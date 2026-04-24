@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { requestFootballApi } from '@/server/integrations/football-api-client'
+import { isFinalProdeStatus, recalculateProdePoints } from '@/server/prode/points'
 import {
   ALLOWED_TOURNAMENTS,
   getAllowedTournamentBySlug,
@@ -572,7 +573,10 @@ async function upsertMatch(
 
     if (error) throw new Error(`No se pudo actualizar el partido ${fixture.fixture.id}: ${error.message}`)
 
-    return 'updated' as const
+    return {
+      id: existing.id,
+      action: 'updated' as const,
+    }
   }
 
   logDebug(debug, 'match insert started', {
@@ -580,10 +584,12 @@ async function upsertMatch(
     payload,
   })
 
-  const { error } = await withTimeout(
+  const { data, error } = await withTimeout(
     supabase
       .from('matches')
-      .insert(payload),
+      .insert(payload)
+      .select('id')
+      .single(),
     `matches insert ${fixture.fixture.id}`
   )
 
@@ -592,7 +598,12 @@ async function upsertMatch(
     error: error?.message ?? null,
   })
 
-  if (!error) return 'created' as const
+  if (!error) {
+    return {
+      id: (data as DbIdRow).id,
+      action: 'created' as const,
+    }
+  }
 
   const shouldTryNumericIdFallback =
     error.message.toLowerCase().includes('null value') ||
@@ -607,13 +618,15 @@ async function upsertMatch(
     fixtureId: fixture.fixture.id,
   })
 
-  const { error: fallbackError } = await withTimeout(
+  const { data: fallbackData, error: fallbackError } = await withTimeout(
     supabase
       .from('matches')
       .insert({
         id: fixture.fixture.id,
         ...payload,
-      }),
+      })
+      .select('id')
+      .single(),
     `matches insert fallback ${fixture.fixture.id}`
   )
 
@@ -641,7 +654,12 @@ async function upsertMatch(
         error: updateByIdError?.message ?? null,
       })
 
-      if (!updateByIdError) return 'updated' as const
+      if (!updateByIdError) {
+        return {
+          id: fixture.fixture.id,
+          action: 'updated' as const,
+        }
+      }
     }
 
     throw new Error(
@@ -649,7 +667,10 @@ async function upsertMatch(
     )
   }
 
-  return 'created' as const
+  return {
+    id: (fallbackData as DbIdRow | null)?.id ?? fixture.fixture.id,
+    action: 'created' as const,
+  }
 }
 
 export async function syncProdeMatches(
@@ -783,7 +804,7 @@ export async function syncProdeMatches(
           if (awayTeam.action === 'created') result.teamsCreated += 1
           if (awayTeam.action === 'updated') result.teamsUpdated += 1
 
-          const outcome = await upsertMatch(
+          const matchUpsert = await upsertMatch(
             supabase,
             fixture,
             league.id,
@@ -792,19 +813,36 @@ export async function syncProdeMatches(
             options.debug
           )
 
-          if (outcome === 'created') {
+          if (matchUpsert.action === 'created') {
             result.created += 1
             result.matchesCreated += 1
           }
 
-          if (outcome === 'updated') {
+          if (matchUpsert.action === 'updated') {
             result.updated += 1
             result.matchesUpdated += 1
           }
 
+          if (
+            isFinalProdeStatus(fixture.fixture.status.short) &&
+            fixture.goals.home !== null &&
+            fixture.goals.away !== null
+          ) {
+            try {
+              await recalculateProdePoints(supabase, matchUpsert.id)
+              logDebug(options.debug, 'prode points recalculated', {
+                fixtureId: fixture.fixture.id,
+                matchId: matchUpsert.id,
+              })
+            } catch (error) {
+              addFixtureError(result, fixture.fixture.id, 'points-recalculation', error)
+            }
+          }
+
           logDebug(options.debug, 'match upserted', {
             fixtureId: fixture.fixture.id,
-            action: outcome,
+            matchId: matchUpsert.id,
+            action: matchUpsert.action,
             homeTeamId: homeTeam.id,
             awayTeamId: awayTeam.id,
             leagueId: league.id,

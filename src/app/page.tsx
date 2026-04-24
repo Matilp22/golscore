@@ -1,6 +1,7 @@
-export const revalidate = 30
+﻿export const revalidate = 30
 
 import AutoRefresh from '@/frontend/components/AutoRefresh'
+import HomeShell from '@/frontend/components/HomeShell'
 import MatchRow from '@/frontend/components/MatchRow'
 import SidebarNav from '@/frontend/components/SidebarNav'
 import Image from 'next/image'
@@ -54,7 +55,7 @@ function formatStatus(statusShort: string, minute: number | null) {
 
   if (statusShort === 'HT') return 'ENTRETIEMPO'
   if (statusShort === 'FT' || statusShort === 'AET' || statusShort === 'PEN') return 'FINAL'
-  if (statusShort === 'NS') return 'PRÓXIMO'
+  if (statusShort === 'NS') return 'PRÃ“XIMO'
 
   return statusShort
 }
@@ -180,7 +181,7 @@ const SECTION_TITLES: Record<string, string> = {
   argentina: 'Argentina',
   internacional: 'Internacional',
   inglaterra: 'Inglaterra',
-  espana: 'España',
+  espana: 'EspaÃ±a',
   italia: 'Italia',
   alemania: 'Alemania',
   portugal: 'Portugal',
@@ -190,7 +191,7 @@ const SECTION_TITLES: Record<string, string> = {
   paraguay: 'Paraguay',
   colombia: 'Colombia',
   chile: 'Chile',
-  mexico: 'México',
+  mexico: 'MÃ©xico',
   eeuu: 'EEUU',
   selecciones: 'Selecciones',
 }
@@ -451,7 +452,7 @@ const LEAGUE_RULES: LeagueRule[] = [
   {
     key: 'espana-la-liga',
     sectionKey: 'espana',
-    sectionTitle: 'España',
+    sectionTitle: 'EspaÃ±a',
     baseTitle: 'La Liga',
     match: (match) =>
       countryText(match).includes('spain') &&
@@ -461,7 +462,7 @@ const LEAGUE_RULES: LeagueRule[] = [
   {
     key: 'espana-copa-del-rey',
     sectionKey: 'espana',
-    sectionTitle: 'España',
+    sectionTitle: 'EspaÃ±a',
     baseTitle: 'Copa del Rey',
     match: (match) =>
       countryText(match).includes('spain') &&
@@ -470,7 +471,7 @@ const LEAGUE_RULES: LeagueRule[] = [
   {
     key: 'espana-supercopa',
     sectionKey: 'espana',
-    sectionTitle: 'España',
+    sectionTitle: 'EspaÃ±a',
     baseTitle: 'Supercopa',
     match: (match) =>
       countryText(match).includes('spain') &&
@@ -544,7 +545,7 @@ const LEAGUE_RULES: LeagueRule[] = [
         countryText(match).includes('portugal') &&
         (
           league.includes('taca de portugal') ||
-          league.includes('taça de portugal') ||
+          league.includes('taÃ§a de portugal') ||
           league.includes('portugal cup')
         )
       )
@@ -573,7 +574,7 @@ const LEAGUE_RULES: LeagueRule[] = [
     key: 'brasil-brasileirao',
     sectionKey: 'brasil',
     sectionTitle: 'Brasil',
-    baseTitle: 'Brasileirão',
+    baseTitle: 'BrasileirÃ£o',
     match: (match) =>
       countryText(match).includes('brazil') &&
       leagueText(match).includes('serie a') &&
@@ -592,7 +593,7 @@ const LEAGUE_RULES: LeagueRule[] = [
     key: 'uruguay-primera-division',
     sectionKey: 'uruguay',
     sectionTitle: 'Uruguay',
-    baseTitle: 'Primera División',
+    baseTitle: 'Primera DivisiÃ³n',
     match: (match) =>
       countryText(match).includes('uruguay') &&
       leagueText(match).includes('primera division'),
@@ -662,7 +663,7 @@ const LEAGUE_RULES: LeagueRule[] = [
     key: 'chile-primera-division',
     sectionKey: 'chile',
     sectionTitle: 'Chile',
-    baseTitle: 'Primera División',
+    baseTitle: 'Primera DivisiÃ³n',
     match: (match) =>
       countryText(match).includes('chile') &&
       leagueText(match).includes('primera division'),
@@ -679,7 +680,7 @@ const LEAGUE_RULES: LeagueRule[] = [
   {
     key: 'mexico-liga-mx',
     sectionKey: 'mexico',
-    sectionTitle: 'México',
+    sectionTitle: 'MÃ©xico',
     baseTitle: 'Liga MX',
     match: (match) =>
       countryText(match).includes('mexico') &&
@@ -688,7 +689,7 @@ const LEAGUE_RULES: LeagueRule[] = [
   {
     key: 'mexico-copa-mx',
     sectionKey: 'mexico',
-    sectionTitle: 'MÃ©xico',
+    sectionTitle: 'MÃƒÂ©xico',
     baseTitle: 'Copa MX',
     match: (match) =>
       countryText(match).includes('mexico') &&
@@ -727,7 +728,7 @@ const LEAGUE_RULES: LeagueRule[] = [
     key: 'selecciones-copa-america',
     sectionKey: 'selecciones',
     sectionTitle: 'Selecciones',
-    baseTitle: 'Copa América',
+    baseTitle: 'Copa AmÃ©rica',
     match: (match) => leagueText(match).includes('copa america'),
   },
   {
@@ -905,7 +906,7 @@ export default async function HomePage({
   const dayOptions = [
     { label: 'Ayer', value: yesterdayISO },
     { label: 'Hoy', value: todayISO },
-    { label: 'Mañana', value: tomorrowISO },
+    { label: 'MaÃ±ana', value: tomorrowISO },
   ]
 
   let groupedSections: SectionBucket[] = SECTION_ORDER.map((sectionKey) => ({
@@ -924,7 +925,7 @@ export default async function HomePage({
     if (error instanceof ApiFootballError) {
       dataError =
         error.code === 'requests'
-          ? 'Se alcanzó el límite diario de la API. Los partidos no pudieron cargarse ahora mismo.'
+          ? 'Se alcanzÃ³ el lÃ­mite diario de la API. Los partidos no pudieron cargarse ahora mismo.'
           : error.message
     } else {
       dataError = 'No se pudieron cargar los partidos en este momento.'
@@ -946,7 +947,7 @@ export default async function HomePage({
   return (
     <div className="min-h-screen bg-transparent text-white">
       <div className="mx-auto max-w-7xl px-3 py-4 md:px-5 md:py-6">
-        <header className="relative mb-4 rounded-2xl border border-white/8 bg-[#111418]/95 px-4 py-4 shadow-[0_10px_30px_rgba(0,0,0,0.2)]">
+        <header className="relative mb-4 rounded-2xl border border-white/8 bg-[#111418]/95 px-4 py-4 pl-16 shadow-[0_10px_30px_rgba(0,0,0,0.2)] lg:pl-4">
           <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
             <Link
               href="/prode"
@@ -963,18 +964,12 @@ export default async function HomePage({
 
           <div className="flex flex-col gap-4">
             <div>
-              <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#7ff0b2]">
+              <h1 className="text-5xl font-black leading-none tracking-normal text-white md:text-7xl">
                 GolScore
-              </p>
-              <h1 className="mt-1 text-xl font-bold text-white md:text-2xl">
-                Partidos del día
               </h1>
-              <p className="mt-1 text-sm text-[#8d98a7]">
-                Estructura inspirada en Promiedos, con una lectura más limpia y compacta.
+              <p className="mt-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#7ff0b2] md:text-sm">
+                Partidos del d&iacute;a
               </p>
-              </div>
-
             </div>
 
             <div className="flex flex-wrap justify-center gap-2">
@@ -995,22 +990,16 @@ export default async function HomePage({
           </div>
         </header>
 
-        <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
-          <aside className="h-fit rounded-2xl border border-white/8 bg-[#0f1317]/90 p-3 lg:sticky lg:top-5 lg:flex lg:max-h-[calc(100vh-2.5rem)] lg:flex-col">
-            <div className="mb-3 border-b border-white/6 pb-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#7ff0b2]">
-                Secciones
-              </p>
-            </div>
-
+        <HomeShell
+          sidebar={
             <div className="sidebar-scroll space-y-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
               <SidebarNav
                 sections={SIDEBAR_SECTION_CONFIGS}
                 highlightedTournamentKeys={[...availableCompetitionKeys]}
               />
             </div>
-          </aside>
-
+          }
+        >
           <main className="space-y-4">
             {dataError ? (
               <div className="rounded-2xl border border-[#5a2a2a] bg-[#3b1919] p-6">
@@ -1100,8 +1089,9 @@ export default async function HomePage({
               </div>
             )}
           </main>
-        </div>
+        </HomeShell>
       </div>
     </div>
   )
 }
+
