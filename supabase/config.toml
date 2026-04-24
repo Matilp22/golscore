@@ -1,0 +1,16 @@
+project_id = "golscore"
+
+[functions.save-prediction]
+verify_jwt = true
+
+[functions.close-predictions]
+verify_jwt = false
+
+[functions.sync-matches]
+verify_jwt = false
+
+[functions.update-results]
+verify_jwt = false
+
+[functions.recalculate-points]
+verify_jwt = false

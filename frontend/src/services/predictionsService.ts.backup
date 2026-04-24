@@ -1,0 +1,26 @@
+import { supabase } from '../lib/supabaseClient'
+
+export async function savePrediction(input: {
+  userId: string
+  matchId: number
+  homeScorePred: number
+  awayScorePred: number
+}) {
+  const { data, error } = await supabase
+    .from('predictions')
+    .upsert(
+      {
+        user_id: input.userId,
+        match_id: input.matchId,
+        home_score_pred: input.homeScorePred,
+        away_score_pred: input.awayScorePred,
+      },
+      { onConflict: 'user_id,match_id' }
+    )
+    .select()
+    .single()
+
+  if (error) throw error
+
+  return data
+}

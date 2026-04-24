@@ -1,0 +1,25 @@
+import { createClient } from '@supabase/supabase-js'
+
+const REST_SUFFIX = '/rest/v1'
+
+function normalizeSupabaseUrl(url: string) {
+  const trimmedUrl = url.trim().replace(/\/+$/, '')
+
+  if (trimmedUrl.endsWith(REST_SUFFIX)) {
+    return trimmedUrl.slice(0, -REST_SUFFIX.length)
+  }
+
+  return trimmedUrl
+}
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing Supabase environment variables')
+}
+
+export const supabase = createClient(
+  normalizeSupabaseUrl(supabaseUrl),
+  supabaseAnonKey
+)
