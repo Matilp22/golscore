@@ -7,9 +7,14 @@ import PredictionForm from '@/frontend/components/prode/PredictionForm'
 type MatchCardProps = {
   match: Match
   prediction?: Prediction
+  draft?: {
+    home: string
+    away: string
+  }
   isAuthenticated: boolean
   isAuthLoading: boolean
   onEditingChange?: (matchId: string, isEditing: boolean) => void
+  onDraftChange?: (matchId: string, draft: { home: string; away: string }) => void
   onSavePrediction: (input: {
     matchId: string
     predictedHomeScore: number
@@ -31,9 +36,11 @@ function formatDate(value: string) {
 export default function MatchCard({
   match,
   prediction,
+  draft,
   isAuthenticated,
   isAuthLoading,
   onEditingChange,
+  onDraftChange,
   onSavePrediction,
 }: MatchCardProps) {
   const locked = isPredictionLocked(match.matchDate)
@@ -75,9 +82,11 @@ export default function MatchCard({
         key={`${match.id}-${prediction?.updatedAt ?? 'empty'}`}
         match={match}
         prediction={prediction}
+        draft={draft}
         isAuthenticated={isAuthenticated}
         isAuthLoading={isAuthLoading}
         onEditingChange={onEditingChange}
+        onDraftChange={onDraftChange}
         onSave={onSavePrediction}
       />
     </article>

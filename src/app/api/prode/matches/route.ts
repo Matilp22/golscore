@@ -31,6 +31,7 @@ type LeagueRow = {
 type TeamRow = {
   id: string
   name: string | null
+  logo_url: string | null
 }
 
 type ResultRow = {
@@ -200,7 +201,6 @@ export async function GET(request: Request) {
     ),
   ] as string[]
   const matchIds = rows.map((match) => match.id)
-
   const [
     { data: leaguesData, error: leaguesError },
     { data: teamsData, error: teamsError },
@@ -224,11 +224,28 @@ export async function GET(request: Request) {
     return prodeError(resultsError, 'No se pudieron cargar los resultados.')
   }
 
+  const { data: teamLogosData, error: teamLogosError } = teamIds.length
+    ? await supabase.from('teams').select('id, logo_url').in('id', teamIds)
+    : { data: [], error: null }
+
+  if (teamLogosError) {
+    console.info('[prode-matches] logo_url no disponible en teams; se usan iniciales.', {
+      code: teamLogosError.code ?? null,
+      message: teamLogosError.message,
+    })
+  }
+
   const leaguesById = new Map(
     ((leaguesData ?? []) as LeagueRow[]).map((league) => [league.id, league])
   )
   const teamsById = new Map(
     ((teamsData ?? []) as TeamRow[]).map((team) => [team.id, team])
+  )
+  const teamLogosById = new Map(
+    ((teamLogosError ? [] : teamLogosData ?? []) as Array<{ id: string; logo_url: string | null }>).map((team) => [
+      team.id,
+      team.logo_url,
+    ])
   )
   const resultsByMatchId = new Map(
     ((resultsError ? [] : resultsData ?? []) as ResultRow[]).map((result) => [
@@ -270,14 +287,14 @@ export async function GET(request: Request) {
         ? {
             id: homeTeam.id,
             name: homeTeam.name ?? 'Local',
-            logoUrl: null,
+            logoUrl: teamLogosById.get(homeTeam.id) ?? null,
           }
         : null,
       awayTeam: awayTeam
         ? {
             id: awayTeam.id,
             name: awayTeam.name ?? 'Visitante',
-            logoUrl: null,
+            logoUrl: teamLogosById.get(awayTeam.id) ?? null,
           }
         : null,
     }

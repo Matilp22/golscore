@@ -47,10 +47,15 @@ export default function ProdePanel() {
   const [isLeaguesLoading, setIsLeaguesLoading] = useState(true)
   const [isMatchesLoading, setIsMatchesLoading] = useState(false)
   const [editingMatchIds, setEditingMatchIds] = useState<Set<string>>(new Set())
+  const [predictionDrafts, setPredictionDrafts] = useState<Record<string, { home: string; away: string }>>({})
+  const isEditingPrediction = editingMatchIds.size > 0
 
   const predictionsByMatchId = useMemo(() => {
     return new Map(predictions.map((prediction) => [prediction.matchId, prediction]))
   }, [predictions])
+  const predictionDraftsByMatchId = useMemo(() => {
+    return new Map(Object.entries(predictionDrafts))
+  }, [predictionDrafts])
 
   const myRanking = leaderboard.find((row) => row.userId === user?.id)
 
@@ -223,8 +228,15 @@ export default function ProdePanel() {
     markUpdatedNow,
   } = useAutoRefresh({
     intervalMs: PRODE_REFRESH_INTERVAL_MS,
-    enabled: Boolean(selectedLeagueId) && !isLeaguesLoading && !isMatchesLoading,
+    enabled:
+      Boolean(selectedLeagueId) &&
+      !isLeaguesLoading &&
+      !isMatchesLoading &&
+      !isEditingPrediction,
+    refreshOnFocus: false,
     onRefresh: async () => {
+      if (isEditingPrediction) return
+
       await loadMatches({ silent: true })
 
       await Promise.all([
@@ -339,6 +351,11 @@ export default function ProdePanel() {
       next.delete(input.matchId)
       return next
     })
+    setPredictionDrafts((current) => {
+      const next = { ...current }
+      delete next[input.matchId]
+      return next
+    })
     markUpdatedNow()
     await Promise.all([
       loadPredictions({ silent: true }),
@@ -349,6 +366,9 @@ export default function ProdePanel() {
 
   const handleEditingChange = useCallback((matchId: string, isEditing: boolean) => {
     setEditingMatchIds((current) => {
+      if (isEditing && current.has(matchId)) return current
+      if (!isEditing && !current.has(matchId)) return current
+
       const next = new Set(current)
 
       if (isEditing) {
@@ -360,6 +380,24 @@ export default function ProdePanel() {
       return next
     })
   }, [])
+
+  const handleDraftChange = useCallback(
+    (matchId: string, draft: { home: string; away: string }) => {
+      setPredictionDrafts((current) => {
+        const currentDraft = current[matchId]
+
+        if (currentDraft?.home === draft.home && currentDraft.away === draft.away) {
+          return current
+        }
+
+        return {
+          ...current,
+          [matchId]: draft,
+        }
+      })
+    },
+    []
+  )
 
   return (
     <div className="min-w-0 space-y-4">
@@ -376,6 +414,7 @@ export default function ProdePanel() {
               setMessage('')
               setIsMatchesLoading(true)
               setEditingMatchIds(new Set())
+              setPredictionDrafts({})
               setSelectedLeagueId(leagueId)
               setSelectedRound(null)
             }}
@@ -402,9 +441,11 @@ export default function ProdePanel() {
             <MatchList
               matches={visibleMatches}
               predictionsByMatchId={predictionsByMatchId}
+              predictionDraftsByMatchId={predictionDraftsByMatchId}
               isAuthenticated={Boolean(user)}
               isAuthLoading={isAuthLoading}
               onEditingChange={handleEditingChange}
+              onDraftChange={handleDraftChange}
               onSavePrediction={handleSavePrediction}
             />
           )}

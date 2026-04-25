@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { useMemo, useState, useTransition } from 'react'
 import type { Match, Prediction } from '@/frontend/types/prode'
 import { isPredictionLocked } from '@/frontend/types/prode'
@@ -7,9 +8,14 @@ import { isPredictionLocked } from '@/frontend/types/prode'
 type PredictionFormProps = {
   match: Match
   prediction?: Prediction
+  draft?: {
+    home: string
+    away: string
+  }
   isAuthenticated: boolean
   isAuthLoading: boolean
   onEditingChange?: (matchId: string, isEditing: boolean) => void
+  onDraftChange?: (matchId: string, draft: { home: string; away: string }) => void
   onSave: (input: {
     matchId: string
     predictedHomeScore: number
@@ -21,20 +27,102 @@ function toScoreInputValue(value: number | null | undefined) {
   return Number.isFinite(value) ? String(value) : ''
 }
 
+function getInitials(value: string) {
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase()
+}
+
+function TeamLogo({
+  logoUrl,
+  name,
+}: {
+  logoUrl?: string | null
+  name: string
+}) {
+  return (
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/8 bg-[#151b21] text-[10px] font-black text-[#7ff0b2]">
+      {logoUrl ? (
+        <Image
+          src={logoUrl}
+          alt={name}
+          width={32}
+          height={32}
+          className="h-7 w-7 object-contain"
+        />
+      ) : (
+        getInitials(name)
+      )}
+    </span>
+  )
+}
+
+function TeamLabel({
+  align = 'left',
+  logoUrl,
+  name,
+  role,
+}: {
+  align?: 'left' | 'right'
+  logoUrl?: string | null
+  name: string
+  role: string
+}) {
+  const content = (
+    <>
+      <TeamLogo logoUrl={logoUrl} name={name} />
+      <div className={`min-w-0 ${align === 'right' ? 'text-right' : ''}`}>
+        <p className="break-words text-sm font-black leading-tight text-white md:truncate">
+          {name}
+        </p>
+        <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8d98a7]">
+          {role}
+        </p>
+      </div>
+    </>
+  )
+
+  return (
+    <div className={`flex min-w-0 items-center gap-2 ${align === 'right' ? 'justify-end' : ''}`}>
+      {align === 'right' ? (
+        <>
+          <div className="min-w-0 text-right">
+            <p className="break-words text-sm font-black leading-tight text-white md:truncate">
+              {name}
+            </p>
+            <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8d98a7]">
+              {role}
+            </p>
+          </div>
+          <TeamLogo logoUrl={logoUrl} name={name} />
+        </>
+      ) : (
+        content
+      )}
+    </div>
+  )
+}
+
 export default function PredictionForm({
   match,
   prediction,
+  draft,
   isAuthenticated,
   isAuthLoading,
   onEditingChange,
+  onDraftChange,
   onSave,
 }: PredictionFormProps) {
   const hasExistingPrediction = Boolean(prediction)
   const [home, setHome] = useState(
-    prediction ? toScoreInputValue(prediction.predictedHomeScore) : ''
+    draft?.home ?? (prediction ? toScoreInputValue(prediction.predictedHomeScore) : '')
   )
   const [away, setAway] = useState(
-    prediction ? toScoreInputValue(prediction.predictedAwayScore) : ''
+    draft?.away ?? (prediction ? toScoreInputValue(prediction.predictedAwayScore) : '')
   )
   const [message, setMessage] = useState('')
   const [isPending, startTransition] = useTransition()
@@ -111,14 +199,11 @@ export default function PredictionForm({
   return (
     <div>
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_56px_56px_minmax(0,1fr)] items-center gap-2 md:grid-cols-[minmax(140px,1fr)_64px_28px_64px_minmax(140px,1fr)_112px] md:gap-3">
-        <div className="min-w-0">
-          <p className="break-words text-sm font-black leading-tight text-white md:truncate">
-            {match.homeTeam?.name ?? 'Local'}
-          </p>
-          <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8d98a7]">
-            Local
-          </p>
-        </div>
+        <TeamLabel
+          name={match.homeTeam?.name ?? 'Local'}
+          logoUrl={match.homeTeam?.logoUrl}
+          role="Local"
+        />
         <input
           type="number"
           min="0"
@@ -127,8 +212,10 @@ export default function PredictionForm({
           disabled={inputsDisabled}
           value={home}
           onChange={(event) => {
+            const nextHome = event.target.value
             onEditingChange?.(match.id, true)
-            setHome(event.target.value)
+            setHome(nextHome)
+            onDraftChange?.(match.id, { home: nextHome, away })
             if (message) setMessage('')
           }}
           aria-label="Pronostico local"
@@ -143,21 +230,21 @@ export default function PredictionForm({
           disabled={inputsDisabled}
           value={away}
           onChange={(event) => {
+            const nextAway = event.target.value
             onEditingChange?.(match.id, true)
-            setAway(event.target.value)
+            setAway(nextAway)
+            onDraftChange?.(match.id, { home, away: nextAway })
             if (message) setMessage('')
           }}
           aria-label="Pronostico visitante"
           className="h-12 w-full min-w-0 rounded-xl border border-white/8 bg-[#0f1317] text-center text-base font-black text-white outline-none focus:border-[#25553d] disabled:opacity-45 md:h-11"
         />
-        <div className="min-w-0 text-right">
-          <p className="break-words text-sm font-black leading-tight text-white md:truncate">
-            {match.awayTeam?.name ?? 'Visitante'}
-          </p>
-          <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8d98a7]">
-            Visitante
-          </p>
-        </div>
+        <TeamLabel
+          align="right"
+          name={match.awayTeam?.name ?? 'Visitante'}
+          logoUrl={match.awayTeam?.logoUrl}
+          role="Visitante"
+        />
         <button
           type="button"
           disabled={buttonDisabled}

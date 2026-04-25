@@ -10,9 +10,11 @@ import {
 type MatchListProps = {
   matches: Match[]
   predictionsByMatchId: Map<string, Prediction>
+  predictionDraftsByMatchId: Map<string, { home: string; away: string }>
   isAuthenticated: boolean
   isAuthLoading: boolean
   onEditingChange?: (matchId: string, isEditing: boolean) => void
+  onDraftChange?: (matchId: string, draft: { home: string; away: string }) => void
   onSavePrediction: (input: {
     matchId: string
     predictedHomeScore: number
@@ -76,9 +78,11 @@ function groupMatches(matches: Match[]): MatchGroup[] {
 export default function MatchList({
   matches,
   predictionsByMatchId,
+  predictionDraftsByMatchId,
   isAuthenticated,
   isAuthLoading,
   onEditingChange,
+  onDraftChange,
   onSavePrediction,
 }: MatchListProps) {
   const groups = groupMatches(matches)
@@ -109,9 +113,11 @@ export default function MatchList({
                 key={match.id}
                 match={match}
                 prediction={predictionsByMatchId.get(match.id)}
+                draft={predictionDraftsByMatchId.get(match.id)}
                 isAuthenticated={isAuthenticated}
                 isAuthLoading={isAuthLoading}
                 onEditingChange={onEditingChange}
+                onDraftChange={onDraftChange}
                 onSavePrediction={onSavePrediction}
               />
             ))}

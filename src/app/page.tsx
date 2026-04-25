@@ -947,7 +947,7 @@ export default async function HomePage({
   return (
     <div className="min-h-screen overflow-x-hidden bg-transparent text-white">
       <div className="mx-auto w-full max-w-7xl px-3 py-4 md:px-5 md:py-6">
-        <header className="relative mb-4 rounded-2xl border border-white/8 bg-[#111418]/95 px-3 py-4 pl-16 shadow-[0_10px_30px_rgba(0,0,0,0.2)] sm:px-4 lg:pl-4">
+        <header className="relative mb-4 rounded-2xl border border-white/8 bg-[#111418]/95 px-3 py-4 shadow-[0_10px_30px_rgba(0,0,0,0.2)] sm:px-4">
           <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
             <Link
               href="/prode"
@@ -964,7 +964,7 @@ export default async function HomePage({
 
           <div className="flex flex-col gap-4">
             <div>
-              <h1 className="text-4xl font-black leading-none tracking-normal text-white sm:text-5xl md:text-7xl">
+              <h1 className="max-w-full break-words text-[2.65rem] font-black leading-none tracking-normal text-white sm:text-5xl md:text-7xl">
                 GolScore
               </h1>
               <p className="mt-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#7ff0b2] md:text-sm">
