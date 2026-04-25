@@ -30,6 +30,7 @@ function formatDate(value: string) {
     month: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
+    hour12: false,
   }).format(new Date(value))
 }
 
@@ -79,7 +80,6 @@ export default function MatchCard({
       </div>
 
       <PredictionForm
-        key={`${match.id}-${prediction?.updatedAt ?? 'empty'}`}
         match={match}
         prediction={prediction}
         draft={draft}

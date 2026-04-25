@@ -47,7 +47,7 @@ export async function savePrediction(input: {
   const data = await response.json()
 
   if (!response.ok) {
-    throw new Error(data?.error || 'No se pudo guardar la prediccion.')
+    throw new Error(data?.error || 'No se pudo guardar la predicción.')
   }
 
   return data.prediction as Prediction

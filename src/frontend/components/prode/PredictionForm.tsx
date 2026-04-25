@@ -161,12 +161,12 @@ export default function PredictionForm({
     }
 
     if (!isAuthenticated) {
-      setMessage('Inicia sesion para guardar tu prediccion.')
+      setMessage('Iniciá sesión para guardar tu predicción.')
       return
     }
 
     if (locked) {
-      setMessage('La prediccion esta bloqueada para este partido.')
+      setMessage('La predicción está bloqueada para este partido.')
       return
     }
 
@@ -176,7 +176,7 @@ export default function PredictionForm({
       predictedHomeScore < 0 ||
       predictedAwayScore < 0
     ) {
-      setMessage('Ingresa dos marcadores validos.')
+      setMessage('Ingresá dos marcadores válidos.')
       return
     }
 
@@ -189,7 +189,7 @@ export default function PredictionForm({
         })
         setIsEditing(false)
         onEditingChange?.(match.id, false)
-        setMessage('Prediccion guardada.')
+        setMessage('Predicción guardada.')
       } catch (error) {
         setMessage(error instanceof Error ? error.message : 'No se pudo guardar.')
       }
@@ -211,6 +211,7 @@ export default function PredictionForm({
           inputMode="numeric"
           disabled={inputsDisabled}
           value={home}
+          onFocus={() => onEditingChange?.(match.id, true)}
           onChange={(event) => {
             const nextHome = event.target.value
             onEditingChange?.(match.id, true)
@@ -218,7 +219,7 @@ export default function PredictionForm({
             onDraftChange?.(match.id, { home: nextHome, away })
             if (message) setMessage('')
           }}
-          aria-label="Pronostico local"
+          aria-label="Pronóstico local"
           className="h-12 w-full min-w-0 rounded-xl border border-white/8 bg-[#0f1317] text-center text-base font-black text-white outline-none focus:border-[#25553d] disabled:opacity-45 md:h-11"
         />
         <span className="hidden text-center text-sm font-black text-[#8d98a7] md:block">vs</span>
@@ -229,6 +230,7 @@ export default function PredictionForm({
           inputMode="numeric"
           disabled={inputsDisabled}
           value={away}
+          onFocus={() => onEditingChange?.(match.id, true)}
           onChange={(event) => {
             const nextAway = event.target.value
             onEditingChange?.(match.id, true)
@@ -236,7 +238,7 @@ export default function PredictionForm({
             onDraftChange?.(match.id, { home, away: nextAway })
             if (message) setMessage('')
           }}
-          aria-label="Pronostico visitante"
+          aria-label="Pronóstico visitante"
           className="h-12 w-full min-w-0 rounded-xl border border-white/8 bg-[#0f1317] text-center text-base font-black text-white outline-none focus:border-[#25553d] disabled:opacity-45 md:h-11"
         />
         <TeamLabel
@@ -256,7 +258,7 @@ export default function PredictionForm({
       </div>
       {isAuthLoading ? (
         <p className="mt-2 text-xs font-semibold text-[#8d98a7]">
-          Verificando sesion...
+          Verificando sesión...
         </p>
       ) : null}
       {message ? (

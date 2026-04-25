@@ -7,10 +7,7 @@ import MatchList from '@/frontend/components/prode/MatchList'
 import PointsSummary from '@/frontend/components/prode/PointsSummary'
 import PredictionCard from '@/frontend/components/prode/PredictionCard'
 import { useAuth } from '@/frontend/hooks/useAuth'
-import {
-  formatLastUpdatedLabel,
-  useAutoRefresh,
-} from '@/frontend/hooks/useAutoRefresh'
+import { useAutoRefresh } from '@/frontend/hooks/useAutoRefresh'
 import { getLeaderboard } from '@/frontend/services/leaderboardService'
 import { getLeagues } from '@/frontend/services/leaguesService'
 import { getMatches } from '@/frontend/services/matchesService'
@@ -186,7 +183,7 @@ export default function ProdePanel() {
       setRankingMessage('')
     } catch {
       setLeaderboard([])
-      setRankingMessage('Todavia no hay puntos calculados.')
+      setRankingMessage('Todavía no hay puntos calculados.')
     }
   }, [])
 
@@ -222,11 +219,7 @@ export default function ProdePanel() {
     [editingMatchIds, user]
   )
 
-  const {
-    isRefreshing: isAutoRefreshing,
-    lastUpdatedAt,
-    markUpdatedNow,
-  } = useAutoRefresh({
+  const { markUpdatedNow } = useAutoRefresh({
     intervalMs: PRODE_REFRESH_INTERVAL_MS,
     enabled:
       Boolean(selectedLeagueId) &&
@@ -361,7 +354,7 @@ export default function ProdePanel() {
       loadPredictions({ silent: true }),
       loadLeaderboard(),
     ])
-    setMessage('Prediccion guardada.')
+    setMessage('Predicción guardada.')
   }
 
   const handleEditingChange = useCallback((matchId: string, isEditing: boolean) => {
@@ -423,15 +416,6 @@ export default function ProdePanel() {
               setSelectedRound(round)
             }}
           />
-          <div className="flex flex-col gap-1 px-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-2">
-            <p className="text-xs font-semibold text-[#8d98a7]">
-              {formatLastUpdatedLabel(lastUpdatedAt)}
-            </p>
-            {isAutoRefreshing ? (
-              <p className="text-xs font-semibold text-[#7ff0b2]">Actualizando en segundo plano...</p>
-            ) : null}
-          </div>
-
           {isLeaguesLoading || isMatchesLoading || isAuthLoading ? (
             <div className="rounded-2xl border border-white/8 bg-[#111418] p-4 sm:p-6">
               <h2 className="text-lg font-black text-white">Partidos</h2>
@@ -512,12 +496,12 @@ export default function ProdePanel() {
                     )
                   ) : (
                     <p className="text-sm text-[#8d98a7]">
-                      Todavia no guardaste predicciones.
+                      Todavía no guardaste predicciones.
                     </p>
                   )
                 ) : (
                   <p className="text-sm text-[#8d98a7]">
-                    Inicia sesion para ver tus predicciones.
+                    Iniciá sesión para ver tus predicciones.
                   </p>
                 )}
               </div>

@@ -469,7 +469,7 @@ function buildBracketTree(fixtures: LeagueFixtureSummary[]): BracketTree {
   }
 
   if (unpositioned.length) {
-    console.warn('[copa-argentina:bracket] Fixtures sin posicion en la llave', {
+    console.warn('[copa-argentina:bracket] Fixtures sin posición en la llave', {
       fixtures: unpositioned.map(({ stageKey, match }) => ({
         stageKey,
         fixtureId: match.id,

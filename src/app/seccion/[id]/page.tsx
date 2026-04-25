@@ -55,7 +55,7 @@ export default async function SeccionPage({ params }: PageProps) {
               {section.title}
             </h1>
             <p className="mt-2 text-sm text-[#8d98a7]">
-              Elegi un torneo para ver tablas, rankings y estadisticas destacadas.
+              Elegí un torneo para ver tablas, rankings y estadísticas destacadas.
             </p>
           </header>
 

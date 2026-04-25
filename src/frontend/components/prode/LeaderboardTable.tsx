@@ -30,7 +30,7 @@ export default function LeaderboardTable({ rows }: LeaderboardTableProps) {
         </div>
       ) : (
         <div className="p-4 text-sm text-[#8d98a7]">
-          Todavia no hay puntos calculados.
+          Todavía no hay puntos calculados.
         </div>
       )}
     </aside>

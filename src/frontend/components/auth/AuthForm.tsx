@@ -47,7 +47,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
         const { error } = await signInWithEmail(email, password)
 
         if (error) {
-          setMessage(error.message || 'No se pudo iniciar sesion.')
+          setMessage(error.message || 'No se pudo iniciar sesión.')
           return
         }
 
@@ -78,7 +78,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
   return (
     <div className="rounded-2xl border border-white/8 bg-[#111418] p-5 shadow-[0_10px_30px_rgba(0,0,0,0.18)]">
       <h1 className="text-2xl font-black text-white">
-        {isLogin ? 'Iniciar sesion' : 'Registrarse'}
+        {isLogin ? 'Iniciar sesión' : 'Registrarse'}
       </h1>
       <p className="mt-2 text-sm text-[#8d98a7]">
         {isLogin
@@ -126,7 +126,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
               ? 'Ingresando...'
               : 'Creando cuenta...'
             : isLogin
-              ? 'Iniciar sesion'
+              ? 'Iniciar sesión'
               : 'Crear cuenta'}
         </button>
       </form>
@@ -147,7 +147,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
           }
           className="font-semibold text-[#7ff0b2] hover:text-white"
         >
-          {isLogin ? 'Registrate' : 'Inicia sesion'}
+          {isLogin ? 'Registrate' : 'Iniciá sesión'}
         </Link>
       </div>
     </div>

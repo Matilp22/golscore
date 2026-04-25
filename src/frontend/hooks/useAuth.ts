@@ -46,7 +46,7 @@ export function useAuth() {
               session: null,
               user: null,
               isLoading: false,
-              error: error instanceof Error ? error.message : 'No se pudo recuperar la sesion.',
+              error: error instanceof Error ? error.message : 'No se pudo recuperar la sesión.',
             })
           })
 

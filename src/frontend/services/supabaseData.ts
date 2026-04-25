@@ -145,7 +145,7 @@ export async function saveMyPrediction(input: {
   } = await supabase.auth.getUser()
 
   if (userError) throw userError
-  if (!user) throw new Error('Necesitas iniciar sesion para guardar predicciones.')
+  if (!user) throw new Error('Necesitás iniciar sesión para guardar predicciones.')
 
   const predictionsQuery = supabase.from('predictions') as unknown as PredictionUpsertQuery
 

@@ -22,27 +22,6 @@ function toTimestamp(value?: number | string | Date) {
   return Number.isNaN(parsed) ? Date.now() : parsed
 }
 
-export function formatLastUpdatedLabel(
-  lastUpdatedAt: number,
-  now = Date.now()
-) {
-  const diffMs = Math.max(0, now - lastUpdatedAt)
-  const diffSeconds = Math.floor(diffMs / 1000)
-
-  if (diffSeconds < 5) return 'Actualizado recién'
-  if (diffSeconds < 60) return `Actualizado hace ${diffSeconds} segundos`
-
-  const diffMinutes = Math.floor(diffSeconds / 60)
-
-  if (diffMinutes < 60) {
-    return `Actualizado hace ${diffMinutes} minuto${diffMinutes === 1 ? '' : 's'}`
-  }
-
-  const diffHours = Math.floor(diffMinutes / 60)
-
-  return `Actualizado hace ${diffHours} hora${diffHours === 1 ? '' : 's'}`
-}
-
 export function useAutoRefresh({
   intervalMs,
   enabled = true,

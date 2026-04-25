@@ -44,6 +44,7 @@ function formatMatchTime(dateString: string) {
   return date.toLocaleTimeString('es-AR', {
     hour: '2-digit',
     minute: '2-digit',
+    hour12: false,
     timeZone: 'America/Argentina/Buenos_Aires',
   })
 }
@@ -55,7 +56,7 @@ function formatStatus(statusShort: string, minute: number | null) {
 
   if (statusShort === 'HT') return 'ENTRETIEMPO'
   if (statusShort === 'FT' || statusShort === 'AET' || statusShort === 'PEN') return 'FINAL'
-  if (statusShort === 'NS') return 'PRÃ“XIMO'
+  if (statusShort === 'NS') return 'PRÓXIMO'
 
   return statusShort
 }
@@ -181,7 +182,7 @@ const SECTION_TITLES: Record<string, string> = {
   argentina: 'Argentina',
   internacional: 'Internacional',
   inglaterra: 'Inglaterra',
-  espana: 'EspaÃ±a',
+  espana: 'España',
   italia: 'Italia',
   alemania: 'Alemania',
   portugal: 'Portugal',
@@ -191,7 +192,7 @@ const SECTION_TITLES: Record<string, string> = {
   paraguay: 'Paraguay',
   colombia: 'Colombia',
   chile: 'Chile',
-  mexico: 'MÃ©xico',
+  mexico: 'México',
   eeuu: 'EEUU',
   selecciones: 'Selecciones',
 }
@@ -452,7 +453,7 @@ const LEAGUE_RULES: LeagueRule[] = [
   {
     key: 'espana-la-liga',
     sectionKey: 'espana',
-    sectionTitle: 'EspaÃ±a',
+    sectionTitle: 'España',
     baseTitle: 'La Liga',
     match: (match) =>
       countryText(match).includes('spain') &&
@@ -462,7 +463,7 @@ const LEAGUE_RULES: LeagueRule[] = [
   {
     key: 'espana-copa-del-rey',
     sectionKey: 'espana',
-    sectionTitle: 'EspaÃ±a',
+    sectionTitle: 'España',
     baseTitle: 'Copa del Rey',
     match: (match) =>
       countryText(match).includes('spain') &&
@@ -471,7 +472,7 @@ const LEAGUE_RULES: LeagueRule[] = [
   {
     key: 'espana-supercopa',
     sectionKey: 'espana',
-    sectionTitle: 'EspaÃ±a',
+    sectionTitle: 'España',
     baseTitle: 'Supercopa',
     match: (match) =>
       countryText(match).includes('spain') &&
@@ -545,7 +546,7 @@ const LEAGUE_RULES: LeagueRule[] = [
         countryText(match).includes('portugal') &&
         (
           league.includes('taca de portugal') ||
-          league.includes('taÃ§a de portugal') ||
+          league.includes('taça de portugal') ||
           league.includes('portugal cup')
         )
       )
@@ -574,7 +575,7 @@ const LEAGUE_RULES: LeagueRule[] = [
     key: 'brasil-brasileirao',
     sectionKey: 'brasil',
     sectionTitle: 'Brasil',
-    baseTitle: 'BrasileirÃ£o',
+    baseTitle: 'Brasileirão',
     match: (match) =>
       countryText(match).includes('brazil') &&
       leagueText(match).includes('serie a') &&
@@ -593,7 +594,7 @@ const LEAGUE_RULES: LeagueRule[] = [
     key: 'uruguay-primera-division',
     sectionKey: 'uruguay',
     sectionTitle: 'Uruguay',
-    baseTitle: 'Primera DivisiÃ³n',
+    baseTitle: 'Primera División',
     match: (match) =>
       countryText(match).includes('uruguay') &&
       leagueText(match).includes('primera division'),
@@ -663,7 +664,7 @@ const LEAGUE_RULES: LeagueRule[] = [
     key: 'chile-primera-division',
     sectionKey: 'chile',
     sectionTitle: 'Chile',
-    baseTitle: 'Primera DivisiÃ³n',
+    baseTitle: 'Primera División',
     match: (match) =>
       countryText(match).includes('chile') &&
       leagueText(match).includes('primera division'),
@@ -680,7 +681,7 @@ const LEAGUE_RULES: LeagueRule[] = [
   {
     key: 'mexico-liga-mx',
     sectionKey: 'mexico',
-    sectionTitle: 'MÃ©xico',
+    sectionTitle: 'México',
     baseTitle: 'Liga MX',
     match: (match) =>
       countryText(match).includes('mexico') &&
@@ -689,7 +690,7 @@ const LEAGUE_RULES: LeagueRule[] = [
   {
     key: 'mexico-copa-mx',
     sectionKey: 'mexico',
-    sectionTitle: 'MÃƒÂ©xico',
+    sectionTitle: 'México',
     baseTitle: 'Copa MX',
     match: (match) =>
       countryText(match).includes('mexico') &&
@@ -728,7 +729,7 @@ const LEAGUE_RULES: LeagueRule[] = [
     key: 'selecciones-copa-america',
     sectionKey: 'selecciones',
     sectionTitle: 'Selecciones',
-    baseTitle: 'Copa AmÃ©rica',
+    baseTitle: 'Copa América',
     match: (match) => leagueText(match).includes('copa america'),
   },
   {
@@ -906,7 +907,7 @@ export default async function HomePage({
   const dayOptions = [
     { label: 'Ayer', value: yesterdayISO },
     { label: 'Hoy', value: todayISO },
-    { label: 'MaÃ±ana', value: tomorrowISO },
+    { label: 'Mañana', value: tomorrowISO },
   ]
 
   let groupedSections: SectionBucket[] = SECTION_ORDER.map((sectionKey) => ({
@@ -925,7 +926,7 @@ export default async function HomePage({
     if (error instanceof ApiFootballError) {
       dataError =
         error.code === 'requests'
-          ? 'Se alcanzÃ³ el lÃ­mite diario de la API. Los partidos no pudieron cargarse ahora mismo.'
+          ? 'Se alcanzó el límite diario de la API. Los partidos no pudieron cargarse ahora mismo.'
           : error.message
     } else {
       dataError = 'No se pudieron cargar los partidos en este momento.'
@@ -968,7 +969,7 @@ export default async function HomePage({
                 GolScore
               </h1>
               <p className="mt-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#7ff0b2] md:text-sm">
-                Partidos del d&iacute;a
+                Partidos del día
               </p>
             </div>
 

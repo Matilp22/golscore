@@ -44,7 +44,7 @@ async function getAuthenticatedUser(request: Request) {
     supabase,
     user: null,
     error: NextResponse.json(
-      { error: 'Necesitas iniciar sesion para guardar predicciones.' },
+      { error: 'Necesitás iniciar sesión para guardar predicciones.' },
       { status: 401 }
     ),
   }
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
     predictedAwayScore < 0
   ) {
     return NextResponse.json(
-      { error: 'Datos invalidos para guardar la prediccion.' },
+      { error: 'Datos inválidos para guardar la predicción.' },
       { status: 400 }
     )
   }

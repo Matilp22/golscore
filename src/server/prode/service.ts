@@ -37,7 +37,7 @@ export async function savePrediction(input: SavePredictionInput) {
     return {
       ok: false,
       status: 403,
-      error: 'La prediccion ya esta bloqueada para este partido.',
+      error: 'La predicción ya está bloqueada para este partido.',
     }
   }
 
