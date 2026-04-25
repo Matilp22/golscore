@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useMemo, useState } from 'react'
 
 import type { LeagueFixtureSummary } from '@/lib/api-football'
+import { parseMatchDate } from '@/shared/utils/prediction-lock'
 
 type CopaArgentinaMatchListProps = {
   rounds: Array<{
@@ -32,7 +33,7 @@ function formatDate(date: string) {
     minute: '2-digit',
     hour12: false,
     timeZone: 'America/Argentina/Buenos_Aires',
-  }).format(new Date(date))
+  }).format(parseMatchDate(date))
 }
 
 function hasPenaltyScore(match: LeagueFixtureSummary) {

@@ -2,6 +2,8 @@ const LIGA_PROFESIONAL_EXTERNAL_ID = 128
 const WORLD_CUP_EXTERNAL_ID = 1
 
 export const SHOW_CLAUSURA = false
+import { parseMatchDate } from '@/shared/utils/prediction-lock'
+
 const FIFTEEN_MINUTES_IN_MS = 15 * 60 * 1000
 
 export function normalizeProdeRound(
@@ -97,7 +99,7 @@ export function getCurrentProdeRound(matches: ProdeRoundMatch[], now = new Date(
       continue
     }
 
-    const matchDateMs = new Date(match.matchDate).getTime()
+    const matchDateMs = parseMatchDate(match.matchDate).getTime()
 
     if (Number.isNaN(matchDateMs)) continue
 

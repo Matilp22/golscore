@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import LeaderboardTable from '@/frontend/components/prode/LeaderboardTable'
@@ -329,6 +329,7 @@ export default function ProdePanel() {
     predictedHomeScore: number
     predictedAwayScore: number
   }) => {
+    setMessage('')
     const savedPrediction = await savePrediction(input)
 
     setPredictions((current) => {
@@ -336,7 +337,18 @@ export default function ProdePanel() {
         (prediction) => prediction.matchId !== savedPrediction.matchId
       )
 
-      return [savedPrediction, ...withoutCurrent]
+      const previous = current.find((prediction) => prediction.matchId === savedPrediction.matchId)
+
+      return [
+        {
+          ...previous,
+          ...savedPrediction,
+          points: savedPrediction.points ?? previous?.points ?? 0,
+          exactHit: savedPrediction.exactHit ?? previous?.exactHit ?? false,
+          partialHit: savedPrediction.partialHit ?? previous?.partialHit ?? false,
+        },
+        ...withoutCurrent,
+      ]
     })
 
     setEditingMatchIds((current) => {
@@ -350,10 +362,11 @@ export default function ProdePanel() {
       return next
     })
     markUpdatedNow()
-    await Promise.all([
-      loadPredictions({ silent: true }),
+    const [freshPredictions] = await Promise.all([
+      getMyPredictions(),
       loadLeaderboard(),
     ])
+    setPredictions(freshPredictions)
     setMessage('Predicción guardada.')
   }
 

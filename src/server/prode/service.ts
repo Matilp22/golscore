@@ -1,5 +1,5 @@
 import { getSupabaseServerClient } from '@/lib/supabase/server'
-import { isPredictionLocked } from '@/server/prode/rules'
+import { getPredictionLockState } from '@/shared/utils/prediction-lock'
 
 type SavePredictionInput = {
   userId: string
@@ -15,7 +15,7 @@ export async function savePrediction(input: SavePredictionInput) {
     return {
       ok: false,
       status: 500,
-      error: 'Supabase no esta configurado.',
+      error: 'Supabase no está configurado.',
     }
   }
 
@@ -33,7 +33,20 @@ export async function savePrediction(input: SavePredictionInput) {
     }
   }
 
-  if (isPredictionLocked(match.match_date)) {
+  const lockState = getPredictionLockState(match.match_date, match.status)
+
+  console.info('[prode/save-prediction] lock check', {
+    matchId: input.matchId,
+    match_date: match.match_date,
+    status: match.status,
+    now: lockState.now.toISOString(),
+    matchStart: lockState.matchStart.toISOString(),
+    lockAt: lockState.lockAt.toISOString(),
+    minutesUntilMatch: Math.round(lockState.minutesUntilMatch * 10) / 10,
+    locked: lockState.locked,
+  })
+
+  if (lockState.locked) {
     return {
       ok: false,
       status: 403,

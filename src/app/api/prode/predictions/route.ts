@@ -10,7 +10,7 @@ async function getAuthenticatedUser(request: Request) {
       supabase: null,
       user: null,
       error: NextResponse.json(
-        { error: 'Supabase no esta configurado.' },
+        { error: 'Supabase no está configurado.' },
         { status: 500 }
       ),
     }
@@ -103,9 +103,12 @@ export async function POST(request: Request) {
     prediction: {
       id: prediction.id,
       userId: prediction.user_id,
-      matchId: prediction.match_id,
+      matchId: String(prediction.match_id),
       predictedHomeScore: prediction.predicted_home_score,
       predictedAwayScore: prediction.predicted_away_score,
+      points: 0,
+      exactHit: false,
+      partialHit: false,
       createdAt: prediction.created_at,
       updatedAt: prediction.updated_at,
     },

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import AppShell from '@/frontend/components/AppShell'
 import AuthStatus from '@/frontend/components/auth/AuthStatus'
 import { getSupabaseServerClient } from '@/lib/supabase/server'
 import './globals.css'
@@ -28,13 +29,16 @@ export default async function RootLayout({
   return (
     <html lang="es" className="h-full antialiased">
       <body className="flex min-h-full flex-col bg-[#0a0d0b] text-white">
-        <div className="mx-auto flex w-full max-w-7xl justify-end px-3 pt-3 md:px-5 md:pt-4">
-          <AuthStatus
-            isAuthenticated={Boolean(user)}
-            userLabel={userLabel}
-          />
-        </div>
-        {children}
+        <AppShell
+          auth={
+            <AuthStatus
+              isAuthenticated={Boolean(user)}
+              userLabel={userLabel}
+            />
+          }
+        >
+          {children}
+        </AppShell>
       </body>
     </html>
   )

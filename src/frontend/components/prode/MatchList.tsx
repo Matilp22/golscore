@@ -6,6 +6,7 @@ import {
   getProdeRoundLabel,
   normalizeProdeRound,
 } from '@/shared/config/prode-rounds'
+import { parseMatchDate } from '@/shared/utils/prediction-lock'
 
 type MatchListProps = {
   matches: Match[]
@@ -34,7 +35,7 @@ function formatGroupDate(value: string) {
     weekday: 'long',
     day: '2-digit',
     month: 'long',
-  }).format(new Date(value))
+  }).format(parseMatchDate(value))
 }
 
 function getGroupLabel(match: Match) {
@@ -70,7 +71,7 @@ function groupMatches(matches: Match[]): MatchGroup[] {
   return [...groups.values()].map((group) => ({
     ...group,
     matches: group.matches.sort(
-      (a, b) => new Date(a.matchDate).getTime() - new Date(b.matchDate).getTime()
+      (a, b) => parseMatchDate(a.matchDate).getTime() - parseMatchDate(b.matchDate).getTime()
     ),
   }))
 }

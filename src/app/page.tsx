@@ -1,9 +1,7 @@
 ﻿export const revalidate = 30
 
 import AutoRefresh from '@/frontend/components/AutoRefresh'
-import HomeShell from '@/frontend/components/HomeShell'
 import MatchRow from '@/frontend/components/MatchRow'
-import SidebarNav from '@/frontend/components/SidebarNav'
 import Image from 'next/image'
 import Link from 'next/link'
 import {
@@ -13,7 +11,6 @@ import {
 } from '@/lib/api-football'
 import {
   getSectionConfig,
-  SIDEBAR_SECTION_CONFIGS,
 } from '@/lib/tournament-pages'
 
 function getBuenosAiresTodayISO() {
@@ -936,11 +933,6 @@ export default async function HomePage({
   const visibleSections = groupedSections.filter(
     (section) => section.competitions.length > 0
   )
-  const availableCompetitionKeys = new Set(
-    visibleSections.flatMap((section) =>
-      section.competitions.map((competition) => competition.key)
-    )
-  )
   const hasLiveMatches = dateMatches.some((match) => isLiveStatus(match.statusShort))
   const refreshIntervalMs = hasLiveMatches ? 60000 : 300000
   const renderedAt = new Date().toISOString()
@@ -948,7 +940,7 @@ export default async function HomePage({
   return (
     <div className="min-h-screen overflow-x-hidden bg-transparent text-white">
       <div className="mx-auto w-full max-w-7xl px-3 py-4 md:px-5 md:py-6">
-        <header className="relative mb-4 rounded-2xl border border-white/8 bg-[#111418]/95 px-3 py-4 shadow-[0_10px_30px_rgba(0,0,0,0.2)] sm:px-4">
+        <header className="relative mb-4 rounded-2xl bg-[#111418]/95 px-3 py-4 shadow-[0_10px_30px_rgba(0,0,0,0.16)] sm:px-4">
           <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
             <Link
               href="/prode"
@@ -991,16 +983,6 @@ export default async function HomePage({
           </div>
         </header>
 
-        <HomeShell
-          sidebar={
-            <div className="sidebar-scroll space-y-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
-              <SidebarNav
-                sections={SIDEBAR_SECTION_CONFIGS}
-                highlightedTournamentKeys={[...availableCompetitionKeys]}
-              />
-            </div>
-          }
-        >
           <main className="min-w-0 space-y-4">
             {dataError ? (
               <div className="rounded-2xl border border-[#5a2a2a] bg-[#3b1919] p-6">
@@ -1090,7 +1072,6 @@ export default async function HomePage({
               </div>
             )}
           </main>
-        </HomeShell>
       </div>
     </div>
   )

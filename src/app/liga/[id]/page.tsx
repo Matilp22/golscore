@@ -5,7 +5,6 @@ import type { ReactNode } from 'react'
 import CurrentRoundNavigator from '@/frontend/components/CurrentRoundNavigator'
 import CopaArgentinaMatchList from '@/frontend/components/CopaArgentinaMatchList'
 import LeaderListInteractive from '@/frontend/components/LeaderListInteractive'
-import SidebarNav from '@/frontend/components/SidebarNav'
 import {
   ApiFootballError,
   getLeagueFixtures,
@@ -18,10 +17,7 @@ import {
   type ResolvedTournament,
   type TopPlayerRow,
 } from '@/lib/api-football'
-import {
-  getTournamentConfig,
-  SIDEBAR_SECTION_CONFIGS,
-} from '@/lib/tournament-pages'
+import { getTournamentConfig } from '@/lib/tournament-pages'
 
 type PageProps = {
   params: Promise<{ id: string }>
@@ -1489,27 +1485,8 @@ export default async function LigaPage({ params }: PageProps) {
 
   return (
     <div className="min-h-screen bg-transparent text-white">
-      <div className="mx-auto grid max-w-7xl gap-4 px-3 py-4 md:px-5 md:py-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="h-fit rounded-3xl border border-white/8 bg-[#0f1317]/90 p-3 lg:sticky lg:top-5 lg:flex lg:max-h-[calc(100vh-2.5rem)] lg:flex-col">
-          <div className="mb-3 border-b border-white/6 pb-3">
-            <Link
-              href="/"
-              className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#7ff0b2]"
-            >
-              Volver a la home
-            </Link>
-          </div>
-
-          <div className="sidebar-scroll lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
-            <SidebarNav
-              sections={SIDEBAR_SECTION_CONFIGS}
-              activeSectionKey={tournament.sectionKey}
-              highlightedTournamentKeys={[tournament.key]}
-            />
-          </div>
-        </aside>
-
-        <main className="space-y-4">
+      <div className="mx-auto max-w-7xl px-3 py-4 md:px-5 md:py-6">
+        <main className="min-w-0 space-y-4">
           <header className="overflow-hidden rounded-3xl border border-white/8 bg-[#111418]/95 shadow-[0_10px_30px_rgba(0,0,0,0.2)]">
             <div className="flex flex-col gap-4 px-4 py-5 md:flex-row md:items-center md:justify-between">
               <div className="flex items-center gap-4">

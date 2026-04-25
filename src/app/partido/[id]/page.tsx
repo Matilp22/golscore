@@ -516,6 +516,18 @@ function getTeamStyle(
     Racing: { shirt: '#60a5fa', secondary: '#ffffff', text: '#ffffff', border: '#ffffff' },
     'Racing Club': { shirt: '#60a5fa', secondary: '#ffffff', text: '#ffffff', border: '#ffffff' },
     Estudiantes: { shirt: '#ef4444', secondary: '#ffffff', text: '#ffffff', border: '#ffffff' },
+    Talleres: { shirt: '#123c69', secondary: '#ffffff', text: '#ffffff', border: '#ffffff' },
+    'San Lorenzo': { shirt: '#1d4ed8', secondary: '#ef4444', text: '#ffffff', border: '#ef4444' },
+    'Vélez Sarsfield': { shirt: '#ffffff', secondary: '#1d4ed8', text: '#111111', border: '#1d4ed8' },
+    Velez: { shirt: '#ffffff', secondary: '#1d4ed8', text: '#111111', border: '#1d4ed8' },
+    Lanus: { shirt: '#7f1d1d', secondary: '#ffffff', text: '#ffffff', border: '#ffffff' },
+    'Rosario Central': { shirt: '#1d4ed8', secondary: '#facc15', text: '#facc15', border: '#facc15' },
+    "Newell's Old Boys": { shirt: '#111111', secondary: '#ef4444', text: '#ffffff', border: '#ef4444' },
+    'Godoy Cruz': { shirt: '#1d4ed8', secondary: '#ffffff', text: '#ffffff', border: '#ffffff' },
+    'Argentinos Juniors': { shirt: '#ef4444', secondary: '#ffffff', text: '#ffffff', border: '#ffffff' },
+    'Defensa y Justicia': { shirt: '#16a34a', secondary: '#facc15', text: '#ffffff', border: '#facc15' },
+    Tigre: { shirt: '#1d4ed8', secondary: '#ef4444', text: '#ffffff', border: '#ef4444' },
+    Platense: { shirt: '#ffffff', secondary: '#7f1d1d', text: '#111111', border: '#7f1d1d' },
     Gimnasia: { shirt: '#1f2937', secondary: '#ffffff', text: '#ffffff', border: '#ffffff' },
     Huracan: { shirt: '#ffffff', secondary: '#dc2626', text: '#dc2626', border: '#dc2626' },
     'Barracas Central': { shirt: '#ef4444', secondary: '#ffffff', text: '#ffffff', border: '#ffffff' },
@@ -527,9 +539,10 @@ function getTeamStyle(
 
   return ensureReadableTeamStyle(
     map[teamName] || {
-      shirt: isHome ? '#dc2626' : '#2563eb',
-      text: '#ffffff',
-      border: '#ffffff',
+      shirt: isHome ? '#14532d' : '#f3f4f6',
+      secondary: isHome ? '#2563eb' : '#9ca3af',
+      text: isHome ? '#ffffff' : '#111827',
+      border: isHome ? '#93c5fd' : '#9ca3af',
     }
   )
 }
@@ -654,12 +667,12 @@ function getPlayerPosition(
   const resolvedCol = inferredPosition?.col || col
   const horizontalPadding =
     sameRowPlayers >= 5
-      ? 5
+      ? 9
       : sameRowPlayers === 4
-      ? 8
-      : sameRowPlayers === 3
       ? 12
-      : 14
+      : sameRowPlayers === 3
+      ? 16
+      : 18
   const horizontalSpan = 100 - horizontalPadding * 2
 
   const x =
@@ -668,8 +681,8 @@ function getPlayerPosition(
       : horizontalPadding + ((resolvedCol - 1) / Math.max(sameRowPlayers - 1, 1)) * horizontalSpan
 
   const normalizedRow = (safeRow - 1) / Math.max(totalRows - 1, 1)
-  const topStart = 10
-  const bottomStart = 90
+  const topStart = 8
+  const bottomStart = 92
   const halfHeight =
     totalRows >= 5
       ? 36
@@ -760,7 +773,7 @@ function Shirt({
 }) {
   return (
     <div
-      className="flex h-8 w-7 items-center justify-center border-2 text-[10px] font-black shadow-md"
+      className="flex h-7 w-6 items-center justify-center border-2 text-[9px] font-black shadow-md sm:h-8 sm:w-7 sm:text-[10px]"
       style={{
         backgroundColor: style.shirt,
         color: style.text,
@@ -886,7 +899,7 @@ function getPlayerFieldState(
   ).length
 
   return {
-    displayName,
+    displayName: abbreviatePlayerName(displayName),
     displayNumber,
     replacedPlayerNumber,
     replacedPlayerName,
@@ -894,6 +907,16 @@ function getPlayerFieldState(
     yellowCards,
     redCards,
   }
+}
+
+function abbreviatePlayerName(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length <= 1) return name
+
+  const lastName = parts[parts.length - 1]
+  const firstInitial = parts[0]?.[0]
+
+  return firstInitial ? `${firstInitial}. ${lastName}` : lastName
 }
 
 function FieldEventBadges({
@@ -1018,7 +1041,6 @@ function PlayerOnField({
       style={{
         left: `${pos.x}%`,
         top: `${pos.y}%`,
-        width: playerState.replacedPlayerName ? '72px' : '82px',
       }}
     >
       <div className="relative mx-auto flex w-fit justify-center">
@@ -1027,7 +1049,7 @@ function PlayerOnField({
             <CaptainBadge />
           </div>
         ) : null}
-        <div className="rounded-2xl border border-[#25553d]/80 bg-[#0f1317]/88 px-2 py-1 shadow-[0_12px_24px_rgba(0,0,0,0.24)] backdrop-blur-[2px]">
+        <div className="rounded-xl border border-[#25553d]/80 bg-[#0f1317]/88 px-1.5 py-1 shadow-[0_12px_24px_rgba(0,0,0,0.24)] backdrop-blur-[2px] sm:rounded-2xl sm:px-2">
           <Shirt number={playerState.displayNumber ?? player.number} style={style} />
         </div>
         <div className="absolute -bottom-1.5 -right-1">
@@ -1047,7 +1069,7 @@ function PlayerOnField({
           </div>
         ) : null}
       </div>
-      <div className="mt-1.5 truncate rounded-full bg-[#0f1317]/82 px-1.5 py-1 text-[8px] font-bold leading-tight text-white shadow-[0_8px_20px_rgba(0,0,0,0.22)] backdrop-blur-[2px]">
+      <div className="mx-auto mt-1.5 max-w-[58px] truncate rounded-full bg-[#0f1317]/82 px-1 py-0.5 text-[7px] font-bold leading-tight text-white shadow-[0_8px_20px_rgba(0,0,0,0.22)] backdrop-blur-[2px] sm:max-w-[76px] sm:px-1.5 sm:py-1 sm:text-[8px]">
         {playerState.displayName}
       </div>
     </div>
@@ -1412,7 +1434,8 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                       </span>
                     </div>
 
-                    <div className="relative min-h-[620px] bg-transparent sm:min-h-[680px] lg:min-h-[760px]">
+                    <div className="overflow-x-auto">
+                    <div className="relative min-h-[620px] min-w-[360px] bg-transparent sm:min-h-[700px] sm:min-w-0 lg:min-h-[800px]">
                       <div className="absolute inset-x-0 top-1/2 h-px bg-[#4ea170]/50" />
                       <div className="absolute left-1/2 top-1/2 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#4ea170]/40" />
                       <div className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#7ff0b2]/40" />
@@ -1454,6 +1477,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                         playerIndex={index}
                       />
                       ))}
+                    </div>
                     </div>
 
                     <div className="flex items-center justify-between border-t border-[#25553d] bg-black/10 px-4 py-3">

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseServerClient } from '@/lib/supabase/server'
 import { getAllowedProdeLeagueIds } from '@/server/prode/scope'
 import { getAllowedProdeLeagueLabel } from '@/shared/config/prode-leagues'
+import { parseMatchDate } from '@/shared/utils/prediction-lock'
 
 type SportDbError = {
   message: string
@@ -264,10 +265,10 @@ export async function GET(request: Request) {
     const statusValue = result?.status ?? match.status
 
     return {
-      id: match.id,
-      leagueId: match.league_id,
-      homeTeamId: match.home_team_id,
-      awayTeamId: match.away_team_id,
+      id: String(match.id),
+      leagueId: match.league_id === null ? null : String(match.league_id),
+      homeTeamId: match.home_team_id === null ? null : String(match.home_team_id),
+      awayTeamId: match.away_team_id === null ? null : String(match.away_team_id),
       matchDate: match.match_date,
       status: statusValue,
       round: match.round === null || match.round === undefined ? null : String(match.round),
@@ -275,24 +276,24 @@ export async function GET(request: Request) {
       awayScore,
       league: league
         ? {
-            id: league.id,
+            id: String(league.id),
             externalId: league.external_id === null ? null : Number(league.external_id),
             name: getAllowedProdeLeagueLabel(league.name),
             country: league.country,
-            season: new Date(match.match_date).getFullYear(),
+            season: parseMatchDate(match.match_date).getFullYear(),
             logoUrl: null,
           }
         : null,
       homeTeam: homeTeam
         ? {
-            id: homeTeam.id,
+            id: String(homeTeam.id),
             name: homeTeam.name ?? 'Local',
             logoUrl: teamLogosById.get(homeTeam.id) ?? null,
           }
         : null,
       awayTeam: awayTeam
         ? {
-            id: awayTeam.id,
+            id: String(awayTeam.id),
             name: awayTeam.name ?? 'Visitante',
             logoUrl: teamLogosById.get(awayTeam.id) ?? null,
           }

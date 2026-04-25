@@ -38,20 +38,27 @@ function StatusBadge({ status }: { status: string }) {
 function TeamBadge({
   logo,
   name,
+  align = 'left',
 }: {
   logo?: string
   name: string
+  align?: 'left' | 'right'
 }) {
+  const logoNode = (
+    <div className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#161a20] ring-1 ring-white/6">
+      {logo ? (
+        <Image src={logo} alt={name} width={24} height={24} className="h-6 w-6 object-contain" />
+      ) : (
+        <span className="text-[9px] text-zinc-500">•</span>
+      )}
+    </div>
+  )
+
   return (
-    <div className="flex min-w-0 items-center gap-2">
-      <div className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#161a20] ring-1 ring-white/6">
-        {logo ? (
-          <Image src={logo} alt={name} width={20} height={20} className="h-5 w-5 object-contain" />
-        ) : (
-          <span className="text-[9px] text-zinc-500">•</span>
-        )}
-      </div>
-      <span className="truncate text-[13px] font-medium text-[#f2f4f7]">{name}</span>
+    <div className={`flex min-w-0 items-center gap-2 ${align === 'right' ? 'justify-end text-right' : ''}`}>
+      {align === 'right' ? null : logoNode}
+      <span className="min-w-0 truncate text-[12px] font-semibold text-[#f2f4f7] sm:text-sm">{name}</span>
+      {align === 'right' ? logoNode : null}
     </div>
   )
 }
@@ -67,34 +74,26 @@ export default function MatchRow({
   score,
   status,
 }: MatchRowProps) {
-  const [homeGoals, awayGoals] = score.split(' - ')
   const isLive = status.includes('EN VIVO')
+  const centerLabel = score === '- - -' ? minute || time || 'vs' : score
 
   return (
     <Link
       href={`/partido/${id}`}
       className="block border-b border-white/6 bg-[#111418] px-3 py-3 transition hover:bg-[#161a20] sm:px-4"
     >
-      <div className="grid min-w-0 grid-cols-[48px_minmax(0,1fr)_auto] items-center gap-2 sm:grid-cols-[56px_minmax(0,1fr)_auto] md:grid-cols-[64px_minmax(0,1fr)_72px_120px] md:gap-3">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_72px_minmax(0,1fr)] items-center gap-2 md:grid-cols-[minmax(0,1fr)_92px_minmax(0,1fr)_112px] md:gap-3">
+        <TeamBadge logo={homeLogo} name={home} />
+
         <div className="text-center">
-          <div className={`text-[11px] font-semibold uppercase tracking-[0.08em] ${isLive ? 'text-[#7ff0b2]' : 'text-[#9ca3af]'}`}>
-            {minute || time}
+          <div className={`rounded-lg border border-white/8 bg-[#0f1317] px-2 py-1 text-xs font-black text-white sm:text-sm ${isLive ? 'text-[#7ff0b2]' : ''}`}>
+            {centerLabel}
           </div>
         </div>
 
-        <div className="min-w-0 space-y-2">
-          <TeamBadge logo={homeLogo} name={home} />
-          <TeamBadge logo={awayLogo} name={away} />
-        </div>
+        <TeamBadge logo={awayLogo} name={away} align="right" />
 
-        <div className="text-right md:text-center">
-          <div className="grid min-w-[38px] grid-cols-2 gap-2 text-sm font-bold text-white sm:min-w-[44px] sm:gap-3">
-            <span>{homeGoals ?? '-'}</span>
-            <span>{awayGoals ?? '-'}</span>
-          </div>
-        </div>
-
-        <div className="hidden justify-end md:flex">
+        <div className="hidden min-w-0 justify-end md:flex">
           <StatusBadge status={status} />
         </div>
       </div>

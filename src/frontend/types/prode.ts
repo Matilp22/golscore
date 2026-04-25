@@ -1,3 +1,9 @@
+import {
+  getPredictionLockState,
+  hasMatchStarted as hasMatchStartedByDate,
+  isPredictionLocked as isPredictionLockedByDate,
+} from '@/shared/utils/prediction-lock'
+
 export type EntityId = string
 
 export type League = {
@@ -86,19 +92,18 @@ export type LeaderboardRow = {
 }
 
 export function isPredictionLocked(matchDate: string, now = new Date()) {
-  const matchStart = new Date(matchDate).getTime()
-
-  return now.getTime() >= matchStart - 15 * 60 * 1000
+  return isPredictionLockedByDate(matchDate, 'scheduled', now)
 }
 
 export function hasMatchStarted(match: Pick<Match, 'matchDate' | 'status'>, now = new Date()) {
-  const normalizedStatus = match.status.toLowerCase()
-  const nonEditableStatuses = ['live', '1h', '2h', 'ht', 'et', 'bt', 'p', 'ft', 'aet', 'pen', 'final', 'finished']
+  return hasMatchStartedByDate(match.matchDate, match.status, now)
+}
 
-  return (
-    now.getTime() >= new Date(match.matchDate).getTime() ||
-    nonEditableStatuses.includes(normalizedStatus)
-  )
+export function getMatchPredictionLockState(
+  match: Pick<Match, 'matchDate' | 'status'>,
+  now = new Date()
+) {
+  return getPredictionLockState(match.matchDate, match.status, now)
 }
 
 export function hasVisibleResult(match: Pick<Match, 'homeScore' | 'awayScore' | 'status'>) {

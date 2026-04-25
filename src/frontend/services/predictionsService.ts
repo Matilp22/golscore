@@ -1,4 +1,4 @@
-import type { Prediction } from '@/frontend/types/prode'
+﻿import type { Prediction } from '@/frontend/types/prode'
 import { getCurrentSession } from '@/lib/supabase/supabaseClient'
 
 async function getAuthHeaders() {

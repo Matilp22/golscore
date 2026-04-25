@@ -1,8 +1,9 @@
 'use client'
 
 import type { Match, Prediction } from '@/frontend/types/prode'
-import { isPredictionLocked } from '@/frontend/types/prode'
+import { getMatchPredictionLockState } from '@/frontend/types/prode'
 import PredictionForm from '@/frontend/components/prode/PredictionForm'
+import { parseMatchDate } from '@/shared/utils/prediction-lock'
 
 type MatchCardProps = {
   match: Match
@@ -31,7 +32,7 @@ function formatDate(value: string) {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
-  }).format(new Date(value))
+  }).format(parseMatchDate(value))
 }
 
 export default function MatchCard({
@@ -44,7 +45,8 @@ export default function MatchCard({
   onDraftChange,
   onSavePrediction,
 }: MatchCardProps) {
-  const locked = isPredictionLocked(match.matchDate)
+  const lockState = getMatchPredictionLockState(match)
+  const locked = lockState.locked
 
   return (
     <article className="min-w-0 px-3 py-3 sm:px-4">
@@ -56,6 +58,11 @@ export default function MatchCard({
           <span className="text-xs text-[#8d98a7]">{formatDate(match.matchDate)}</span>
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
+          {prediction ? (
+            <span className="rounded-full border border-[#25553d] bg-[#13251d] px-2 py-0.5 text-[10px] font-bold uppercase text-[#7ff0b2]">
+              Pronosticado
+            </span>
+          ) : null}
           {match.homeScore !== null && match.awayScore !== null ? (
             <span className="rounded-full border border-white/8 bg-white/5 px-2 py-0.5 text-[11px] font-bold text-white">
               {match.homeScore} - {match.awayScore}

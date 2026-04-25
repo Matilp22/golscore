@@ -1,9 +1,9 @@
-'use client'
+﻿'use client'
 
 import Image from 'next/image'
-import { useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 import type { Match, Prediction } from '@/frontend/types/prode'
-import { isPredictionLocked } from '@/frontend/types/prode'
+import { getMatchPredictionLockState } from '@/frontend/types/prode'
 
 type PredictionFormProps = {
   match: Match
@@ -127,7 +127,8 @@ export default function PredictionForm({
   const [message, setMessage] = useState('')
   const [isPending, startTransition] = useTransition()
   const [isEditing, setIsEditing] = useState(!hasExistingPrediction)
-  const locked = isPredictionLocked(match.matchDate)
+  const lockState = useMemo(() => getMatchPredictionLockState(match), [match])
+  const locked = lockState.locked
   const actionLabel =
     locked ? 'Bloqueado' : hasExistingPrediction && !isEditing ? 'Editar' : 'Guardar'
   const predictedHomeScore = home.trim() === '' ? NaN : Number(home)
@@ -150,6 +151,19 @@ export default function PredictionForm({
     (!hasExistingPrediction || isEditing) &&
     hasValidScores
   const buttonDisabled = canEnterEditMode ? false : !canSavePrediction
+
+  useEffect(() => {
+    console.debug('[prode/prediction-form] lock check', {
+      matchId: match.id,
+      match_date: match.matchDate,
+      status: match.status,
+      now: lockState.now.toISOString(),
+      matchStart: lockState.matchStart.toISOString(),
+      lockAt: lockState.lockAt.toISOString(),
+      minutesUntilMatch: Math.round(lockState.minutesUntilMatch * 10) / 10,
+      locked,
+    })
+  }, [locked, lockState, match.id, match.matchDate, match.status])
 
   const handleSave = () => {
     setMessage('')

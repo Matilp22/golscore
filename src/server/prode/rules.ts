@@ -1,3 +1,8 @@
+import {
+  hasMatchStarted as hasMatchStartedByDate,
+  isPredictionLocked as isPredictionLockedByDate,
+} from '@/shared/utils/prediction-lock'
+
 export type MatchResult = {
   homeScore: number
   awayScore: number
@@ -9,10 +14,7 @@ export type PredictionResult = {
 }
 
 export function isPredictionLocked(matchDate: string | Date, now = new Date()) {
-  const date = typeof matchDate === 'string' ? new Date(matchDate) : matchDate
-  const lockAt = date.getTime() - 15 * 60 * 1000
-
-  return now.getTime() >= lockAt
+  return isPredictionLockedByDate(matchDate, 'scheduled', now)
 }
 
 export function hasMatchStarted(
@@ -20,24 +22,7 @@ export function hasMatchStarted(
   status = 'scheduled',
   now = new Date()
 ) {
-  const date = typeof matchDate === 'string' ? new Date(matchDate) : matchDate
-  const normalizedStatus = status.toLowerCase()
-  const startedStatuses = [
-    'live',
-    '1h',
-    '2h',
-    'ht',
-    'et',
-    'bt',
-    'p',
-    'ft',
-    'aet',
-    'pen',
-    'final',
-    'finished',
-  ]
-
-  return now.getTime() >= date.getTime() || startedStatuses.includes(normalizedStatus)
+  return hasMatchStartedByDate(matchDate, status, now)
 }
 
 function outcome({ homeScore, awayScore }: MatchResult) {

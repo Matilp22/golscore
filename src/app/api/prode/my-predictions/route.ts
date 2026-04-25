@@ -26,7 +26,7 @@ async function getAuthenticatedUser(request: Request) {
       supabase: null,
       user: null,
       error: NextResponse.json(
-        { error: 'Supabase no esta configurado.', predictions: [] },
+        { error: 'Supabase no está configurado.', predictions: [] },
         { status: 500 }
       ),
     }
@@ -68,7 +68,7 @@ export async function GET(request: Request) {
 
   if (!supabase) {
     return NextResponse.json(
-      { error: 'Supabase no esta configurado.', predictions: [] },
+      { error: 'Supabase no está configurado.', predictions: [] },
       { status: 500 }
     )
   }
@@ -114,7 +114,7 @@ export async function GET(request: Request) {
     partialHit: scoresByPredictionId.get(prediction.id)?.partial_hit ?? false,
     id: prediction.id,
     userId: prediction.user_id,
-    matchId: prediction.match_id,
+    matchId: String(prediction.match_id),
     predictedHomeScore: prediction.predicted_home_score,
     predictedAwayScore: prediction.predicted_away_score,
     createdAt: prediction.created_at,

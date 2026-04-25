@@ -82,6 +82,22 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['predictions']['Insert']>
         Relationships: []
       }
+      user_favorite_leagues: {
+        Row: {
+          id: string
+          user_id: string
+          league_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          league_id: string
+          created_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['user_favorite_leagues']['Insert']>
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>

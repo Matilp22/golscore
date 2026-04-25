@@ -1,4 +1,4 @@
-import ProdePanel from '@/frontend/components/prode/ProdePanel'
+﻿import ProdePanel from '@/frontend/components/prode/ProdePanel'
 
 export default function ProdePage() {
   return (

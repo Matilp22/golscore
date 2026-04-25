@@ -1,5 +1,4 @@
 import Image from 'next/image'
-import Link from 'next/link'
 
 import {
   ApiFootballError,
@@ -129,15 +128,6 @@ export default async function EquipoPage({ params }: PageProps) {
   return (
     <div className="min-h-screen text-white">
       <div className="mx-auto max-w-7xl px-3 py-4 md:px-5 md:py-6">
-        <div className="mb-4">
-          <Link
-            href="/"
-            className="inline-flex rounded-lg border border-white/8 bg-[#111418] px-3 py-2 text-sm text-[#c8d0da] transition hover:bg-[#161a20]"
-          >
-            Volver al inicio
-          </Link>
-        </div>
-
         <header className="mb-4 overflow-hidden rounded-2xl border border-white/8 bg-[#111418]/95 shadow-[0_10px_30px_rgba(0,0,0,0.2)]">
           <div className="flex flex-col gap-4 px-4 py-5 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-4">
