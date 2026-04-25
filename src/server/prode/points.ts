@@ -4,6 +4,29 @@ export type RecalculateProdePointsResult = {
   matchId: string | number | null
 }
 
+type SupabaseRpcError = {
+  message?: string
+  details?: string
+  detail?: string
+  hint?: string
+  code?: string
+}
+
+export class ProdePointsRecalculationError extends Error {
+  code?: string
+  detail?: string
+
+  constructor(error: SupabaseRpcError) {
+    const detail = error.details ?? error.detail ?? error.hint
+
+    super(error.message ?? 'No se pudieron recalcular los puntos del prode.')
+
+    this.name = 'ProdePointsRecalculationError'
+    this.code = error.code
+    this.detail = detail
+  }
+}
+
 const FINAL_MATCH_STATUSES = new Set([
   'final',
   'ft',
@@ -35,7 +58,7 @@ export async function recalculateProdePoints(
   })
 
   if (error) {
-    throw new Error(`No se pudieron recalcular los puntos del prode: ${error.message}`)
+    throw new ProdePointsRecalculationError(error)
   }
 
   return {
