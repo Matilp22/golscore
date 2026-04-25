@@ -4,6 +4,7 @@ import { isFinalProdeStatus, recalculateProdePoints } from '@/server/prode/point
 import {
   ALLOWED_TOURNAMENTS,
   getAllowedTournamentBySlug,
+  getAllowedTournamentByExternalId,
   normalizeLeagueName,
   type AllowedTournament,
 } from '@/shared/config/prode-leagues'
@@ -38,6 +39,10 @@ type ApiFixture = {
     away: number | null
   }
   score?: {
+    fulltime?: {
+      home: number | null
+      away: number | null
+    }
     penalty?: {
       home: number | null
       away: number | null
@@ -110,6 +115,41 @@ type UpsertResult = {
   action: UpsertAction
 }
 
+export type SyncSingleFixtureResult = {
+  fixtureId: number
+  tournament: {
+    slug: string
+    name: string
+    externalLeagueId: number
+    season: number
+  }
+  api: {
+    status: string
+    goalsHome: number | null
+    goalsAway: number | null
+    fulltimeHome: number | null
+    fulltimeAway: number | null
+    resolvedHomeScore: number | null
+    resolvedAwayScore: number | null
+  }
+  warnings: string[]
+  before: {
+    id: DbId
+    external_id: number | string | null
+    home_score: number | null
+    away_score: number | null
+    status: string | null
+  } | null
+  after: {
+    id: DbId
+    external_id: number | string | null
+    home_score: number | null
+    away_score: number | null
+    status: string | null
+  } | null
+  action: UpsertAction
+}
+
 function logDebug(enabled: boolean | undefined, message: string, meta?: Record<string, unknown>) {
   if (!enabled) return
 
@@ -154,6 +194,14 @@ function getFixtureRoundValue(round: string | null | undefined) {
   const normalizedRound = round?.trim()
 
   return normalizedRound ? normalizedRound : null
+}
+
+function getFixtureHomeScore(fixture: ApiFixture) {
+  return fixture.goals.home ?? fixture.score?.fulltime?.home ?? null
+}
+
+function getFixtureAwayScore(fixture: ApiFixture) {
+  return fixture.goals.away ?? fixture.score?.fulltime?.away ?? null
 }
 
 function getTournamentSelection(slug?: string | null) {
@@ -226,6 +274,30 @@ async function fetchTournamentFixtures(tournament: AllowedTournament) {
   }
 
   return payload.response ?? []
+}
+
+async function fetchFixtureById(fixtureId: number) {
+  const { payload } = await requestFootballApi<ApiFixture[]>(
+    '/fixtures',
+    {
+      id: fixtureId,
+      timezone: 'America/Argentina/Buenos_Aires',
+    },
+    { logContext: `sync-match:${fixtureId}` }
+  )
+  const apiErrors = payload.errors ? Object.values(payload.errors).filter(Boolean) : []
+
+  if (apiErrors.length) {
+    throw new Error(apiErrors.join(' | '))
+  }
+
+  const fixture = payload.response?.[0] ?? null
+
+  if (!fixture) {
+    throw new Error(`API-Football no devolvio el fixture ${fixtureId}.`)
+  }
+
+  return fixture
 }
 
 async function upsertLeague(
@@ -511,6 +583,8 @@ async function upsertMatch(
   awayTeamId: string | number,
   debug?: boolean
 ) {
+  const homeScore = getFixtureHomeScore(fixture)
+  const awayScore = getFixtureAwayScore(fixture)
   const payload = {
     external_id: fixture.fixture.id,
     league_id: leagueId,
@@ -519,10 +593,8 @@ async function upsertMatch(
     match_date: fixture.fixture.date,
     round: getFixtureRoundValue(fixture.league.round),
     status: fixture.fixture.status.short,
-    home_score: fixture.goals.home,
-    away_score: fixture.goals.away,
-    home_penalty_score: fixture.score?.penalty?.home ?? null,
-    away_penalty_score: fixture.score?.penalty?.away ?? null,
+    home_score: homeScore,
+    away_score: awayScore,
   }
 
   logDebug(debug, 'match lookup by external_id started', {
@@ -533,7 +605,7 @@ async function upsertMatch(
     supabase
       .from('matches')
       .select('id')
-      .eq('external_id', fixture.fixture.id)
+      .eq('external_id', String(fixture.fixture.id))
       .maybeSingle(),
     `matches lookup ${fixture.fixture.id}`
   )
@@ -573,6 +645,8 @@ async function upsertMatch(
 
     if (error) throw new Error(`No se pudo actualizar el partido ${fixture.fixture.id}: ${error.message}`)
 
+    await updatePenaltyScoresIfSupported(supabase, existing.id, fixture, debug)
+
     return {
       id: existing.id,
       action: 'updated' as const,
@@ -599,6 +673,8 @@ async function upsertMatch(
   })
 
   if (!error) {
+    await updatePenaltyScoresIfSupported(supabase, (data as DbIdRow).id, fixture, debug)
+
     return {
       id: (data as DbIdRow).id,
       action: 'created' as const,
@@ -655,6 +731,8 @@ async function upsertMatch(
       })
 
       if (!updateByIdError) {
+        await updatePenaltyScoresIfSupported(supabase, fixture.fixture.id, fixture, debug)
+
         return {
           id: fixture.fixture.id,
           action: 'updated' as const,
@@ -667,9 +745,152 @@ async function upsertMatch(
     )
   }
 
+  const fallbackId = (fallbackData as DbIdRow | null)?.id ?? fixture.fixture.id
+  await updatePenaltyScoresIfSupported(supabase, fallbackId, fixture, debug)
+
   return {
-    id: (fallbackData as DbIdRow | null)?.id ?? fixture.fixture.id,
+    id: fallbackId,
     action: 'created' as const,
+  }
+}
+
+async function updatePenaltyScoresIfSupported(
+  supabase: SupabaseClient,
+  matchId: DbId,
+  fixture: ApiFixture,
+  debug?: boolean
+) {
+  const homePenaltyScore = fixture.score?.penalty?.home ?? null
+  const awayPenaltyScore = fixture.score?.penalty?.away ?? null
+
+  if (homePenaltyScore === null && awayPenaltyScore === null) return
+
+  const { error } = await withTimeout(
+    supabase
+      .from('matches')
+      .update({
+        home_penalty_score: homePenaltyScore,
+        away_penalty_score: awayPenaltyScore,
+      })
+      .eq('id', matchId),
+    `matches penalty update ${fixture.fixture.id}`
+  )
+
+  if (!error) return
+
+  const message = error.message.toLowerCase()
+  const isMissingPenaltyColumn =
+    message.includes('home_penalty_score') ||
+    message.includes('away_penalty_score') ||
+    message.includes('schema cache')
+
+  if (isMissingPenaltyColumn) {
+    logDebug(debug, 'penalty columns missing; base match sync preserved', {
+      fixtureId: fixture.fixture.id,
+      matchId,
+      error: error.message,
+    })
+    return
+  }
+
+  throw new Error(`No se pudieron guardar penales del partido ${fixture.fixture.id}: ${error.message}`)
+}
+
+async function fetchStoredMatchByExternalId(supabase: SupabaseClient, fixtureId: number) {
+  const { data, error } = await withTimeout(
+    supabase
+      .from('matches')
+      .select('id, external_id, home_score, away_score, status')
+      .eq('external_id', String(fixtureId))
+      .maybeSingle(),
+    `matches debug lookup ${fixtureId}`
+  )
+
+  if (error) {
+    throw new Error(`No se pudo leer el partido ${fixtureId} desde Supabase: ${error.message}`)
+  }
+
+  return data as SyncSingleFixtureResult['before']
+}
+
+export async function syncProdeFixtureById(
+  supabase: SupabaseClient,
+  fixtureId: number,
+  options: { debug?: boolean } = {}
+): Promise<SyncSingleFixtureResult> {
+  const fixture = await fetchFixtureById(fixtureId)
+  const tournament = getAllowedTournamentByExternalId(fixture.league.id)
+
+  if (!tournament) {
+    throw new Error(
+      `Fixture ${fixtureId} pertenece a liga ${fixture.league.id}, que no esta permitida para Prode.`
+    )
+  }
+
+  if (fixture.league.season && fixture.league.season !== tournament.season) {
+    throw new Error(
+      `Fixture ${fixtureId} pertenece a temporada ${fixture.league.season}, esperada ${tournament.season}.`
+    )
+  }
+
+  const before = await fetchStoredMatchByExternalId(supabase, fixtureId)
+  const league = await upsertLeague(supabase, tournament, fixture, options.debug)
+  const [homeTeam, awayTeam] = await Promise.all([
+    upsertTeam(supabase, fixture.teams.home, options.debug),
+    upsertTeam(supabase, fixture.teams.away, options.debug),
+  ])
+  const matchUpsert = await upsertMatch(
+    supabase,
+    fixture,
+    league.id,
+    homeTeam.id,
+    awayTeam.id,
+    options.debug
+  )
+  const warnings: string[] = []
+
+  if (
+    isFinalProdeStatus(fixture.fixture.status.short) &&
+    getFixtureHomeScore(fixture) !== null &&
+    getFixtureAwayScore(fixture) !== null
+  ) {
+    try {
+      await recalculateProdePoints(supabase, matchUpsert.id)
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'No se pudieron recalcular puntos.'
+      warnings.push(message)
+      logDebug(options.debug, 'prode points recalculation failed after single fixture sync', {
+        fixtureId,
+        matchId: matchUpsert.id,
+        error: message,
+      })
+    }
+  }
+
+  const after = await fetchStoredMatchByExternalId(supabase, fixtureId)
+
+  return {
+    fixtureId,
+    tournament: {
+      slug: tournament.slug,
+      name: tournament.name,
+      externalLeagueId: tournament.externalLeagueId,
+      season: tournament.season,
+    },
+    api: {
+      status: fixture.fixture.status.short,
+      goalsHome: fixture.goals.home,
+      goalsAway: fixture.goals.away,
+      fulltimeHome: fixture.score?.fulltime?.home ?? null,
+      fulltimeAway: fixture.score?.fulltime?.away ?? null,
+      resolvedHomeScore: getFixtureHomeScore(fixture),
+      resolvedAwayScore: getFixtureAwayScore(fixture),
+    },
+    warnings,
+    before,
+    after,
+    action: matchUpsert.action,
   }
 }
 
@@ -790,8 +1011,12 @@ export async function syncProdeMatches(
             api_round: fixture.league.round ?? null,
             stored_round: getFixtureRoundValue(fixture.league.round),
             status: fixture.fixture.status.short,
-            home_score: fixture.goals.home,
-            away_score: fixture.goals.away,
+            goals_home: fixture.goals.home,
+            goals_away: fixture.goals.away,
+            fulltime_home: fixture.score?.fulltime?.home ?? null,
+            fulltime_away: fixture.score?.fulltime?.away ?? null,
+            resolved_home_score: getFixtureHomeScore(fixture),
+            resolved_away_score: getFixtureAwayScore(fixture),
           })
 
           const [homeTeam, awayTeam] = await Promise.all([
@@ -825,8 +1050,8 @@ export async function syncProdeMatches(
 
           if (
             isFinalProdeStatus(fixture.fixture.status.short) &&
-            fixture.goals.home !== null &&
-            fixture.goals.away !== null
+            getFixtureHomeScore(fixture) !== null &&
+            getFixtureAwayScore(fixture) !== null
           ) {
             try {
               await recalculateProdePoints(supabase, matchUpsert.id)

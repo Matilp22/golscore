@@ -55,6 +55,9 @@ export type Prediction = {
   matchId: EntityId
   predictedHomeScore: number
   predictedAwayScore: number
+  points?: number
+  exactHit?: boolean
+  partialHit?: boolean
   createdAt: string
   updatedAt: string
 }

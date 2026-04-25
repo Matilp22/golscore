@@ -340,6 +340,10 @@ export default function ProdePanel() {
       return next
     })
     markUpdatedNow()
+    await Promise.all([
+      loadPredictions({ silent: true }),
+      loadLeaderboard(),
+    ])
     setMessage('Prediccion guardada.')
   }
 

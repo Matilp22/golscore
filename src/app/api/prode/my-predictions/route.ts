@@ -11,6 +11,13 @@ type PredictionRow = {
   updated_at: string
 }
 
+type PredictionScoreRow = {
+  prediction_id: string
+  points: number | null
+  exact_hit: boolean | null
+  partial_hit: boolean | null
+}
+
 async function getAuthenticatedUser(request: Request) {
   const supabase = await getSupabaseServerClient()
 
@@ -83,7 +90,28 @@ export async function GET(request: Request) {
     )
   }
 
+  const predictionIds = ((data ?? []) as PredictionRow[]).map((prediction) => prediction.id)
+  const scoresByPredictionId = new Map<string, PredictionScoreRow>()
+
+  if (predictionIds.length) {
+    const { data: scores, error: scoresError } = await supabase
+      .from('prediction_scores')
+      .select('prediction_id, points, exact_hit, partial_hit')
+      .in('prediction_id', predictionIds)
+
+    if (scoresError) {
+      console.error('[prode/my-predictions] Error leyendo prediction_scores', scoresError)
+    } else {
+      for (const score of (scores ?? []) as PredictionScoreRow[]) {
+        scoresByPredictionId.set(score.prediction_id, score)
+      }
+    }
+  }
+
   const predictions = ((data ?? []) as PredictionRow[]).map((prediction) => ({
+    points: scoresByPredictionId.get(prediction.id)?.points ?? 0,
+    exactHit: scoresByPredictionId.get(prediction.id)?.exact_hit ?? false,
+    partialHit: scoresByPredictionId.get(prediction.id)?.partial_hit ?? false,
     id: prediction.id,
     userId: prediction.user_id,
     matchId: prediction.match_id,

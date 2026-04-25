@@ -12,17 +12,21 @@ export async function getLeaderboard() {
 
   return (data.leaderboard ?? []).map((row: {
     user_id: string
-    name: string
-    points: number
-    played: number
-    exact_hits: number
-    partial_hits: number
+    username?: string
+    name?: string
+    total_points?: number
+    points?: number
+    played?: number
+    exact_predictions?: number
+    exact_hits?: number
+    partial_predictions?: number
+    partial_hits?: number
   }): LeaderboardRow => ({
     userId: row.user_id,
-    name: row.name,
-    points: row.points,
-    played: row.played,
-    exactHits: row.exact_hits,
-    partialHits: row.partial_hits,
+    name: row.username ?? row.name ?? 'Usuario',
+    points: row.total_points ?? row.points ?? 0,
+    played: row.played ?? 0,
+    exactHits: row.exact_predictions ?? row.exact_hits ?? 0,
+    partialHits: row.partial_predictions ?? row.partial_hits ?? 0,
   }))
 }

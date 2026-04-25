@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getSupabaseServerClient } from '@/lib/supabase/server'
 
 type LeaderboardDbError = {
@@ -9,8 +10,35 @@ type LeaderboardDbError = {
   hint?: string
 }
 
+type LeaderboardSourceRow = {
+  user_id: string
+  name?: string | null
+  username?: string | null
+  points?: number | null
+  played?: number | null
+  exact_hits?: number | null
+  partial_hits?: number | null
+}
+
+type PredictionScoreRow = {
+  user_id: string
+  points: number | null
+  exact_hit: boolean | null
+  partial_hit: boolean | null
+}
+
+type ProfileRow = {
+  id: string
+  username: string | null
+  display_name: string | null
+}
+
 function isMissingLeaderboardSource(error: LeaderboardDbError | null) {
   return error?.code === '42P01' || error?.code === 'PGRST205'
+}
+
+function shouldFallbackToPredictionScores(error: LeaderboardDbError | null) {
+  return isMissingLeaderboardSource(error) || error?.code === '42703'
 }
 
 function sanitizeDiagnostic(value: unknown) {
@@ -46,6 +74,95 @@ async function fetchLeaderboardFrom(
     .order('exact_hits', { ascending: false })
 }
 
+function normalizeLeaderboardRows(rows: LeaderboardSourceRow[]) {
+  return rows
+    .map((row) => {
+      const totalPoints = row.points ?? 0
+      const exactPredictions = row.exact_hits ?? 0
+      const partialPredictions = row.partial_hits ?? 0
+
+      return {
+        user_id: row.user_id,
+        username: row.username ?? row.name ?? 'Usuario',
+        name: row.name ?? row.username ?? 'Usuario',
+        total_points: totalPoints,
+        points: totalPoints,
+        played: row.played ?? exactPredictions + partialPredictions,
+        exact_predictions: exactPredictions,
+        exact_hits: exactPredictions,
+        partial_predictions: partialPredictions,
+        partial_hits: partialPredictions,
+      }
+    })
+    .sort((a, b) => {
+      if (b.total_points !== a.total_points) return b.total_points - a.total_points
+      return b.exact_predictions - a.exact_predictions
+    })
+}
+
+async function fetchLeaderboardFromPredictionScores() {
+  const supabase = getSupabaseAdminClient()
+  const { data: scores, error: scoresError } = await supabase
+    .from('prediction_scores')
+    .select('user_id, points, exact_hit, partial_hit')
+
+  if (scoresError) {
+    console.error('[prode/leaderboard] Error leyendo prediction_scores', scoresError)
+    throw scoresError
+  }
+
+  const scoreRows = (scores ?? []) as PredictionScoreRow[]
+
+  if (!scoreRows.length) return []
+
+  const userIds = [...new Set(scoreRows.map((row) => row.user_id))]
+  const profilesResult = await supabase
+    .from('profiles')
+    .select('id, username, display_name')
+    .in('id', userIds)
+  const fallbackProfilesResult =
+    profilesResult.error?.code === '42703'
+      ? await supabase
+          .from('profiles')
+          .select('id, username')
+          .in('id', userIds)
+      : null
+  const profiles = fallbackProfilesResult?.data ?? profilesResult.data
+  const profilesError = fallbackProfilesResult?.error ?? profilesResult.error
+
+  if (profilesError) {
+    console.error('[prode/leaderboard] Error leyendo profiles para fallback', profilesError)
+  }
+
+  const profilesByUserId = new Map(
+    ((profiles ?? []) as ProfileRow[]).map((profile) => [profile.id, profile])
+  )
+  const grouped = new Map<string, LeaderboardSourceRow>()
+
+  for (const score of scoreRows) {
+    const current = grouped.get(score.user_id) ?? {
+      user_id: score.user_id,
+      points: 0,
+      played: 0,
+      exact_hits: 0,
+      partial_hits: 0,
+    }
+
+    current.points = (current.points ?? 0) + (score.points ?? 0)
+    current.played = (current.played ?? 0) + 1
+    current.exact_hits = (current.exact_hits ?? 0) + (score.exact_hit ? 1 : 0)
+    current.partial_hits = (current.partial_hits ?? 0) + (score.partial_hit ? 1 : 0)
+
+    const profile = profilesByUserId.get(score.user_id)
+    current.username = profile?.display_name ?? profile?.username ?? 'Usuario'
+    current.name = current.username
+
+    grouped.set(score.user_id, current)
+  }
+
+  return normalizeLeaderboardRows([...grouped.values()])
+}
+
 export async function GET() {
   try {
     const supabase = await getSupabaseServerClient()
@@ -74,11 +191,15 @@ export async function GET() {
     if (error) {
       console.error('[prode/leaderboard] Error de Supabase', error)
 
-      if (isMissingLeaderboardSource(error)) {
+      if (shouldFallbackToPredictionScores(error)) {
+        const scoreLeaderboard = await fetchLeaderboardFromPredictionScores()
+
         return NextResponse.json({
           ok: true,
-          leaderboard: [],
-          meta: { emptyReason: 'leaderboard_source_missing' },
+          leaderboard: scoreLeaderboard,
+          meta: scoreLeaderboard.length
+            ? { source: 'prediction_scores', fallbackReason: error.code }
+            : { emptyReason: 'prediction_scores_empty', fallbackReason: error.code },
         })
       }
 
@@ -94,7 +215,21 @@ export async function GET() {
       )
     }
 
-    return NextResponse.json({ ok: true, leaderboard: data ?? [] })
+    const normalizedLeaderboard = normalizeLeaderboardRows((data ?? []) as LeaderboardSourceRow[])
+
+    if (normalizedLeaderboard.length) {
+      return NextResponse.json({ ok: true, leaderboard: normalizedLeaderboard })
+    }
+
+    const scoreLeaderboard = await fetchLeaderboardFromPredictionScores()
+
+    return NextResponse.json({
+      ok: true,
+      leaderboard: scoreLeaderboard,
+      meta: scoreLeaderboard.length
+        ? { source: 'prediction_scores' }
+        : { emptyReason: 'no_points_calculated' },
+    })
   } catch (error) {
     console.error('[prode/leaderboard] Error completo', error)
 

@@ -53,6 +53,12 @@ export default function MatchCard({
               {match.homeScore} - {match.awayScore}
             </span>
           ) : null}
+          {prediction?.points !== undefined ? (
+            <span className="rounded-full border border-[#25553d] bg-[#13251d] px-2 py-0.5 text-[11px] font-bold text-[#7ff0b2]">
+              {prediction.points} pts
+              {prediction.exactHit ? ' exacto' : prediction.partialHit ? ' parcial' : ''}
+            </span>
+          ) : null}
           {locked ? (
             <span className="rounded-full border border-[#45312f] bg-[#241918] px-2 py-0.5 text-[10px] font-bold uppercase text-[#ffb4a6]">
               Cerrado

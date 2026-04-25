@@ -26,22 +26,80 @@ type FixtureSample = {
       name?: string
     }
   }
+  goals?: {
+    home?: number | null
+    away?: number | null
+  }
+  score?: {
+    fulltime?: {
+      home?: number | null
+      away?: number | null
+    }
+  }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const config = getFootballApiConfig()
+    const { searchParams } = new URL(request.url)
+    const fixture = searchParams.get('fixture')
+    const fixtureId = fixture ? Number(fixture) : null
+
+    if (fixture && (!fixtureId || !Number.isFinite(fixtureId))) {
+      return NextResponse.json(
+        { ok: false, error: 'fixture invalido.' },
+        { status: 400 }
+      )
+    }
+
     const { status, payload } = await requestFootballApi<FixtureSample[]>(
       '/fixtures',
-      {
-        league: 128,
-        season: 2026,
-        timezone: 'America/Argentina/Buenos_Aires',
-      },
-      { logContext: 'test-football-api' }
+      fixtureId
+        ? {
+            id: fixtureId,
+            timezone: 'America/Argentina/Buenos_Aires',
+          }
+        : {
+            league: 128,
+            season: 2026,
+            timezone: 'America/Argentina/Buenos_Aires',
+          },
+      { logContext: fixtureId ? `test-football-api:fixture:${fixtureId}` : 'test-football-api' }
     )
 
     const response = Array.isArray(payload.response) ? payload.response : []
+    const fixtureResponse = fixtureId ? response[0] ?? null : null
+
+    if (fixtureId) {
+      return NextResponse.json({
+        ok: true,
+        status,
+        keyConfigured: Boolean(config.apiKey),
+        baseUrl: config.baseUrl,
+        errors: payload.errors ?? {},
+        results: payload.results ?? response.length,
+        fixture: fixtureResponse
+          ? {
+              fixture: {
+                id: fixtureResponse.fixture?.id ?? null,
+                status: {
+                  short: fixtureResponse.fixture?.status?.short ?? null,
+                },
+              },
+              goals: {
+                home: fixtureResponse.goals?.home ?? null,
+                away: fixtureResponse.goals?.away ?? null,
+              },
+              score: {
+                fulltime: {
+                  home: fixtureResponse.score?.fulltime?.home ?? null,
+                  away: fixtureResponse.score?.fulltime?.away ?? null,
+                },
+              },
+            }
+          : null,
+      })
+    }
 
     return NextResponse.json({
       ok: true,

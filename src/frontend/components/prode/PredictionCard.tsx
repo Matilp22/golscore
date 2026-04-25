@@ -18,7 +18,8 @@ export default function PredictionCard({
         {match?.awayTeam?.name ?? 'Visitante'}
       </p>
       <p className="mt-1 text-xs text-[#8d98a7]">
-        Partido #{prediction.matchId}
+        Partido #{prediction.matchId} · {prediction.points ?? 0} pts
+        {prediction.exactHit ? ' exacto' : prediction.partialHit ? ' parcial' : ''}
       </p>
     </div>
   )
