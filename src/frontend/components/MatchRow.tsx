@@ -29,7 +29,7 @@ function StatusBadge({ status }: { status: string }) {
     : 'bg-[#1c2128] text-[#a8b0bc] border-[#2a3038]'
 
   return (
-    <span className={`rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${classes}`}>
+    <span className={`max-w-full whitespace-nowrap rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] ${classes}`}>
       {status}
     </span>
   )
@@ -44,7 +44,7 @@ function TeamBadge({
 }) {
   return (
     <div className="flex min-w-0 items-center gap-2">
-      <div className="flex h-5 w-5 items-center justify-center overflow-hidden rounded-full bg-[#161a20] ring-1 ring-white/6">
+      <div className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#161a20] ring-1 ring-white/6">
         {logo ? (
           <Image src={logo} alt={name} width={20} height={20} className="h-5 w-5 object-contain" />
         ) : (
@@ -73,9 +73,9 @@ export default function MatchRow({
   return (
     <Link
       href={`/partido/${id}`}
-      className="block border-b border-white/6 bg-[#111418] px-3 py-3 transition hover:bg-[#161a20]"
+      className="block border-b border-white/6 bg-[#111418] px-3 py-3 transition hover:bg-[#161a20] sm:px-4"
     >
-      <div className="grid grid-cols-[56px_1fr_auto] items-center gap-3 md:grid-cols-[64px_1fr_72px_120px]">
+      <div className="grid min-w-0 grid-cols-[48px_minmax(0,1fr)_auto] items-center gap-2 sm:grid-cols-[56px_minmax(0,1fr)_auto] md:grid-cols-[64px_minmax(0,1fr)_72px_120px] md:gap-3">
         <div className="text-center">
           <div className={`text-[11px] font-semibold uppercase tracking-[0.08em] ${isLive ? 'text-[#7ff0b2]' : 'text-[#9ca3af]'}`}>
             {minute || time}
@@ -88,7 +88,7 @@ export default function MatchRow({
         </div>
 
         <div className="text-right md:text-center">
-          <div className="grid min-w-[44px] grid-cols-2 gap-3 text-sm font-bold text-white">
+          <div className="grid min-w-[38px] grid-cols-2 gap-2 text-sm font-bold text-white sm:min-w-[44px] sm:gap-3">
             <span>{homeGoals ?? '-'}</span>
             <span>{awayGoals ?? '-'}</span>
           </div>
@@ -99,7 +99,7 @@ export default function MatchRow({
         </div>
       </div>
 
-      <div className="mt-2 flex justify-end md:hidden">
+      <div className="mt-2 flex min-w-0 justify-end md:hidden">
         <StatusBadge status={status} />
       </div>
     </Link>

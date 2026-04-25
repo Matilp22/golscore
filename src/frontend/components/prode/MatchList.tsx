@@ -85,7 +85,7 @@ export default function MatchList({
 
   if (!matches.length) {
     return (
-      <div className="rounded-2xl border border-white/8 bg-[#111418] p-6">
+      <div className="rounded-2xl border border-white/8 bg-[#111418] p-4 sm:p-6">
         <h2 className="text-lg font-black text-white">Partidos</h2>
         <p className="mt-2 text-sm text-[#8d98a7]">
           No hay partidos cargados para los filtros seleccionados.
@@ -95,10 +95,10 @@ export default function MatchList({
   }
 
   return (
-    <section className="space-y-3">
+    <section className="min-w-0 space-y-3">
       {groups.map((group) => (
-        <div key={group.key} className="overflow-hidden rounded-2xl border border-white/8 bg-[#111418]">
-          <div className="border-b border-white/8 bg-[#151a20] px-4 py-3">
+        <div key={group.key} className="min-w-0 overflow-hidden rounded-2xl border border-white/8 bg-[#111418]">
+          <div className="border-b border-white/8 bg-[#151a20] px-3 py-3 sm:px-4">
             <h3 className="text-sm font-black uppercase tracking-[0.14em] text-white">
               {group.label}
             </h3>

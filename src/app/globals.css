@@ -19,10 +19,15 @@
 
 html {
   scroll-behavior: smooth;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 body {
   min-height: 100vh;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
   background:
     radial-gradient(circle at top left, rgba(38, 84, 59, 0.22), transparent 28%),
     linear-gradient(180deg, #0d1014 0%, #0a0c10 100%);

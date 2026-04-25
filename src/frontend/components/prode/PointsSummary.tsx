@@ -22,7 +22,7 @@ export default function PointsSummary({
     : predictionExactHits
 
   return (
-    <div className="grid gap-3 sm:grid-cols-3">
+    <div className="grid gap-3 md:grid-cols-3">
       <div className="rounded-2xl border border-white/8 bg-[#111418] p-4">
         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#7ff0b2]">
           Puntos

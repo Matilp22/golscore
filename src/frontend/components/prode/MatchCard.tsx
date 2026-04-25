@@ -39,15 +39,15 @@ export default function MatchCard({
   const locked = isPredictionLocked(match.matchDate)
 
   return (
-    <article className="px-4 py-3">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
+    <article className="min-w-0 px-3 py-3 sm:px-4">
+      <div className="mb-3 flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#7ff0b2]">
             {match.league?.name ?? 'Torneo'}
           </span>
           <span className="text-xs text-[#8d98a7]">{formatDate(match.matchDate)}</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           {match.homeScore !== null && match.awayScore !== null ? (
             <span className="rounded-full border border-white/8 bg-white/5 px-2 py-0.5 text-[11px] font-bold text-white">
               {match.homeScore} - {match.awayScore}

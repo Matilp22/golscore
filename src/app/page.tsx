@@ -945,13 +945,13 @@ export default async function HomePage({
   const renderedAt = new Date().toISOString()
 
   return (
-    <div className="min-h-screen bg-transparent text-white">
-      <div className="mx-auto max-w-7xl px-3 py-4 md:px-5 md:py-6">
-        <header className="relative mb-4 rounded-2xl border border-white/8 bg-[#111418]/95 px-4 py-4 pl-16 shadow-[0_10px_30px_rgba(0,0,0,0.2)] lg:pl-4">
+    <div className="min-h-screen overflow-x-hidden bg-transparent text-white">
+      <div className="mx-auto w-full max-w-7xl px-3 py-4 md:px-5 md:py-6">
+        <header className="relative mb-4 rounded-2xl border border-white/8 bg-[#111418]/95 px-3 py-4 pl-16 shadow-[0_10px_30px_rgba(0,0,0,0.2)] sm:px-4 lg:pl-4">
           <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
             <Link
               href="/prode"
-              className="inline-flex items-center justify-center rounded-xl border border-[#25553d] bg-[#163828] px-4 py-2 text-sm font-semibold text-[#7ff0b2] transition hover:bg-[#1b4330]"
+              className="inline-flex min-h-11 items-center justify-center rounded-xl border border-[#25553d] bg-[#163828] px-4 py-2 text-sm font-semibold text-[#7ff0b2] transition hover:bg-[#1b4330]"
             >
               Prode
             </Link>
@@ -964,7 +964,7 @@ export default async function HomePage({
 
           <div className="flex flex-col gap-4">
             <div>
-              <h1 className="text-5xl font-black leading-none tracking-normal text-white md:text-7xl">
+              <h1 className="text-4xl font-black leading-none tracking-normal text-white sm:text-5xl md:text-7xl">
                 GolScore
               </h1>
               <p className="mt-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#7ff0b2] md:text-sm">
@@ -972,12 +972,12 @@ export default async function HomePage({
               </p>
             </div>
 
-            <div className="flex flex-wrap justify-center gap-2">
+            <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:justify-center">
               {dayOptions.map((day) => (
                 <a
                   key={day.value}
                   href={`/?date=${day.value}`}
-                  className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+                  className={`flex min-h-11 items-center justify-center rounded-lg border px-2 py-2 text-center text-sm font-semibold transition sm:px-3 ${
                     selectedDate === day.value
                       ? 'border-[#2d6d4d] bg-[#163828] text-[#7ff0b2]'
                       : 'border-white/8 bg-[#15191e] text-[#c7d0da] hover:border-white/14 hover:bg-[#181d23]'
@@ -1000,7 +1000,7 @@ export default async function HomePage({
             </div>
           }
         >
-          <main className="space-y-4">
+          <main className="min-w-0 space-y-4">
             {dataError ? (
               <div className="rounded-2xl border border-[#5a2a2a] bg-[#3b1919] p-6">
                 <p className="text-sm font-medium text-[#ffd5d5]">
@@ -1014,9 +1014,9 @@ export default async function HomePage({
                 <section
                   id={section.key}
                   key={section.key}
-                  className="overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92"
+                  className="min-w-0 overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92"
                 >
-                  <div className="border-b border-white/6 bg-[#13181d] px-4 py-3">
+                  <div className="border-b border-white/6 bg-[#13181d] px-3 py-3 sm:px-4">
                     <h2 className="text-base font-bold text-white md:text-lg">
                       {section.title}
                     </h2>
@@ -1029,9 +1029,9 @@ export default async function HomePage({
                         key={competition.key}
                         className="scroll-mt-5 px-0 py-0"
                       >
-                        <div className="border-b border-white/6 bg-[#12171c] px-4 py-3">
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-3">
+                        <div className="border-b border-white/6 bg-[#12171c] px-3 py-3 sm:px-4">
+                          <div className="flex min-w-0 items-center justify-between gap-3">
+                            <div className="flex min-w-0 items-center gap-3">
                               {competition.logo ? (
                                 <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/8 bg-[#161b21]">
                                   <Image
@@ -1047,14 +1047,14 @@ export default async function HomePage({
                                   {competition.title.slice(0, 2)}
                                 </div>
                               )}
-                              <div>
-                                <h3 className="text-sm font-semibold text-[#f3f6fa] md:text-base">
+                              <div className="min-w-0">
+                                <h3 className="break-words text-sm font-semibold text-[#f3f6fa] md:text-base">
                                   {competition.title}
                                 </h3>
                               </div>
                             </div>
 
-                            <div className="rounded-md bg-white/5 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#94a0ae]">
+                            <div className="shrink-0 rounded-md bg-white/5 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#94a0ae] sm:px-2.5 sm:text-[11px]">
                               {competition.matches.length} partido{competition.matches.length !== 1 ? 's' : ''}
                             </div>
                           </div>

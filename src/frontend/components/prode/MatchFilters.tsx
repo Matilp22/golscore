@@ -72,14 +72,14 @@ function FilterSelect({
   }, [])
 
   return (
-    <div ref={wrapperRef} className="relative">
+    <div ref={wrapperRef} className="relative min-w-0">
       <label className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#7ff0b2]">
         {label}
       </label>
       <button
         type="button"
         onClick={() => setIsOpen((current) => !current)}
-        className="mt-2 flex h-11 w-full items-center justify-between gap-3 rounded-2xl border border-white/8 bg-[#10151a] px-4 text-left text-white transition hover:border-white/12 hover:bg-[#151b21]"
+        className="mt-2 flex h-12 w-full items-center justify-between gap-3 rounded-2xl border border-white/8 bg-[#10151a] px-4 text-left text-white transition hover:border-white/12 hover:bg-[#151b21] md:h-11"
         aria-expanded={isOpen}
         aria-haspopup="listbox"
       >
@@ -159,7 +159,7 @@ export default function MatchFilters({
   )
 
   return (
-    <div className="grid gap-3 rounded-3xl border border-white/8 bg-[#0f1317]/92 p-4 sm:grid-cols-2">
+    <div className="grid min-w-0 gap-3 rounded-2xl border border-white/8 bg-[#0f1317]/92 p-3 md:grid-cols-2 md:p-4">
       <FilterSelect
         label="Liga"
         value={selectedLeagueId}

@@ -110,9 +110,9 @@ export default function PredictionForm({
 
   return (
     <div>
-      <div className="grid gap-3 md:grid-cols-[minmax(140px,1fr)_64px_28px_64px_minmax(140px,1fr)_112px] md:items-center">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_56px_56px_minmax(0,1fr)] items-center gap-2 md:grid-cols-[minmax(140px,1fr)_64px_28px_64px_minmax(140px,1fr)_112px] md:gap-3">
         <div className="min-w-0">
-          <p className="truncate text-sm font-black text-white">
+          <p className="break-words text-sm font-black leading-tight text-white md:truncate">
             {match.homeTeam?.name ?? 'Local'}
           </p>
           <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8d98a7]">
@@ -132,7 +132,7 @@ export default function PredictionForm({
             if (message) setMessage('')
           }}
           aria-label="Pronostico local"
-          className="h-11 w-full rounded-xl border border-white/8 bg-[#0f1317] text-center text-base font-black text-white outline-none focus:border-[#25553d] disabled:opacity-45"
+          className="h-12 w-full min-w-0 rounded-xl border border-white/8 bg-[#0f1317] text-center text-base font-black text-white outline-none focus:border-[#25553d] disabled:opacity-45 md:h-11"
         />
         <span className="hidden text-center text-sm font-black text-[#8d98a7] md:block">vs</span>
         <input
@@ -148,10 +148,10 @@ export default function PredictionForm({
             if (message) setMessage('')
           }}
           aria-label="Pronostico visitante"
-          className="h-11 w-full rounded-xl border border-white/8 bg-[#0f1317] text-center text-base font-black text-white outline-none focus:border-[#25553d] disabled:opacity-45"
+          className="h-12 w-full min-w-0 rounded-xl border border-white/8 bg-[#0f1317] text-center text-base font-black text-white outline-none focus:border-[#25553d] disabled:opacity-45 md:h-11"
         />
-        <div className="min-w-0 md:text-right">
-          <p className="truncate text-sm font-black text-white">
+        <div className="min-w-0 text-right">
+          <p className="break-words text-sm font-black leading-tight text-white md:truncate">
             {match.awayTeam?.name ?? 'Visitante'}
           </p>
           <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8d98a7]">
@@ -162,7 +162,7 @@ export default function PredictionForm({
           type="button"
           disabled={buttonDisabled}
           onClick={handleSave}
-          className="h-11 rounded-xl border border-[#25553d] bg-[#163828] px-4 text-sm font-bold text-[#7ff0b2] transition hover:bg-[#1b4330] disabled:cursor-not-allowed disabled:opacity-45"
+          className="col-span-4 h-12 rounded-xl border border-[#25553d] bg-[#163828] px-4 text-sm font-bold text-[#7ff0b2] transition hover:bg-[#1b4330] disabled:cursor-not-allowed disabled:opacity-45 md:col-span-1 md:h-11"
         >
           {isPending ? 'Guardando' : actionLabel}
         </button>

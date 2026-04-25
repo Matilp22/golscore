@@ -362,11 +362,11 @@ export default function ProdePanel() {
   }, [])
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4">
       <PointsSummary myRanking={myRanking} predictions={predictions} />
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="space-y-4">
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="min-w-0 space-y-4">
           <MatchFilters
             leagues={leagues}
             rounds={rounds}
@@ -384,7 +384,7 @@ export default function ProdePanel() {
               setSelectedRound(round)
             }}
           />
-          <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+          <div className="flex flex-col gap-1 px-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-2">
             <p className="text-xs font-semibold text-[#8d98a7]">
               {formatLastUpdatedLabel(lastUpdatedAt)}
             </p>
@@ -394,7 +394,7 @@ export default function ProdePanel() {
           </div>
 
           {isLeaguesLoading || isMatchesLoading || isAuthLoading ? (
-            <div className="rounded-2xl border border-white/8 bg-[#111418] p-6">
+            <div className="rounded-2xl border border-white/8 bg-[#111418] p-4 sm:p-6">
               <h2 className="text-lg font-black text-white">Partidos</h2>
               <p className="mt-2 text-sm text-[#8d98a7]">Cargando partidos...</p>
             </div>
@@ -416,7 +416,7 @@ export default function ProdePanel() {
           ) : null}
         </div>
 
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           <LeaderboardTable rows={leaderboard} />
           {rankingMessage ? (
             <p className="rounded-2xl border border-white/8 bg-[#0f1317] px-4 py-3 text-sm text-[#8d98a7]">
@@ -424,10 +424,10 @@ export default function ProdePanel() {
             </p>
           ) : null}
           <section className="rounded-2xl border border-white/8 bg-[#111418]">
-            <div className="border-b border-white/8 px-4 py-3">
+            <div className="border-b border-white/8 px-3 py-3 sm:px-4">
               <h2 className="text-lg font-black text-white">Reglas del prode</h2>
             </div>
-            <div className="p-4">
+            <div className="p-3 sm:p-4">
               <ul className="space-y-2 text-sm text-[#dce7f2]">
                 <li className="flex gap-2">
                   <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#7ff0b2]" />
