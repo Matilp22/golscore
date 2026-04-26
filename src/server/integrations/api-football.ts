@@ -94,6 +94,7 @@ type FixtureListItem = {
   teams: FixtureTeams
   goals: FixtureGoals
   score?: {
+    fulltime?: FixtureGoals
     penalty?: FixtureGoals
   }
 }
@@ -387,6 +388,11 @@ export type LeagueStandingGroup = {
   name: string
   rows: LeagueStandingRow[]
 }
+
+type CalculatedStandingAccumulator = Omit<LeagueStandingRow, 'rank'>
+
+const CALCULATED_STANDINGS_LEAGUE_IDS = new Set([128])
+const FINAL_STANDINGS_STATUSES = new Set(['FT', 'AET', 'PEN'])
 
 type PlayerStatistic = {
   team?: TeamInfo
@@ -867,6 +873,22 @@ export async function getLeagueStandings(
   leagueId: number,
   season: number
 ): Promise<LeagueStandingGroup[]> {
+  if (CALCULATED_STANDINGS_LEAGUE_IDS.has(leagueId)) {
+    try {
+      const calculatedStandings = await getCalculatedLeagueStandings(leagueId, season)
+
+      if (calculatedStandings.length && calculatedStandings[0]?.rows.length) {
+        return calculatedStandings
+      }
+    } catch (error) {
+      console.warn('[standings:calculated] No se pudo calcular tabla desde fixtures', {
+        leagueId,
+        season,
+        error: error instanceof Error ? error.message : 'Error desconocido',
+      })
+    }
+  }
+
   const data = (await apiFootball('/standings', {
     league: leagueId,
     season,
@@ -901,6 +923,189 @@ export async function getLeagueStandings(
       })),
     }
   })
+}
+
+async function getCalculatedLeagueStandings(
+  leagueId: number,
+  season: number
+): Promise<LeagueStandingGroup[]> {
+  const [fixturesData, standingsData] = await Promise.all([
+    apiFootball('/fixtures', {
+      league: leagueId,
+      season,
+      timezone: 'America/Argentina/Buenos_Aires',
+    }, {
+      revalidate: 60,
+    }) as Promise<ApiFootballResponse<FixtureListItem>>,
+    apiFootball('/standings', {
+      league: leagueId,
+      season,
+    }, {
+      revalidate: 300,
+    }) as Promise<ApiFootballResponse<StandingResponseItem>>,
+  ])
+  const seenFixtureIds = new Set<number>()
+  const table = new Map<number | string, CalculatedStandingAccumulator>()
+  const zoneMembership = getStandingZoneMembership(standingsData.response?.[0]?.league?.standings || [])
+
+  function getTeamRow(team: TeamInfo | undefined) {
+    const teamId = team?.id ?? team?.name ?? 'unknown'
+    const current = table.get(teamId)
+
+    if (current) return current
+
+    const next: CalculatedStandingAccumulator = {
+      teamId: team?.id,
+      teamName: team?.name || 'Equipo',
+      teamLogo: team?.logo,
+      points: 0,
+      played: 0,
+      won: 0,
+      drawn: 0,
+      lost: 0,
+      goalsFor: 0,
+      goalsAgainst: 0,
+      goalDifference: 0,
+    }
+
+    table.set(teamId, next)
+    return next
+  }
+
+  for (const item of fixturesData.response ?? []) {
+    const fixtureId = item.fixture.id
+    const statusShort = item.fixture.status.short
+
+    if (seenFixtureIds.has(fixtureId)) continue
+    seenFixtureIds.add(fixtureId)
+
+    if (!FINAL_STANDINGS_STATUSES.has(statusShort)) continue
+
+    const homeGoals = item.goals.home ?? item.score?.fulltime?.home ?? null
+    const awayGoals = item.goals.away ?? item.score?.fulltime?.away ?? null
+
+    if (homeGoals === null || awayGoals === null) continue
+
+    const home = getTeamRow(item.teams.home)
+    const away = getTeamRow(item.teams.away)
+
+    home.played += 1
+    home.goalsFor += homeGoals
+    home.goalsAgainst += awayGoals
+
+    away.played += 1
+    away.goalsFor += awayGoals
+    away.goalsAgainst += homeGoals
+
+    if (homeGoals > awayGoals) {
+      home.won += 1
+      home.points += 3
+      away.lost += 1
+    } else if (homeGoals < awayGoals) {
+      away.won += 1
+      away.points += 3
+      home.lost += 1
+    } else {
+      home.drawn += 1
+      away.drawn += 1
+      home.points += 1
+      away.points += 1
+    }
+
+    home.goalDifference = home.goalsFor - home.goalsAgainst
+    away.goalDifference = away.goalsFor - away.goalsAgainst
+  }
+
+  const rows = [...table.values()]
+    .filter((row) => row.played > 0)
+    .sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points
+      if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference
+      if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor
+      return a.teamName.localeCompare(b.teamName, 'es-AR')
+    })
+    .map((row, index) => ({
+      ...row,
+      rank: index + 1,
+    }))
+
+  if (zoneMembership.length) {
+    const rowsByTeam = new Map(rows.map((row) => [String(row.teamId || row.teamName), row]))
+    const zoneGroups = zoneMembership
+      .map((zone) => ({
+        name: zone.name,
+        rows: zone.teamKeys
+          .map((teamKey) => rowsByTeam.get(teamKey))
+          .filter((row): row is LeagueStandingRow => Boolean(row))
+          .sort((a, b) => {
+            if (b.points !== a.points) return b.points - a.points
+            if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference
+            if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor
+            return a.teamName.localeCompare(b.teamName, 'es-AR')
+          })
+          .map((row, index) => ({
+            ...row,
+            rank: index + 1,
+          })),
+      }))
+      .filter((group) => group.rows.length)
+
+    if (zoneGroups.length >= 2) {
+      console.info('[standings:calculated]', {
+        leagueId,
+        season,
+        fixtures: seenFixtureIds.size,
+        countedFixtures: zoneGroups.reduce((max, group) => Math.max(max, ...group.rows.map((row) => row.played)), 0),
+        groups: zoneGroups.map((group) => ({ name: group.name, teams: group.rows.length })),
+        source: 'fixtures+api-groups',
+      })
+
+      return zoneGroups
+    }
+  }
+
+  console.info('[standings:calculated]', {
+    leagueId,
+    season,
+    fixtures: seenFixtureIds.size,
+    teams: rows.length,
+    source: 'fixtures',
+  })
+
+  return rows.length ? [{ name: 'Tabla', rows }] : []
+}
+
+function getStandingZoneMembership(groups: StandingEntry[][]) {
+  return groups
+    .map((group, index) => {
+      const groupName =
+        group.find((row) => row.group)?.group ||
+        (groups.length > 1 ? `Grupo ${index + 1}` : 'Tabla')
+      const normalized = normalizeStandingGroupName(groupName)
+
+      if (
+        !normalized.includes('group a') &&
+        !normalized.includes('group b') &&
+        !normalized.includes('grupo a') &&
+        !normalized.includes('grupo b')
+      ) {
+        return null
+      }
+
+      return {
+        name: normalized.includes('group b') || normalized.includes('grupo b') ? 'Zona B' : 'Zona A',
+        teamKeys: group.map((row) => String(row.team?.id || row.team?.name || '')).filter(Boolean),
+      }
+    })
+    .filter((group): group is { name: string; teamKeys: string[] } => Boolean(group))
+    .sort((a, b) => a.name.localeCompare(b.name, 'es-AR'))
+}
+
+function normalizeStandingGroupName(value: string) {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
 }
 
 export async function getLeagueFixtures(leagueId: number, season: number) {

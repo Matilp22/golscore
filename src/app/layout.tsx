@@ -20,8 +20,16 @@ export default async function RootLayout({
   } = supabase
     ? await supabase.auth.getUser()
     : { data: { user: null } }
+  const { data: profile } = supabase && user
+    ? await supabase
+        .from('profiles')
+        .select('username')
+        .eq('id', user.id)
+        .maybeSingle()
+    : { data: null }
 
   const userLabel =
+    profile?.username ||
     (typeof user?.user_metadata?.username === 'string' && user.user_metadata.username) ||
     user?.email ||
     'Mi cuenta'

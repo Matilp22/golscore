@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 export type RecalculateProdePointsResult = {
   matchId: string | number | null
   calculated: number
+  finalizedPredictions: number
 }
 
 type SupabaseRpcError = {
@@ -41,6 +42,15 @@ type ScoreUpsertRow = {
   exact_hit: boolean
   partial_hit: boolean
   calculated_at: string
+}
+
+function omitCalculatedAt(rows: ScoreUpsertRow[]) {
+  return rows.map((row) => {
+    const { calculated_at: calculatedAt, ...withoutCalculatedAt } = row
+    void calculatedAt
+
+    return withoutCalculatedAt
+  })
 }
 
 type ProfileRow = {
@@ -99,13 +109,17 @@ function calculatePredictionScore(prediction: PredictionRow, homeScore: number, 
 
 async function refreshLeaderboards(supabase: SupabaseClient, userIds: string[]) {
   const uniqueUserIds = [...new Set(userIds)]
+  const isFullRefresh = uniqueUserIds.length === 0
 
-  if (!uniqueUserIds.length) return
-
-  const { data: scores, error: scoresError } = await supabase
+  let scoresQuery = supabase
     .from('prediction_scores')
     .select('user_id, points, exact_hit, partial_hit')
-    .in('user_id', uniqueUserIds)
+
+  if (!isFullRefresh) {
+    scoresQuery = scoresQuery.in('user_id', uniqueUserIds)
+  }
+
+  const { data: scores, error: scoresError } = await scoresQuery
 
   if (scoresError) {
     console.error('[prode/points] No se pudieron leer prediction_scores para leaderboards', {
@@ -116,10 +130,50 @@ async function refreshLeaderboards(supabase: SupabaseClient, userIds: string[]) 
     return
   }
 
+  const scoreRows = (scores ?? []) as Array<{
+    user_id: string
+    points: number | null
+    exact_hit: boolean | null
+    partial_hit: boolean | null
+  }>
+  const leaderboardUserIds = isFullRefresh
+    ? [...new Set(scoreRows.map((score) => score.user_id))]
+    : uniqueUserIds
+
+  if (isFullRefresh) {
+    const { error: deleteError } = await supabase
+      .from('leaderboards')
+      .delete()
+      .not('user_id', 'is', null)
+
+    if (deleteError) {
+      console.error('[prode/points] No se pudo limpiar leaderboards', {
+        message: deleteError.message,
+        code: deleteError.code ?? null,
+        details: deleteError.details ?? null,
+      })
+    }
+  } else {
+    const { error: deleteError } = await supabase
+      .from('leaderboards')
+      .delete()
+      .in('user_id', uniqueUserIds)
+
+    if (deleteError) {
+      console.error('[prode/points] No se pudieron limpiar leaderboards afectados', {
+        message: deleteError.message,
+        code: deleteError.code ?? null,
+        details: deleteError.details ?? null,
+      })
+    }
+  }
+
+  if (!leaderboardUserIds.length) return
+
   const { data: profiles, error: profilesError } = await supabase
     .from('profiles')
     .select('id, username, display_name')
-    .in('id', uniqueUserIds)
+    .in('id', leaderboardUserIds)
 
   if (profilesError) {
     console.error('[prode/points] No se pudieron leer profiles para leaderboards', {
@@ -146,16 +200,11 @@ async function refreshLeaderboards(supabase: SupabaseClient, userIds: string[]) 
   >()
   const now = new Date().toISOString()
 
-  for (const score of (scores ?? []) as Array<{
-    user_id: string
-    points: number | null
-    exact_hit: boolean | null
-    partial_hit: boolean | null
-  }>) {
+  for (const score of scoreRows) {
     const profile = profilesById.get(score.user_id)
     const current = grouped.get(score.user_id) ?? {
       user_id: score.user_id,
-      name: profile?.display_name ?? profile?.username ?? 'Usuario',
+      name: profile?.username ?? profile?.display_name ?? 'Usuario',
       points: 0,
       played: 0,
       exact_hits: 0,
@@ -170,12 +219,12 @@ async function refreshLeaderboards(supabase: SupabaseClient, userIds: string[]) 
     grouped.set(score.user_id, current)
   }
 
-  const leaderboardRows = uniqueUserIds.map((userId) => {
+  const leaderboardRows = leaderboardUserIds.map((userId) => {
     const profile = profilesById.get(userId)
 
     return grouped.get(userId) ?? {
       user_id: userId,
-      name: profile?.display_name ?? profile?.username ?? 'Usuario',
+      name: profile?.username ?? profile?.display_name ?? 'Usuario',
       points: 0,
       played: 0,
       exact_hits: 0,
@@ -184,11 +233,33 @@ async function refreshLeaderboards(supabase: SupabaseClient, userIds: string[]) 
     }
   })
 
+  const canonicalRows = leaderboardRows.map((row) => ({
+    user_id: row.user_id,
+    total_points: row.points,
+    exact_predictions: row.exact_hits,
+    partial_predictions: row.partial_hits,
+    updated_at: row.updated_at,
+  }))
   const { error } = await supabase
     .from('leaderboards')
-    .upsert(leaderboardRows, { onConflict: 'user_id' })
+    .upsert(canonicalRows, { onConflict: 'user_id' })
 
   if (error) {
+    if (error.code === '42703') {
+      const { error: legacyError } = await supabase
+        .from('leaderboards')
+        .upsert(leaderboardRows, { onConflict: 'user_id' })
+
+      if (!legacyError) return
+
+      console.error('[prode/points] No se pudo actualizar leaderboards legacy', {
+        message: legacyError.message,
+        code: legacyError.code ?? null,
+        details: legacyError.details ?? null,
+      })
+      return
+    }
+
     console.error('[prode/points] No se pudo actualizar leaderboards', {
       message: error.message,
       code: error.code ?? null,
@@ -199,7 +270,7 @@ async function refreshLeaderboards(supabase: SupabaseClient, userIds: string[]) 
 
 async function recalculateProdePointsInApp(
   supabase: SupabaseClient,
-  targetMatchId: number | null
+  targetMatchId: string | number | null
 ) {
   let predictionsQuery = supabase
     .from('predictions')
@@ -218,6 +289,10 @@ async function recalculateProdePointsInApp(
   const predictionRows = (predictions ?? []) as PredictionRow[]
 
   if (!predictionRows.length) {
+    if (targetMatchId === null) {
+      await refreshLeaderboards(supabase, [])
+    }
+
     return 0
   }
 
@@ -251,6 +326,8 @@ async function recalculateProdePointsInApp(
   )
   const now = new Date().toISOString()
   const scoreRows: ScoreUpsertRow[] = []
+  const stalePredictionIds: string[] = []
+  const affectedUserIds = [...new Set(predictionRows.map((prediction) => prediction.user_id))]
 
   for (const prediction of predictionRows) {
     const matchId = String(prediction.match_id)
@@ -259,7 +336,10 @@ async function recalculateProdePointsInApp(
     const homeScore = result?.home_score ?? match?.home_score ?? null
     const awayScore = result?.away_score ?? match?.away_score ?? null
 
-    if (homeScore === null || awayScore === null) continue
+    if (homeScore === null || awayScore === null) {
+      stalePredictionIds.push(prediction.id)
+      continue
+    }
 
     scoreRows.push({
       prediction_id: prediction.id,
@@ -270,27 +350,77 @@ async function recalculateProdePointsInApp(
     })
   }
 
-  if (!scoreRows.length) return 0
+  if (stalePredictionIds.length) {
+    const { error: staleScoreError } = await supabase
+      .from('prediction_scores')
+      .delete()
+      .in('prediction_id', stalePredictionIds)
 
-  const { error: scoreError } = await supabase
+    if (staleScoreError) {
+      throw new ProdePointsRecalculationError(staleScoreError)
+    }
+
+    const { error: stalePointsError } = await supabase
+      .from('points')
+      .delete()
+      .in('prediction_id', stalePredictionIds)
+
+    if (
+      stalePointsError &&
+      stalePointsError.code !== '42P01' &&
+      stalePointsError.code !== 'PGRST205' &&
+      stalePointsError.code !== '42703'
+    ) {
+      throw new ProdePointsRecalculationError(stalePointsError)
+    }
+  }
+
+  if (!scoreRows.length) {
+    await refreshLeaderboards(supabase, targetMatchId === null ? [] : affectedUserIds)
+    return 0
+  }
+
+  let { error: scoreError } = await supabase
     .from('prediction_scores')
     .upsert(scoreRows, { onConflict: 'prediction_id' })
+
+  if (scoreError?.code === 'PGRST204' && scoreError.message.includes('calculated_at')) {
+    const retry = await supabase
+      .from('prediction_scores')
+      .upsert(omitCalculatedAt(scoreRows), { onConflict: 'prediction_id' })
+
+    scoreError = retry.error
+  }
 
   if (scoreError) {
     throw new ProdePointsRecalculationError(scoreError)
   }
 
-  const { error: pointsError } = await supabase
+  let { error: pointsError } = await supabase
     .from('points')
     .upsert(scoreRows, { onConflict: 'prediction_id' })
 
-  if (pointsError && pointsError.code !== '42P01' && pointsError.code !== 'PGRST205') {
+  if (pointsError?.code === 'PGRST204' && pointsError.message.includes('calculated_at')) {
+    const retry = await supabase
+      .from('points')
+      .upsert(omitCalculatedAt(scoreRows), { onConflict: 'prediction_id' })
+
+    pointsError = retry.error
+  }
+
+  if (
+    pointsError &&
+    pointsError.code !== '42P01' &&
+    pointsError.code !== 'PGRST205' &&
+    pointsError.code !== '42703' &&
+    pointsError.code !== 'PGRST204'
+  ) {
     throw new ProdePointsRecalculationError(pointsError)
   }
 
   await refreshLeaderboards(
     supabase,
-    scoreRows.map((score) => score.user_id)
+    targetMatchId === null ? [] : affectedUserIds
   )
 
   return scoreRows.length
@@ -303,9 +433,11 @@ export async function recalculateProdePoints(
   const targetMatchId =
     matchId === null || matchId === undefined || matchId === ''
       ? null
-      : Number(matchId)
+      : typeof matchId === 'number'
+        ? matchId
+        : String(matchId)
 
-  if (targetMatchId !== null && !Number.isFinite(targetMatchId)) {
+  if (typeof targetMatchId === 'number' && !Number.isFinite(targetMatchId)) {
     throw new Error('matchId invalido para recalcular puntos.')
   }
 
@@ -314,5 +446,6 @@ export async function recalculateProdePoints(
   return {
     matchId: targetMatchId,
     calculated,
+    finalizedPredictions: calculated,
   }
 }

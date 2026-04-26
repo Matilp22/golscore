@@ -1155,14 +1155,16 @@ function StandingsTable({
       <table className={`min-w-full ${compact ? 'text-[12px]' : 'text-sm'}`}>
         <thead className="text-left text-[#8d98a7]">
           <tr className="border-b border-white/6">
-            <th className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} font-semibold`}>#</th>
+            <th className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} font-semibold`}>Pos</th>
             <th className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} font-semibold`}>Equipo</th>
-            <th className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} font-semibold text-center`}>PTS</th>
             <th className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} font-semibold text-center`}>PJ</th>
             <th className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} font-semibold text-center`}>PG</th>
             <th className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} font-semibold text-center`}>PE</th>
             <th className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} font-semibold text-center`}>PP</th>
+            <th className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} font-semibold text-center`}>GF</th>
+            <th className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} font-semibold text-center`}>GC</th>
             <th className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} font-semibold text-center`}>DG</th>
+            <th className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} font-semibold text-center`}>PTS</th>
             {showAverage ? (
               <th className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} font-semibold text-center`}>Prom.</th>
             ) : null}
@@ -1189,12 +1191,14 @@ function StandingsTable({
                   <span className={`font-medium ${compact ? 'text-[12px]' : ''}`}>{row.teamName}</span>
                 </div>
               </td>
-              <td className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} text-center font-bold`}>{row.points}</td>
               <td className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} text-center`}>{row.played}</td>
               <td className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} text-center`}>{row.won}</td>
               <td className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} text-center`}>{row.drawn}</td>
               <td className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} text-center`}>{row.lost}</td>
+              <td className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} text-center`}>{row.goalsFor}</td>
+              <td className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} text-center`}>{row.goalsAgainst}</td>
               <td className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} text-center`}>{row.goalDifference}</td>
+              <td className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} text-center font-bold`}>{row.points}</td>
               {showAverage ? (
                 <td className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} text-center font-semibold`}>
                   {formatAverage(row.average || 0)}
@@ -1549,7 +1553,7 @@ export default async function LigaPage({ params }: PageProps) {
           ) : null}
 
           {primaryGroups.length ? (
-            <div className={compactGroups ? 'grid gap-4 xl:grid-cols-2' : 'space-y-4'}>
+            <div className={compactGroups ? 'grid gap-4 lg:grid-cols-2' : 'space-y-4'}>
               {primaryGroups.map((group) => (
                 <SectionCard
                   key={group.name}

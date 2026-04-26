@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getSupabaseServerClient } from '@/lib/supabase/server'
 import { savePrediction } from '@/server/prode/service'
 
@@ -51,7 +52,7 @@ async function getAuthenticatedUser(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const { supabase, user, error } = await getAuthenticatedUser(request)
+  const { user, error } = await getAuthenticatedUser(request)
 
   if (error || !user) {
     return error
@@ -98,13 +99,11 @@ export async function POST(request: Request) {
     created_at: string
     updated_at: string
   }
-  const { data: predictionScore, error: predictionScoreError } = supabase
-    ? await supabase
-        .from('prediction_scores')
-        .select('points, exact_hit, partial_hit')
-        .eq('prediction_id', prediction.id)
-        .maybeSingle()
-    : { data: null, error: null }
+  const { data: predictionScore, error: predictionScoreError } = await getSupabaseAdminClient()
+    .from('prediction_scores')
+    .select('points, exact_hit, partial_hit')
+    .eq('prediction_id', prediction.id)
+    .maybeSingle()
 
   if (predictionScoreError) {
     console.error('[prode/predictions] Error leyendo prediction_scores', {

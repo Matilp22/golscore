@@ -5,9 +5,12 @@ type LeaderboardRow = {
   user_id: string
   name?: string | null
   points: number | null
+  total_points?: number | null
   played: number | null
   exact_hits: number | null
   partial_hits: number | null
+  exact_predictions?: number | null
+  partial_predictions?: number | null
 }
 
 type PredictionScoreRow = {
@@ -26,6 +29,11 @@ type ApiError = {
   message?: string
   code?: string
   details?: string
+}
+
+type SupabaseListResult = {
+  data: unknown[] | null
+  error: ApiError | null
 }
 
 function getErrorPayload(error: unknown) {
@@ -55,15 +63,16 @@ function normalizeRows(rows: LeaderboardRow[], profiles: ProfileRow[]) {
   return rows
     .map((row) => {
       const points = row.points ?? 0
-      const exactHits = row.exact_hits ?? 0
-      const partialHits = row.partial_hits ?? 0
+      const totalPoints = row.total_points ?? points
+      const exactHits = row.exact_predictions ?? row.exact_hits ?? 0
+      const partialHits = row.partial_predictions ?? row.partial_hits ?? 0
 
       return {
         user_id: row.user_id,
         username: getDisplayName(row.user_id, profilesById),
         name: getDisplayName(row.user_id, profilesById),
-        total_points: points,
-        points,
+        total_points: totalPoints,
+        points: totalPoints,
         played: row.played ?? exactHits + partialHits,
         exact_predictions: exactHits,
         exact_hits: exactHits,
@@ -103,7 +112,7 @@ function totalsDiffer(leaderboardRows: LeaderboardRow[], scoreRows: LeaderboardR
   if (!leaderboardRows.length && scoreRows.length) return true
 
   const leaderboardTotals = new Map(
-    leaderboardRows.map((row) => [row.user_id, row.points ?? 0])
+    leaderboardRows.map((row) => [row.user_id, row.total_points ?? row.points ?? 0])
   )
 
   return scoreRows.some((row) => leaderboardTotals.get(row.user_id) !== (row.points ?? 0))
@@ -112,15 +121,23 @@ function totalsDiffer(leaderboardRows: LeaderboardRow[], scoreRows: LeaderboardR
 export async function GET() {
   try {
     const supabase = getSupabaseAdminClient()
-    const [
-      leaderboardResult,
-      scoresResult,
-    ] = await Promise.all([
-      supabase
+    let leaderboardResult: SupabaseListResult = await supabase
+      .from('leaderboards')
+      .select('user_id, total_points, exact_predictions, partial_predictions')
+      .order('total_points', { ascending: false })
+      .order('exact_predictions', { ascending: false })
+
+    if (leaderboardResult.error?.code === '42703') {
+      leaderboardResult = await supabase
         .from('leaderboards')
         .select('user_id, name, points, played, exact_hits, partial_hits')
         .order('points', { ascending: false })
-        .order('exact_hits', { ascending: false }),
+        .order('exact_hits', { ascending: false })
+    }
+
+    const [
+      scoresResult,
+    ] = await Promise.all([
       supabase
         .from('prediction_scores')
         .select('user_id, points, exact_hit, partial_hit'),
