@@ -324,6 +324,15 @@ export default function ProdePanel() {
     void loadPredictions()
   }, [loadPredictions, user])
 
+  useEffect(() => {
+    if (isAuthLoading || !selectedLeagueId) return
+
+    void Promise.all([
+      loadLeaderboard(),
+      user ? loadPredictions() : Promise.resolve(),
+    ])
+  }, [isAuthLoading, loadLeaderboard, loadPredictions, selectedLeagueId, user])
+
   const handleSavePrediction = async (input: {
     matchId: string
     predictedHomeScore: number

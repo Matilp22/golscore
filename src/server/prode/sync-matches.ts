@@ -176,27 +176,6 @@ async function withTimeout<T>(promise: PromiseLike<T>, stage: string, ms = 20000
   }
 }
 
-async function withLogoColumnFallback<T extends { error: { message: string } | null }>(
-  primary: () => PromiseLike<T>,
-  fallback: () => PromiseLike<T>,
-  stage: string,
-  debug?: boolean
-) {
-  const result = await withTimeout(primary(), stage)
-  const missingLogoColumn =
-    result.error?.message.toLowerCase().includes('logo_url') ||
-    result.error?.message.toLowerCase().includes('schema cache')
-
-  if (!missingLogoColumn) return result
-
-  logDebug(debug, 'team logo_url column missing; retrying without logo', {
-    stage,
-    error: result.error?.message ?? null,
-  })
-
-  return withTimeout(fallback(), `${stage} without logo`)
-}
-
 function addFixtureError(
   result: SyncTournamentResult,
   fixtureId: number | null,
@@ -225,6 +204,10 @@ function getFixtureHomeScore(fixture: ApiFixture) {
 
 function getFixtureAwayScore(fixture: ApiFixture) {
   return fixture.goals.away ?? fixture.score?.fulltime?.away ?? null
+}
+
+function getTeamLogoUrl(team: { id: number; logo?: string }) {
+  return team.logo || `https://media.api-sports.io/football/teams/${team.id}.png`
 }
 
 function getTournamentSelection(slug?: string | null) {
@@ -471,7 +454,7 @@ async function upsertTeam(
   const payload = {
     external_id: team.id,
     name: team.name,
-    ...(team.logo ? { logo_url: team.logo } : {}),
+    logo_url: getTeamLogoUrl(team),
   }
 
   logDebug(debug, 'team lookup by external_id started', {
@@ -501,23 +484,14 @@ async function upsertTeam(
   if (existingByExternalId) {
     logDebug(debug, 'team update started', { id: (existingByExternalId as DbIdRow).id })
 
-    const { data, error } = await withLogoColumnFallback(
-      () =>
-        supabase
-          .from('teams')
-          .update(payload)
-          .eq('id', (existingByExternalId as DbIdRow).id)
-          .select('id')
-          .single(),
-      () =>
-        supabase
-          .from('teams')
-          .update({ external_id: team.id, name: team.name })
-          .eq('id', (existingByExternalId as DbIdRow).id)
-          .select('id')
-          .single(),
+    const { data, error } = await withTimeout(
+      supabase
+        .from('teams')
+        .update(payload)
+        .eq('id', (existingByExternalId as DbIdRow).id)
+        .select('id')
+        .single(),
       `teams update ${team.id}`,
-      debug
     )
 
     logDebug(debug, 'team update finished', {
@@ -561,23 +535,14 @@ async function upsertTeam(
   if (reusableLegacyTeam) {
     logDebug(debug, 'legacy team normalize started', { id: reusableLegacyTeam.id })
 
-    const { data, error } = await withLogoColumnFallback(
-      () =>
-        supabase
-          .from('teams')
-          .update(payload)
-          .eq('id', reusableLegacyTeam.id)
-          .select('id')
-          .single(),
-      () =>
-        supabase
-          .from('teams')
-          .update({ external_id: team.id, name: team.name })
-          .eq('id', reusableLegacyTeam.id)
-          .select('id')
-          .single(),
+    const { data, error } = await withTimeout(
+      supabase
+        .from('teams')
+        .update(payload)
+        .eq('id', reusableLegacyTeam.id)
+        .select('id')
+        .single(),
       `legacy team normalize ${team.id}`,
-      debug
     )
 
     logDebug(debug, 'legacy team normalize finished', {
@@ -595,21 +560,13 @@ async function upsertTeam(
 
   logDebug(debug, 'team insert started', { external_id: team.id })
 
-  const { data, error } = await withLogoColumnFallback(
-    () =>
-      supabase
-        .from('teams')
-        .insert(payload)
-        .select('id')
-        .single(),
-    () =>
-      supabase
-        .from('teams')
-        .insert({ external_id: team.id, name: team.name })
-        .select('id')
-        .single(),
+  const { data, error } = await withTimeout(
+    supabase
+      .from('teams')
+      .insert(payload)
+      .select('id')
+      .single(),
     `teams insert ${team.id}`,
-    debug
   )
 
   logDebug(debug, 'team insert finished', {

@@ -324,6 +324,7 @@ export async function GET(request: Request) {
         ? {
             id: String(homeTeam.id),
             name: homeTeam.name ?? 'Local',
+            logo_url: homeTeam.logo_url,
             logoUrl: homeTeam.logo_url ?? getApiSportsLogoUrl(homeTeam.external_id),
           }
         : null,
@@ -331,6 +332,7 @@ export async function GET(request: Request) {
         ? {
             id: String(awayTeam.id),
             name: awayTeam.name ?? 'Visitante',
+            logo_url: awayTeam.logo_url,
             logoUrl: awayTeam.logo_url ?? getApiSportsLogoUrl(awayTeam.external_id),
           }
         : null,
