@@ -23,7 +23,7 @@ export async function getLeaderboard() {
     partial_hits?: number
   }): LeaderboardRow => ({
     userId: row.user_id,
-    name: row.username ?? row.name ?? 'Usuario',
+    name: row.username || row.name || 'Usuario',
     points: row.total_points ?? row.points ?? 0,
     played: row.played ?? 0,
     exactHits: row.exact_predictions ?? row.exact_hits ?? 0,

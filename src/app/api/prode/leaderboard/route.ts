@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
-import { recalculateProdePoints } from '@/server/prode/points'
 
 type LeaderboardRow = {
   user_id: string
@@ -11,10 +10,16 @@ type LeaderboardRow = {
   partial_hits: number | null
 }
 
+type PredictionScoreRow = {
+  user_id: string
+  points: number | null
+  exact_hit: boolean | null
+  partial_hit: boolean | null
+}
+
 type ProfileRow = {
   id: string
   username?: string | null
-  display_name?: string | null
 }
 
 type ApiError = {
@@ -23,38 +28,40 @@ type ApiError = {
   details?: string
 }
 
-function errorInfo(error: unknown) {
+function getErrorPayload(error: unknown) {
   const value = error as ApiError
 
   return {
+    ok: false,
     error:
       error instanceof Error
         ? error.message
         : value?.message ?? 'No se pudo cargar la tabla de posiciones.',
     code: value?.code ?? null,
     detail: value?.details ?? null,
+    leaderboard: [],
   }
 }
 
-function normalizeLeaderboardRows(rows: LeaderboardRow[], profiles: ProfileRow[]) {
+function getDisplayName(userId: string, profilesById: Map<string, ProfileRow>) {
+  const profile = profilesById.get(userId)
+
+  return profile?.username ?? 'Usuario'
+}
+
+function normalizeRows(rows: LeaderboardRow[], profiles: ProfileRow[]) {
   const profilesById = new Map(profiles.map((profile) => [profile.id, profile]))
 
   return rows
     .map((row) => {
-      const profile = profilesById.get(row.user_id)
-      const name =
-        profile?.display_name ??
-        profile?.username ??
-        row.name ??
-        `Usuario ${row.user_id.slice(0, 8)}`
       const points = row.points ?? 0
       const exactHits = row.exact_hits ?? 0
       const partialHits = row.partial_hits ?? 0
 
       return {
         user_id: row.user_id,
-        username: name,
-        name,
+        username: getDisplayName(row.user_id, profilesById),
+        name: getDisplayName(row.user_id, profilesById),
         total_points: points,
         points,
         played: row.played ?? exactHits + partialHits,
@@ -70,59 +77,97 @@ function normalizeLeaderboardRows(rows: LeaderboardRow[], profiles: ProfileRow[]
     })
 }
 
+function groupScoresByUser(scores: PredictionScoreRow[]): LeaderboardRow[] {
+  const grouped = new Map<string, LeaderboardRow>()
+
+  for (const score of scores) {
+    const current = grouped.get(score.user_id) ?? {
+      user_id: score.user_id,
+      points: 0,
+      played: 0,
+      exact_hits: 0,
+      partial_hits: 0,
+    }
+
+    current.points = (current.points ?? 0) + (score.points ?? 0)
+    current.played = (current.played ?? 0) + 1
+    current.exact_hits = (current.exact_hits ?? 0) + (score.exact_hit ? 1 : 0)
+    current.partial_hits = (current.partial_hits ?? 0) + (score.partial_hit ? 1 : 0)
+    grouped.set(score.user_id, current)
+  }
+
+  return [...grouped.values()]
+}
+
+function totalsDiffer(leaderboardRows: LeaderboardRow[], scoreRows: LeaderboardRow[]) {
+  if (!leaderboardRows.length && scoreRows.length) return true
+
+  const leaderboardTotals = new Map(
+    leaderboardRows.map((row) => [row.user_id, row.points ?? 0])
+  )
+
+  return scoreRows.some((row) => leaderboardTotals.get(row.user_id) !== (row.points ?? 0))
+}
+
 export async function GET() {
   try {
     const supabase = getSupabaseAdminClient()
+    const [
+      leaderboardResult,
+      scoresResult,
+    ] = await Promise.all([
+      supabase
+        .from('leaderboards')
+        .select('user_id, name, points, played, exact_hits, partial_hits')
+        .order('points', { ascending: false })
+        .order('exact_hits', { ascending: false }),
+      supabase
+        .from('prediction_scores')
+        .select('user_id, points, exact_hit, partial_hit'),
+    ])
 
-    try {
-      await recalculateProdePoints(supabase)
-    } catch (recalculateError) {
-      console.error('[prode/leaderboard] No se pudo recalcular antes de leer ranking', errorInfo(recalculateError))
+    if (leaderboardResult.error) {
+      console.error('[prode/leaderboard] Error leyendo leaderboards', leaderboardResult.error)
     }
 
-    const { data: leaderboardRows, error: leaderboardError } = await supabase
-      .from('leaderboards')
-      .select('user_id, name, points, played, exact_hits, partial_hits')
-      .order('points', { ascending: false })
-      .order('exact_hits', { ascending: false })
-
-    if (leaderboardError) {
-      console.error('[prode/leaderboard] Error leyendo leaderboards', leaderboardError)
-
-      return NextResponse.json({
-        ok: false,
-        ...errorInfo(leaderboardError),
-        leaderboard: [],
-      })
+    if (scoresResult.error) {
+      console.error('[prode/leaderboard] Error leyendo prediction_scores', scoresResult.error)
     }
 
-    const rows = (leaderboardRows ?? []) as LeaderboardRow[]
+    const leaderboardRows = (leaderboardResult.error ? [] : leaderboardResult.data ?? []) as LeaderboardRow[]
+    const groupedScoreRows = groupScoresByUser((scoresResult.error ? [] : scoresResult.data ?? []) as PredictionScoreRow[])
+    const sourceRows = totalsDiffer(leaderboardRows, groupedScoreRows)
+      ? groupedScoreRows
+      : leaderboardRows
+    const userIds = sourceRows.map((row) => row.user_id)
+    const profilesResult = userIds.length
+      ? await supabase
+          .from('profiles')
+          .select('id, username')
+          .in('id', userIds)
+      : { data: [], error: null }
 
-    if (!rows.length) {
-      return NextResponse.json({ ok: true, leaderboard: [] })
+    if (profilesResult.error) {
+      console.error('[prode/leaderboard] Error leyendo profiles; usando fallback', profilesResult.error)
     }
 
-    const userIds = rows.map((row) => row.user_id)
-    const { data: profiles, error: profilesError } = await supabase
-      .from('profiles')
-      .select('id, username, display_name')
-      .in('id', userIds)
-
-    if (profilesError) {
-      console.error('[prode/leaderboard] Error leyendo profiles; usando user_id/name fallback', profilesError)
-    }
+    console.info('[prode/leaderboard] response debug', {
+      leaderboardsRead: leaderboardRows.length,
+      predictionScoresRead: scoresResult.error ? 0 : scoresResult.data?.length ?? 0,
+      source: sourceRows === groupedScoreRows ? 'prediction_scores' : 'leaderboards',
+    })
 
     return NextResponse.json({
-      ok: true,
-      leaderboard: normalizeLeaderboardRows(rows, profilesError ? [] : ((profiles ?? []) as ProfileRow[])),
+      ok: !leaderboardResult.error && !scoresResult.error,
+      leaderboard: normalizeRows(
+        sourceRows,
+        profilesResult.error ? [] : ((profilesResult.data ?? []) as ProfileRow[])
+      ),
+      error: leaderboardResult.error || scoresResult.error ? 'No se pudo leer una fuente del ranking.' : undefined,
     })
   } catch (error) {
     console.error('[prode/leaderboard] Error completo', error)
 
-    return NextResponse.json({
-      ok: false,
-      ...errorInfo(error),
-      leaderboard: [],
-    })
+    return NextResponse.json(getErrorPayload(error))
   }
 }

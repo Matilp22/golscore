@@ -11,8 +11,10 @@ export default function PointsSummary({
   myRanking,
   predictions,
 }: PointsSummaryProps) {
-  const points = Number.isFinite(myRanking?.points) ? myRanking?.points ?? 0 : 0
-  const exactHits = Number.isFinite(myRanking?.exactHits) ? myRanking?.exactHits ?? 0 : 0
+  const localPoints = predictions.reduce((sum, prediction) => sum + (prediction.points ?? 0), 0)
+  const localExactHits = predictions.filter((prediction) => prediction.exactHit).length
+  const points = Number.isFinite(myRanking?.points) ? myRanking?.points ?? 0 : localPoints
+  const exactHits = Number.isFinite(myRanking?.exactHits) ? myRanking?.exactHits ?? 0 : localExactHits
 
   return (
     <div className="grid gap-3 md:grid-cols-3">
