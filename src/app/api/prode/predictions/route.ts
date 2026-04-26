@@ -51,7 +51,7 @@ async function getAuthenticatedUser(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const { user, error } = await getAuthenticatedUser(request)
+  const { supabase, user, error } = await getAuthenticatedUser(request)
 
   if (error || !user) {
     return error
@@ -98,6 +98,22 @@ export async function POST(request: Request) {
     created_at: string
     updated_at: string
   }
+  const { data: predictionScore, error: predictionScoreError } = supabase
+    ? await supabase
+        .from('prediction_scores')
+        .select('points, exact_hit, partial_hit')
+        .eq('prediction_id', prediction.id)
+        .maybeSingle()
+    : { data: null, error: null }
+
+  if (predictionScoreError) {
+    console.error('[prode/predictions] Error leyendo prediction_scores', {
+      predictionId: prediction.id,
+      message: predictionScoreError.message,
+      code: predictionScoreError.code ?? null,
+      details: predictionScoreError.details ?? null,
+    })
+  }
 
   return NextResponse.json({
     prediction: {
@@ -106,9 +122,9 @@ export async function POST(request: Request) {
       matchId: String(prediction.match_id),
       predictedHomeScore: prediction.predicted_home_score,
       predictedAwayScore: prediction.predicted_away_score,
-      points: 0,
-      exactHit: false,
-      partialHit: false,
+      points: predictionScore?.points ?? 0,
+      exactHit: predictionScore?.exact_hit ?? false,
+      partialHit: predictionScore?.partial_hit ?? false,
       createdAt: prediction.created_at,
       updatedAt: prediction.updated_at,
     },

@@ -155,7 +155,7 @@ export default async function JugadorPage({ params, searchParams }: PageProps) {
           <header className="mb-4 overflow-hidden rounded-2xl border border-white/8 bg-[#111418]/95 shadow-[0_10px_30px_rgba(0,0,0,0.2)]">
             <div className="flex flex-col gap-4 px-4 py-5 md:flex-row md:items-center md:justify-between">
               <div className="flex items-center gap-4">
-                <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-[#161a20] ring-1 ring-white/6">
+                <div className="flex h-20 w-20 items-center justify-center overflow-hidden">
                   {player.photo ? (
                     <Image
                       src={player.photo}

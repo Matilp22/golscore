@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
+import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getSupabaseServerClient } from '@/lib/supabase/server'
+import { recalculateProdePoints } from '@/server/prode/points'
 
 type PredictionRow = {
   id: string
@@ -13,6 +15,8 @@ type PredictionRow = {
 
 type PredictionScoreRow = {
   prediction_id: string
+  user_id: string
+  match_id: string
   points: number | null
   exact_hit: boolean | null
   partial_hit: boolean | null
@@ -91,35 +95,88 @@ export async function GET(request: Request) {
   }
 
   const predictionIds = ((data ?? []) as PredictionRow[]).map((prediction) => prediction.id)
+  const predictedMatchIds = [
+    ...new Set(((data ?? []) as PredictionRow[]).map((prediction) => prediction.match_id)),
+  ]
   const scoresByPredictionId = new Map<string, PredictionScoreRow>()
+  const scoresByUserAndMatchId = new Map<string, PredictionScoreRow>()
 
-  if (predictionIds.length) {
-    const { data: scores, error: scoresError } = await supabase
-      .from('prediction_scores')
-      .select('prediction_id, points, exact_hit, partial_hit')
-      .in('prediction_id', predictionIds)
+  if (predictedMatchIds.length) {
+    try {
+      const adminSupabase = getSupabaseAdminClient()
 
-    if (scoresError) {
-      console.error('[prode/my-predictions] Error leyendo prediction_scores', scoresError)
-    } else {
-      for (const score of (scores ?? []) as PredictionScoreRow[]) {
-        scoresByPredictionId.set(score.prediction_id, score)
-      }
+      await Promise.all(
+        predictedMatchIds.map((matchId) => recalculateProdePoints(adminSupabase, matchId))
+      )
+    } catch (recalculateError) {
+      console.error('[prode/my-predictions] No se pudieron recalcular puntos antes de leerlos', {
+        message:
+          recalculateError instanceof Error
+            ? recalculateError.message
+            : 'Error desconocido',
+      })
     }
   }
 
-  const predictions = ((data ?? []) as PredictionRow[]).map((prediction) => ({
-    points: scoresByPredictionId.get(prediction.id)?.points ?? 0,
-    exactHit: scoresByPredictionId.get(prediction.id)?.exact_hit ?? false,
-    partialHit: scoresByPredictionId.get(prediction.id)?.partial_hit ?? false,
-    id: prediction.id,
-    userId: prediction.user_id,
-    matchId: String(prediction.match_id),
-    predictedHomeScore: prediction.predicted_home_score,
-    predictedAwayScore: prediction.predicted_away_score,
-    createdAt: prediction.created_at,
-    updatedAt: prediction.updated_at,
-  }))
+  if (predictionIds.length) {
+    const primaryScores = await supabase
+      .from('prediction_scores')
+      .select('prediction_id, user_id, match_id, points, exact_hit, partial_hit')
+      .in('prediction_id', predictionIds)
+    const fallbackScores = predictedMatchIds.length
+      ? await supabase
+          .from('prediction_scores')
+          .select('prediction_id, user_id, match_id, points, exact_hit, partial_hit')
+          .eq('user_id', user.id)
+          .in('match_id', predictedMatchIds)
+      : { data: [], error: null }
+    const pointsScores = await supabase
+      .from('points')
+      .select('prediction_id, user_id, match_id, points, exact_hit, partial_hit')
+      .in('prediction_id', predictionIds)
+    const scoresError = primaryScores.error ?? fallbackScores.error
+    const scores = [
+      ...(primaryScores.data ?? []),
+      ...(fallbackScores.data ?? []),
+      ...(pointsScores.error ? [] : pointsScores.data ?? []),
+    ]
+
+    if (scoresError) {
+      console.error('[prode/my-predictions] Error leyendo prediction_scores', scoresError)
+    }
+
+    if (pointsScores.error && pointsScores.error.code !== '42P01' && pointsScores.error.code !== 'PGRST205') {
+      console.error('[prode/my-predictions] Error leyendo points', pointsScores.error)
+    }
+
+    for (const score of scores as PredictionScoreRow[]) {
+      scoresByPredictionId.set(score.prediction_id, score)
+      scoresByUserAndMatchId.set(`${score.user_id}:${String(score.match_id)}`, score)
+    }
+  }
+
+  const predictions = ((data ?? []) as PredictionRow[]).map((prediction) => {
+    const score =
+      scoresByPredictionId.get(prediction.id) ??
+      scoresByUserAndMatchId.get(`${prediction.user_id}:${String(prediction.match_id)}`)
+
+    return {
+      prediction_id: prediction.id,
+      match_id: String(prediction.match_id),
+      points: score?.points ?? 0,
+      exact_hit: score?.exact_hit ?? false,
+      partial_hit: score?.partial_hit ?? false,
+      exactHit: score?.exact_hit ?? false,
+      partialHit: score?.partial_hit ?? false,
+      id: prediction.id,
+      userId: prediction.user_id,
+      matchId: String(prediction.match_id),
+      predictedHomeScore: prediction.predicted_home_score,
+      predictedAwayScore: prediction.predicted_away_score,
+      createdAt: prediction.created_at,
+      updatedAt: prediction.updated_at,
+    }
+  })
 
   return NextResponse.json({ predictions })
 }

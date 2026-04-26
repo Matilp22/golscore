@@ -1,7 +1,6 @@
 'use client'
 
 import type { Match, Prediction } from '@/frontend/types/prode'
-import { getMatchPredictionLockState } from '@/frontend/types/prode'
 import PredictionForm from '@/frontend/components/prode/PredictionForm'
 import { parseMatchDate } from '@/shared/utils/prediction-lock'
 
@@ -45,9 +44,6 @@ export default function MatchCard({
   onDraftChange,
   onSavePrediction,
 }: MatchCardProps) {
-  const lockState = getMatchPredictionLockState(match)
-  const locked = lockState.locked
-
   return (
     <article className="min-w-0 px-3 py-3 sm:px-4">
       <div className="mb-3 flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
@@ -58,31 +54,12 @@ export default function MatchCard({
           <span className="text-xs text-[#8d98a7]">{formatDate(match.matchDate)}</span>
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          {prediction ? (
-            <span className="rounded-full border border-[#25553d] bg-[#13251d] px-2 py-0.5 text-[10px] font-bold uppercase text-[#7ff0b2]">
-              Pronosticado
-            </span>
-          ) : null}
-          {match.homeScore !== null && match.awayScore !== null ? (
-            <span className="rounded-full border border-white/8 bg-white/5 px-2 py-0.5 text-[11px] font-bold text-white">
-              {match.homeScore} - {match.awayScore}
-            </span>
-          ) : null}
           {prediction?.points !== undefined ? (
             <span className="rounded-full border border-[#25553d] bg-[#13251d] px-2 py-0.5 text-[11px] font-bold text-[#7ff0b2]">
               {prediction.points} pts
               {prediction.exactHit ? ' exacto' : prediction.partialHit ? ' parcial' : ''}
             </span>
           ) : null}
-          {locked ? (
-            <span className="rounded-full border border-[#45312f] bg-[#241918] px-2 py-0.5 text-[10px] font-bold uppercase text-[#ffb4a6]">
-              Cerrado
-            </span>
-          ) : (
-            <span className="rounded-full border border-[#25553d] bg-[#13251d] px-2 py-0.5 text-[10px] font-bold uppercase text-[#7ff0b2]">
-              Abierto
-            </span>
-          )}
         </div>
       </div>
 

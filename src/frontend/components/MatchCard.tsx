@@ -58,7 +58,7 @@ export default function MatchCard({
       <div className="space-y-4">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-zinc-800 text-lg">
+            <div className="flex h-10 w-10 items-center justify-center overflow-hidden">
               {homeLogo ? (
                 <Image
                   src={homeLogo}
@@ -80,7 +80,7 @@ export default function MatchCard({
 
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-zinc-800 text-lg">
+            <div className="flex h-10 w-10 items-center justify-center overflow-hidden">
               {awayLogo ? (
                 <Image
                   src={awayLogo}

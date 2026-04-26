@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { useAuth } from '@/frontend/hooks/useAuth'
 import {
+  getFavoriteLeagueErrorInfo,
   getUserFavoriteLeagues,
   toggleFavoriteLeague,
 } from '@/frontend/services/favoriteLeaguesService'
@@ -48,6 +49,12 @@ function readFavorites() {
   } catch {
     return []
   }
+}
+
+function writeLocalFavorites(favorites: string[]) {
+  if (typeof window === 'undefined') return
+
+  window.localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favorites))
 }
 
 export default function SidebarNav({
@@ -102,11 +109,14 @@ export default function SidebarNav({
         setFavoriteKeys(favorites)
       })
       .catch((error: unknown) => {
-        console.error('[sidebar-favorites] No se pudieron cargar favoritos', error)
+        console.warn(
+          '[sidebar-favorites] No se pudieron cargar favoritos; usando favoritos locales.',
+          getFavoriteLeagueErrorInfo(error)
+        )
         if (!active) return
 
-        setRemoteFavoriteUserId(user.id)
-        setFavoriteKeys([])
+        setRemoteFavoriteUserId(null)
+        setFavoriteKeys(readFavorites())
       })
 
     return () => {
@@ -130,15 +140,28 @@ export default function SidebarNav({
         : [...current, tournamentKey]
     )
 
-    if (!user || remoteFavoriteUserId !== user.id) return
+    if (!user || remoteFavoriteUserId !== user.id) {
+      const nextFavorites = wasFavorite
+        ? favoriteKeys.filter((key) => key !== tournamentKey)
+        : Array.from(new Set([...favoriteKeys, tournamentKey]))
+
+      writeLocalFavorites(nextFavorites)
+      return
+    }
 
     void toggleFavoriteLeague(user.id, tournamentKey, wasFavorite).catch((error: unknown) => {
-      console.error('[sidebar-favorites] No se pudo actualizar favorito', error)
-      setFavoriteKeys((current) =>
-        wasFavorite
-          ? Array.from(new Set([...current, tournamentKey]))
-          : current.filter((key) => key !== tournamentKey)
+      console.warn(
+        '[sidebar-favorites] No se pudo actualizar favorito en Supabase; usando favoritos locales.',
+        getFavoriteLeagueErrorInfo(error)
       )
+      setRemoteFavoriteUserId(null)
+
+      const nextFavorites = wasFavorite
+        ? favoriteKeys.filter((key) => key !== tournamentKey)
+        : Array.from(new Set([...favoriteKeys, tournamentKey]))
+
+      setFavoriteKeys(nextFavorites)
+      writeLocalFavorites(nextFavorites)
     })
   }
 

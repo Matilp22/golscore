@@ -32,6 +32,7 @@ type LeagueRow = {
 type TeamRow = {
   id: string
   name: string | null
+  external_id?: string | number | null
   logo_url: string | null
 }
 
@@ -69,6 +70,12 @@ function isMissingOptionalRelation(error: SportDbError | null) {
   return error?.code === '42P01' || error?.code === 'PGRST205'
 }
 
+function getApiSportsLogoUrl(externalId: string | number | null | undefined) {
+  if (externalId === null || externalId === undefined || externalId === '') return null
+
+  return `https://media.api-sports.io/football/teams/${externalId}.png`
+}
+
 async function fetchResultsInChunks(
   supabase: SupabaseServerClient,
   matchIds: string[]
@@ -104,6 +111,54 @@ async function fetchResultsInChunks(
   }
 
   return { data, error: null as SportDbError | null }
+}
+
+async function fetchTeamsWithLogos(
+  supabase: SupabaseServerClient,
+  teamIds: string[]
+) {
+  if (!teamIds.length) {
+    return { data: [] as TeamRow[], error: null as SportDbError | null }
+  }
+
+  const primary = await supabase
+    .from('teams')
+    .select('id, name, external_id, logo_url')
+    .in('id', teamIds)
+
+  if (!primary.error) {
+    return {
+      data: (primary.data ?? []) as TeamRow[],
+      error: null as SportDbError | null,
+    }
+  }
+
+  const missingOptionalLogoColumn =
+    primary.error.code === '42703' ||
+    primary.error.message.toLowerCase().includes('logo_url') ||
+    primary.error.message.toLowerCase().includes('schema cache')
+
+  if (!missingOptionalLogoColumn) {
+    return { data: [], error: primary.error as SportDbError }
+  }
+
+  console.info('[prode-matches] logo_url no disponible en teams; se usa fallback por external_id.', {
+    code: primary.error.code ?? null,
+    message: primary.error.message,
+  })
+
+  const fallback = await supabase
+    .from('teams')
+    .select('id, name, external_id')
+    .in('id', teamIds)
+
+  return {
+    data: ((fallback.data ?? []) as Array<Omit<TeamRow, 'logo_url'>>).map((team) => ({
+      ...team,
+      logo_url: null,
+    })),
+    error: fallback.error as SportDbError | null,
+  }
 }
 
 export async function GET(request: Request) {
@@ -213,9 +268,7 @@ export async function GET(request: Request) {
           .select('id, name, country, external_id')
           .in('id', leagueIds)
       : Promise.resolve({ data: [], error: null }),
-    teamIds.length
-      ? supabase.from('teams').select('id, name').in('id', teamIds)
-      : Promise.resolve({ data: [], error: null }),
+    fetchTeamsWithLogos(supabase, teamIds),
     fetchResultsInChunks(supabase, matchIds),
   ])
 
@@ -225,28 +278,11 @@ export async function GET(request: Request) {
     return prodeError(resultsError, 'No se pudieron cargar los resultados.')
   }
 
-  const { data: teamLogosData, error: teamLogosError } = teamIds.length
-    ? await supabase.from('teams').select('id, logo_url').in('id', teamIds)
-    : { data: [], error: null }
-
-  if (teamLogosError) {
-    console.info('[prode-matches] logo_url no disponible en teams; se usan iniciales.', {
-      code: teamLogosError.code ?? null,
-      message: teamLogosError.message,
-    })
-  }
-
   const leaguesById = new Map(
     ((leaguesData ?? []) as LeagueRow[]).map((league) => [league.id, league])
   )
   const teamsById = new Map(
     ((teamsData ?? []) as TeamRow[]).map((team) => [team.id, team])
-  )
-  const teamLogosById = new Map(
-    ((teamLogosError ? [] : teamLogosData ?? []) as Array<{ id: string; logo_url: string | null }>).map((team) => [
-      team.id,
-      team.logo_url,
-    ])
   )
   const resultsByMatchId = new Map(
     ((resultsError ? [] : resultsData ?? []) as ResultRow[]).map((result) => [
@@ -288,14 +324,14 @@ export async function GET(request: Request) {
         ? {
             id: String(homeTeam.id),
             name: homeTeam.name ?? 'Local',
-            logoUrl: teamLogosById.get(homeTeam.id) ?? null,
+            logoUrl: homeTeam.logo_url ?? getApiSportsLogoUrl(homeTeam.external_id),
           }
         : null,
       awayTeam: awayTeam
         ? {
             id: String(awayTeam.id),
             name: awayTeam.name ?? 'Visitante',
-            logoUrl: teamLogosById.get(awayTeam.id) ?? null,
+            logoUrl: awayTeam.logo_url ?? getApiSportsLogoUrl(awayTeam.external_id),
           }
         : null,
     }

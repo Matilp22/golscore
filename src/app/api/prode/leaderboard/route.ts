@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getSupabaseServerClient } from '@/lib/supabase/server'
+import { recalculateProdePoints } from '@/server/prode/points'
 
 type LeaderboardDbError = {
   message: string
@@ -178,6 +179,17 @@ export async function GET() {
         },
         { status: 500 }
       )
+    }
+
+    try {
+      await recalculateProdePoints(getSupabaseAdminClient())
+    } catch (recalculateError) {
+      console.error('[prode/leaderboard] No se pudo recalcular antes de leer ranking', {
+        message:
+          recalculateError instanceof Error
+            ? recalculateError.message
+            : 'Error desconocido',
+      })
     }
 
     const primary = await fetchLeaderboardFrom(supabase, 'leaderboards')

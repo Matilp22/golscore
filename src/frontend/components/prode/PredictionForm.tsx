@@ -27,16 +27,6 @@ function toScoreInputValue(value: number | null | undefined) {
   return Number.isFinite(value) ? String(value) : ''
 }
 
-function getInitials(value: string) {
-  return value
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join('')
-    .toUpperCase()
-}
-
 function TeamLogo({
   logoUrl,
   name,
@@ -45,7 +35,7 @@ function TeamLogo({
   name: string
 }) {
   return (
-    <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/8 bg-[#151b21] text-[10px] font-black text-[#7ff0b2]">
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden">
       {logoUrl ? (
         <Image
           src={logoUrl}
@@ -55,7 +45,11 @@ function TeamLogo({
           className="h-7 w-7 object-contain"
         />
       ) : (
-        getInitials(name)
+        <span
+          aria-hidden="true"
+          className="h-5 w-4 bg-[#8d98a7]"
+          style={{ clipPath: 'polygon(50% 0, 92% 16%, 84% 72%, 50% 100%, 16% 72%, 8% 16%)' }}
+        />
       )}
     </span>
   )
@@ -234,7 +228,7 @@ export default function PredictionForm({
             if (message) setMessage('')
           }}
           aria-label="Pronóstico local"
-          className="h-12 w-full min-w-0 rounded-xl border border-white/8 bg-[#0f1317] text-center text-base font-black text-white outline-none focus:border-[#25553d] disabled:opacity-45 md:h-11"
+          className="h-12 w-full min-w-0 rounded-xl border border-[#c9d1d9] bg-white text-center text-base font-black text-black outline-none focus:border-[#7ff0b2] disabled:bg-[#d8dde3] disabled:text-[#1f2933] disabled:opacity-75 md:h-11"
         />
         <span className="hidden text-center text-sm font-black text-[#8d98a7] md:block">vs</span>
         <input
@@ -253,7 +247,7 @@ export default function PredictionForm({
             if (message) setMessage('')
           }}
           aria-label="Pronóstico visitante"
-          className="h-12 w-full min-w-0 rounded-xl border border-white/8 bg-[#0f1317] text-center text-base font-black text-white outline-none focus:border-[#25553d] disabled:opacity-45 md:h-11"
+          className="h-12 w-full min-w-0 rounded-xl border border-[#c9d1d9] bg-white text-center text-base font-black text-black outline-none focus:border-[#7ff0b2] disabled:bg-[#d8dde3] disabled:text-[#1f2933] disabled:opacity-75 md:h-11"
         />
         <TeamLabel
           align="right"

@@ -1016,7 +1016,7 @@ export default async function HomePage({
                           <div className="flex min-w-0 items-center justify-between gap-3">
                             <div className="flex min-w-0 items-center gap-3">
                               {competition.logo ? (
-                                <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/8 bg-[#161b21]">
+                                <div className="flex h-8 w-8 items-center justify-center">
                                   <Image
                                     src={competition.logo}
                                     alt={competition.title}
@@ -1026,8 +1026,8 @@ export default async function HomePage({
                                   />
                                 </div>
                               ) : (
-                                <div className="flex h-8 w-8 items-center justify-center rounded-full border border-[#2d6d4d]/50 bg-[#163828] text-[11px] font-black uppercase text-[#7ff0b2]">
-                                  {competition.title.slice(0, 2)}
+                                <div className="flex h-8 w-8 items-center justify-center">
+                                  <span className="h-5 w-4 bg-[#6f7884] [clip-path:polygon(50%_0,92%_16%,84%_72%,50%_100%,16%_72%,8%_16%)]" />
                                 </div>
                               )}
                               <div className="min-w-0">

@@ -1491,7 +1491,7 @@ export default async function LigaPage({ params }: PageProps) {
             <div className="flex flex-col gap-4 px-4 py-5 md:flex-row md:items-center md:justify-between">
               <div className="flex items-center gap-4">
                 {resolvedTournament?.logo ? (
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#161a20]">
+                  <div className="flex h-16 w-16 items-center justify-center">
                     <Image
                       src={resolvedTournament.logo}
                       alt={resolvedTournament.name}

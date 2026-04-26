@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { requestFootballApi } from '@/server/integrations/football-api-client'
-import { isFinalProdeStatus, recalculateProdePoints } from '@/server/prode/points'
+import { recalculateProdePoints } from '@/server/prode/points'
 import {
   ALLOWED_TOURNAMENTS,
   getAllowedTournamentBySlug,
@@ -899,11 +899,7 @@ export async function syncProdeFixtureById(
   )
   const warnings: string[] = []
 
-  if (
-    isFinalProdeStatus(fixture.fixture.status.short) &&
-    getFixtureHomeScore(fixture) !== null &&
-    getFixtureAwayScore(fixture) !== null
-  ) {
+  if (getFixtureHomeScore(fixture) !== null && getFixtureAwayScore(fixture) !== null) {
     try {
       await recalculateProdePoints(supabase, matchUpsert.id)
     } catch (error) {
@@ -1098,11 +1094,7 @@ export async function syncProdeMatches(
             result.matchesUpdated += 1
           }
 
-          if (
-            isFinalProdeStatus(fixture.fixture.status.short) &&
-            getFixtureHomeScore(fixture) !== null &&
-            getFixtureAwayScore(fixture) !== null
-          ) {
+          if (getFixtureHomeScore(fixture) !== null && getFixtureAwayScore(fixture) !== null) {
             try {
               await recalculateProdePoints(supabase, matchUpsert.id)
               logDebug(options.debug, 'prode points recalculated', {

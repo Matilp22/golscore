@@ -706,7 +706,7 @@ function TeamLogo({
   const classes = size === 'sm' ? 'h-8 w-8' : 'h-16 w-16'
 
   return (
-    <div className={`flex ${classes} items-center justify-center overflow-hidden rounded-full bg-[#161a20] ring-1 ring-white/6`}>
+    <div className={`flex ${classes} items-center justify-center overflow-hidden`}>
       {logo ? (
         <Image
           src={logo}

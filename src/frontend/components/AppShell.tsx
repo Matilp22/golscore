@@ -83,7 +83,7 @@ export default function AppShell({ auth, children }: AppShellProps) {
         </div>
       ) : null}
 
-      <div className="mx-auto grid w-full max-w-7xl gap-4 px-3 pb-4 pt-3 md:px-5 md:pb-6 md:pt-4 lg:grid-cols-[210px_minmax(0,1fr)]">
+      <div className="mx-auto grid w-full max-w-7xl gap-4 px-3 pb-4 pt-16 md:px-5 md:pb-6 md:pt-16 lg:grid-cols-[210px_minmax(0,1fr)] lg:pt-4">
         <aside className="hidden h-fit rounded-2xl border border-white/8 bg-[#0f1317]/88 p-2 lg:sticky lg:top-4 lg:mt-[68px] lg:block lg:max-h-[calc(100vh-6.25rem)] lg:overflow-y-auto">
           {sidebar}
         </aside>

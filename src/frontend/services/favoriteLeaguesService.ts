@@ -5,6 +5,12 @@ type FavoriteLeagueRow = {
   league_id: string
 }
 
+export type FavoriteLeagueError = Error & {
+  code?: string
+  details?: string
+  hint?: string
+}
+
 type FavoriteLeagueSelectQuery = {
   select: (columns: string) => {
     eq: (column: string, value: string) => {
@@ -13,20 +19,20 @@ type FavoriteLeagueSelectQuery = {
         options: { ascending: boolean }
       ) => Promise<{
         data: Array<Pick<FavoriteLeagueRow, 'league_id'>> | null
-        error: Error | null
+        error: FavoriteLeagueError | null
       }>
     }
   }
 }
 
 type FavoriteLeagueWriteQuery = {
-  upsert: (
+  insert: (
     value: FavoriteLeagueRow,
-    options: { onConflict: string }
-  ) => Promise<{ error: Error | null }>
+    options?: { count?: 'exact' | 'planned' | 'estimated' }
+  ) => Promise<{ error: FavoriteLeagueError | null }>
   delete: () => {
     eq: (column: string, value: string) => {
-      eq: (column: string, value: string) => Promise<{ error: Error | null }>
+      eq: (column: string, value: string) => Promise<{ error: FavoriteLeagueError | null }>
     }
   }
 }
@@ -34,6 +40,26 @@ type FavoriteLeagueWriteQuery = {
 function favoriteLeagueQuery() {
   return getSupabaseBrowserClient().from('user_favorite_leagues' as 'leagues') as unknown as
     FavoriteLeagueSelectQuery & FavoriteLeagueWriteQuery
+}
+
+export function getFavoriteLeagueErrorInfo(error: unknown) {
+  if (!error || typeof error !== 'object') {
+    return {
+      message: error instanceof Error ? error.message : 'Error desconocido',
+      code: null,
+      details: null,
+      hint: null,
+    }
+  }
+
+  const value = error as Partial<FavoriteLeagueError>
+
+  return {
+    message: value.message ?? 'Error desconocido',
+    code: value.code ?? null,
+    details: value.details ?? null,
+    hint: value.hint ?? null,
+  }
 }
 
 export async function getUserFavoriteLeagues(userId: string) {
@@ -50,13 +76,12 @@ export async function getUserFavoriteLeagues(userId: string) {
 }
 
 export async function addFavoriteLeague(userId: string, leagueId: string) {
-  const { error } = await favoriteLeagueQuery()
-    .upsert(
-      { user_id: userId, league_id: leagueId },
-      { onConflict: 'user_id,league_id' }
-    )
+  const { error } = await favoriteLeagueQuery().insert({
+    user_id: userId,
+    league_id: leagueId,
+  })
 
-  if (error) throw error
+  if (error && error.code !== '23505') throw error
 }
 
 export async function removeFavoriteLeague(userId: string, leagueId: string) {

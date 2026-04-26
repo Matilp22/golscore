@@ -45,11 +45,11 @@ function TeamBadge({
   align?: 'left' | 'right'
 }) {
   const logoNode = (
-    <div className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#161a20] ring-1 ring-white/6">
+    <div className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden">
       {logo ? (
         <Image src={logo} alt={name} width={24} height={24} className="h-6 w-6 object-contain" />
       ) : (
-        <span className="text-[9px] text-zinc-500">•</span>
+        <span className="h-4 w-3 bg-[#6f7884] [clip-path:polygon(50%_0,92%_16%,84%_72%,50%_100%,16%_72%,8%_16%)]" />
       )}
     </div>
   )

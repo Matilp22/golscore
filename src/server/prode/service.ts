@@ -1,4 +1,6 @@
 import { getSupabaseServerClient } from '@/lib/supabase/server'
+import { getSupabaseAdminClient } from '@/lib/supabase/admin'
+import { recalculateProdePoints } from '@/server/prode/points'
 import { getPredictionLockState } from '@/shared/utils/prediction-lock'
 
 type SavePredictionInput = {
@@ -21,7 +23,7 @@ export async function savePrediction(input: SavePredictionInput) {
 
   const { data: match, error: matchError } = await supabase
     .from('matches')
-    .select('id, match_date, status')
+    .select('id, match_date, status, home_score, away_score')
     .eq('id', input.matchId)
     .single()
 
@@ -73,6 +75,20 @@ export async function savePrediction(input: SavePredictionInput) {
       ok: false,
       status: 500,
       error: error.message,
+    }
+  }
+
+  if (match.home_score !== null && match.away_score !== null) {
+    try {
+      await recalculateProdePoints(getSupabaseAdminClient(), input.matchId)
+    } catch (recalculateError) {
+      console.error('[prode/save-prediction] No se pudieron recalcular puntos', {
+        matchId: input.matchId,
+        error:
+          recalculateError instanceof Error
+            ? recalculateError.message
+            : 'Error desconocido',
+      })
     }
   }
 
