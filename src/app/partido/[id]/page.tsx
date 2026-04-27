@@ -47,14 +47,14 @@ function formatStatusLabel(statusLong: string, elapsed?: number | null) {
 function translateCountry(country: string) {
   const map: Record<string, string> = {
     Argentina: 'Argentina',
-    Spain: 'EspaÃ±a',
+    Spain: 'España',
     Italy: 'Italia',
     Germany: 'Alemania',
     England: 'Inglaterra',
     Portugal: 'Portugal',
     France: 'Francia',
-    Netherlands: 'PaÃ­ses Bajos',
-    Holland: 'PaÃ­ses Bajos',
+    Netherlands: 'Países Bajos',
+    Holland: 'Países Bajos',
     Brazil: 'Brasil',
     Serbia: 'Serbia',
     World: 'Mundo',
@@ -75,7 +75,7 @@ function translateLeagueName(name: string) {
 
   const map: Record<string, string> = {
     'World Cup': 'Mundial',
-    'Copa America': 'Copa AmÃ©rica',
+    'Copa America': 'Copa América',
     'UEFA Euro': 'Eurocopa',
     'UEFA Nations League': 'Liga de Naciones UEFA',
     'World Cup - Qualification Europe': 'Eliminatorias UEFA',
@@ -92,18 +92,18 @@ function translateStatType(type: string) {
     'Shots off Goal': 'Remates afuera',
     'Total Shots': 'Remates totales',
     'Blocked Shots': 'Remates bloqueados',
-    'Shots insidebox': 'Remates dentro del Ã¡rea',
-    'Shots outsidebox': 'Remates fuera del Ã¡rea',
+    'Shots insidebox': 'Remates dentro del área',
+    'Shots outsidebox': 'Remates fuera del área',
     Fouls: 'Faltas',
     'Corner Kicks': 'Tiros de esquina',
     Offsides: 'Offsides',
-    'Ball Possession': 'PosesiÃ³n',
+    'Ball Possession': 'Posesión',
     'Yellow Cards': 'Tarjetas amarillas',
     'Red Cards': 'Tarjetas rojas',
     'Goalkeeper Saves': 'Atajadas',
     'Total passes': 'Pases totales',
     'Passes accurate': 'Pases correctos',
-    'Passes %': 'PrecisiÃ³n de pase',
+    'Passes %': 'Precisión de pase',
     expected_goals: 'Goles esperados',
   }
 
@@ -126,14 +126,14 @@ function formatStatValue(value: string | number | null | undefined) {
 }
 
 function formatVenueLocation(city?: string | null) {
-  if (!city) return 'UbicaciÃ³n no disponible'
+  if (!city) return 'Ubicación no disponible'
 
   const parts = city
     .split(',')
     .map((part) => part.trim())
     .filter(Boolean)
 
-  if (parts.length === 0) return 'UbicaciÃ³n no disponible'
+  if (parts.length === 0) return 'Ubicación no disponible'
   if (parts.length === 1) return parts[0]
 
   return `${parts[0]} (${parts.slice(1).join(', ')})`
@@ -228,14 +228,14 @@ function translateEventDetail(event: MatchEvent) {
   if (normalizedDetail.includes('missed penalty') || normalizedDetail.includes('penalty missed')) {
     return 'Penal errado'
   }
-  if (normalizedType.includes('subst')) return 'Sustitucion'
+  if (normalizedType.includes('subst')) return 'Sustitución'
   if (normalizedType.includes('var') || normalizedComments.includes('var')) {
-    return detail || comments || 'Revision VAR'
+    return detail || comments || 'Revisión VAR'
   }
 
   const map: Record<string, string> = {
     Foul: 'Falta',
-    Injury: 'Lesion',
+    Injury: 'Lesión',
     Offside: 'Offside',
     Handball: 'Mano',
     'Penalty Shootout': 'Penales',
@@ -248,6 +248,10 @@ function getEventPrimary(event: MatchEvent) {
   const kind = getEventKind(event)
 
   if (kind === 'var') return 'VAR'
+  if (kind === 'substitution') {
+    return event.assist?.name || event.player?.name || 'Sustitución'
+  }
+
   return event.player?.name || event.type || 'Evento'
 }
 
@@ -261,8 +265,8 @@ function getEventSecondary(event: MatchEvent) {
   }
 
   if (kind === 'substitution') {
-    return event.assist?.name
-      ? `Sale: ${event.assist.name}`
+    return event.player?.name
+      ? `por ${event.player.name}`
       : translateEventDetail(event)
   }
 
@@ -335,12 +339,25 @@ function getEventTypeStyle(event: MatchEvent) {
   }
 }
 
-function EventIcon({ kind }: { kind: EventKind }) {
+function EventIcon({
+  kind,
+  size = 'md',
+}: {
+  kind: EventKind
+  size?: 'md' | 'lg'
+}) {
+  const ballClass = size === 'lg' ? 'h-[24px] w-[24px]' : 'h-[16px] w-[16px]'
   const ballIcon = (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-[16px] w-[16px] overflow-visible">
-      <circle cx="12" cy="12" r="9.5" fill="#f8fafc" stroke="#0f1317" strokeWidth="1.4" />
-      <path d="m12 7 3.1 2.2-1.2 3.6h-3.8L8.9 9.2 12 7Z" fill="#0f1317" />
-      <path d="M5.3 10.2 8.9 9.2M15.1 9.2l3.6 1M10.1 12.8l-2.4 3M13.9 12.8l2.4 3" fill="none" stroke="#0f1317" strokeWidth="1.2" strokeLinecap="round" />
+    <svg viewBox="0 0 32 32" aria-hidden="true" className={`${ballClass} overflow-visible`}>
+      <circle cx="16" cy="16" r="13.5" fill="#f8fafc" stroke="#0f1317" strokeWidth="1.8" />
+      <path d="M16 8.2 21 11.8 19.1 17.6h-6.2L11 11.8 16 8.2Z" fill="#0f1317" />
+      <path
+        d="m7.8 12.2 3.2-.4M21 11.8l3.2.4M12.9 17.6l-2.7 3.8M19.1 17.6l2.7 3.8M12.2 26.5l-2-5.1M19.8 26.5l2-5.1"
+        fill="none"
+        stroke="#0f1317"
+        strokeLinecap="round"
+        strokeWidth="1.5"
+      />
     </svg>
   )
 
@@ -461,7 +478,7 @@ function getTeamStyle(
 
   const map: Record<string, TeamStyle> = {
     Independiente: { shirt: '#d90429', text: '#ffffff', border: '#ffffff' },
-    'Atenas RÃ­o Cuarto': { shirt: '#2563eb', text: '#ffffff', border: '#ffffff' },
+    'Atenas Río Cuarto': { shirt: '#2563eb', text: '#ffffff', border: '#ffffff' },
     'Atenas Rio Cuarto': { shirt: '#2563eb', text: '#ffffff', border: '#ffffff' },
     River: { shirt: '#ffffff', secondary: '#e5e7eb', text: '#111111', border: '#dc2626' },
     Boca: { shirt: '#1d4ed8', secondary: '#facc15', text: '#facc15', border: '#facc15' },
@@ -470,7 +487,7 @@ function getTeamStyle(
     Estudiantes: { shirt: '#ef4444', secondary: '#ffffff', text: '#ffffff', border: '#ffffff' },
     Talleres: { shirt: '#123c69', secondary: '#ffffff', text: '#ffffff', border: '#ffffff' },
     'San Lorenzo': { shirt: '#1d4ed8', secondary: '#ef4444', text: '#ffffff', border: '#ef4444' },
-    'VÃ©lez Sarsfield': { shirt: '#ffffff', secondary: '#1d4ed8', text: '#111111', border: '#1d4ed8' },
+    'Vélez Sarsfield': { shirt: '#ffffff', secondary: '#1d4ed8', text: '#111111', border: '#1d4ed8' },
     Velez: { shirt: '#ffffff', secondary: '#1d4ed8', text: '#111111', border: '#1d4ed8' },
     Lanus: { shirt: '#7f1d1d', secondary: '#ffffff', text: '#ffffff', border: '#ffffff' },
     'Rosario Central': { shirt: '#1d4ed8', secondary: '#facc15', text: '#facc15', border: '#facc15' },
@@ -603,8 +620,8 @@ function getPlayerPosition(
     const fallbackRows = 4
     const normalizedRow = (fallback.row - 1) / Math.max(fallbackRows - 1, 1)
     if (fullField) {
-      const start = side === 'top' ? 15 : 85
-      const end = side === 'top' ? 85 : 15
+      const start = side === 'top' ? 13 : 87
+      const end = side === 'top' ? 87 : 13
       return { x: fallback.x, y: start + normalizedRow * (end - start) }
     }
 
@@ -626,9 +643,9 @@ function getPlayerPosition(
   const resolvedCol = inferredPosition?.col || col
   const horizontalPadding = fullField
     ? sameRowPlayers >= 5
-      ? 15
+      ? 14
       : sameRowPlayers === 4
-      ? 18
+      ? 15
       : sameRowPlayers === 3
       ? 22
       : 28
@@ -648,8 +665,8 @@ function getPlayerPosition(
 
   const normalizedRow = (safeRow - 1) / Math.max(totalRows - 1, 1)
   if (fullField) {
-    const start = side === 'top' ? 15 : 85
-    const end = side === 'top' ? 85 : 15
+    const start = side === 'top' ? 13 : 87
+    const end = side === 'top' ? 87 : 13
     return { x, y: start + normalizedRow * (end - start) }
   }
 
@@ -745,7 +762,7 @@ function Shirt({
 }) {
   return (
     <div
-      className="flex h-5 w-4 items-center justify-center text-[7px] font-black sm:h-8 sm:w-7 sm:text-[10px]"
+      className="flex h-10 w-8 items-center justify-center text-sm font-black sm:h-16 sm:w-14 sm:text-xl"
       style={{
         backgroundColor: style.shirt,
         color: style.text,
@@ -800,8 +817,11 @@ type PlayerFieldState = {
   substitutionMinute?: number | null
   substitutionReplacementName?: string | null
   goals: number
+  goalMinutes: Array<number | null>
   yellowCards: number
+  yellowCardMinutes: Array<number | null>
   redCards: number
+  redCardMinutes: Array<number | null>
 }
 
 function matchesPlayerEvent(
@@ -838,18 +858,18 @@ function getPlayerFieldState(
     matchesPlayerEvent(event.player, basePlayer.id, displayName) ||
     matchesPlayerEvent(event.player, undefined, displayName)
 
-  const goals = events.filter((event) => {
+  const goalEvents = events.filter((event) => {
     const kind = getEventKind(event)
     return (kind === 'goal' || kind === 'penalty-goal') && matchesDisplayedPlayer(event)
-  }).length
+  })
 
-  const yellowCards = events.filter((event) =>
+  const yellowCardEvents = events.filter((event) =>
     getEventKind(event) === 'yellow-card' && matchesDisplayedPlayer(event)
-  ).length
+  )
 
-  const redCards = events.filter((event) =>
+  const redCardEvents = events.filter((event) =>
     getEventKind(event) === 'red-card' && matchesDisplayedPlayer(event)
-  ).length
+  )
 
   return {
     displayName: abbreviatePlayerName(displayName),
@@ -858,9 +878,12 @@ function getPlayerFieldState(
     substitutionReplacementName: substitutionEvent?.assist?.name
       ? abbreviatePlayerName(substitutionEvent.assist.name)
       : null,
-    goals,
-    yellowCards,
-    redCards,
+    goals: goalEvents.length,
+    goalMinutes: goalEvents.map((event) => event.time?.elapsed ?? null),
+    yellowCards: yellowCardEvents.length,
+    yellowCardMinutes: yellowCardEvents.map((event) => event.time?.elapsed ?? null),
+    redCards: redCardEvents.length,
+    redCardMinutes: redCardEvents.map((event) => event.time?.elapsed ?? null),
   }
 }
 
@@ -874,50 +897,66 @@ function abbreviatePlayerName(name: string) {
   return firstInitial ? `${firstInitial}. ${lastName}` : lastName
 }
 
-function FieldEventBadges({
+function incidenceSlots(count: number, minutes: Array<number | null>) {
+  return Array.from({ length: count }, (_, index) => minutes[index] ?? null)
+}
+
+function FieldSideIncidences({
   goals,
+  goalMinutes,
   yellowCards,
+  yellowCardMinutes,
   redCards,
+  redCardMinutes,
+}: {
+  goals: number
+  goalMinutes: Array<number | null>
+  yellowCards: number
+  yellowCardMinutes: Array<number | null>
+  redCards: number
+  redCardMinutes: Array<number | null>
+}) {
+  if (!goals && !yellowCards && !redCards) return null
+
+  return (
+    <div className="absolute left-[calc(50%+20px)] top-1/2 flex -translate-y-1/2 items-center gap-1.5 whitespace-nowrap text-left sm:left-[calc(50%+35px)] sm:gap-2">
+      {incidenceSlots(goals, goalMinutes).map((minute, index) => (
+        <span key={`goal-${index}`} className="inline-flex items-center gap-0.5 text-[10px] font-black text-white sm:text-xs">
+          <EventIcon kind="goal" size="lg" />
+          {minute ? <span>{minute}&apos;</span> : null}
+        </span>
+      ))}
+      {incidenceSlots(yellowCards, yellowCardMinutes).map((minute, index) => (
+        <span key={`yellow-${index}`} className="inline-flex items-center gap-0.5 text-[10px] font-black text-[#f3d36c] sm:text-xs">
+          <EventIcon kind="yellow-card" />
+          {minute ? <span>{minute}&apos;</span> : null}
+        </span>
+      ))}
+      {incidenceSlots(redCards, redCardMinutes).map((minute, index) => (
+        <span key={`red-${index}`} className="inline-flex items-center gap-0.5 text-[10px] font-black text-[#ff8f8f] sm:text-xs">
+          <EventIcon kind="red-card" />
+          {minute ? <span>{minute}&apos;</span> : null}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function FieldSubstitutionBadge({
   substitutionMinute,
   substitutionReplacementName,
 }: {
-  goals: number
-  yellowCards: number
-  redCards: number
   substitutionMinute?: number | null
   substitutionReplacementName?: string | null
 }) {
-  if (!goals && !yellowCards && !redCards && !substitutionMinute) return null
+  if (!substitutionMinute) return null
 
   return (
-    <div className="mt-0.5 flex min-h-3.5 flex-col items-center justify-center gap-0.5">
-      <div className="flex items-center justify-center gap-0.5">
-        {goals ? (
-          <span className="inline-flex min-h-3 min-w-3 items-center justify-center text-[#7ff0b2]">
-            <EventIcon kind="goal" />
-            {goals > 1 ? <span className="ml-0.5 text-[8px] font-bold">{goals}</span> : null}
-          </span>
-        ) : null}
-        {yellowCards ? (
-          <span className="inline-flex min-h-3 min-w-3 items-center justify-center text-[#f3d36c]">
-            <EventIcon kind="yellow-card" />
-            {yellowCards > 1 ? <span className="ml-0.5 text-[8px] font-bold">{yellowCards}</span> : null}
-          </span>
-        ) : null}
-        {redCards ? (
-          <span className="inline-flex min-h-3 min-w-3 items-center justify-center text-[#ff8f8f]">
-            <EventIcon kind="red-card" />
-          </span>
-        ) : null}
-      </div>
-      {substitutionMinute ? (
-        <div className="max-w-[64px] text-center leading-[1.05] sm:max-w-[76px]">
-          <div className="text-[8px] font-black text-[#ff8f8f]">&darr; {substitutionMinute}&apos;</div>
-          {substitutionReplacementName ? (
-            <div className="mt-px truncate text-[6px] font-semibold text-[#c8d0da] sm:text-[7px]">
-              por {substitutionReplacementName}
-            </div>
-          ) : null}
+    <div className="mt-0.5 max-w-[96px] text-center leading-tight sm:max-w-[128px]">
+      <div className="text-xs font-black text-[#ff8f8f] sm:text-sm">&darr; {substitutionMinute}&apos;</div>
+      {substitutionReplacementName ? (
+        <div className="mt-px truncate text-[10px] font-semibold text-[#dbe7de] sm:text-xs">
+          por {substitutionReplacementName}
         </div>
       ) : null}
     </div>
@@ -978,7 +1017,7 @@ function PlayerOnField({
 
   return (
     <div
-      className="absolute w-[64px] -translate-x-1/2 -translate-y-1/2 overflow-hidden text-center sm:w-[76px]"
+      className="absolute w-[112px] -translate-x-1/2 -translate-y-1/2 text-center sm:w-[148px]"
       style={{
         left: `${pos.x}%`,
         top: `${pos.y}%`,
@@ -991,14 +1030,19 @@ function PlayerOnField({
           </div>
         ) : null}
         <Shirt number={playerState.displayNumber ?? player.number} style={style} />
+        <FieldSideIncidences
+          goals={playerState.goals}
+          goalMinutes={playerState.goalMinutes}
+          yellowCards={playerState.yellowCards}
+          yellowCardMinutes={playerState.yellowCardMinutes}
+          redCards={playerState.redCards}
+          redCardMinutes={playerState.redCardMinutes}
+        />
       </div>
-      <div className="mx-auto mt-1 max-w-[60px] overflow-hidden truncate text-ellipsis whitespace-nowrap text-[6px] font-bold leading-tight text-white sm:mt-1.5 sm:max-w-[76px] sm:text-[8px]">
+      <div className="mx-auto mt-1 max-w-[94px] overflow-hidden truncate text-ellipsis whitespace-nowrap text-xs font-bold leading-tight text-white sm:mt-1.5 sm:max-w-[128px] sm:text-base">
         {playerState.displayName}
       </div>
-      <FieldEventBadges
-        goals={playerState.goals}
-        yellowCards={playerState.yellowCards}
-        redCards={playerState.redCards}
+      <FieldSubstitutionBadge
         substitutionMinute={playerState.substitutionMinute}
         substitutionReplacementName={playerState.substitutionReplacementName}
       />
@@ -1042,7 +1086,7 @@ function FormationPitch({
         </span>
       </div>
 
-      <div className="relative min-h-[430px] w-full min-w-0 overflow-hidden bg-transparent sm:min-h-[520px] lg:min-h-[620px]">
+      <div className="relative min-h-[560px] w-full min-w-0 overflow-hidden bg-transparent sm:min-h-[680px] lg:min-h-[760px]">
         <div className="absolute inset-x-0 top-1/2 h-px bg-[#4ea170]/50" />
         <div className="absolute left-1/2 top-1/2 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#4ea170]/40" />
         <div className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#7ff0b2]/40" />
@@ -1167,7 +1211,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
     const message =
       error instanceof ApiFootballError
         ? error.code === 'requests'
-          ? 'Se alcanzÃ³ el lÃ­mite diario de la API. El detalle del partido no pudo cargarse.'
+          ? 'Se alcanzó el límite diario de la API. El detalle del partido no pudo cargarse.'
           : error.message
         : 'No se pudo cargar el detalle del partido.'
 
@@ -1191,7 +1235,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
         <div className="mx-0 w-full max-w-none px-0 py-3 md:mx-auto md:max-w-6xl md:px-4 md:py-10">
           <div className="w-full rounded-2xl border border-white/8 bg-[#111418] p-4 md:p-6">
             <h1 className="text-2xl font-black">Partido no encontrado</h1>
-            <p className="mt-2 text-[#8d98a7]">No existe informaciÃ³n para este partido.</p>
+            <p className="mt-2 text-[#8d98a7]">No existe información para este partido.</p>
           </div>
         </div>
       </div>
@@ -1317,13 +1361,13 @@ export default async function PartidoDetallePage({ params }: PageProps) {
               </p>
             </div>
             <div>
-              <span className="text-[#8d98a7]">UbicaciÃ³n</span>
+              <span className="text-[#8d98a7]">Ubicación</span>
               <p className="mt-1 font-medium text-white">
                 {formatVenueLocation(fixture.fixture.venue?.city)}
               </p>
             </div>
             <div>
-              <span className="text-[#8d98a7]">Ãrbitro</span>
+              <span className="text-[#8d98a7]">Árbitro</span>
               <p className="mt-1 font-medium text-white">
                 {formatReferee(fixture.fixture.referee)}
               </p>
@@ -1338,7 +1382,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="text-base font-bold text-white">Minuto a minuto</h2>
                   <span className="text-[11px] uppercase tracking-[0.16em] text-[#8d98a7]">
-                    CronologÃ­a
+                    Cronología
                   </span>
                 </div>
               </div>
@@ -1417,7 +1461,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
             <div className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
               <div className="border-b border-white/6 bg-[#13181d] px-2 py-3 md:px-4">
                 <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-base font-bold text-white">FormaciÃ³n</h2>
+                  <h2 className="text-base font-bold text-white">Formación</h2>
                   <span className="text-[11px] uppercase tracking-[0.16em] text-[#8d98a7]">
                     Visual
                   </span>
@@ -1456,7 +1500,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-white/8 bg-[#12171c] px-2 py-3 text-sm text-[#8d98a7] md:px-4 md:py-4">
-                      Este partido no tiene una formaciÃ³n visual real cargada por la fuente de datos.
+                      Este partido no tiene una formación visual real cargada por la fuente de datos.
                     </div>
                   )}
 
@@ -1497,15 +1541,15 @@ export default async function PartidoDetallePage({ params }: PageProps) {
               <div className="px-2 py-1 md:px-4">
                 <InfoRow label="Estado" value={translateStatus(status.long)} />
                 <InfoRow label="Liga" value={translateLeagueName(fixture.league.name)} />
-                <InfoRow label="PaÃ­s" value={translateCountry(fixture.league.country)} />
-                <InfoRow label="Ãrbitro" value={formatReferee(fixture.fixture.referee)} />
+                <InfoRow label="País" value={translateCountry(fixture.league.country)} />
+                <InfoRow label="Árbitro" value={formatReferee(fixture.fixture.referee)} />
               </div>
             </div>
 
             <div className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
               <div className="border-b border-white/6 bg-[#13181d] px-2 py-3 md:px-4">
                 <div className="flex items-center justify-center">
-                  <h2 className="text-lg font-bold tracking-[0.01em] text-white">EstadÃ­sticas</h2>
+                  <h2 className="text-lg font-bold tracking-[0.01em] text-white">Estadísticas</h2>
                 </div>
               </div>
 
@@ -1555,7 +1599,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                 </div>
               ) : (
                 <div className="px-2 py-5 text-sm text-[#8d98a7] md:px-4">
-                  No hay estadÃ­sticas disponibles.
+                  No hay estadísticas disponibles.
                 </div>
               )}
             </div>

@@ -74,10 +74,16 @@ function TinyEventBadges({
   if (!goals && !yellowCards && !redCards) return null
 
   const ballIcon = (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-[13px] w-[13px] overflow-visible drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)]">
-      <circle cx="12" cy="12" r="9.5" fill="#f8fafc" stroke="#0f1317" strokeWidth="1.4" />
-      <path d="m12 7 3.1 2.2-1.2 3.6h-3.8L8.9 9.2 12 7Z" fill="#0f1317" />
-      <path d="M5.3 10.2 8.9 9.2M15.1 9.2l3.6 1M10.1 12.8l-2.4 3M13.9 12.8l2.4 3" fill="none" stroke="#0f1317" strokeWidth="1.2" strokeLinecap="round" />
+    <svg viewBox="0 0 32 32" aria-hidden="true" className="h-[13px] w-[13px] overflow-visible">
+      <circle cx="16" cy="16" r="13.5" fill="#f8fafc" stroke="#0f1317" strokeWidth="1.8" />
+      <path d="M16 8.2 21 11.8 19.1 17.6h-6.2L11 11.8 16 8.2Z" fill="#0f1317" />
+      <path
+        d="m7.8 12.2 3.2-.4M21 11.8l3.2.4M12.9 17.6l-2.7 3.8M19.1 17.6l2.7 3.8M12.2 26.5l-2-5.1M19.8 26.5l2-5.1"
+        fill="none"
+        stroke="#0f1317"
+        strokeLinecap="round"
+        strokeWidth="1.5"
+      />
     </svg>
   )
 

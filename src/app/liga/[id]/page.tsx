@@ -1441,7 +1441,7 @@ export default async function LigaPage({ params }: PageProps) {
     errorMessage =
       error instanceof ApiFootballError
         ? error.message
-        : 'No se pudo cargar la informacion del torneo.'
+        : 'No se pudo cargar la información del torneo.'
   }
 
   const { primaryGroups, secondaryGroups } = splitPrimaryGroups(standings)
@@ -1516,7 +1516,7 @@ export default async function LigaPage({ params }: PageProps) {
                   <p className="mt-1 text-sm text-[#8d98a7]">
                     {resolvedTournament
                       ? `Temporada ${resolvedTournament.season}`
-                      : 'Buscando informacion del torneo'}
+                      : 'Buscando información del torneo'}
                   </p>
                 </div>
               </div>
