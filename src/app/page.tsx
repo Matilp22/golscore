@@ -935,6 +935,7 @@ export default async function HomePage({
   const visibleSections = groupedSections.filter(
     (section) => section.competitions.length > 0
   )
+  const visibleCompetitions = visibleSections.flatMap((section) => section.competitions)
   const hasLiveMatches = dateMatches.some((match) => isLiveStatus(match.statusShort))
   const refreshIntervalMs = hasLiveMatches ? 60000 : 300000
   const renderedAt = new Date().toISOString()
@@ -994,82 +995,70 @@ export default async function HomePage({
               </div>
             ) : null}
 
-            {visibleSections.length ? (
-              visibleSections.map((section) => (
-                <section
-                  id={section.key}
-                  key={section.key}
-                  className="w-full min-w-0 overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92"
-                >
-                  <div className="border-b border-white/6 bg-[#13181d] px-3 py-3 sm:px-4">
-                    <h2 className="text-base font-bold text-white md:text-lg">
-                      {section.title}
-                    </h2>
-                  </div>
-
-                  <div className="divide-y divide-white/6">
-                    {section.competitions.map((competition) => (
-                      <div
-                        id={competition.key}
-                        key={competition.key}
-                        className="scroll-mt-5 px-0 py-0"
-                      >
-                        <div className="border-b border-white/6 bg-[#12171c] px-3 py-3 sm:px-4">
-                          <div className="flex min-w-0 items-center justify-between gap-3">
-                            <div className="flex min-w-0 items-center gap-3">
-                              {competition.logo ? (
-                                <div className="flex h-8 w-8 items-center justify-center">
-                                  <Image
-                                    src={competition.logo}
-                                    alt={competition.title}
-                                    width={24}
-                                    height={24}
-                                    className="h-6 w-6 object-contain"
-                                  />
-                                </div>
-                              ) : (
-                                <div className="flex h-8 w-8 items-center justify-center">
-                                  <span className="h-5 w-4 bg-[#6f7884] [clip-path:polygon(50%_0,92%_16%,84%_72%,50%_100%,16%_72%,8%_16%)]" />
-                                </div>
-                              )}
-                              <div className="min-w-0">
-                                <h3 className="break-words text-sm font-semibold text-[#f3f6fa] md:text-base">
-                                  {competition.title}
-                                </h3>
+            {visibleCompetitions.length ? (
+              <section className="w-full min-w-0 overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
+                <div className="divide-y divide-white/7">
+                  {visibleCompetitions.map((competition) => (
+                    <div
+                      id={competition.key}
+                      key={competition.key}
+                      className="scroll-mt-5 px-0 py-0"
+                    >
+                      <div className="border-b border-white/7 bg-[#10151a] px-3 py-3 sm:px-4">
+                        <div className="flex min-w-0 items-center justify-between gap-3">
+                          <div className="flex min-w-0 items-center gap-3">
+                            {competition.logo ? (
+                              <div className="flex h-8 w-8 items-center justify-center">
+                                <Image
+                                  src={competition.logo}
+                                  alt={competition.title}
+                                  width={24}
+                                  height={24}
+                                  className="h-6 w-6 object-contain"
+                                />
                               </div>
-                            </div>
-
-                            <div className="shrink-0 rounded-md bg-white/5 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#94a0ae] sm:px-2.5 sm:text-[11px]">
-                              {competition.matches.length} partido{competition.matches.length !== 1 ? 's' : ''}
+                            ) : (
+                              <div className="flex h-8 w-8 items-center justify-center">
+                                <span className="h-5 w-4 bg-[#6f7884] [clip-path:polygon(50%_0,92%_16%,84%_72%,50%_100%,16%_72%,8%_16%)]" />
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <h2 className="break-words text-base font-bold text-[#f3f6fa] md:text-lg">
+                                {competition.title}
+                              </h2>
                             </div>
                           </div>
-                        </div>
 
-                        <div>
-                          {competition.matches.map((match) => (
-                            <MatchRow
-                              key={match.id}
-                              id={match.id}
-                              league={competition.title}
-                              country={match.country}
-                              homeLogo={match.homeLogo}
-                              awayLogo={match.awayLogo}
-                              time={formatMatchTime(match.date)}
-                              minute={match.minute ? `${match.minute}'` : ''}
-                              home={match.home}
-                              away={match.away}
-                              score={`${match.goalsHome ?? '-'} - ${match.goalsAway ?? '-'}`}
-                              status={formatStatus(match.statusShort, match.minute)}
-                              goalScorers={match.goalScorers}
-                              broadcastChannel={match.broadcastChannel}
-                            />
-                          ))}
+                          <div className="shrink-0 rounded-md border border-white/7 bg-white/[0.04] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#94a0ae] sm:px-2.5 sm:text-[11px]">
+                            {competition.matches.length} partido{competition.matches.length !== 1 ? 's' : ''}
+                          </div>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </section>
-              ))
+
+                      <div>
+                        {competition.matches.map((match) => (
+                          <MatchRow
+                            key={match.id}
+                            id={match.id}
+                            league={competition.title}
+                            country={match.country}
+                            homeLogo={match.homeLogo}
+                            awayLogo={match.awayLogo}
+                            time={formatMatchTime(match.date)}
+                            minute={match.minute ? `${match.minute}'` : ''}
+                            home={match.home}
+                            away={match.away}
+                            score={`${match.goalsHome ?? '-'} - ${match.goalsAway ?? '-'}`}
+                            status={formatStatus(match.statusShort, match.minute)}
+                            goalScorers={match.goalScorers}
+                            broadcastChannel={match.broadcastChannel}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
             ) : dataError ? null : (
               <div className="w-full rounded-2xl border border-white/8 bg-[#0f1317]/92 px-2 py-5 text-sm text-[#94a0ae] md:px-4 md:py-6">
                 No hay partidos cargados para la fecha seleccionada.

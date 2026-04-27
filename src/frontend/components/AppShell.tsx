@@ -83,10 +83,12 @@ export default function AppShell({ auth, children }: AppShellProps) {
         </div>
       ) : null}
 
-      <div className="grid w-full max-w-none gap-3 px-1 pb-3 pt-16 sm:px-2 md:px-5 md:pb-6 md:pt-16 lg:mx-auto lg:max-w-7xl lg:grid-cols-[210px_minmax(0,1fr)] lg:gap-4 lg:px-5 lg:pt-4">
-        <aside className="hidden h-fit rounded-2xl border border-white/8 bg-[#0f1317]/88 p-2 lg:sticky lg:top-4 lg:mt-[68px] lg:block lg:max-h-[calc(100vh-6.25rem)] lg:overflow-y-auto">
-          {sidebar}
-        </aside>
+      <div className={`grid w-full max-w-none gap-3 px-1 pb-3 pt-16 sm:px-2 md:px-5 md:pb-6 md:pt-16 lg:mx-auto lg:max-w-7xl lg:gap-4 lg:px-5 lg:pt-4 ${isHome ? '' : 'lg:grid-cols-[210px_minmax(0,1fr)]'}`}>
+        {isHome ? null : (
+          <aside className="hidden h-fit rounded-2xl border border-white/8 bg-[#0f1317]/88 p-2 lg:sticky lg:top-4 lg:mt-[68px] lg:block lg:max-h-[calc(100vh-6.25rem)] lg:overflow-y-auto">
+            {sidebar}
+          </aside>
+        )}
         <div className="min-w-0">
           <div className="mb-3 flex min-h-10 items-center justify-between gap-3">
             <div>{isHome ? null : <BackButton />}</div>
