@@ -940,8 +940,8 @@ export default async function HomePage({
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-transparent text-white">
-      <div className="mx-auto w-full max-w-none px-2.5 py-3 sm:px-3 md:px-5 md:py-6 lg:max-w-7xl">
-        <header className="relative mb-4 rounded-2xl bg-[#111418]/95 px-3 py-4 shadow-[0_10px_30px_rgba(0,0,0,0.16)] sm:px-4">
+      <div className="w-full px-0 py-3 lg:mx-auto lg:max-w-7xl lg:px-5 lg:py-6">
+        <header className="relative mb-4 w-full rounded-2xl bg-[#111418]/95 px-2 py-3 shadow-[0_10px_30px_rgba(0,0,0,0.16)] sm:px-3 md:px-4 md:py-4">
           <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
             <Link
               href="/prode"
@@ -998,7 +998,7 @@ export default async function HomePage({
                 <section
                   id={section.key}
                   key={section.key}
-                  className="min-w-0 overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92"
+                  className="w-full min-w-0 overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92"
                 >
                   <div className="border-b border-white/6 bg-[#13181d] px-3 py-3 sm:px-4">
                     <h2 className="text-base font-bold text-white md:text-lg">
@@ -1068,7 +1068,7 @@ export default async function HomePage({
                 </section>
               ))
             ) : dataError ? null : (
-              <div className="rounded-2xl border border-white/8 bg-[#0f1317]/92 px-4 py-6 text-sm text-[#94a0ae]">
+              <div className="w-full rounded-2xl border border-white/8 bg-[#0f1317]/92 px-2 py-5 text-sm text-[#94a0ae] md:px-4 md:py-6">
                 No hay partidos cargados para la fecha seleccionada.
               </div>
             )}

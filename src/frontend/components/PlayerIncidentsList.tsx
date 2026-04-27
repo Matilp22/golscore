@@ -130,8 +130,8 @@ export default function PlayerIncidentsList({
   }, [leagueId, season, playerId, playerName, teamId, expectedCount, statType])
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
-      <div className="border-b border-white/6 bg-[#13181d] px-4 py-3">
+    <div className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
+      <div className="border-b border-white/6 bg-[#13181d] px-2 py-3 md:px-4">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="text-base font-bold text-white">Partidos con incidencias</h2>
@@ -146,16 +146,16 @@ export default function PlayerIncidentsList({
       </div>
 
       {loading ? (
-        <div className="px-4 py-5 text-sm text-[#8d98a7]">Buscando incidencias del jugador...</div>
+        <div className="px-2 py-5 text-sm text-[#8d98a7] md:px-4">Buscando incidencias del jugador...</div>
       ) : error ? (
-        <div className="px-4 py-5 text-sm text-[#ffb1b1]">{error}</div>
+        <div className="px-2 py-5 text-sm text-[#ffb1b1] md:px-4">{error}</div>
       ) : matches.length ? (
-        <div className="space-y-3 p-4">
+        <div className="space-y-3 p-2 md:p-4">
           {matches.map((match) => (
             <Link
               key={match.fixtureId}
               href={`/partido/${match.fixtureId}`}
-              className="block rounded-2xl border border-white/6 bg-[#151b22] px-4 py-4 transition duration-300 ease-out hover:-translate-y-0.5 hover:border-white/12 hover:bg-[#19212a]"
+              className="block rounded-2xl border border-white/6 bg-[#151b22] px-2 py-3 transition duration-300 ease-out hover:-translate-y-0.5 hover:border-white/12 hover:bg-[#19212a] md:px-4 md:py-4"
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -184,7 +184,7 @@ export default function PlayerIncidentsList({
           ))}
         </div>
       ) : (
-        <div className="px-4 py-5 text-sm text-[#8d98a7]">
+        <div className="px-2 py-5 text-sm text-[#8d98a7] md:px-4">
           No se encontraron partidos con ese registro en este torneo.
         </div>
       )}

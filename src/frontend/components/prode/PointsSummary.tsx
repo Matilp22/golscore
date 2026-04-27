@@ -17,20 +17,20 @@ export default function PointsSummary({
   const exactHits = Number.isFinite(myRanking?.exactHits) ? myRanking?.exactHits ?? 0 : localExactHits
 
   return (
-    <div className="grid gap-3 md:grid-cols-3">
-      <div className="rounded-2xl border border-white/8 bg-[#111418] p-4">
+    <div className="grid w-full gap-3 md:grid-cols-3">
+      <div className="w-full rounded-2xl border border-white/8 bg-[#111418] p-2 sm:p-3 md:p-4">
         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#7ff0b2]">
           Puntos
         </p>
         <p className="mt-2 text-2xl font-black text-white">{points}</p>
       </div>
-      <div className="rounded-2xl border border-white/8 bg-[#111418] p-4">
+      <div className="w-full rounded-2xl border border-white/8 bg-[#111418] p-2 sm:p-3 md:p-4">
         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#7ff0b2]">
           Predicciones
         </p>
         <p className="mt-2 text-2xl font-black text-white">{predictions.length}</p>
       </div>
-      <div className="rounded-2xl border border-white/8 bg-[#111418] p-4">
+      <div className="w-full rounded-2xl border border-white/8 bg-[#111418] p-2 sm:p-3 md:p-4">
         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#7ff0b2]">
           Exactos
         </p>

@@ -1125,14 +1125,14 @@ function SectionCard({
   children: ReactNode
 }) {
   return (
-    <section className="overflow-hidden rounded-3xl border border-white/8 bg-[#0f1317]/92">
-      <div className="border-b border-white/6 bg-[#13181d] px-4 py-3">
+    <section className="w-full overflow-hidden rounded-3xl border border-white/8 bg-[#0f1317]/92">
+      <div className="border-b border-white/6 bg-[#13181d] px-2 py-3 md:px-4">
         <h2 className="text-base font-bold text-white md:text-lg">{title}</h2>
         {subtitle ? (
           <p className="mt-1 text-sm text-[#8d98a7]">{subtitle}</p>
         ) : null}
       </div>
-      <div className="p-4">{children}</div>
+      <div className="p-2 md:p-4">{children}</div>
     </section>
   )
 }
@@ -1356,8 +1356,8 @@ export default async function LigaPage({ params }: PageProps) {
 
   if (!tournament) {
     return (
-      <div className="min-h-screen bg-[#0a0d0b] px-4 py-10 text-white">
-        <div className="mx-auto max-w-6xl rounded-3xl border border-white/8 bg-[#111418] p-6">
+      <div className="min-h-screen bg-[#0a0d0b] px-2 py-3 text-white md:px-4 md:py-10">
+        <div className="w-full max-w-none rounded-3xl border border-white/8 bg-[#111418] p-4 md:mx-auto md:max-w-6xl md:p-6">
           <h1 className="text-2xl font-black">Torneo no encontrado</h1>
           <p className="mt-2 text-[#8d98a7]">No existe una configuracion para este torneo.</p>
         </div>
@@ -1489,10 +1489,10 @@ export default async function LigaPage({ params }: PageProps) {
 
   return (
     <div className="min-h-screen bg-transparent text-white">
-      <div className="mx-auto w-full max-w-none px-2.5 py-3 sm:px-3 md:px-5 md:py-6 lg:max-w-7xl">
-        <main className="min-w-0 space-y-4">
-          <header className="overflow-hidden rounded-3xl border border-white/8 bg-[#111418]/95 shadow-[0_10px_30px_rgba(0,0,0,0.2)]">
-            <div className="flex flex-col gap-4 px-4 py-5 md:flex-row md:items-center md:justify-between">
+      <div className="w-full max-w-none px-0 py-3 lg:mx-auto lg:max-w-7xl lg:px-5 lg:py-6">
+        <main className="w-full min-w-0 space-y-4">
+          <header className="w-full overflow-hidden rounded-3xl border border-white/8 bg-[#111418]/95 shadow-[0_10px_30px_rgba(0,0,0,0.2)]">
+            <div className="flex flex-col gap-3 px-2 py-3 md:flex-row md:items-center md:justify-between md:gap-4 md:px-4 md:py-5">
               <div className="flex items-center gap-4">
                 {resolvedTournament?.logo ? (
                   <div className="flex h-16 w-16 items-center justify-center">
@@ -1524,7 +1524,7 @@ export default async function LigaPage({ params }: PageProps) {
           </header>
 
           {errorMessage ? (
-            <div className="rounded-3xl border border-[#5a2a2a] bg-[#3b1919] p-6">
+            <div className="w-full rounded-3xl border border-[#5a2a2a] bg-[#3b1919] p-4 md:p-6">
               <p className="text-sm font-medium text-[#ffd5d5]">{errorMessage}</p>
             </div>
           ) : null}

@@ -111,7 +111,7 @@ export default function CurrentRoundNavigator({
   if (!selectedRound) return null
 
   return (
-    <section className="overflow-hidden rounded-3xl border border-white/8 bg-[#0f1317]/92">
+    <section className="w-full overflow-hidden rounded-3xl border border-white/8 bg-[#0f1317]/92">
       <div className="border-b border-white/6 bg-[#13181d] px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <button
@@ -187,7 +187,7 @@ export default function CurrentRoundNavigator({
       </div>
 
       <div className="p-4">
-        <div className="overflow-hidden rounded-2xl border border-white/8 bg-[#11161b]">
+        <div className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#11161b]">
           {selectedRound.days.map(([day, matches]) => (
             <div key={day} className="border-b border-white/10 last:border-b-0">
               <div className="border-b border-white/8 bg-[#141a20] px-4 py-2 text-center text-sm font-bold text-white last:border-b-0">

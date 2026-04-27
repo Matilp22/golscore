@@ -8,7 +8,7 @@ type LeaderboardTableProps = {
 
 export default function LeaderboardTable({ rows }: LeaderboardTableProps) {
   return (
-    <aside className="h-fit min-w-0 rounded-2xl border border-white/8 bg-[#111418]">
+    <aside className="h-fit w-full min-w-0 rounded-2xl border border-white/8 bg-[#111418]">
       <div className="border-b border-white/8 px-3 py-3 sm:px-4">
         <h2 className="text-lg font-black text-white">Tabla de posiciones</h2>
       </div>

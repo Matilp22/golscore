@@ -19,6 +19,8 @@ type PanelPlayer = {
   redCards?: number
   replacedPlayerName?: string
   substitutionLabel?: string
+  substitutionDirection?: 'in' | 'out'
+  substitutionMinute?: number | null
 }
 
 type FormationTeamPanelProps = {
@@ -72,58 +74,10 @@ function TinyEventBadges({
   if (!goals && !yellowCards && !redCards) return null
 
   const ballIcon = (
-    <svg viewBox="0 0 64 64" aria-hidden="true" className="h-[13px] w-[13px] overflow-visible">
-      <circle
-        cx="32"
-        cy="32"
-        r="29"
-        fill="none"
-        stroke="#ffffff"
-        strokeWidth="2.4"
-      />
-      <path
-        d="M32 11 23 18.5v11l9 6 9-6v-11L32 11Z"
-        fill="none"
-        stroke="#ffffff"
-        strokeWidth="2.2"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M23 18.5 12 15 6.5 28.5 13.5 36l10-6.5"
-        fill="none"
-        stroke="#ffffff"
-        strokeWidth="2.2"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M41 18.5 52 15l5.5 13.5-7 7.5-10-6.5"
-        fill="none"
-        stroke="#ffffff"
-        strokeWidth="2.2"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M13.5 36 16.5 48.5 27.5 49l4.5-13.5"
-        fill="none"
-        stroke="#ffffff"
-        strokeWidth="2.2"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M50.5 36 47.5 48.5 36.5 49 32 35.5"
-        fill="none"
-        stroke="#ffffff"
-        strokeWidth="2.2"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M27.5 49 32 58 36.5 49"
-        fill="none"
-        stroke="#ffffff"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-[13px] w-[13px] overflow-visible drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)]">
+      <circle cx="12" cy="12" r="9.5" fill="#f8fafc" stroke="#0f1317" strokeWidth="1.4" />
+      <path d="m12 7 3.1 2.2-1.2 3.6h-3.8L8.9 9.2 12 7Z" fill="#0f1317" />
+      <path d="M5.3 10.2 8.9 9.2M15.1 9.2l3.6 1M10.1 12.8l-2.4 3M13.9 12.8l2.4 3" fill="none" stroke="#0f1317" strokeWidth="1.2" strokeLinecap="round" />
     </svg>
   )
 
@@ -156,7 +110,7 @@ export default function FormationTeamPanel({
   const players = tab === 'starters' ? starters : substitutes
 
   return (
-    <div className="rounded-2xl border border-white/8 bg-[#111418] p-4">
+    <div className="w-full rounded-2xl border border-white/8 bg-[#111418] p-2 sm:p-3 md:p-4">
       <div className={`${align === 'right' ? 'text-right' : 'text-left'}`}>
         <h4 className="text-sm font-bold uppercase tracking-[0.14em] text-[#f3f6fa]">{title}</h4>
       </div>
@@ -186,19 +140,19 @@ export default function FormationTeamPanel({
         </button>
       </div>
 
-      <div className="mt-4 rounded-xl border border-white/6 bg-[#161a20] px-3 py-3">
+      <div className="mt-3 rounded-xl border border-white/6 bg-[#161a20] px-2 py-3 md:mt-4 md:px-3">
         <p className="text-[11px] uppercase tracking-wide text-[#8d98a7]">DT</p>
         <p className="mt-1 text-sm font-semibold text-white">
           {coachName || 'No disponible'}
         </p>
       </div>
 
-      <div className="mt-4 space-y-2">
+      <div className="mt-3 space-y-2 md:mt-4">
         {players.length ? (
           players.map((player) => (
             <div
               key={player.id}
-              className={`flex items-center gap-3 rounded-xl border border-white/6 bg-[#161a20] px-3 py-2 ${
+              className={`flex items-center gap-2 rounded-xl border border-white/6 bg-[#161a20] px-2 py-2 md:gap-3 md:px-3 ${
                 align === 'right' ? 'flex-row-reverse text-right' : ''
               }`}
             >
@@ -216,9 +170,21 @@ export default function FormationTeamPanel({
                   {player.name}
                 </p>
                 {player.replacedPlayerName && player.substitutionLabel ? (
-                  <p className="mt-0.5 truncate text-[10px] text-[#9fb0c2]">
-                    {player.substitutionLabel} {player.replacedPlayerName}
-                  </p>
+                  <div className="mt-0.5 leading-tight">
+                    <p
+                      className={`text-[10px] font-black ${
+                        player.substitutionDirection === 'in'
+                          ? 'text-[#7ff0b2]'
+                          : 'text-[#ff8f8f]'
+                      }`}
+                    >
+                      {player.substitutionDirection === 'in' ? <>&uarr;</> : <>&darr;</>}{' '}
+                      {player.substitutionMinute ? `${player.substitutionMinute}'` : ''}
+                    </p>
+                    <p className="truncate text-[10px] text-[#9fb0c2]">
+                      {player.substitutionLabel} {player.replacedPlayerName}
+                    </p>
+                  </div>
                 ) : null}
               </div>
 

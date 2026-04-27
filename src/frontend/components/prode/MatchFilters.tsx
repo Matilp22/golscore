@@ -159,7 +159,7 @@ export default function MatchFilters({
   )
 
   return (
-    <div className="grid min-w-0 gap-3 rounded-2xl border border-white/8 bg-[#0f1317]/92 p-3 md:grid-cols-2 md:p-4">
+    <div className="grid w-full min-w-0 gap-3 rounded-2xl border border-white/8 bg-[#0f1317]/92 p-2 sm:p-3 md:grid-cols-2 md:p-4">
       <FilterSelect
         label="Liga"
         value={selectedLeagueId}

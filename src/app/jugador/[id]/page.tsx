@@ -87,7 +87,7 @@ function SummaryStat({
   accent: string
 }) {
   return (
-    <div className="rounded-xl border border-white/6 bg-[#161a20] px-4 py-3">
+    <div className="rounded-xl border border-white/6 bg-[#161a20] px-2 py-3 md:px-4">
       <p className="text-[11px] uppercase tracking-[0.14em] text-[#8d98a7]">{label}</p>
       <p className={`mt-1 text-xl font-black ${accent}`}>{value}</p>
     </div>
@@ -111,8 +111,8 @@ export default async function JugadorPage({ params, searchParams }: PageProps) {
   if (!playerId || !season) {
     return (
       <div className="min-h-screen text-white">
-        <div className="mx-auto max-w-6xl px-4 py-10">
-          <div className="rounded-2xl border border-[#5a2a2a] bg-[#3b1919] p-6">
+        <div className="mx-0 w-full max-w-none px-0 py-3 md:mx-auto md:max-w-6xl md:px-4 md:py-10">
+          <div className="w-full rounded-2xl border border-[#5a2a2a] bg-[#3b1919] p-4 md:p-6">
             <h1 className="text-2xl font-black">Jugador no disponible</h1>
             <p className="mt-2 text-[#ffd5d5]">
               Faltan datos para mostrar la ficha del jugador.
@@ -151,9 +151,9 @@ export default async function JugadorPage({ params, searchParams }: PageProps) {
 
     return (
       <div className="min-h-screen text-white">
-        <div className="mx-auto w-full max-w-none px-2.5 py-3 sm:px-3 md:px-5 md:py-6 lg:max-w-7xl">
-          <header className="mb-4 overflow-hidden rounded-2xl border border-white/8 bg-[#111418]/95 shadow-[0_10px_30px_rgba(0,0,0,0.2)]">
-            <div className="flex flex-col gap-4 px-4 py-5 md:flex-row md:items-center md:justify-between">
+        <div className="w-full max-w-none px-0 py-3 lg:mx-auto lg:max-w-7xl lg:px-5 lg:py-6">
+          <header className="mb-4 w-full overflow-hidden rounded-2xl border border-white/8 bg-[#111418]/95 shadow-[0_10px_30px_rgba(0,0,0,0.2)]">
+            <div className="flex flex-col gap-3 px-2 py-3 md:flex-row md:items-center md:justify-between md:gap-4 md:px-4 md:py-5">
               <div className="flex items-center gap-4">
                 <div className="flex h-20 w-20 items-center justify-center overflow-hidden">
                   {player.photo ? (
@@ -201,12 +201,12 @@ export default async function JugadorPage({ params, searchParams }: PageProps) {
 
           <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
             <aside className="space-y-4">
-              <div className="overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
-                <div className="border-b border-white/6 bg-[#13181d] px-4 py-3">
+              <div className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
+                <div className="border-b border-white/6 bg-[#13181d] px-2 py-3 md:px-4">
                   <h2 className="text-base font-bold text-white">Ficha</h2>
                 </div>
 
-                <div className="px-4 py-1">
+                <div className="px-2 py-1 md:px-4">
                   <InfoRow label="Edad" value={String(player.age || 'No disponible')} />
                   <InfoRow label="Nacionalidad" value={player.nationality || 'No disponible'} />
                   <InfoRow label="Nacimiento" value={formatDate(player.birthDate)} />
@@ -223,12 +223,12 @@ export default async function JugadorPage({ params, searchParams }: PageProps) {
                 </div>
               </div>
 
-              <div className="overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
-                <div className="border-b border-white/6 bg-[#13181d] px-4 py-3">
+              <div className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
+                <div className="border-b border-white/6 bg-[#13181d] px-2 py-3 md:px-4">
                   <h2 className="text-base font-bold text-white">Temporada</h2>
                 </div>
 
-                <div className="px-4 py-1">
+                <div className="px-2 py-1 md:px-4">
                   <InfoRow label="Competencia" value={league?.name || 'No disponible'} />
                   <InfoRow label="País" value={league?.country || 'No disponible'} />
                   <InfoRow label="Apariciones" value={String(statistics.appearances)} />
@@ -264,8 +264,8 @@ export default async function JugadorPage({ params, searchParams }: PageProps) {
 
     return (
       <div className="min-h-screen text-white">
-        <div className="mx-auto max-w-6xl px-4 py-10">
-          <div className="rounded-2xl border border-[#5a2a2a] bg-[#3b1919] p-6">
+        <div className="mx-0 w-full max-w-none px-0 py-3 md:mx-auto md:max-w-6xl md:px-4 md:py-10">
+          <div className="w-full rounded-2xl border border-[#5a2a2a] bg-[#3b1919] p-4 md:p-6">
             <h1 className="text-2xl font-black">Jugador no disponible</h1>
             <p className="mt-2 text-[#ffd5d5]">{message}</p>
           </div>

@@ -407,11 +407,11 @@ export default function ProdePanel() {
   )
 
   return (
-    <div className="min-w-0 space-y-4">
+    <div className="w-full min-w-0 space-y-4">
       <PointsSummary myRanking={myRanking} predictions={predictions} />
 
-      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="min-w-0 space-y-4">
+      <div className="grid w-full min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="w-full min-w-0 space-y-4">
           <MatchFilters
             leagues={leagues}
             rounds={rounds}
@@ -435,7 +435,7 @@ export default function ProdePanel() {
             }}
           />
           {isLeaguesLoading || isMatchesLoading || isAuthLoading ? (
-            <div className="rounded-2xl border border-white/8 bg-[#111418] p-4 sm:p-6">
+            <div className="w-full rounded-2xl border border-white/8 bg-[#111418] p-2 sm:p-3 md:p-4">
               <h2 className="text-lg font-black text-white">Partidos</h2>
               <p className="mt-2 text-sm text-[#8d98a7]">Cargando partidos...</p>
             </div>
@@ -453,20 +453,20 @@ export default function ProdePanel() {
           )}
 
           {message ? (
-            <div className="rounded-2xl border border-white/8 bg-[#0f1317] px-4 py-3 text-sm text-[#dce7f2]">
+            <div className="w-full rounded-2xl border border-white/8 bg-[#0f1317] px-2 py-3 text-sm text-[#dce7f2] md:px-4">
               {message}
             </div>
           ) : null}
         </div>
 
-        <div className="min-w-0 space-y-4">
+        <div className="w-full min-w-0 space-y-4">
           <LeaderboardTable rows={leaderboard} />
           {rankingMessage ? (
-            <p className="rounded-2xl border border-white/8 bg-[#0f1317] px-4 py-3 text-sm text-[#8d98a7]">
+            <p className="w-full rounded-2xl border border-white/8 bg-[#0f1317] px-2 py-3 text-sm text-[#8d98a7] md:px-4">
               {rankingMessage}
             </p>
           ) : null}
-          <section className="rounded-2xl border border-white/8 bg-[#111418]">
+          <section className="w-full rounded-2xl border border-white/8 bg-[#111418]">
             <div className="border-b border-white/8 px-3 py-3 sm:px-4">
               <h2 className="text-lg font-black text-white">Reglas del prode</h2>
             </div>
@@ -492,7 +492,7 @@ export default function ProdePanel() {
             </div>
           </section>
           {SHOW_MY_PREDICTIONS ? (
-            <section className="rounded-2xl border border-white/8 bg-[#111418]">
+            <section className="w-full rounded-2xl border border-white/8 bg-[#111418]">
               <div className="border-b border-white/8 px-4 py-3">
                 <h2 className="text-lg font-black text-white">Mis predicciones</h2>
               </div>

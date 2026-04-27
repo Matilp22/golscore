@@ -1,4 +1,4 @@
-import {
+﻿import {
   ApiFootballError,
   getMatchDetail,
   type MatchEvent,
@@ -47,14 +47,14 @@ function formatStatusLabel(statusLong: string, elapsed?: number | null) {
 function translateCountry(country: string) {
   const map: Record<string, string> = {
     Argentina: 'Argentina',
-    Spain: 'España',
+    Spain: 'EspaÃ±a',
     Italy: 'Italia',
     Germany: 'Alemania',
     England: 'Inglaterra',
     Portugal: 'Portugal',
     France: 'Francia',
-    Netherlands: 'Países Bajos',
-    Holland: 'Países Bajos',
+    Netherlands: 'PaÃ­ses Bajos',
+    Holland: 'PaÃ­ses Bajos',
     Brazil: 'Brasil',
     Serbia: 'Serbia',
     World: 'Mundo',
@@ -75,7 +75,7 @@ function translateLeagueName(name: string) {
 
   const map: Record<string, string> = {
     'World Cup': 'Mundial',
-    'Copa America': 'Copa América',
+    'Copa America': 'Copa AmÃ©rica',
     'UEFA Euro': 'Eurocopa',
     'UEFA Nations League': 'Liga de Naciones UEFA',
     'World Cup - Qualification Europe': 'Eliminatorias UEFA',
@@ -92,18 +92,18 @@ function translateStatType(type: string) {
     'Shots off Goal': 'Remates afuera',
     'Total Shots': 'Remates totales',
     'Blocked Shots': 'Remates bloqueados',
-    'Shots insidebox': 'Remates dentro del área',
-    'Shots outsidebox': 'Remates fuera del área',
+    'Shots insidebox': 'Remates dentro del Ã¡rea',
+    'Shots outsidebox': 'Remates fuera del Ã¡rea',
     Fouls: 'Faltas',
     'Corner Kicks': 'Tiros de esquina',
     Offsides: 'Offsides',
-    'Ball Possession': 'Posesión',
+    'Ball Possession': 'PosesiÃ³n',
     'Yellow Cards': 'Tarjetas amarillas',
     'Red Cards': 'Tarjetas rojas',
     'Goalkeeper Saves': 'Atajadas',
     'Total passes': 'Pases totales',
     'Passes accurate': 'Pases correctos',
-    'Passes %': 'Precisión de pase',
+    'Passes %': 'PrecisiÃ³n de pase',
     expected_goals: 'Goles esperados',
   }
 
@@ -126,14 +126,14 @@ function formatStatValue(value: string | number | null | undefined) {
 }
 
 function formatVenueLocation(city?: string | null) {
-  if (!city) return 'Ubicación no disponible'
+  if (!city) return 'UbicaciÃ³n no disponible'
 
   const parts = city
     .split(',')
     .map((part) => part.trim())
     .filter(Boolean)
 
-  if (parts.length === 0) return 'Ubicación no disponible'
+  if (parts.length === 0) return 'UbicaciÃ³n no disponible'
   if (parts.length === 1) return parts[0]
 
   return `${parts[0]} (${parts.slice(1).join(', ')})`
@@ -337,67 +337,19 @@ function getEventTypeStyle(event: MatchEvent) {
 
 function EventIcon({ kind }: { kind: EventKind }) {
   const ballIcon = (
-    <svg viewBox="0 0 64 64" aria-hidden="true" className="h-[18px] w-[18px] overflow-visible">
-      <circle
-        cx="32"
-        cy="32"
-        r="29"
-        fill="none"
-        stroke="#ffffff"
-        strokeWidth="2.4"
-      />
-      <path
-        d="M32 11 23 18.5v11l9 6 9-6v-11L32 11Z"
-        fill="none"
-        stroke="#ffffff"
-        strokeWidth="2.2"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M23 18.5 12 15 6.5 28.5 13.5 36l10-6.5"
-        fill="none"
-        stroke="#ffffff"
-        strokeWidth="2.2"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M41 18.5 52 15l5.5 13.5-7 7.5-10-6.5"
-        fill="none"
-        stroke="#ffffff"
-        strokeWidth="2.2"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M13.5 36 16.5 48.5 27.5 49l4.5-13.5"
-        fill="none"
-        stroke="#ffffff"
-        strokeWidth="2.2"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M50.5 36 47.5 48.5 36.5 49 32 35.5"
-        fill="none"
-        stroke="#ffffff"
-        strokeWidth="2.2"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M27.5 49 32 58 36.5 49"
-        fill="none"
-        stroke="#ffffff"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-[16px] w-[16px] overflow-visible">
+      <circle cx="12" cy="12" r="9.5" fill="#f8fafc" stroke="#0f1317" strokeWidth="1.4" />
+      <path d="m12 7 3.1 2.2-1.2 3.6h-3.8L8.9 9.2 12 7Z" fill="#0f1317" />
+      <path d="M5.3 10.2 8.9 9.2M15.1 9.2l3.6 1M10.1 12.8l-2.4 3M13.9 12.8l2.4 3" fill="none" stroke="#0f1317" strokeWidth="1.2" strokeLinecap="round" />
     </svg>
   )
 
   if (kind === 'yellow-card') {
-    return <span className="inline-block h-4 w-3 rounded-[2px] bg-[#f3d36c] shadow-[0_0_0_1px_rgba(0,0,0,0.18)]" />
+    return <span className="inline-block h-4 w-3 rounded-[1px] bg-[#f3d36c]" />
   }
 
   if (kind === 'red-card') {
-    return <span className="inline-block h-4 w-3 rounded-[2px] bg-[#ef4444] shadow-[0_0_0_1px_rgba(0,0,0,0.18)]" />
+    return <span className="inline-block h-4 w-3 rounded-[1px] bg-[#ef4444]" />
   }
 
   if (kind === 'goal') {
@@ -437,8 +389,8 @@ function EventIcon({ kind }: { kind: EventKind }) {
   if (kind === 'substitution') {
     return (
       <span className="inline-flex items-center gap-[2px] text-xs font-black leading-none">
-        <span className="text-[#7ff0b2]">↑</span>
-        <span className="text-[#ff8f8f]">↓</span>
+        <span className="text-[#7ff0b2]">&uarr;</span>
+        <span className="text-[#ff8f8f]">&darr;</span>
       </span>
     )
   }
@@ -509,7 +461,7 @@ function getTeamStyle(
 
   const map: Record<string, TeamStyle> = {
     Independiente: { shirt: '#d90429', text: '#ffffff', border: '#ffffff' },
-    'Atenas Río Cuarto': { shirt: '#2563eb', text: '#ffffff', border: '#ffffff' },
+    'Atenas RÃ­o Cuarto': { shirt: '#2563eb', text: '#ffffff', border: '#ffffff' },
     'Atenas Rio Cuarto': { shirt: '#2563eb', text: '#ffffff', border: '#ffffff' },
     River: { shirt: '#ffffff', secondary: '#e5e7eb', text: '#111111', border: '#dc2626' },
     Boca: { shirt: '#1d4ed8', secondary: '#facc15', text: '#facc15', border: '#facc15' },
@@ -518,7 +470,7 @@ function getTeamStyle(
     Estudiantes: { shirt: '#ef4444', secondary: '#ffffff', text: '#ffffff', border: '#ffffff' },
     Talleres: { shirt: '#123c69', secondary: '#ffffff', text: '#ffffff', border: '#ffffff' },
     'San Lorenzo': { shirt: '#1d4ed8', secondary: '#ef4444', text: '#ffffff', border: '#ef4444' },
-    'Vélez Sarsfield': { shirt: '#ffffff', secondary: '#1d4ed8', text: '#111111', border: '#1d4ed8' },
+    'VÃ©lez Sarsfield': { shirt: '#ffffff', secondary: '#1d4ed8', text: '#111111', border: '#1d4ed8' },
     Velez: { shirt: '#ffffff', secondary: '#1d4ed8', text: '#111111', border: '#1d4ed8' },
     Lanus: { shirt: '#7f1d1d', secondary: '#ffffff', text: '#ffffff', border: '#ffffff' },
     'Rosario Central': { shirt: '#1d4ed8', secondary: '#facc15', text: '#facc15', border: '#facc15' },
@@ -630,7 +582,8 @@ function getPlayerPosition(
   formation?: string,
   side: 'top' | 'bottom' = 'top',
   fallbackIndex = 0,
-  lineupPlayers?: PlayerWrapper[]
+  lineupPlayers?: PlayerWrapper[],
+  fullField = false
 ) {
   const rawGrid = playerWrap.player?.grid
   const hasGrid = Boolean(rawGrid && rawGrid.includes(':'))
@@ -649,6 +602,12 @@ function getPlayerPosition(
 
     const fallbackRows = 4
     const normalizedRow = (fallback.row - 1) / Math.max(fallbackRows - 1, 1)
+    if (fullField) {
+      const start = side === 'top' ? 15 : 85
+      const end = side === 'top' ? 85 : 15
+      return { x: fallback.x, y: start + normalizedRow * (end - start) }
+    }
+
     const topStart = 10
     const bottomStart = 90
     const halfHeight = 34
@@ -665,14 +624,21 @@ function getPlayerPosition(
       : inferredPosition?.sameRowPlayers || Number(formation?.split('-')?.[safeRow - 2] || 1)
 
   const resolvedCol = inferredPosition?.col || col
-  const horizontalPadding =
-    sameRowPlayers >= 5
-      ? 9
+  const horizontalPadding = fullField
+    ? sameRowPlayers >= 5
+      ? 15
       : sameRowPlayers === 4
-      ? 12
+      ? 18
       : sameRowPlayers === 3
-      ? 16
-      : 18
+      ? 22
+      : 28
+    : sameRowPlayers >= 5
+    ? 13
+    : sameRowPlayers === 4
+    ? 15
+    : sameRowPlayers === 3
+    ? 18
+    : 22
   const horizontalSpan = 100 - horizontalPadding * 2
 
   const x =
@@ -681,6 +647,12 @@ function getPlayerPosition(
       : horizontalPadding + ((resolvedCol - 1) / Math.max(sameRowPlayers - 1, 1)) * horizontalSpan
 
   const normalizedRow = (safeRow - 1) / Math.max(totalRows - 1, 1)
+  if (fullField) {
+    const start = side === 'top' ? 15 : 85
+    const end = side === 'top' ? 85 : 15
+    return { x, y: start + normalizedRow * (end - start) }
+  }
+
   const topStart = 12
   const bottomStart = 88
   const halfHeight =
@@ -716,7 +688,7 @@ function TeamLogo({
           className={`${classes} object-contain`}
         />
       ) : (
-        <span className="text-xs text-[#6f7a87]">•</span>
+        <span className="text-xs text-[#6f7a87]">â€¢</span>
       )}
     </div>
   )
@@ -773,11 +745,10 @@ function Shirt({
 }) {
   return (
     <div
-      className="flex h-6 w-5 items-center justify-center border text-[8px] font-black shadow-md sm:h-8 sm:w-7 sm:border-2 sm:text-[10px]"
+      className="flex h-5 w-4 items-center justify-center text-[7px] font-black sm:h-8 sm:w-7 sm:text-[10px]"
       style={{
         backgroundColor: style.shirt,
         color: style.text,
-        borderColor: style.border,
         clipPath:
           'polygon(18% 0%, 36% 0%, 40% 12%, 60% 12%, 64% 0%, 82% 0%, 100% 18%, 86% 28%, 86% 100%, 14% 100%, 14% 28%, 0% 18%)',
       }}
@@ -826,8 +797,8 @@ function getCaptainReference(lineup?: MatchLineup | null) {
 type PlayerFieldState = {
   displayName: string
   displayNumber?: number
-  replacedPlayerNumber?: number
-  replacedPlayerName?: string
+  substitutionMinute?: number | null
+  substitutionReplacementName?: string | null
   goals: number
   yellowCards: number
   redCards: number
@@ -849,14 +820,11 @@ function matchesPlayerEvent(
 
 function getPlayerFieldState(
   playerWrap: PlayerWrapper,
-  events: MatchEvent[],
-  lineup?: MatchLineup | null
+  events: MatchEvent[]
 ): PlayerFieldState {
   const basePlayer = playerWrap.player || {}
-  let displayName = basePlayer.name || 'Jugador'
-  let displayNumber = basePlayer.number
-  let replacedPlayerNumber: number | undefined
-  let replacedPlayerName: string | undefined
+  const displayName = basePlayer.name || 'Jugador'
+  const displayNumber = basePlayer.number
 
   const substitutionEvent = events.find((event) => {
     const kind = getEventKind(event)
@@ -865,21 +833,6 @@ function getPlayerFieldState(
       matchesPlayerEvent(event.player, basePlayer.id, basePlayer.name)
     )
   })
-
-  if (substitutionEvent?.assist?.name) {
-    const incomingPlayer = (lineup?.substitutes || []).find((substituteWrap) =>
-      matchesPlayerEvent(
-        substituteWrap.player,
-        substitutionEvent.assist?.id,
-        substitutionEvent.assist?.name
-      )
-    )?.player
-
-    displayName = incomingPlayer?.name || substitutionEvent.assist.name
-    displayNumber = incomingPlayer?.number ?? displayNumber
-    replacedPlayerName = basePlayer.name || 'Jugador'
-    replacedPlayerNumber = basePlayer.number
-  }
 
   const matchesDisplayedPlayer = (event: MatchEvent) =>
     matchesPlayerEvent(event.player, basePlayer.id, displayName) ||
@@ -901,8 +854,10 @@ function getPlayerFieldState(
   return {
     displayName: abbreviatePlayerName(displayName),
     displayNumber,
-    replacedPlayerNumber,
-    replacedPlayerName,
+    substitutionMinute: substitutionEvent?.time?.elapsed ?? null,
+    substitutionReplacementName: substitutionEvent?.assist?.name
+      ? abbreviatePlayerName(substitutionEvent.assist.name)
+      : null,
     goals,
     yellowCards,
     redCards,
@@ -923,31 +878,47 @@ function FieldEventBadges({
   goals,
   yellowCards,
   redCards,
+  substitutionMinute,
+  substitutionReplacementName,
 }: {
   goals: number
   yellowCards: number
   redCards: number
+  substitutionMinute?: number | null
+  substitutionReplacementName?: string | null
 }) {
-  if (!goals && !yellowCards && !redCards) return null
+  if (!goals && !yellowCards && !redCards && !substitutionMinute) return null
 
   return (
-    <div className="mt-0.5 flex items-center justify-center gap-1">
-      {goals ? (
-        <span className="inline-flex min-h-3.5 min-w-3.5 items-center justify-center rounded-full bg-[#163828] px-1 text-[#7ff0b2]">
-          <EventIcon kind="goal" />
-          {goals > 1 ? <span className="ml-0.5 text-[9px] font-bold">{goals}</span> : null}
-        </span>
-      ) : null}
-      {yellowCards ? (
-        <span className="inline-flex min-h-3.5 min-w-3.5 items-center justify-center rounded-full bg-[#3f3616] px-1 text-[#f3d36c]">
-          <EventIcon kind="yellow-card" />
-          {yellowCards > 1 ? <span className="ml-0.5 text-[9px] font-bold">{yellowCards}</span> : null}
-        </span>
-      ) : null}
-      {redCards ? (
-        <span className="inline-flex min-h-3.5 min-w-3.5 items-center justify-center rounded-full bg-[#3b1919] px-1 text-[#ff8f8f]">
-          <EventIcon kind="red-card" />
-        </span>
+    <div className="mt-0.5 flex min-h-3.5 flex-col items-center justify-center gap-0.5">
+      <div className="flex items-center justify-center gap-0.5">
+        {goals ? (
+          <span className="inline-flex min-h-3 min-w-3 items-center justify-center text-[#7ff0b2]">
+            <EventIcon kind="goal" />
+            {goals > 1 ? <span className="ml-0.5 text-[8px] font-bold">{goals}</span> : null}
+          </span>
+        ) : null}
+        {yellowCards ? (
+          <span className="inline-flex min-h-3 min-w-3 items-center justify-center text-[#f3d36c]">
+            <EventIcon kind="yellow-card" />
+            {yellowCards > 1 ? <span className="ml-0.5 text-[8px] font-bold">{yellowCards}</span> : null}
+          </span>
+        ) : null}
+        {redCards ? (
+          <span className="inline-flex min-h-3 min-w-3 items-center justify-center text-[#ff8f8f]">
+            <EventIcon kind="red-card" />
+          </span>
+        ) : null}
+      </div>
+      {substitutionMinute ? (
+        <div className="max-w-[64px] text-center leading-[1.05] sm:max-w-[76px]">
+          <div className="text-[8px] font-black text-[#ff8f8f]">&darr; {substitutionMinute}&apos;</div>
+          {substitutionReplacementName ? (
+            <div className="mt-px truncate text-[6px] font-semibold text-[#c8d0da] sm:text-[7px]">
+              por {substitutionReplacementName}
+            </div>
+          ) : null}
+        </div>
       ) : null}
     </div>
   )
@@ -955,41 +926,9 @@ function FieldEventBadges({
 
 function CaptainBadge() {
   return (
-    <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-[#f3d36c] bg-[#5b4a16] px-1 text-[9px] font-black uppercase tracking-[0.04em] text-[#ffe38a] shadow-[0_0_0_1px_rgba(0,0,0,0.28)]">
+    <span className="inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-[#f3d36c] bg-[#5b4a16] px-0.5 text-[8px] font-black uppercase tracking-[0.04em] text-[#ffe38a] shadow-[0_0_0_1px_rgba(0,0,0,0.28)] sm:h-4 sm:min-w-4 sm:px-1 sm:text-[9px]">
       C
     </span>
-  )
-}
-
-function TinyReplacementPlayer({
-  number,
-  name,
-  style,
-}: {
-  number?: number
-  name?: string
-  style: TeamStyle
-}) {
-  if (!name) return null
-
-  return (
-    <div className="flex max-w-[64px] items-center gap-1 rounded-full border border-white/8 bg-[#0f1317]/92 px-1 py-0.5 text-left opacity-90 shadow-[0_6px_16px_rgba(0,0,0,0.2)]">
-      <div
-        className="flex h-4 w-3.5 items-center justify-center border text-[7px] font-black"
-        style={{
-          backgroundColor: style.shirt,
-          color: style.text,
-          borderColor: style.border,
-          clipPath:
-            'polygon(18% 0%, 36% 0%, 40% 12%, 60% 12%, 64% 0%, 82% 0%, 100% 18%, 86% 28%, 86% 100%, 14% 100%, 14% 28%, 0% 18%)',
-        }}
-      >
-        {number || ''}
-      </div>
-      <span className="max-w-[38px] truncate text-[7px] font-medium text-[#c9d3de]">
-        {name}
-      </span>
-    </div>
   )
 }
 
@@ -1004,6 +943,7 @@ function PlayerOnField({
   captainReference,
   playerIndex,
   lineupPlayers,
+  fullField = false,
 }: {
   playerWrap: PlayerWrapper
   formation?: string
@@ -1018,11 +958,12 @@ function PlayerOnField({
   }
   playerIndex?: number
   lineupPlayers?: PlayerWrapper[]
+  fullField?: boolean
 }) {
-  const pos = getPlayerPosition(playerWrap, formation, side, playerIndex, lineupPlayers)
+  const pos = getPlayerPosition(playerWrap, formation, side, playerIndex, lineupPlayers, fullField)
   const player = playerWrap.player || {}
   const style = getStyleForPlayer(playerWrap, teamName, isHome, lineup)
-  const playerState = getPlayerFieldState(playerWrap, events, lineup)
+  const playerState = getPlayerFieldState(playerWrap, events)
   const isCaptain = Boolean(
     isCaptainFlag(player.captain) ||
     isCaptainFlag(playerWrap.captain) ||
@@ -1037,40 +978,96 @@ function PlayerOnField({
 
   return (
     <div
-      className="absolute w-[46px] -translate-x-1/2 -translate-y-1/2 text-center sm:w-[72px]"
+      className="absolute w-[64px] -translate-x-1/2 -translate-y-1/2 overflow-hidden text-center sm:w-[76px]"
       style={{
         left: `${pos.x}%`,
         top: `${pos.y}%`,
       }}
     >
-      <div className="relative mx-auto flex w-fit justify-center">
+      <div className="relative mx-auto flex w-fit max-w-full justify-center">
         {isCaptain ? (
-          <div className="absolute -left-1.5 top-1/2 z-10 -translate-y-1/2">
+          <div className="absolute -left-2 -top-1 z-10">
             <CaptainBadge />
           </div>
         ) : null}
-        <div className="rounded-lg border border-[#25553d]/80 bg-[#0f1317]/88 px-1 py-0.5 shadow-[0_12px_24px_rgba(0,0,0,0.24)] backdrop-blur-[2px] sm:rounded-2xl sm:px-2 sm:py-1">
-          <Shirt number={playerState.displayNumber ?? player.number} style={style} />
-        </div>
-        <div className="absolute -bottom-1.5 -right-1">
-          <FieldEventBadges
-            goals={playerState.goals}
-            yellowCards={playerState.yellowCards}
-            redCards={playerState.redCards}
-          />
-        </div>
-        {playerState.replacedPlayerName ? (
-          <div className="absolute left-full top-1/2 z-10 ml-1 -translate-y-1/2">
-            <TinyReplacementPlayer
-              number={playerState.replacedPlayerNumber}
-              name={playerState.replacedPlayerName}
-              style={style}
-            />
-          </div>
-        ) : null}
+        <Shirt number={playerState.displayNumber ?? player.number} style={style} />
       </div>
-      <div className="mx-auto mt-1 max-w-[44px] truncate rounded-full bg-[#0f1317]/82 px-1 py-0.5 text-[6px] font-bold leading-tight text-white shadow-[0_8px_20px_rgba(0,0,0,0.22)] backdrop-blur-[2px] sm:mt-1.5 sm:max-w-[76px] sm:px-1.5 sm:py-1 sm:text-[8px]">
+      <div className="mx-auto mt-1 max-w-[60px] overflow-hidden truncate text-ellipsis whitespace-nowrap text-[6px] font-bold leading-tight text-white sm:mt-1.5 sm:max-w-[76px] sm:text-[8px]">
         {playerState.displayName}
+      </div>
+      <FieldEventBadges
+        goals={playerState.goals}
+        yellowCards={playerState.yellowCards}
+        redCards={playerState.redCards}
+        substitutionMinute={playerState.substitutionMinute}
+        substitutionReplacementName={playerState.substitutionReplacementName}
+      />
+    </div>
+  )
+}
+
+function FormationPitch({
+  teamName,
+  teamLogo,
+  formation,
+  lineup,
+  side,
+  isHome,
+  events,
+  captainReference,
+}: {
+  teamName: string
+  teamLogo?: string
+  formation?: string
+  lineup?: MatchLineup | null
+  side: 'top' | 'bottom'
+  isHome: boolean
+  events: MatchEvent[]
+  captainReference?: {
+    id?: number
+    name?: string
+  }
+}) {
+  const starters = lineup?.startXI || []
+
+  return (
+    <div className="w-full overflow-hidden rounded-2xl border border-[#25553d] bg-[linear-gradient(180deg,#163828_0%,#12281d_12%,#0f1317_100%)]">
+      <div className="flex items-center justify-between gap-2 border-b border-[#25553d] bg-black/10 px-2 py-2 md:px-4 md:py-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <TeamLogo logo={teamLogo} name={teamName} size="sm" />
+          <span className="truncate font-bold text-white">{teamName}</span>
+        </div>
+        <span className="shrink-0 text-sm font-semibold text-[#dbe7de]">
+          {formation || 'Sin formación real'}
+        </span>
+      </div>
+
+      <div className="relative min-h-[430px] w-full min-w-0 overflow-hidden bg-transparent sm:min-h-[520px] lg:min-h-[620px]">
+        <div className="absolute inset-x-0 top-1/2 h-px bg-[#4ea170]/50" />
+        <div className="absolute left-1/2 top-1/2 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#4ea170]/40" />
+        <div className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#7ff0b2]/40" />
+
+        <div className="absolute left-1/2 top-0 h-16 w-36 -translate-x-1/2 border-x border-b border-[#4ea170]/40 sm:w-40" />
+        <div className="absolute left-1/2 top-0 h-7 w-16 -translate-x-1/2 border-x border-b border-[#4ea170]/40 sm:w-20" />
+        <div className="absolute left-1/2 bottom-0 h-16 w-36 -translate-x-1/2 border-x border-t border-[#4ea170]/40 sm:w-40" />
+        <div className="absolute left-1/2 bottom-0 h-7 w-16 -translate-x-1/2 border-x border-t border-[#4ea170]/40 sm:w-20" />
+
+        {starters.map((playerWrap, index) => (
+          <PlayerOnField
+            key={`${playerWrap.player?.id || index}-${side}`}
+            playerWrap={playerWrap}
+            formation={formation}
+            side={side}
+            teamName={teamName}
+            isHome={isHome}
+            lineup={lineup}
+            lineupPlayers={starters}
+            events={events}
+            captainReference={captainReference}
+            playerIndex={index}
+            fullField
+          />
+        ))}
       </div>
     </div>
   )
@@ -1125,6 +1122,11 @@ function buildPanelPlayers({
     const redCards = events.filter((event) =>
       getEventKind(event) === 'red-card' && matchesPlayerEvent(event.player, player.id, player.name)
     ).length
+    const substitutionDirection: 'in' | 'out' | undefined = playerOutEvent
+      ? 'out'
+      : playerInEvent
+      ? 'in'
+      : undefined
 
     return {
       id: String(player.id || `${teamName}-${index}`),
@@ -1144,6 +1146,8 @@ function buildPanelPlayers({
           : playerInEvent?.player?.name
           ? 'por'
           : undefined,
+      substitutionDirection,
+      substitutionMinute: playerOutEvent?.time?.elapsed ?? playerInEvent?.time?.elapsed ?? null,
     }
   })
 }
@@ -1163,14 +1167,14 @@ export default async function PartidoDetallePage({ params }: PageProps) {
     const message =
       error instanceof ApiFootballError
         ? error.code === 'requests'
-          ? 'Se alcanzó el límite diario de la API. El detalle del partido no pudo cargarse.'
+          ? 'Se alcanzÃ³ el lÃ­mite diario de la API. El detalle del partido no pudo cargarse.'
           : error.message
         : 'No se pudo cargar el detalle del partido.'
 
     return (
       <div className="min-h-screen text-white">
-        <div className="mx-auto max-w-6xl px-4 py-10">
-          <div className="rounded-2xl border border-[#5a2a2a] bg-[#3b1919] p-6">
+        <div className="mx-0 w-full max-w-none px-0 py-3 md:mx-auto md:max-w-6xl md:px-4 md:py-10">
+          <div className="w-full rounded-2xl border border-[#5a2a2a] bg-[#3b1919] p-4 md:p-6">
             <h1 className="text-2xl font-black">Detalle no disponible</h1>
             <p className="mt-2 text-[#ffd5d5]">{message}</p>
           </div>
@@ -1184,10 +1188,10 @@ export default async function PartidoDetallePage({ params }: PageProps) {
   if (!fixture) {
     return (
       <div className="min-h-screen text-white">
-        <div className="mx-auto max-w-6xl px-4 py-10">
-          <div className="rounded-2xl border border-white/8 bg-[#111418] p-6">
+        <div className="mx-0 w-full max-w-none px-0 py-3 md:mx-auto md:max-w-6xl md:px-4 md:py-10">
+          <div className="w-full rounded-2xl border border-white/8 bg-[#111418] p-4 md:p-6">
             <h1 className="text-2xl font-black">Partido no encontrado</h1>
-            <p className="mt-2 text-[#8d98a7]">No existe información para este partido.</p>
+            <p className="mt-2 text-[#8d98a7]">No existe informaciÃ³n para este partido.</p>
           </div>
         </div>
       </div>
@@ -1251,15 +1255,15 @@ export default async function PartidoDetallePage({ params }: PageProps) {
   })
   return (
     <div className="min-h-screen text-white">
-      <div className="mx-auto w-full max-w-none px-2.5 py-3 sm:px-3 md:px-5 md:py-6 lg:max-w-7xl">
-        <header className="relative mb-4 overflow-hidden rounded-2xl border border-white/8 bg-[#111418]/95 shadow-[0_10px_30px_rgba(0,0,0,0.2)]">
+      <div className="w-full max-w-none px-0 py-3 lg:mx-auto lg:max-w-7xl lg:px-5 lg:py-6">
+        <header className="relative mb-4 w-full overflow-hidden rounded-2xl border border-white/8 bg-[#111418]/95 shadow-[0_10px_30px_rgba(0,0,0,0.2)]">
           <AutoRefresh
             intervalMs={60000}
             showButton
             className="absolute right-4 top-4 z-10"
           />
 
-          <div className="border-b border-white/6 px-4 py-3">
+          <div className="border-b border-white/6 px-2 py-3 md:px-4">
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#7ff0b2]">
               {translateCountry(fixture.league.country)}
             </p>
@@ -1268,9 +1272,9 @@ export default async function PartidoDetallePage({ params }: PageProps) {
             </h1>
           </div>
 
-          <div className="grid gap-4 px-4 py-5 md:grid-cols-[1fr_auto_1fr] md:items-start">
+          <div className="grid gap-3 px-2 py-3 md:grid-cols-[1fr_auto_1fr] md:items-start md:gap-4 md:px-4 md:py-5">
             <div
-              className="flex items-center gap-3 rounded-2xl border px-4 py-4 md:justify-start"
+              className="flex items-center gap-3 rounded-2xl border px-2 py-3 md:justify-start md:px-4 md:py-4"
               style={getPanelStyle(homeColors)}
             >
               <TeamLogo logo={homeTeam.logo} name={homeTeam.name} />
@@ -1291,7 +1295,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
             </div>
 
             <div
-              className="flex items-center gap-3 rounded-2xl border px-4 py-4 md:justify-end"
+              className="flex items-center gap-3 rounded-2xl border px-2 py-3 md:justify-end md:px-4 md:py-4"
               style={getPanelStyle(awayColors)}
             >
               <div className="min-w-0 text-right">
@@ -1305,7 +1309,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
             </div>
           </div>
 
-          <div className="grid gap-3 border-t border-white/6 bg-[#13181d] px-4 py-3 text-sm text-[#c8d0da] md:grid-cols-3">
+          <div className="grid gap-3 border-t border-white/6 bg-[#13181d] px-2 py-3 text-sm text-[#c8d0da] md:grid-cols-3 md:px-4">
             <div>
               <span className="text-[#8d98a7]">Estadio</span>
               <p className="mt-1 font-medium text-white">
@@ -1313,13 +1317,13 @@ export default async function PartidoDetallePage({ params }: PageProps) {
               </p>
             </div>
             <div>
-              <span className="text-[#8d98a7]">Ubicación</span>
+              <span className="text-[#8d98a7]">UbicaciÃ³n</span>
               <p className="mt-1 font-medium text-white">
                 {formatVenueLocation(fixture.fixture.venue?.city)}
               </p>
             </div>
             <div>
-              <span className="text-[#8d98a7]">Árbitro</span>
+              <span className="text-[#8d98a7]">Ãrbitro</span>
               <p className="mt-1 font-medium text-white">
                 {formatReferee(fixture.fixture.referee)}
               </p>
@@ -1329,19 +1333,19 @@ export default async function PartidoDetallePage({ params }: PageProps) {
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_320px]">
           <section className="space-y-4">
-            <div className="overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
-              <div className="border-b border-white/6 bg-[#13181d] px-4 py-3">
+            <div className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
+              <div className="border-b border-white/6 bg-[#13181d] px-2 py-3 md:px-4">
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="text-base font-bold text-white">Minuto a minuto</h2>
                   <span className="text-[11px] uppercase tracking-[0.16em] text-[#8d98a7]">
-                    Cronología
+                    CronologÃ­a
                   </span>
                 </div>
               </div>
 
               {events.length ? (
                 <div>
-                  <div className="grid grid-cols-[1fr_72px_1fr] border-b border-white/6 bg-[#12171c] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8d98a7]">
+                  <div className="grid grid-cols-[1fr_56px_1fr] border-b border-white/6 bg-[#12171c] px-2 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8d98a7] md:grid-cols-[1fr_72px_1fr] md:px-4">
                     <div>{homeTeam.name}</div>
                     <div className="text-center">Min</div>
                     <div className="text-right">{awayTeam.name}</div>
@@ -1356,7 +1360,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                     return (
                       <div
                         key={`${event.time?.elapsed || 'x'}-${index}`}
-                        className="grid grid-cols-[1fr_72px_1fr] items-center border-b border-white/6 px-4 py-3 last:border-b-0"
+                        className="grid grid-cols-[1fr_56px_1fr] items-center border-b border-white/6 px-2 py-3 last:border-b-0 md:grid-cols-[1fr_72px_1fr] md:px-4"
                       >
                         <div className="min-w-0 pr-3">
                           {isHome ? (
@@ -1404,16 +1408,16 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                   })}
                 </div>
               ) : (
-                <div className="px-4 py-5 text-sm text-[#8d98a7]">
+                <div className="px-2 py-5 text-sm text-[#8d98a7] md:px-4">
                   No hay eventos disponibles.
                 </div>
               )}
             </div>
 
-            <div className="overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
-              <div className="border-b border-white/6 bg-[#13181d] px-4 py-3">
+            <div className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
+              <div className="border-b border-white/6 bg-[#13181d] px-2 py-3 md:px-4">
                 <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-base font-bold text-white">Formación</h2>
+                  <h2 className="text-base font-bold text-white">FormaciÃ³n</h2>
                   <span className="text-[11px] uppercase tracking-[0.16em] text-[#8d98a7]">
                     Visual
                   </span>
@@ -1421,83 +1425,42 @@ export default async function PartidoDetallePage({ params }: PageProps) {
               </div>
 
               {homeLineup || awayLineup ? (
-                <div className="p-4">
+                <div className="w-full px-0 py-2 md:p-4">
                   {hasAnyVisualFormation ? (
-                    <div className="overflow-hidden rounded-2xl border border-[#25553d] bg-[linear-gradient(180deg,#163828_0%,#12281d_12%,#0f1317_100%)]">
-                    <div className="flex items-center justify-between border-b border-[#25553d] bg-black/10 px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <TeamLogo logo={awayTeam.logo} name={awayTeam.name} size="sm" />
-                        <span className="font-bold text-white">{awayTeam.name}</span>
-                      </div>
-                      <span className="text-sm font-semibold text-[#dbe7de]">
-                        {awayHasVisualFormation ? awayLineup?.formation || '-' : 'Sin formación real'}
-                      </span>
+                    <div className="space-y-3">
+                      {homeHasVisualFormation && homeLineup ? (
+                        <FormationPitch
+                          teamName={homeTeam.name}
+                          teamLogo={homeTeam.logo}
+                          formation={homeLineup.formation}
+                          lineup={homeLineup}
+                          side="top"
+                          isHome
+                          events={homeTeamEvents}
+                          captainReference={homeCaptainReference}
+                        />
+                      ) : null}
+
+                      {awayHasVisualFormation && awayLineup ? (
+                        <FormationPitch
+                          teamName={awayTeam.name}
+                          teamLogo={awayTeam.logo}
+                          formation={awayLineup.formation}
+                          lineup={awayLineup}
+                          side="bottom"
+                          isHome={false}
+                          events={awayTeamEvents}
+                          captainReference={awayCaptainReference}
+                        />
+                      ) : null}
                     </div>
-
-                    <div className="overflow-hidden">
-                    <div className="relative min-h-[560px] w-full min-w-0 bg-transparent sm:min-h-[700px] lg:min-h-[800px]">
-                      <div className="absolute inset-x-0 top-1/2 h-px bg-[#4ea170]/50" />
-                      <div className="absolute left-1/2 top-1/2 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#4ea170]/40" />
-                      <div className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#7ff0b2]/40" />
-
-                      <div className="absolute left-1/2 top-0 h-16 w-36 -translate-x-1/2 border-x border-b border-[#4ea170]/40 sm:w-40" />
-                      <div className="absolute left-1/2 top-0 h-7 w-16 -translate-x-1/2 border-x border-b border-[#4ea170]/40 sm:w-20" />
-
-                      <div className="absolute left-1/2 bottom-0 h-16 w-36 -translate-x-1/2 border-x border-t border-[#4ea170]/40 sm:w-40" />
-                      <div className="absolute left-1/2 bottom-0 h-7 w-16 -translate-x-1/2 border-x border-t border-[#4ea170]/40 sm:w-20" />
-
-                      {awayHasVisualFormation && awayLineup?.startXI?.map((playerWrap, index) => (
-                      <PlayerOnField
-                        key={`${playerWrap.player?.id || index}-top`}
-                        playerWrap={playerWrap}
-                        formation={awayLineup.formation}
-                        side="top"
-                        teamName={awayTeam.name}
-                        isHome={false}
-                        lineup={awayLineup}
-                        lineupPlayers={awayLineup?.startXI || []}
-                        events={awayTeamEvents}
-                        captainReference={awayCaptainReference}
-                        playerIndex={index}
-                      />
-                      ))}
-
-                      {homeHasVisualFormation && homeLineup?.startXI?.map((playerWrap, index) => (
-                      <PlayerOnField
-                        key={`${playerWrap.player?.id || index}-bottom`}
-                        playerWrap={playerWrap}
-                        formation={homeLineup.formation}
-                        side="bottom"
-                        teamName={homeTeam.name}
-                        isHome
-                        lineup={homeLineup}
-                        lineupPlayers={homeLineup?.startXI || []}
-                        events={homeTeamEvents}
-                        captainReference={homeCaptainReference}
-                        playerIndex={index}
-                      />
-                      ))}
-                    </div>
-                    </div>
-
-                    <div className="flex items-center justify-between border-t border-[#25553d] bg-black/10 px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <TeamLogo logo={homeTeam.logo} name={homeTeam.name} size="sm" />
-                        <span className="font-bold text-white">{homeTeam.name}</span>
-                      </div>
-                      <span className="text-sm font-semibold text-[#dbe7de]">
-                        {homeHasVisualFormation ? homeLineup?.formation || '-' : 'Sin formación real'}
-                      </span>
-                    </div>
-                  </div>
-
                   ) : (
-                    <div className="rounded-2xl border border-white/8 bg-[#12171c] px-4 py-4 text-sm text-[#8d98a7]">
-                      Este partido no tiene una formación visual real cargada por la fuente de datos.
+                    <div className="rounded-2xl border border-white/8 bg-[#12171c] px-2 py-3 text-sm text-[#8d98a7] md:px-4 md:py-4">
+                      Este partido no tiene una formaciÃ³n visual real cargada por la fuente de datos.
                     </div>
                   )}
 
-                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div className="mt-3 grid gap-3 md:mt-4 md:grid-cols-2 md:gap-4">
                 <FormationTeamPanel
                   title={homeTeam.name}
                   coachName={homeLineup?.coach?.name}
@@ -1516,7 +1479,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                   </div>
                 </div>
               ) : (
-                <div className="px-4 py-5 text-sm text-[#8d98a7]">
+                <div className="px-2 py-5 text-sm text-[#8d98a7] md:px-4">
                   No hay alineaciones disponibles.
                 </div>
               )}
@@ -1524,30 +1487,30 @@ export default async function PartidoDetallePage({ params }: PageProps) {
           </section>
 
           <aside className="space-y-4">
-            <div className="overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
-              <div className="border-b border-white/6 bg-[#13181d] px-4 py-3">
+            <div className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
+              <div className="border-b border-white/6 bg-[#13181d] px-2 py-3 md:px-4">
                 <div className="flex items-center justify-center">
                   <h2 className="text-base font-bold text-white">Datos del partido</h2>
                 </div>
               </div>
 
-              <div className="px-4 py-1">
+              <div className="px-2 py-1 md:px-4">
                 <InfoRow label="Estado" value={translateStatus(status.long)} />
                 <InfoRow label="Liga" value={translateLeagueName(fixture.league.name)} />
-                <InfoRow label="País" value={translateCountry(fixture.league.country)} />
-                <InfoRow label="Árbitro" value={formatReferee(fixture.fixture.referee)} />
+                <InfoRow label="PaÃ­s" value={translateCountry(fixture.league.country)} />
+                <InfoRow label="Ãrbitro" value={formatReferee(fixture.fixture.referee)} />
               </div>
             </div>
 
-            <div className="overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
-              <div className="border-b border-white/6 bg-[#13181d] px-4 py-3">
+            <div className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
+              <div className="border-b border-white/6 bg-[#13181d] px-2 py-3 md:px-4">
                 <div className="flex items-center justify-center">
-                  <h2 className="text-lg font-bold tracking-[0.01em] text-white">Estadísticas</h2>
+                  <h2 className="text-lg font-bold tracking-[0.01em] text-white">EstadÃ­sticas</h2>
                 </div>
               </div>
 
               {homeStats.length && awayStats.length ? (
-                <div className="space-y-3 px-4 py-4">
+                <div className="space-y-3 px-2 py-3 md:px-4 md:py-4">
                   {homeStats.map((stat, index) => {
                     const awayValue = awayStats[index]?.value
                     const homeNumber = parseStatNumber(stat.value)
@@ -1591,8 +1554,8 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                   })}
                 </div>
               ) : (
-                <div className="px-4 py-5 text-sm text-[#8d98a7]">
-                  No hay estadísticas disponibles.
+                <div className="px-2 py-5 text-sm text-[#8d98a7] md:px-4">
+                  No hay estadÃ­sticas disponibles.
                 </div>
               )}
             </div>

@@ -49,7 +49,7 @@ export default function MatchCard({
     predictionPoints === 1 ? '1 pt' : `${Number.isFinite(predictionPoints) ? predictionPoints : 0} pts`
 
   return (
-    <article className="min-w-0 px-3 py-3 sm:px-4">
+    <article className="w-full min-w-0 px-3 py-3 sm:px-4">
       <div className="mb-3 flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#7ff0b2]">

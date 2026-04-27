@@ -97,7 +97,7 @@ export default function CopaArgentinaMatchList({ rounds }: CopaArgentinaMatchLis
         </select>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-white/8 bg-[#11161b]">
+      <div className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#11161b]">
         {activeRound.matches.map((match) => (
           <Link
             key={match.id}
