@@ -75,14 +75,21 @@ function TinyEventBadges({
 
   const ballIcon = (
     <svg viewBox="0 0 32 32" aria-hidden="true" className="h-[13px] w-[13px] overflow-visible">
-      <circle cx="16" cy="16" r="13.5" fill="#f8fafc" stroke="#0f1317" strokeWidth="1.8" />
-      <path d="M16 8.2 21 11.8 19.1 17.6h-6.2L11 11.8 16 8.2Z" fill="#0f1317" />
+      <circle cx="16" cy="16" r="13.4" fill="#f8fafc" stroke="#0f1317" strokeWidth="1.6" />
+      <path d="M7.2 22.3c4.8 3.8 11.1 4.3 16.7.2" fill="none" stroke="#d7dbe0" strokeLinecap="round" strokeWidth="2.2" />
       <path
-        d="m7.8 12.2 3.2-.4M21 11.8l3.2.4M12.9 17.6l-2.7 3.8M19.1 17.6l2.7 3.8M12.2 26.5l-2-5.1M19.8 26.5l2-5.1"
+        d="M6.1 9.2c6.8-3 13.6-1.4 20.2 4.8M25.9 8.3c-2.4 6.9-7.3 11.4-14.6 13.4M25.5 22.9c-6.7 2.7-13.4.9-19.7-5.4M6.4 24.1c2.2-6.8 7-11.2 14.5-13.3"
         fill="none"
-        stroke="#0f1317"
+        stroke="#0a0a0a"
         strokeLinecap="round"
-        strokeWidth="1.5"
+        strokeWidth="3"
+      />
+      <path
+        d="M9.1 11.2c5-2.2 9.8-1.1 14.6 3.2M23.6 11c-2.1 5-5.7 8.3-11 9.8M23 21.1c-5.1 1.8-9.9.5-14.5-3.7M9 21.5c1.8-4.9 5.4-8.2 10.9-9.8"
+        fill="none"
+        stroke="#7a7f86"
+        strokeLinecap="round"
+        strokeWidth="1.05"
       />
     </svg>
   )
@@ -96,10 +103,10 @@ function TinyEventBadges({
         </span>
       ) : null}
       {yellowCards ? (
-        <span className="inline-block h-3.5 w-2.5 rounded-[2px] bg-[#f3d36c]" />
+        <span className="inline-block h-[13px] w-[9px] rounded-[2px] bg-[#f3d36c]" />
       ) : null}
       {redCards ? (
-        <span className="inline-block h-3.5 w-2.5 rounded-[2px] bg-[#ef4444]" />
+        <span className="inline-block h-[13px] w-[9px] rounded-[2px] bg-[#ef4444]" />
       ) : null}
     </div>
   )

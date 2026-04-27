@@ -349,24 +349,31 @@ function EventIcon({
   const ballClass = size === 'lg' ? 'h-[24px] w-[24px]' : 'h-[16px] w-[16px]'
   const ballIcon = (
     <svg viewBox="0 0 32 32" aria-hidden="true" className={`${ballClass} overflow-visible`}>
-      <circle cx="16" cy="16" r="13.5" fill="#f8fafc" stroke="#0f1317" strokeWidth="1.8" />
-      <path d="M16 8.2 21 11.8 19.1 17.6h-6.2L11 11.8 16 8.2Z" fill="#0f1317" />
+      <circle cx="16" cy="16" r="13.4" fill="#f8fafc" stroke="#0f1317" strokeWidth="1.6" />
+      <path d="M7.2 22.3c4.8 3.8 11.1 4.3 16.7.2" fill="none" stroke="#d7dbe0" strokeLinecap="round" strokeWidth="2.2" />
       <path
-        d="m7.8 12.2 3.2-.4M21 11.8l3.2.4M12.9 17.6l-2.7 3.8M19.1 17.6l2.7 3.8M12.2 26.5l-2-5.1M19.8 26.5l2-5.1"
+        d="M6.1 9.2c6.8-3 13.6-1.4 20.2 4.8M25.9 8.3c-2.4 6.9-7.3 11.4-14.6 13.4M25.5 22.9c-6.7 2.7-13.4.9-19.7-5.4M6.4 24.1c2.2-6.8 7-11.2 14.5-13.3"
         fill="none"
-        stroke="#0f1317"
+        stroke="#0a0a0a"
         strokeLinecap="round"
-        strokeWidth="1.5"
+        strokeWidth="3"
+      />
+      <path
+        d="M9.1 11.2c5-2.2 9.8-1.1 14.6 3.2M23.6 11c-2.1 5-5.7 8.3-11 9.8M23 21.1c-5.1 1.8-9.9.5-14.5-3.7M9 21.5c1.8-4.9 5.4-8.2 10.9-9.8"
+        fill="none"
+        stroke="#7a7f86"
+        strokeLinecap="round"
+        strokeWidth="1.05"
       />
     </svg>
   )
 
   if (kind === 'yellow-card') {
-    return <span className="inline-block h-4 w-3 rounded-[1px] bg-[#f3d36c]" />
+    return <span className="inline-block h-[14px] w-[11px] rounded-[1px] bg-[#f3d36c]" />
   }
 
   if (kind === 'red-card') {
-    return <span className="inline-block h-4 w-3 rounded-[1px] bg-[#ef4444]" />
+    return <span className="inline-block h-[14px] w-[11px] rounded-[1px] bg-[#ef4444]" />
   }
 
   if (kind === 'goal') {
@@ -762,7 +769,7 @@ function Shirt({
 }) {
   return (
     <div
-      className="flex h-10 w-8 items-center justify-center text-sm font-black sm:h-16 sm:w-14 sm:text-xl"
+      className="flex h-8 w-6 items-center justify-center text-[10px] font-black sm:h-12 sm:w-10 sm:text-[15px]"
       style={{
         backgroundColor: style.shirt,
         color: style.text,
@@ -817,11 +824,8 @@ type PlayerFieldState = {
   substitutionMinute?: number | null
   substitutionReplacementName?: string | null
   goals: number
-  goalMinutes: Array<number | null>
   yellowCards: number
-  yellowCardMinutes: Array<number | null>
   redCards: number
-  redCardMinutes: Array<number | null>
 }
 
 function matchesPlayerEvent(
@@ -879,11 +883,8 @@ function getPlayerFieldState(
       ? abbreviatePlayerName(substitutionEvent.assist.name)
       : null,
     goals: goalEvents.length,
-    goalMinutes: goalEvents.map((event) => event.time?.elapsed ?? null),
     yellowCards: yellowCardEvents.length,
-    yellowCardMinutes: yellowCardEvents.map((event) => event.time?.elapsed ?? null),
     redCards: redCardEvents.length,
-    redCardMinutes: redCardEvents.map((event) => event.time?.elapsed ?? null),
   }
 }
 
@@ -897,45 +898,36 @@ function abbreviatePlayerName(name: string) {
   return firstInitial ? `${firstInitial}. ${lastName}` : lastName
 }
 
-function incidenceSlots(count: number, minutes: Array<number | null>) {
-  return Array.from({ length: count }, (_, index) => minutes[index] ?? null)
+function incidenceSlots(count: number) {
+  return Array.from({ length: count })
 }
 
 function FieldSideIncidences({
   goals,
-  goalMinutes,
   yellowCards,
-  yellowCardMinutes,
   redCards,
-  redCardMinutes,
 }: {
   goals: number
-  goalMinutes: Array<number | null>
   yellowCards: number
-  yellowCardMinutes: Array<number | null>
   redCards: number
-  redCardMinutes: Array<number | null>
 }) {
   if (!goals && !yellowCards && !redCards) return null
 
   return (
-    <div className="absolute left-[calc(50%+20px)] top-1/2 flex -translate-y-1/2 items-center gap-1.5 whitespace-nowrap text-left sm:left-[calc(50%+35px)] sm:gap-2">
-      {incidenceSlots(goals, goalMinutes).map((minute, index) => (
-        <span key={`goal-${index}`} className="inline-flex items-center gap-0.5 text-[10px] font-black text-white sm:text-xs">
+    <div className="absolute left-[calc(50%+16px)] top-1/2 flex -translate-y-1/2 items-center gap-1 whitespace-nowrap text-left sm:left-[calc(50%+27px)] sm:gap-1.5">
+      {incidenceSlots(goals).map((_, index) => (
+        <span key={`goal-${index}`} className="inline-flex items-center gap-0.5 text-[9px] font-black text-white sm:text-[11px]">
           <EventIcon kind="goal" size="lg" />
-          {minute ? <span>{minute}&apos;</span> : null}
         </span>
       ))}
-      {incidenceSlots(yellowCards, yellowCardMinutes).map((minute, index) => (
-        <span key={`yellow-${index}`} className="inline-flex items-center gap-0.5 text-[10px] font-black text-[#f3d36c] sm:text-xs">
+      {incidenceSlots(yellowCards).map((_, index) => (
+        <span key={`yellow-${index}`} className="inline-flex items-center gap-0.5 text-[9px] font-black text-[#f3d36c] sm:text-[11px]">
           <EventIcon kind="yellow-card" />
-          {minute ? <span>{minute}&apos;</span> : null}
         </span>
       ))}
-      {incidenceSlots(redCards, redCardMinutes).map((minute, index) => (
-        <span key={`red-${index}`} className="inline-flex items-center gap-0.5 text-[10px] font-black text-[#ff8f8f] sm:text-xs">
+      {incidenceSlots(redCards).map((_, index) => (
+        <span key={`red-${index}`} className="inline-flex items-center gap-0.5 text-[9px] font-black text-[#ff8f8f] sm:text-[11px]">
           <EventIcon kind="red-card" />
-          {minute ? <span>{minute}&apos;</span> : null}
         </span>
       ))}
     </div>
@@ -944,21 +936,14 @@ function FieldSideIncidences({
 
 function FieldSubstitutionBadge({
   substitutionMinute,
-  substitutionReplacementName,
 }: {
   substitutionMinute?: number | null
-  substitutionReplacementName?: string | null
 }) {
   if (!substitutionMinute) return null
 
   return (
-    <div className="mt-0.5 max-w-[96px] text-center leading-tight sm:max-w-[128px]">
-      <div className="text-xs font-black text-[#ff8f8f] sm:text-sm">&darr; {substitutionMinute}&apos;</div>
-      {substitutionReplacementName ? (
-        <div className="mt-px truncate text-[10px] font-semibold text-[#dbe7de] sm:text-xs">
-          por {substitutionReplacementName}
-        </div>
-      ) : null}
+    <div className="mt-0.5 max-w-[76px] text-center leading-tight sm:max-w-[104px]">
+      <div className="text-[9px] font-black text-[#ff8f8f] sm:text-[11px]">&darr; {substitutionMinute}&apos;</div>
     </div>
   )
 }
@@ -1017,7 +1002,7 @@ function PlayerOnField({
 
   return (
     <div
-      className="absolute w-[112px] -translate-x-1/2 -translate-y-1/2 text-center sm:w-[148px]"
+      className="absolute w-[88px] -translate-x-1/2 -translate-y-1/2 text-center sm:w-[116px]"
       style={{
         left: `${pos.x}%`,
         top: `${pos.y}%`,
@@ -1032,20 +1017,18 @@ function PlayerOnField({
         <Shirt number={playerState.displayNumber ?? player.number} style={style} />
         <FieldSideIncidences
           goals={playerState.goals}
-          goalMinutes={playerState.goalMinutes}
           yellowCards={playerState.yellowCards}
-          yellowCardMinutes={playerState.yellowCardMinutes}
           redCards={playerState.redCards}
-          redCardMinutes={playerState.redCardMinutes}
         />
       </div>
-      <div className="mx-auto mt-1 max-w-[94px] overflow-hidden truncate text-ellipsis whitespace-nowrap text-xs font-bold leading-tight text-white sm:mt-1.5 sm:max-w-[128px] sm:text-base">
+      <div className="mx-auto mt-0.5 max-w-[72px] overflow-hidden truncate text-ellipsis whitespace-nowrap text-[9px] font-bold leading-tight text-white sm:mt-1 sm:max-w-[96px] sm:text-xs">
         {playerState.displayName}
       </div>
-      <FieldSubstitutionBadge
-        substitutionMinute={playerState.substitutionMinute}
-        substitutionReplacementName={playerState.substitutionReplacementName}
-      />
+      <div className="mx-auto flex w-fit justify-center">
+        <FieldSubstitutionBadge
+          substitutionMinute={playerState.substitutionMinute}
+        />
+      </div>
     </div>
   )
 }
@@ -1086,7 +1069,7 @@ function FormationPitch({
         </span>
       </div>
 
-      <div className="relative min-h-[560px] w-full min-w-0 overflow-hidden bg-transparent sm:min-h-[680px] lg:min-h-[760px]">
+      <div className="relative min-h-[500px] w-full min-w-0 overflow-hidden bg-transparent sm:min-h-[610px] lg:min-h-[680px]">
         <div className="absolute inset-x-0 top-1/2 h-px bg-[#4ea170]/50" />
         <div className="absolute left-1/2 top-1/2 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#4ea170]/40" />
         <div className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#7ff0b2]/40" />
