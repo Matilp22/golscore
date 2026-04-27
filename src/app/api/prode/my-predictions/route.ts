@@ -82,6 +82,8 @@ async function getAuthenticatedUser(request: Request) {
 
 export async function GET(request: Request) {
   const { supabase, user, error: authError } = await getAuthenticatedUser(request)
+  const { searchParams } = new URL(request.url)
+  const leagueId = searchParams.get('leagueId')
 
   if (authError) return authError
 
@@ -99,11 +101,34 @@ export async function GET(request: Request) {
 
   try {
     const adminSupabase = getSupabaseAdminClient()
-    const { data: predictionsData, error: predictionsError } = await adminSupabase
+    let matchIdsForLeague: string[] | null = null
+
+    if (leagueId) {
+      const { data: leagueMatchesData, error: leagueMatchesError } = await adminSupabase
+        .from('matches')
+        .select('id')
+        .eq('league_id', leagueId)
+
+      if (leagueMatchesError) throw leagueMatchesError
+
+      matchIdsForLeague = (leagueMatchesData ?? []).map((match) => String(match.id))
+
+      if (!matchIdsForLeague.length) {
+        return NextResponse.json({ ok: true, predictions: [] })
+      }
+    }
+
+    let predictionsQuery = adminSupabase
       .from('predictions')
       .select('id, user_id, match_id, predicted_home_score, predicted_away_score, created_at, updated_at')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
+
+    if (matchIdsForLeague) {
+      predictionsQuery = predictionsQuery.in('match_id', matchIdsForLeague)
+    }
+
+    const { data: predictionsData, error: predictionsError } = await predictionsQuery
 
     if (predictionsError) throw predictionsError
 
@@ -126,6 +151,7 @@ export async function GET(request: Request) {
 
     console.info('[prode/my-predictions] response debug', {
       userId: user.id,
+      leagueId,
       predictions: predictionRows.length,
       predictionScoresRead: scoresByPredictionId.size,
       debugPrediction: scoresByPredictionId.get(DEBUG_PREDICTION_ID) ?? null,

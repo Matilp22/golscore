@@ -2,32 +2,101 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import {
   getSupabaseBrowserClient,
   signOut,
 } from '@/lib/supabase/supabaseClient'
 import { useAuth } from '@/frontend/hooks/useAuth'
 
-type AuthStatusProps = {
-  isAuthenticated: boolean
-  userLabel?: string | null
+type ProfileQuery = {
+  select: (columns: string) => {
+    eq: (column: string, value: string) => {
+      maybeSingle: () => Promise<{
+        data: { username?: string | null } | null
+        error: { message: string; code?: string; details?: string | null } | null
+      }>
+    }
+  }
 }
 
-export default function AuthStatus({
-  isAuthenticated,
-  userLabel,
-}: AuthStatusProps) {
+function profilesQuery() {
+  return getSupabaseBrowserClient().from('profiles' as 'leagues') as unknown as ProfileQuery
+}
+
+function AuthPlaceholder() {
+  return (
+    <div
+      className="h-10 w-[172px] rounded-xl border border-white/8 bg-[#111418]"
+      aria-hidden="true"
+    />
+  )
+}
+
+export default function AuthStatus() {
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, isLoading } = useAuth()
+  const [mounted, setMounted] = useState(false)
+  const [profile, setProfile] = useState<{ userId: string; username: string | null } | null>(null)
   const [error, setError] = useState('')
   const [isPending, startTransition] = useTransition()
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setMounted(true)
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [])
+
+  useEffect(() => {
+    let active = true
+
+    if (!mounted || !user) {
+      return () => {
+        active = false
+      }
+    }
+
+    profilesQuery()
+      .select('username')
+      .eq('id', user.id)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!active) return
+
+        if (error) {
+          console.warn('[auth-status] No se pudo cargar profiles', {
+            message: error.message,
+            code: error.code ?? null,
+            details: error.details ?? null,
+          })
+          return
+        }
+
+        setProfile({
+          userId: user.id,
+          username: data?.username ?? null,
+        })
+      })
+      .catch((error: unknown) => {
+        if (!active) return
+
+        console.warn('[auth-status] Error cargando perfil', {
+          message: error instanceof Error ? error.message : 'Error desconocido',
+        })
+      })
+
+    return () => {
+      active = false
+    }
+  }, [mounted, user])
+
   const currentUserLabel =
+    (profile && profile.userId === user?.id ? profile.username : null) ||
     (typeof user?.user_metadata?.username === 'string' && user.user_metadata.username) ||
     user?.email ||
-    userLabel ||
     'Mi cuenta'
-  const loggedIn = Boolean(user) || isAuthenticated
 
   const handleLogout = () => {
     setError('')
@@ -47,12 +116,17 @@ export default function AuthStatus({
         return
       }
 
+      setProfile(null)
       router.replace('/')
       router.refresh()
     })
   }
 
-  if (!loggedIn) {
+  if (!mounted || isLoading) {
+    return <AuthPlaceholder />
+  }
+
+  if (!user) {
     return (
       <div className="flex items-center gap-2">
         <Link

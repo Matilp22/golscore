@@ -1,7 +1,12 @@
 import type { LeaderboardRow } from '@/frontend/types/prode'
 
-export async function getLeaderboard() {
-  const response = await fetch('/api/prode/leaderboard', {
+export async function getLeaderboard({ leagueId }: { leagueId?: string | null } = {}) {
+  const params = new URLSearchParams()
+
+  if (leagueId) params.set('leagueId', leagueId)
+
+  const query = params.toString()
+  const response = await fetch(`/api/prode/leaderboard${query ? `?${query}` : ''}`, {
     cache: 'no-store',
   })
   const data = await response.json()

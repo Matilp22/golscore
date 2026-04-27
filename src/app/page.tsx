@@ -12,6 +12,7 @@ import {
 import {
   getSectionConfig,
 } from '@/lib/tournament-pages'
+import { isFinishedStatus, isLiveStatus as isActiveLiveStatus } from '@/shared/utils/match-status'
 
 function getBuenosAiresTodayISO() {
   const formatter = new Intl.DateTimeFormat('en-CA', {
@@ -52,14 +53,14 @@ function formatStatus(statusShort: string, minute: number | null) {
   }
 
   if (statusShort === 'HT') return 'ENTRETIEMPO'
-  if (statusShort === 'FT' || statusShort === 'AET' || statusShort === 'PEN') return 'FINAL'
+  if (isFinishedStatus(statusShort)) return 'FINAL'
   if (statusShort === 'NS') return 'PRÓXIMO'
 
   return statusShort
 }
 
 function isLiveStatus(statusShort: string) {
-  return ['1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE'].includes(statusShort)
+  return isActiveLiveStatus(statusShort)
 }
 
 type ApiMatch = MatchListItem
@@ -939,7 +940,7 @@ export default async function HomePage({
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-transparent text-white">
-      <div className="mx-auto w-full max-w-7xl px-3 py-4 md:px-5 md:py-6">
+      <div className="mx-auto w-full max-w-none px-2.5 py-3 sm:px-3 md:px-5 md:py-6 lg:max-w-7xl">
         <header className="relative mb-4 rounded-2xl bg-[#111418]/95 px-3 py-4 shadow-[0_10px_30px_rgba(0,0,0,0.16)] sm:px-4">
           <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
             <Link

@@ -23,7 +23,7 @@ export default async function SeccionPage({ params }: PageProps) {
 
   return (
     <div className="min-h-screen bg-transparent text-white">
-      <div className="mx-auto max-w-7xl px-3 py-4 md:px-5 md:py-6">
+      <div className="mx-auto w-full max-w-none px-2.5 py-3 sm:px-3 md:px-5 md:py-6 lg:max-w-7xl">
         <main className="min-w-0 space-y-4">
           <header className="rounded-3xl border border-white/8 bg-[#111418]/95 px-4 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.2)]">
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#7ff0b2]">

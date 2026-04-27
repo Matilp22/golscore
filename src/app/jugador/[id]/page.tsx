@@ -151,7 +151,7 @@ export default async function JugadorPage({ params, searchParams }: PageProps) {
 
     return (
       <div className="min-h-screen text-white">
-        <div className="mx-auto max-w-7xl px-3 py-4 md:px-5 md:py-6">
+        <div className="mx-auto w-full max-w-none px-2.5 py-3 sm:px-3 md:px-5 md:py-6 lg:max-w-7xl">
           <header className="mb-4 overflow-hidden rounded-2xl border border-white/8 bg-[#111418]/95 shadow-[0_10px_30px_rgba(0,0,0,0.2)]">
             <div className="flex flex-col gap-4 px-4 py-5 md:flex-row md:items-center md:justify-between">
               <div className="flex items-center gap-4">

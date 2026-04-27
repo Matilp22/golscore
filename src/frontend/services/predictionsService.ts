@@ -13,9 +13,14 @@ async function getAuthHeaders() {
   }
 }
 
-export async function getMyPredictions() {
+export async function getMyPredictions({ leagueId }: { leagueId?: string | null } = {}) {
   const authHeaders = await getAuthHeaders()
-  const response = await fetch('/api/prode/my-predictions', {
+  const params = new URLSearchParams()
+
+  if (leagueId) params.set('leagueId', leagueId)
+
+  const query = params.toString()
+  const response = await fetch(`/api/prode/my-predictions${query ? `?${query}` : ''}`, {
     cache: 'no-store',
     credentials: 'include',
     headers: authHeaders,

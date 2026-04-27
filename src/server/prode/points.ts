@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { isFinishedStatus } from '@/shared/utils/match-status'
 
 export type RecalculateProdePointsResult = {
   matchId: string | number | null
@@ -74,17 +75,8 @@ export class ProdePointsRecalculationError extends Error {
   }
 }
 
-const FINAL_MATCH_STATUSES = new Set([
-  'final',
-  'ft',
-  'aet',
-  'pen',
-  'finished',
-  'match finished',
-])
-
 export function isFinalProdeStatus(status: string | null | undefined) {
-  return FINAL_MATCH_STATUSES.has((status || '').trim().toLowerCase())
+  return isFinishedStatus(status)
 }
 
 function getOutcome(homeScore: number, awayScore: number) {

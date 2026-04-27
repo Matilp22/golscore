@@ -35,19 +35,11 @@ async function getSyncOptions(request: Request) {
     searchParams.get('competition') ??
     (typeof body?.competition === 'string' ? body.competition : null)
   const debugValue = searchParams.get('debug') ?? body?.debug
-  const limitValue = searchParams.get('limit') ?? body?.limit
-  const limitNumber =
-    typeof limitValue === 'string' || typeof limitValue === 'number'
-      ? Number(limitValue)
-      : null
 
   return {
     competition,
     debug: debugValue === true || debugValue === 'true' || debugValue === '1',
-    limit:
-      limitNumber && Number.isFinite(limitNumber) && limitNumber > 0
-        ? Math.min(Math.floor(limitNumber), 50)
-        : null,
+    limit: null,
   }
 }
 
@@ -63,6 +55,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ ok: true, ...result })
   } catch (error) {
+    console.error('[sync-matches] Error completo', error)
+
     return NextResponse.json(
       {
         ok: false,

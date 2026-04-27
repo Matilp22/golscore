@@ -15,6 +15,7 @@ type LeaderboardRow = {
 
 type PredictionScoreRow = {
   user_id: string
+  match_id?: string | null
   points: number | null
   exact_hit: boolean | null
   partial_hit: boolean | null
@@ -118,9 +119,82 @@ function totalsDiffer(leaderboardRows: LeaderboardRow[], scoreRows: LeaderboardR
   return scoreRows.some((row) => leaderboardTotals.get(row.user_id) !== (row.points ?? 0))
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const supabase = getSupabaseAdminClient()
+    const { searchParams } = new URL(request.url)
+    const leagueId = searchParams.get('leagueId')
+
+    if (leagueId) {
+      const { data: leagueMatchesData, error: leagueMatchesError } = await supabase
+        .from('matches')
+        .select('id')
+        .eq('league_id', leagueId)
+
+      if (leagueMatchesError) {
+        console.error('[prode/leaderboard] Error leyendo partidos por liga', leagueMatchesError)
+
+        return NextResponse.json({
+          ok: false,
+          error: leagueMatchesError.message ?? 'No se pudieron leer los partidos del torneo.',
+          code: leagueMatchesError.code ?? null,
+          detail: leagueMatchesError.details ?? null,
+          leaderboard: [],
+        })
+      }
+
+      const matchIds = (leagueMatchesData ?? []).map((match) => String(match.id))
+
+      if (!matchIds.length) {
+        return NextResponse.json({ ok: true, leaderboard: [] })
+      }
+
+      const { data: scoresData, error: scoresError } = await supabase
+        .from('prediction_scores')
+        .select('user_id, match_id, points, exact_hit, partial_hit')
+        .in('match_id', matchIds)
+
+      if (scoresError) {
+        console.error('[prode/leaderboard] Error leyendo prediction_scores por liga', scoresError)
+
+        return NextResponse.json({
+          ok: false,
+          error: scoresError.message ?? 'No se pudo leer el ranking del torneo.',
+          code: scoresError.code ?? null,
+          detail: scoresError.details ?? null,
+          leaderboard: [],
+        })
+      }
+
+      const sourceRows = groupScoresByUser((scoresData ?? []) as PredictionScoreRow[])
+      const userIds = sourceRows.map((row) => row.user_id)
+      const profilesResult = userIds.length
+        ? await supabase
+            .from('profiles')
+            .select('id, username')
+            .in('id', userIds)
+        : { data: [], error: null }
+
+      if (profilesResult.error) {
+        console.error('[prode/leaderboard] Error leyendo profiles; usando fallback', profilesResult.error)
+      }
+
+      console.info('[prode/leaderboard] response debug', {
+        leagueId,
+        matchesForLeague: matchIds.length,
+        predictionScoresRead: scoresData?.length ?? 0,
+        source: 'prediction_scores_by_league',
+      })
+
+      return NextResponse.json({
+        ok: !profilesResult.error,
+        leaderboard: normalizeRows(
+          sourceRows,
+          profilesResult.error ? [] : ((profilesResult.data ?? []) as ProfileRow[])
+        ),
+      })
+    }
+
     let leaderboardResult: SupabaseListResult = await supabase
       .from('leaderboards')
       .select('user_id, total_points, exact_predictions, partial_predictions')

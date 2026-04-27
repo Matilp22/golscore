@@ -176,8 +176,13 @@ export default function ProdePanel() {
   )
 
   const loadLeaderboard = useCallback(async () => {
+    if (!selectedLeagueId) {
+      setLeaderboard([])
+      return
+    }
+
     try {
-      const leaderboardData = await getLeaderboard()
+      const leaderboardData = await getLeaderboard({ leagueId: selectedLeagueId })
 
       setLeaderboard(leaderboardData)
       setRankingMessage('')
@@ -185,17 +190,17 @@ export default function ProdePanel() {
       setLeaderboard([])
       setRankingMessage('Todavía no hay puntos calculados.')
     }
-  }, [])
+  }, [selectedLeagueId])
 
   const loadPredictions = useCallback(
     async ({ silent = false } = {}) => {
-      if (!user) {
+      if (!user || !selectedLeagueId) {
         setPredictions([])
         return
       }
 
       try {
-        const predictionsData = await getMyPredictions()
+        const predictionsData = await getMyPredictions({ leagueId: selectedLeagueId })
 
         setPredictions((currentPredictions) =>
           silent && editingMatchIds.size
@@ -216,7 +221,7 @@ export default function ProdePanel() {
         }
       }
     },
-    [editingMatchIds, user]
+    [editingMatchIds, selectedLeagueId, user]
   )
 
   const { markUpdatedNow } = useAutoRefresh({
@@ -312,24 +317,11 @@ export default function ProdePanel() {
   }, [effectiveSelectedRound, matches.length, rounds.length, selectedLeagueId, visibleMatches.length])
 
   useEffect(() => {
-    void loadLeaderboard()
-  }, [loadLeaderboard])
-
-  useEffect(() => {
-    if (!user) {
-      setPredictions([])
-      return
-    }
-
-    void loadPredictions()
-  }, [loadPredictions, user])
-
-  useEffect(() => {
     if (isAuthLoading || !selectedLeagueId) return
 
     void Promise.all([
       loadLeaderboard(),
-      user ? loadPredictions() : Promise.resolve(),
+      user ? loadPredictions() : Promise.resolve(setPredictions([])),
     ])
   }, [isAuthLoading, loadLeaderboard, loadPredictions, selectedLeagueId, user])
 
@@ -372,7 +364,7 @@ export default function ProdePanel() {
     })
     markUpdatedNow()
     const [freshPredictions] = await Promise.all([
-      getMyPredictions(),
+      getMyPredictions({ leagueId: selectedLeagueId }),
       loadLeaderboard(),
     ])
     setPredictions(freshPredictions)
@@ -427,9 +419,13 @@ export default function ProdePanel() {
             selectedRound={effectiveSelectedRound}
             onLeagueChange={(leagueId) => {
               setMessage('')
+              setRankingMessage('')
               setIsMatchesLoading(true)
               setEditingMatchIds(new Set())
               setPredictionDrafts({})
+              setMatches([])
+              setPredictions([])
+              setLeaderboard([])
               setSelectedLeagueId(leagueId)
               setSelectedRound(null)
             }}

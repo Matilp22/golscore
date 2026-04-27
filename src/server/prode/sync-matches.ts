@@ -8,12 +8,15 @@ import {
   normalizeLeagueName,
   type AllowedTournament,
 } from '@/shared/config/prode-leagues'
+import { isFinishedStatus } from '@/shared/utils/match-status'
 
 type ApiFixture = {
   fixture: {
     id: number
     date: string
     status: {
+      elapsed?: number | null
+      long?: string
       short: string
     }
   }
@@ -117,6 +120,10 @@ type UpsertResult = {
   action: UpsertAction
 }
 
+type StoredMatchLookupRow = DbIdRow & {
+  external_id?: number | string | null
+}
+
 export type SyncSingleFixtureResult = {
   fixtureId: number
   tournament: {
@@ -127,6 +134,9 @@ export type SyncSingleFixtureResult = {
   }
   api: {
     status: string
+    statusLong?: string | null
+    elapsed?: number | null
+    date?: string
     goalsHome: number | null
     goalsAway: number | null
     fulltimeHome: number | null
@@ -150,6 +160,30 @@ export type SyncSingleFixtureResult = {
     status: string | null
   } | null
   action: UpsertAction
+  matchBefore?: SyncSingleFixtureResult['before']
+  matchAfter?: SyncSingleFixtureResult['after']
+  apiFixture?: {
+    fixture: {
+      id: number
+      date: string
+      status: {
+        short: string
+        long: string | null
+        elapsed: number | null
+      }
+    }
+    goals: {
+      home: number | null
+      away: number | null
+    }
+    score: {
+      fulltime: {
+        home: number | null
+        away: number | null
+      }
+    }
+  }
+  updatedFields?: Record<string, { before: unknown; after: unknown }>
 }
 
 function logDebug(enabled: boolean | undefined, message: string, meta?: Record<string, unknown>) {
@@ -204,6 +238,37 @@ function getFixtureHomeScore(fixture: ApiFixture) {
 
 function getFixtureAwayScore(fixture: ApiFixture) {
   return fixture.goals.away ?? fixture.score?.fulltime?.away ?? null
+}
+
+function hasResolvedScore(fixture: ApiFixture) {
+  return getFixtureHomeScore(fixture) !== null && getFixtureAwayScore(fixture) !== null
+}
+
+function shouldRecalculateProdePoints(fixture: ApiFixture) {
+  return isFinishedStatus(fixture.fixture.status.short) && hasResolvedScore(fixture)
+}
+
+function getUpdatedFields(
+  before: SyncSingleFixtureResult['before'],
+  after: SyncSingleFixtureResult['after']
+) {
+  const fields: Record<string, { before: unknown; after: unknown }> = {}
+
+  if (!after) return fields
+
+  for (const field of ['status', 'home_score', 'away_score', 'external_id'] as const) {
+    const beforeValue = before?.[field] ?? null
+    const afterValue = after[field] ?? null
+
+    if (beforeValue !== afterValue) {
+      fields[field] = {
+        before: beforeValue,
+        after: afterValue,
+      }
+    }
+  }
+
+  return fields
 }
 
 function getTeamLogoUrl(team: { id: number; logo?: string }) {
@@ -608,14 +673,30 @@ async function upsertMatch(
     external_id: fixture.fixture.id,
   })
 
-  const { data: existingByExternalId, error: existingExternalIdError } = await withTimeout(
-    supabase
-      .from('matches')
-      .select('id')
-      .eq('external_id', String(fixture.fixture.id))
-      .maybeSingle(),
-    `matches lookup ${fixture.fixture.id}`
-  )
+  const externalIdCandidates = [String(fixture.fixture.id), fixture.fixture.id]
+  let existingByExternalId: StoredMatchLookupRow | null = null
+  let existingExternalIdError: { message: string } | null = null
+
+  for (const externalId of externalIdCandidates) {
+    const { data, error } = await withTimeout(
+      supabase
+        .from('matches')
+        .select('id, external_id')
+        .eq('external_id', externalId)
+        .maybeSingle(),
+      `matches lookup ${fixture.fixture.id}`
+    )
+
+    if (error) {
+      existingExternalIdError = error
+      break
+    }
+
+    if (data) {
+      existingByExternalId = data as StoredMatchLookupRow
+      break
+    }
+  }
 
   logDebug(debug, 'match lookup by external_id finished', {
     external_id: fixture.fixture.id,
@@ -627,7 +708,32 @@ async function upsertMatch(
     throw new Error(`No se pudo verificar el partido ${fixture.fixture.id}: ${existingExternalIdError.message}`)
   }
 
-  const existing = existingByExternalId as DbIdRow | null
+  if (!existingByExternalId) {
+    const { data: existingById, error: existingByIdError } = await withTimeout(
+      supabase
+        .from('matches')
+        .select('id, external_id')
+        .eq('id', fixture.fixture.id)
+        .maybeSingle(),
+      `matches lookup by id ${fixture.fixture.id}`
+    )
+
+    if (existingByIdError) {
+      logDebug(debug, 'match lookup by id fallback failed', {
+        fixtureId: fixture.fixture.id,
+        error: existingByIdError.message,
+      })
+    } else if (existingById) {
+      existingByExternalId = existingById as StoredMatchLookupRow
+      logDebug(debug, 'match lookup by id fallback found legacy row', {
+        fixtureId: fixture.fixture.id,
+        id: existingByExternalId.id,
+        external_id: existingByExternalId.external_id ?? null,
+      })
+    }
+  }
+
+  const existing = existingByExternalId
 
   if (existing) {
     logDebug(debug, 'match update started', {
@@ -652,6 +758,7 @@ async function upsertMatch(
 
     if (error) throw new Error(`No se pudo actualizar el partido ${fixture.fixture.id}: ${error.message}`)
 
+    await updateElapsedIfSupported(supabase, existing.id, fixture, debug)
     await updatePenaltyScoresIfSupported(supabase, existing.id, fixture, debug)
 
     return {
@@ -680,6 +787,7 @@ async function upsertMatch(
   })
 
   if (!error) {
+    await updateElapsedIfSupported(supabase, (data as DbIdRow).id, fixture, debug)
     await updatePenaltyScoresIfSupported(supabase, (data as DbIdRow).id, fixture, debug)
 
     return {
@@ -738,6 +846,7 @@ async function upsertMatch(
       })
 
       if (!updateByIdError) {
+        await updateElapsedIfSupported(supabase, fixture.fixture.id, fixture, debug)
         await updatePenaltyScoresIfSupported(supabase, fixture.fixture.id, fixture, debug)
 
         return {
@@ -753,12 +862,53 @@ async function upsertMatch(
   }
 
   const fallbackId = (fallbackData as DbIdRow | null)?.id ?? fixture.fixture.id
+  await updateElapsedIfSupported(supabase, fallbackId, fixture, debug)
   await updatePenaltyScoresIfSupported(supabase, fallbackId, fixture, debug)
 
   return {
     id: fallbackId,
     action: 'created' as const,
   }
+}
+
+async function updateElapsedIfSupported(
+  supabase: SupabaseClient,
+  matchId: DbId,
+  fixture: ApiFixture,
+  debug?: boolean
+) {
+  const elapsed = isFinishedStatus(fixture.fixture.status.short)
+    ? null
+    : fixture.fixture.status.elapsed ?? null
+
+  const { error } = await withTimeout(
+    supabase
+      .from('matches')
+      .update({ elapsed })
+      .eq('id', matchId),
+    `matches elapsed update ${fixture.fixture.id}`
+  )
+
+  if (!error) return
+
+  const message = error.message.toLowerCase()
+  const isMissingElapsedColumn =
+    message.includes('elapsed') ||
+    message.includes('schema cache') ||
+    error.code === '42703' ||
+    error.code === 'PGRST204'
+
+  if (isMissingElapsedColumn) {
+    logDebug(debug, 'elapsed column missing; base match sync preserved', {
+      fixtureId: fixture.fixture.id,
+      matchId,
+      elapsed,
+      error: error.message,
+    })
+    return
+  }
+
+  throw new Error(`No se pudo guardar elapsed del partido ${fixture.fixture.id}: ${error.message}`)
 }
 
 async function updatePenaltyScoresIfSupported(
@@ -804,14 +954,43 @@ async function updatePenaltyScoresIfSupported(
 }
 
 async function fetchStoredMatchByExternalId(supabase: SupabaseClient, fixtureId: number) {
-  const { data, error } = await withTimeout(
-    supabase
-      .from('matches')
-      .select('id, external_id, home_score, away_score, status')
-      .eq('external_id', String(fixtureId))
-      .maybeSingle(),
-    `matches debug lookup ${fixtureId}`
-  )
+  let data: unknown = null
+  let error: { message: string } | null = null
+
+  for (const externalId of [String(fixtureId), fixtureId]) {
+    const result = await withTimeout(
+      supabase
+        .from('matches')
+        .select('id, external_id, home_score, away_score, status')
+        .eq('external_id', externalId)
+        .maybeSingle(),
+      `matches debug lookup ${fixtureId}`
+    )
+
+    if (result.error) {
+      error = result.error
+      break
+    }
+
+    if (result.data) {
+      data = result.data
+      break
+    }
+  }
+
+  if (!data && !error) {
+    const result = await withTimeout(
+      supabase
+        .from('matches')
+        .select('id, external_id, home_score, away_score, status')
+        .eq('id', fixtureId)
+        .maybeSingle(),
+      `matches debug lookup by id ${fixtureId}`
+    )
+
+    data = result.data
+    error = result.error
+  }
 
   if (error) {
     throw new Error(`No se pudo leer el partido ${fixtureId} desde Supabase: ${error.message}`)
@@ -856,7 +1035,7 @@ export async function syncProdeFixtureById(
   )
   const warnings: string[] = []
 
-  if (getFixtureHomeScore(fixture) !== null && getFixtureAwayScore(fixture) !== null) {
+  if (shouldRecalculateProdePoints(fixture)) {
     try {
       await recalculateProdePoints(supabase, matchUpsert.id)
     } catch (error) {
@@ -872,6 +1051,7 @@ export async function syncProdeFixtureById(
   }
 
   const after = await fetchStoredMatchByExternalId(supabase, fixtureId)
+  const updatedFields = getUpdatedFields(before, after)
 
   return {
     fixtureId,
@@ -883,6 +1063,9 @@ export async function syncProdeFixtureById(
     },
     api: {
       status: fixture.fixture.status.short,
+      statusLong: fixture.fixture.status.long ?? null,
+      elapsed: fixture.fixture.status.elapsed ?? null,
+      date: fixture.fixture.date,
       goalsHome: fixture.goals.home,
       goalsAway: fixture.goals.away,
       fulltimeHome: fixture.score?.fulltime?.home ?? null,
@@ -893,6 +1076,30 @@ export async function syncProdeFixtureById(
     warnings,
     before,
     after,
+    matchBefore: before,
+    matchAfter: after,
+    apiFixture: {
+      fixture: {
+        id: fixture.fixture.id,
+        date: fixture.fixture.date,
+        status: {
+          short: fixture.fixture.status.short,
+          long: fixture.fixture.status.long ?? null,
+          elapsed: fixture.fixture.status.elapsed ?? null,
+        },
+      },
+      goals: {
+        home: fixture.goals.home,
+        away: fixture.goals.away,
+      },
+      score: {
+        fulltime: {
+          home: fixture.score?.fulltime?.home ?? null,
+          away: fixture.score?.fulltime?.away ?? null,
+        },
+      },
+    },
+    updatedFields,
     action: matchUpsert.action,
   }
 }
@@ -938,13 +1145,13 @@ export async function syncProdeMatches(
       result.fetched = fixtures.length
       result.roundSummary = summarizeFixtureRounds(fixtures)
       const orderedFixtures = [...fixtures].sort(compareFixturesByApiOrder)
-      const fixturesToProcess = limit ? orderedFixtures.slice(0, limit) : orderedFixtures
+      const fixturesToProcess = orderedFixtures
 
       logDebug(options.debug, 'fixtures fetched', {
         tournament: tournament.slug,
         fetched: fixtures.length,
         processing: fixturesToProcess.length,
-        limit,
+        limitIgnored: limit,
         roundSummary: result.roundSummary,
         order: orderedFixtures.map((fixture) => ({
           round: fixture.league.round ?? null,
@@ -1051,7 +1258,7 @@ export async function syncProdeMatches(
             result.matchesUpdated += 1
           }
 
-          if (getFixtureHomeScore(fixture) !== null && getFixtureAwayScore(fixture) !== null) {
+          if (shouldRecalculateProdePoints(fixture)) {
             try {
               await recalculateProdePoints(supabase, matchUpsert.id)
               logDebug(options.debug, 'prode points recalculated', {

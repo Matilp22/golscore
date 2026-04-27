@@ -681,14 +681,14 @@ function getPlayerPosition(
       : horizontalPadding + ((resolvedCol - 1) / Math.max(sameRowPlayers - 1, 1)) * horizontalSpan
 
   const normalizedRow = (safeRow - 1) / Math.max(totalRows - 1, 1)
-  const topStart = 8
-  const bottomStart = 92
+  const topStart = 12
+  const bottomStart = 88
   const halfHeight =
     totalRows >= 5
-      ? 36
-      : totalRows === 4
       ? 34
-      : 32
+      : totalRows === 4
+      ? 32
+      : 30
   const y = side === 'top' ? topStart + normalizedRow * halfHeight : bottomStart - normalizedRow * halfHeight
 
   return { x, y }
@@ -773,7 +773,7 @@ function Shirt({
 }) {
   return (
     <div
-      className="flex h-7 w-6 items-center justify-center border-2 text-[9px] font-black shadow-md sm:h-8 sm:w-7 sm:text-[10px]"
+      className="flex h-6 w-5 items-center justify-center border text-[8px] font-black shadow-md sm:h-8 sm:w-7 sm:border-2 sm:text-[10px]"
       style={{
         backgroundColor: style.shirt,
         color: style.text,
@@ -1037,7 +1037,7 @@ function PlayerOnField({
 
   return (
     <div
-      className="absolute -translate-x-1/2 -translate-y-1/2 text-center"
+      className="absolute w-[46px] -translate-x-1/2 -translate-y-1/2 text-center sm:w-[72px]"
       style={{
         left: `${pos.x}%`,
         top: `${pos.y}%`,
@@ -1049,7 +1049,7 @@ function PlayerOnField({
             <CaptainBadge />
           </div>
         ) : null}
-        <div className="rounded-xl border border-[#25553d]/80 bg-[#0f1317]/88 px-1.5 py-1 shadow-[0_12px_24px_rgba(0,0,0,0.24)] backdrop-blur-[2px] sm:rounded-2xl sm:px-2">
+        <div className="rounded-lg border border-[#25553d]/80 bg-[#0f1317]/88 px-1 py-0.5 shadow-[0_12px_24px_rgba(0,0,0,0.24)] backdrop-blur-[2px] sm:rounded-2xl sm:px-2 sm:py-1">
           <Shirt number={playerState.displayNumber ?? player.number} style={style} />
         </div>
         <div className="absolute -bottom-1.5 -right-1">
@@ -1069,7 +1069,7 @@ function PlayerOnField({
           </div>
         ) : null}
       </div>
-      <div className="mx-auto mt-1.5 max-w-[58px] truncate rounded-full bg-[#0f1317]/82 px-1 py-0.5 text-[7px] font-bold leading-tight text-white shadow-[0_8px_20px_rgba(0,0,0,0.22)] backdrop-blur-[2px] sm:max-w-[76px] sm:px-1.5 sm:py-1 sm:text-[8px]">
+      <div className="mx-auto mt-1 max-w-[44px] truncate rounded-full bg-[#0f1317]/82 px-1 py-0.5 text-[6px] font-bold leading-tight text-white shadow-[0_8px_20px_rgba(0,0,0,0.22)] backdrop-blur-[2px] sm:mt-1.5 sm:max-w-[76px] sm:px-1.5 sm:py-1 sm:text-[8px]">
         {playerState.displayName}
       </div>
     </div>
@@ -1251,7 +1251,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
   })
   return (
     <div className="min-h-screen text-white">
-      <div className="mx-auto max-w-7xl px-3 py-4 md:px-5 md:py-6">
+      <div className="mx-auto w-full max-w-none px-2.5 py-3 sm:px-3 md:px-5 md:py-6 lg:max-w-7xl">
         <header className="relative mb-4 overflow-hidden rounded-2xl border border-white/8 bg-[#111418]/95 shadow-[0_10px_30px_rgba(0,0,0,0.2)]">
           <AutoRefresh
             intervalMs={60000}
@@ -1434,8 +1434,8 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                       </span>
                     </div>
 
-                    <div className="overflow-x-auto">
-                    <div className="relative min-h-[620px] min-w-[360px] bg-transparent sm:min-h-[700px] sm:min-w-0 lg:min-h-[800px]">
+                    <div className="overflow-hidden">
+                    <div className="relative min-h-[560px] w-full min-w-0 bg-transparent sm:min-h-[700px] lg:min-h-[800px]">
                       <div className="absolute inset-x-0 top-1/2 h-px bg-[#4ea170]/50" />
                       <div className="absolute left-1/2 top-1/2 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#4ea170]/40" />
                       <div className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#7ff0b2]/40" />

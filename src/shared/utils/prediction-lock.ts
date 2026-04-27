@@ -1,20 +1,7 @@
+import { hasStartedStatus } from '@/shared/utils/match-status'
+
 const PREDICTION_LOCK_MINUTES = 15
 const ARGENTINA_UTC_OFFSET_HOURS = 3
-
-const STARTED_STATUSES = new Set([
-  'live',
-  '1h',
-  '2h',
-  'ht',
-  'et',
-  'bt',
-  'p',
-  'ft',
-  'aet',
-  'pen',
-  'final',
-  'finished',
-])
 
 function hasExplicitTimezone(value: string) {
   return /(?:z|[+-]\d{2}:?\d{2})$/i.test(value.trim())
@@ -64,7 +51,7 @@ export function getPredictionLockState(
   const matchStartMs = matchStart.getTime()
   const nowMs = now.getTime()
   const minutesUntilMatch = (matchStartMs - nowMs) / 60000
-  const statusStarted = STARTED_STATUSES.has(status.toLowerCase())
+  const statusStarted = hasStartedStatus(status)
   const invalidDate = Number.isNaN(matchStartMs)
   const locked = invalidDate || statusStarted || minutesUntilMatch <= PREDICTION_LOCK_MINUTES
 

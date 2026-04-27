@@ -6,6 +6,7 @@ import {
   writePersistentCache,
 } from '@/server/cache/cache-db'
 import { getFootballApiConfig } from '@/server/config/env'
+import { isFinishedStatus } from '@/shared/utils/match-status'
 
 type ApiFootballResponse<T> = {
   errors?: Record<string, string>
@@ -392,7 +393,6 @@ export type LeagueStandingGroup = {
 type CalculatedStandingAccumulator = Omit<LeagueStandingRow, 'rank'>
 
 const CALCULATED_STANDINGS_LEAGUE_IDS = new Set([128])
-const FINAL_STANDINGS_STATUSES = new Set(['FT', 'AET', 'PEN'])
 
 type PlayerStatistic = {
   team?: TeamInfo
@@ -979,7 +979,7 @@ async function getCalculatedLeagueStandings(
     if (seenFixtureIds.has(fixtureId)) continue
     seenFixtureIds.add(fixtureId)
 
-    if (!FINAL_STANDINGS_STATUSES.has(statusShort)) continue
+    if (!isFinishedStatus(statusShort)) continue
 
     const homeGoals = item.goals.home ?? item.score?.fulltime?.home ?? null
     const awayGoals = item.goals.away ?? item.score?.fulltime?.away ?? null
