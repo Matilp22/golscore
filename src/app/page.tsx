@@ -7,7 +7,8 @@ import Link from 'next/link'
 import {
   ApiFootballError,
   getMatchesByDate,
-  type MatchListItem,
+  type MatchListItemWithGoalScorers,
+  withGoalScorers,
 } from '@/lib/api-football'
 import {
   getSectionConfig,
@@ -63,7 +64,7 @@ function isLiveStatus(statusShort: string) {
   return isActiveLiveStatus(statusShort)
 }
 
-type ApiMatch = MatchListItem
+type ApiMatch = MatchListItemWithGoalScorers
 
 type CompetitionBucket = {
   key: string
@@ -913,12 +914,12 @@ export default async function HomePage({
     title: SECTION_TITLES[sectionKey],
     competitions: [],
   }))
-  let dateMatches: MatchListItem[] = []
+  let dateMatches: ApiMatch[] = []
 
   let dataError: string | null = null
 
   try {
-    dateMatches = await getMatchesByDate(selectedDate)
+    dateMatches = await withGoalScorers(await getMatchesByDate(selectedDate))
     groupedSections = groupMatchesWithPromiedosStructure(dateMatches)
   } catch (error) {
     if (error instanceof ApiFootballError) {
@@ -1059,6 +1060,7 @@ export default async function HomePage({
                               away={match.away}
                               score={`${match.goalsHome ?? '-'} - ${match.goalsAway ?? '-'}`}
                               status={formatStatus(match.statusShort, match.minute)}
+                              goalScorers={match.goalScorers}
                             />
                           ))}
                         </div>

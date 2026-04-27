@@ -1,5 +1,6 @@
-﻿import Image from 'next/image'
+import Image from 'next/image'
 import Link from 'next/link'
+import type { MatchGoalScorer, MatchGoalScorers } from '@/lib/api-football'
 
 type MatchRowProps = {
   id?: number | string
@@ -13,6 +14,7 @@ type MatchRowProps = {
   awayLogo?: string
   score: string
   status: string
+  goalScorers?: MatchGoalScorers
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -63,6 +65,41 @@ function TeamBadge({
   )
 }
 
+function formatGoalScorer(goal: MatchGoalScorer) {
+  const minute =
+    goal.extraMinute && goal.extraMinute > 0
+      ? `${goal.minute}+${goal.extraMinute}'`
+      : `${goal.minute}'`
+
+  return `${minute} ${goal.player}`
+}
+
+function GoalScorersLine({ goalScorers }: { goalScorers?: MatchGoalScorers }) {
+  const homeGoals = goalScorers?.home.map(formatGoalScorer).join('; ') || ''
+  const awayGoals = goalScorers?.away.map(formatGoalScorer).join('; ') || ''
+
+  if (!homeGoals && !awayGoals) return null
+
+  const clampStyle = {
+    display: '-webkit-box',
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: 'vertical',
+  } as const
+
+  return (
+    <div className="mt-2 grid min-w-0 grid-cols-[minmax(0,1fr)_72px_minmax(0,1fr)] gap-2 text-[11px] leading-snug text-[#8d98a7] md:grid-cols-[minmax(0,1fr)_92px_minmax(0,1fr)_112px] md:gap-3">
+      <div className="min-w-0 overflow-hidden break-words" style={clampStyle}>
+        {homeGoals}
+      </div>
+      <div aria-hidden="true" />
+      <div className="min-w-0 overflow-hidden break-words text-right" style={clampStyle}>
+        {awayGoals}
+      </div>
+      <div aria-hidden="true" className="hidden md:block" />
+    </div>
+  )
+}
+
 export default function MatchRow({
   id = 1,
   time,
@@ -73,6 +110,7 @@ export default function MatchRow({
   awayLogo,
   score,
   status,
+  goalScorers,
 }: MatchRowProps) {
   const isLive = status.includes('EN VIVO')
   const centerLabel = score === '- - -' ? minute || time || 'vs' : score
@@ -97,6 +135,8 @@ export default function MatchRow({
           <StatusBadge status={status} />
         </div>
       </div>
+
+      <GoalScorersLine goalScorers={goalScorers} />
 
       <div className="mt-2 flex min-w-0 justify-end md:hidden">
         <StatusBadge status={status} />

@@ -107,7 +107,9 @@ export type MatchListItem = {
   leagueLogo?: string
   country?: string
   date: string
+  homeId?: number
   home: string
+  awayId?: number
   away: string
   homeLogo?: string
   awayLogo?: string
@@ -116,6 +118,21 @@ export type MatchListItem = {
   minute: number | null
   statusShort: string
   statusLong: string
+}
+
+export type MatchGoalScorer = {
+  minute: number
+  extraMinute?: number | null
+  player: string
+}
+
+export type MatchGoalScorers = {
+  home: MatchGoalScorer[]
+  away: MatchGoalScorer[]
+}
+
+export type MatchListItemWithGoalScorers = MatchListItem & {
+  goalScorers: MatchGoalScorers
 }
 
 export type LeagueFixtureSummary = {
@@ -205,6 +222,7 @@ function logCopaArgentinaFixtureDebug(
 
 export type MatchEvent = {
   team?: {
+    id?: number
     name?: string
   }
   player?: {
@@ -217,6 +235,7 @@ export type MatchEvent = {
   }
   time?: {
     elapsed?: number | null
+    extra?: number | null
   }
   type?: string
   detail?: string
@@ -664,7 +683,9 @@ export async function getMatchesByDate(date: string): Promise<MatchListItem[]> {
     leagueLogo: item.league.logo,
     country: item.league.country,
     date: item.fixture.date,
+    homeId: item.teams.home.id,
     home: item.teams.home.name,
+    awayId: item.teams.away.id,
     away: item.teams.away.name,
     homeLogo: item.teams.home.logo,
     awayLogo: item.teams.away.logo,
@@ -687,8 +708,10 @@ export async function getMatchesByDate(date: string): Promise<MatchListItem[]> {
         statusShort: item.statusShort,
         statusLong: item.statusLong,
         minute: item.minute,
+        homeTeamId: item.homeId,
         homeTeamName: item.home,
         homeTeamLogo: item.homeLogo,
+        awayTeamId: item.awayId,
         awayTeamName: item.away,
         awayTeamLogo: item.awayLogo,
         goalsHome: item.goalsHome,
@@ -706,7 +729,9 @@ export async function getMatchesByDate(date: string): Promise<MatchListItem[]> {
       leagueLogo: item.leagueLogo,
       country: item.country,
       date: item.date,
+      homeId: item.homeTeamId,
       home: item.homeTeamName,
+      awayId: item.awayTeamId,
       away: item.awayTeamName,
       homeLogo: item.homeTeamLogo,
       awayLogo: item.awayTeamLogo,
@@ -724,6 +749,90 @@ export async function getMatchesByDate(date: string): Promise<MatchListItem[]> {
   }
 
   return mappedFixtures
+}
+
+function hasAnyGoals(match: MatchListItem) {
+  return (match.goalsHome ?? 0) > 0 || (match.goalsAway ?? 0) > 0
+}
+
+function isGoalEvent(event: MatchEvent) {
+  return (event.type || '').toLowerCase() === 'goal'
+}
+
+function isSameEventTeam(event: MatchEvent, team: MatchListItem, side: 'home' | 'away') {
+  const teamId = side === 'home' ? team.homeId : team.awayId
+  const teamName = side === 'home' ? team.home : team.away
+
+  if (teamId && event.team?.id) return event.team.id === teamId
+  return event.team?.name === teamName
+}
+
+function mapGoalEvent(event: MatchEvent): MatchGoalScorer | null {
+  const minute = event.time?.elapsed
+  const player = event.player?.name
+
+  if (!minute || !player) return null
+
+  return {
+    minute,
+    extraMinute: event.time?.extra ?? null,
+    player,
+  }
+}
+
+function sortGoalScorers(a: MatchGoalScorer, b: MatchGoalScorer) {
+  if (a.minute !== b.minute) return a.minute - b.minute
+  return (a.extraMinute ?? 0) - (b.extraMinute ?? 0)
+}
+
+async function getGoalScorersForMatch(match: MatchListItem): Promise<MatchGoalScorers> {
+  if (!hasAnyGoals(match)) return { home: [], away: [] }
+
+  const events = await apiFootball('/fixtures/events', {
+    fixture: match.id,
+  }, {
+    revalidate: 30,
+  }) as ApiFootballResponse<MatchEvent>
+
+  const goalEvents = (events.response || []).filter(isGoalEvent)
+
+  return {
+    home: goalEvents
+      .filter((event) => isSameEventTeam(event, match, 'home'))
+      .map(mapGoalEvent)
+      .filter((event): event is MatchGoalScorer => event !== null)
+      .sort(sortGoalScorers),
+    away: goalEvents
+      .filter((event) => isSameEventTeam(event, match, 'away'))
+      .map(mapGoalEvent)
+      .filter((event): event is MatchGoalScorer => event !== null)
+      .sort(sortGoalScorers),
+  }
+}
+
+export async function withGoalScorers(
+  matches: MatchListItem[]
+): Promise<MatchListItemWithGoalScorers[]> {
+  const goalScorersByMatchId = new Map<number, MatchGoalScorers>()
+  const matchesWithGoals = matches.filter(hasAnyGoals)
+
+  const responses = await Promise.allSettled(
+    matchesWithGoals.map(async (match) => ({
+      id: match.id,
+      goalScorers: await getGoalScorersForMatch(match),
+    }))
+  )
+
+  for (const response of responses) {
+    if (response.status === 'fulfilled') {
+      goalScorersByMatchId.set(response.value.id, response.value.goalScorers)
+    }
+  }
+
+  return matches.map((match) => ({
+    ...match,
+    goalScorers: goalScorersByMatchId.get(match.id) || { home: [], away: [] },
+  }))
 }
 
 export async function getMatchDetail(id: number) {
