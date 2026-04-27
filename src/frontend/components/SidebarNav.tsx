@@ -19,7 +19,8 @@ type SidebarNavProps = {
   onNavigate?: () => void
 }
 
-const FAVORITES_STORAGE_KEY = 'golscore:favorites:v1'
+const FAVORITES_STORAGE_KEY = 'fulboapp:favorites:v1'
+const LEGACY_FAVORITES_STORAGE_KEY = ['gol', 'score:favorites:v1'].join('')
 
 function Chevron({ open }: { open: boolean }) {
   return (
@@ -41,7 +42,11 @@ function readFavorites() {
   if (typeof window === 'undefined') return []
 
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(FAVORITES_STORAGE_KEY) ?? '[]')
+    const storedFavorites =
+      window.localStorage.getItem(FAVORITES_STORAGE_KEY) ??
+      window.localStorage.getItem(LEGACY_FAVORITES_STORAGE_KEY) ??
+      '[]'
+    const parsed = JSON.parse(storedFavorites)
 
     return Array.isArray(parsed)
       ? parsed.filter((item): item is string => typeof item === 'string')

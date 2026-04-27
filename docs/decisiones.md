@@ -1,6 +1,6 @@
 # Decisiones de producto y frontend
 
-Este documento resume las decisiones importantes que se fueron tomando durante la evolucion de `GolScore`, con foco en estructura, UI, comportamiento del detalle de partido, integracion con la API y criterios de diseno.
+Este documento resume las decisiones importantes que se fueron tomando durante la evolucion de `FulboApp`, con foco en estructura, UI, comportamiento del detalle de partido, integracion con la API y criterios de diseno.
 
 ## 1. Base del proyecto
 

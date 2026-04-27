@@ -1,6 +1,6 @@
-# GolScore
+# FulboApp
 
-GolScore es una app web de resultados de futbol construida con Next.js. La experiencia esta pensada para seguir partidos del dia con una estructura editorial inspirada en Promiedos, pero con una interfaz mas limpia, compacta y enfocada en el detalle de partido.
+FulboApp es una app web de resultados de futbol construida con Next.js. La experiencia esta pensada para seguir partidos del dia con una estructura editorial inspirada en Promiedos, pero con una interfaz mas limpia, compacta y enfocada en el detalle de partido.
 
 Hoy el proyecto ya incluye:
 

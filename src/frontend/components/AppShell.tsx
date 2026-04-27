@@ -67,7 +67,7 @@ export default function AppShell({ auth, children }: AppShellProps) {
           <aside className="absolute bottom-0 left-0 top-0 flex w-[min(82vw,300px)] max-w-full flex-col border-r border-white/10 bg-[#0f1317] shadow-[18px_0_42px_rgba(0,0,0,0.42)]">
             <div className="flex items-center justify-between border-b border-white/8 px-3 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#7ff0b2]">
-                GolScore
+                FulboApp
               </p>
               <button
                 type="button"

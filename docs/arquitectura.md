@@ -1,6 +1,6 @@
 # Arquitectura
 
-GolScore queda organizado como una app Next.js App Router lista para Vercel, con separacion interna por responsabilidad.
+FulboApp queda organizado como una app Next.js App Router lista para Vercel, con separacion interna por responsabilidad.
 
 ## Capas
 

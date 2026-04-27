@@ -15,6 +15,7 @@ type MatchRowProps = {
   score: string
   status: string
   goalScorers?: MatchGoalScorers
+  broadcastChannel?: string | null
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -70,8 +71,14 @@ function formatGoalScorer(goal: MatchGoalScorer) {
     goal.extraMinute && goal.extraMinute > 0
       ? `${goal.minute}+${goal.extraMinute}'`
       : `${goal.minute}'`
+  const suffix =
+    goal.kind === 'penalty'
+      ? ' (P)'
+      : goal.kind === 'own-goal'
+        ? ' (e/c)'
+        : ''
 
-  return `${minute} ${goal.player}`
+  return `${minute} ${goal.player}${suffix}`
 }
 
 function GoalScorersLine({ goalScorers }: { goalScorers?: MatchGoalScorers }) {
@@ -100,6 +107,16 @@ function GoalScorersLine({ goalScorers }: { goalScorers?: MatchGoalScorers }) {
   )
 }
 
+function BroadcastLine({ channel }: { channel?: string | null }) {
+  if (!channel) return null
+
+  return (
+    <div className="mt-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] leading-snug text-[#8d98a7]">
+      TV: {channel}
+    </div>
+  )
+}
+
 export default function MatchRow({
   id = 1,
   time,
@@ -111,6 +128,7 @@ export default function MatchRow({
   score,
   status,
   goalScorers,
+  broadcastChannel,
 }: MatchRowProps) {
   const isLive = status.includes('EN VIVO')
   const centerLabel = score === '- - -' ? minute || time || 'vs' : score
@@ -137,6 +155,7 @@ export default function MatchRow({
       </div>
 
       <GoalScorersLine goalScorers={goalScorers} />
+      <BroadcastLine channel={broadcastChannel} />
 
       <div className="mt-2 flex min-w-0 justify-end md:hidden">
         <StatusBadge status={status} />

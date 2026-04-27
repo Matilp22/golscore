@@ -960,7 +960,7 @@ export default async function HomePage({
           <div className="flex flex-col gap-4">
             <div>
               <h1 className="max-w-full break-words text-[2.65rem] font-black leading-none tracking-normal text-white sm:text-5xl md:text-7xl">
-                GolScore
+                FulboApp
               </h1>
               <p className="mt-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#7ff0b2] md:text-sm">
                 Partidos del día
@@ -1061,6 +1061,7 @@ export default async function HomePage({
                               score={`${match.goalsHome ?? '-'} - ${match.goalsAway ?? '-'}`}
                               status={formatStatus(match.statusShort, match.minute)}
                               goalScorers={match.goalScorers}
+                              broadcastChannel={match.broadcastChannel}
                             />
                           ))}
                         </div>

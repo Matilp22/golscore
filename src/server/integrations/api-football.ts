@@ -6,6 +6,7 @@ import {
   writePersistentCache,
 } from '@/server/cache/cache-db'
 import { getFootballApiConfig } from '@/server/config/env'
+import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { isFinishedStatus } from '@/shared/utils/match-status'
 
 type ApiFootballResponse<T> = {
@@ -124,6 +125,7 @@ export type MatchGoalScorer = {
   minute: number
   extraMinute?: number | null
   player: string
+  kind?: 'penalty' | 'own-goal' | 'regular'
 }
 
 export type MatchGoalScorers = {
@@ -133,6 +135,7 @@ export type MatchGoalScorers = {
 
 export type MatchListItemWithGoalScorers = MatchListItem & {
   goalScorers: MatchGoalScorers
+  broadcastChannel?: string | null
 }
 
 export type LeagueFixtureSummary = {
@@ -767,6 +770,15 @@ function isSameEventTeam(event: MatchEvent, team: MatchListItem, side: 'home' | 
   return event.team?.name === teamName
 }
 
+function getGoalKind(event: MatchEvent): MatchGoalScorer['kind'] {
+  const detail = (event.detail || '').toLowerCase()
+
+  if (detail.includes('own goal')) return 'own-goal'
+  if (detail.includes('penalty')) return 'penalty'
+
+  return 'regular'
+}
+
 function mapGoalEvent(event: MatchEvent): MatchGoalScorer | null {
   const minute = event.time?.elapsed
   const player = event.player?.name
@@ -777,6 +789,7 @@ function mapGoalEvent(event: MatchEvent): MatchGoalScorer | null {
     minute,
     extraMinute: event.time?.extra ?? null,
     player,
+    kind: getGoalKind(event),
   }
 }
 
@@ -810,6 +823,55 @@ async function getGoalScorersForMatch(match: MatchListItem): Promise<MatchGoalSc
   }
 }
 
+type BroadcastChannelRow = {
+  id: number | string
+  external_id: number | string | null
+  broadcast_channel: string | null
+}
+
+async function getBroadcastChannelsByFixtureId(matches: MatchListItem[]) {
+  const fixtureIds = [
+    ...new Set(matches.map((match) => match.id).filter((id) => Number.isFinite(id))),
+  ]
+  const empty = new Map<number, string>()
+
+  if (!fixtureIds.length) return empty
+
+  try {
+    const supabase = getSupabaseAdminClient()
+    const { data, error } = await supabase
+      .from('matches')
+      .select('id, external_id, broadcast_channel')
+      .or(`external_id.in.(${fixtureIds.join(',')}),id.in.(${fixtureIds.join(',')})`)
+
+    if (error) {
+      const message = error.message.toLowerCase()
+      const isMissingOptionalColumn =
+        error.code === '42703' ||
+        message.includes('broadcast_channel') ||
+        message.includes('schema cache')
+
+      if (isMissingOptionalColumn) return empty
+      throw error
+    }
+
+    return new Map(
+      ((data ?? []) as BroadcastChannelRow[])
+        .filter((row) => row.broadcast_channel)
+        .map((row) => [
+          Number(row.external_id ?? row.id),
+          row.broadcast_channel as string,
+        ])
+    )
+  } catch (error) {
+    console.info('[home:broadcasts] Canal de TV no disponible; se omite en Home.', {
+      message: error instanceof Error ? error.message : String(error),
+    })
+
+    return empty
+  }
+}
+
 export async function withGoalScorers(
   matches: MatchListItem[]
 ): Promise<MatchListItemWithGoalScorers[]> {
@@ -829,9 +891,12 @@ export async function withGoalScorers(
     }
   }
 
+  const broadcastChannelsByFixtureId = await getBroadcastChannelsByFixtureId(matches)
+
   return matches.map((match) => ({
     ...match,
     goalScorers: goalScorersByMatchId.get(match.id) || { home: [], away: [] },
+    broadcastChannel: broadcastChannelsByFixtureId.get(match.id) || null,
   }))
 }
 
