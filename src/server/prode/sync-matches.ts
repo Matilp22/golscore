@@ -56,6 +56,7 @@ type ApiFixture = {
 }
 
 type ApiFixtureEvent = {
+  id?: number | string
   team?: {
     id?: number
     name?: string
@@ -90,6 +91,8 @@ export type SyncTournamentResult = {
   teamsUpdated: number
   matchesCreated: number
   matchesUpdated: number
+  eventsFound: number
+  goalsInserted: number
   created: number
   updated: number
   skipped: number
@@ -116,6 +119,8 @@ export type SyncMatchesResult = {
   teamsUpdated: number
   matchesCreated: number
   matchesUpdated: number
+  eventsFound: number
+  goalsInserted: number
   created: number
   updated: number
   skipped: number
@@ -144,6 +149,13 @@ type UpsertResult = {
 type StoredMatchLookupRow = DbIdRow & {
   external_id?: number | string | null
 }
+
+type SyncMatchEventsResult = {
+  eventsFound: number
+  goalsInserted: number
+}
+
+const ALLOWED_GOAL_DETAILS = new Set(['Normal Goal', 'Penalty', 'Own Goal'])
 
 export type SyncSingleFixtureResult = {
   fixtureId: number
@@ -263,10 +275,6 @@ function getFixtureAwayScore(fixture: ApiFixture) {
 
 function hasResolvedScore(fixture: ApiFixture) {
   return getFixtureHomeScore(fixture) !== null && getFixtureAwayScore(fixture) !== null
-}
-
-function hasAnyFixtureGoals(fixture: ApiFixture) {
-  return (getFixtureHomeScore(fixture) ?? 0) > 0 || (getFixtureAwayScore(fixture) ?? 0) > 0
 }
 
 function shouldRecalculateProdePoints(fixture: ApiFixture) {
@@ -912,15 +920,25 @@ async function upsertMatch(
 }
 
 function getEventExternalId(fixture: ApiFixture, event: ApiFixtureEvent) {
+  if (event.id !== undefined && event.id !== null) return String(event.id)
+
   return [
     fixture.fixture.id,
-    event.team?.id ?? 'team',
     event.time?.elapsed ?? 'minute',
-    event.time?.extra ?? 'extra',
-    event.type ?? 'type',
+    event.team?.id ?? 'team',
+    event.player?.name ?? 'player',
     event.detail ?? 'detail',
-    event.player?.id ?? event.player?.name ?? 'player',
   ].join(':')
+}
+
+function isGoalEventForScoreboard(event: ApiFixtureEvent) {
+  return (
+    event.type === 'Goal' &&
+    ALLOWED_GOAL_DETAILS.has(event.detail ?? '') &&
+    event.time?.elapsed !== null &&
+    event.time?.elapsed !== undefined &&
+    Boolean(event.player?.name)
+  )
 }
 
 function isMissingOptionalMatchEvents(error: { code?: string; message: string }) {
@@ -947,6 +965,51 @@ function shouldIgnoreEventSyncError(error: unknown) {
   )
 }
 
+async function hasStoredFinalGoalEvents(
+  supabase: SupabaseClient,
+  matchId: DbId,
+  fixture: ApiFixture,
+  debug?: boolean
+) {
+  const expectedGoals = (getFixtureHomeScore(fixture) ?? 0) + (getFixtureAwayScore(fixture) ?? 0)
+
+  if (!isFinishedStatus(fixture.fixture.status.short) || expectedGoals <= 0) return false
+
+  const response = await withTimeout(
+    supabase
+      .from('match_events')
+      .select('id', { count: 'exact', head: true })
+      .eq('match_id', matchId)
+      .eq('type', 'Goal'),
+    `match_events count ${fixture.fixture.id}`
+  )
+
+  if (response.error) {
+    if (isMissingOptionalMatchEvents(response.error)) return false
+
+    console.warn('[sync-match-events] No se pudo revisar eventos guardados; se intentara sincronizar.', {
+      fixtureId: fixture.fixture.id,
+      matchId,
+      message: response.error.message,
+    })
+    return false
+  }
+
+  const storedGoals = response.count ?? 0
+  const hasCompleteEvents = storedGoals >= expectedGoals
+
+  if (hasCompleteEvents) {
+    logDebug(debug, 'match events already synced for final score', {
+      fixtureId: fixture.fixture.id,
+      matchId,
+      storedGoals,
+      expectedGoals,
+    })
+  }
+
+  return hasCompleteEvents
+}
+
 async function syncMatchEventsIfSupported(
   supabase: SupabaseClient,
   fixture: ApiFixture,
@@ -954,13 +1017,15 @@ async function syncMatchEventsIfSupported(
   homeTeamId: DbId,
   awayTeamId: DbId,
   debug?: boolean
-) {
-  if (!hasAnyFixtureGoals(fixture)) return
+): Promise<SyncMatchEventsResult> {
+  const emptyResult = { eventsFound: 0, goalsInserted: 0 }
 
   try {
+    if (await hasStoredFinalGoalEvents(supabase, matchId, fixture, debug)) return emptyResult
+
     const events = await fetchFixtureEvents(fixture.fixture.id)
     const eventRows = events
-      .filter((event) => event.type && event.time?.elapsed && event.player?.name)
+      .filter(isGoalEventForScoreboard)
       .map((event) => ({
         match_id: matchId,
         external_event_id: getEventExternalId(fixture, event),
@@ -978,25 +1043,35 @@ async function syncMatchEventsIfSupported(
         detail: event.detail ?? null,
       }))
 
+    console.info('[sync-match-events] eventos recibidos', {
+      fixtureId: fixture.fixture.id,
+      matchId,
+      totalEvents: events.length,
+      goalEvents: eventRows.length,
+      allowedDetails: [...ALLOWED_GOAL_DETAILS],
+    })
+
     const deleteResponse = await withTimeout(
       supabase.from('match_events').delete().eq('match_id', matchId),
       `match_events delete ${fixture.fixture.id}`
     )
 
     if (deleteResponse.error) {
-      if (isMissingOptionalMatchEvents(deleteResponse.error)) return
+      if (isMissingOptionalMatchEvents(deleteResponse.error)) return emptyResult
       throw deleteResponse.error
     }
 
-    if (!eventRows.length) return
+    if (!eventRows.length) return { eventsFound: events.length, goalsInserted: 0 }
 
     const insertResponse = await withTimeout(
-      supabase.from('match_events').insert(eventRows),
-      `match_events insert ${fixture.fixture.id}`
+      supabase
+        .from('match_events')
+        .upsert(eventRows, { onConflict: 'match_id,external_event_id' }),
+      `match_events upsert ${fixture.fixture.id}`
     )
 
     if (insertResponse.error) {
-      if (isMissingOptionalMatchEvents(insertResponse.error)) return
+      if (isMissingOptionalMatchEvents(insertResponse.error)) return emptyResult
       throw insertResponse.error
     }
 
@@ -1005,6 +1080,16 @@ async function syncMatchEventsIfSupported(
       matchId,
       events: eventRows.length,
     })
+    console.info('[sync-match-events] goles insertados en match_events', {
+      fixtureId: fixture.fixture.id,
+      matchId,
+      insertedGoals: eventRows.length,
+    })
+
+    return {
+      eventsFound: events.length,
+      goalsInserted: eventRows.length,
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
 
@@ -1013,13 +1098,15 @@ async function syncMatchEventsIfSupported(
         fixtureId: fixture.fixture.id,
         message,
       })
-      return
+      return emptyResult
     }
 
     console.warn('[sync-match-events] No se pudieron sincronizar eventos; se omiten.', {
       fixtureId: fixture.fixture.id,
       message,
     })
+
+    return emptyResult
   }
 }
 
@@ -1293,6 +1380,8 @@ export async function syncProdeMatches(
       teamsUpdated: 0,
       matchesCreated: 0,
       matchesUpdated: 0,
+      eventsFound: 0,
+      goalsInserted: 0,
       created: 0,
       updated: 0,
       skipped: 0,
@@ -1409,7 +1498,7 @@ export async function syncProdeMatches(
             options.debug
           )
 
-          await syncMatchEventsIfSupported(
+          const eventSync = await syncMatchEventsIfSupported(
             supabase,
             fixture,
             matchUpsert.id,
@@ -1417,6 +1506,8 @@ export async function syncProdeMatches(
             awayTeam.id,
             options.debug
           )
+          result.eventsFound += eventSync.eventsFound
+          result.goalsInserted += eventSync.goalsInserted
 
           if (matchUpsert.action === 'created') {
             result.created += 1
@@ -1466,7 +1557,15 @@ export async function syncProdeMatches(
         teamsUpdated: result.teamsUpdated,
         matchesCreated: result.matchesCreated,
         matchesUpdated: result.matchesUpdated,
+        eventsFound: result.eventsFound,
+        goalsInserted: result.goalsInserted,
         errors: result.errors.length,
+      })
+      console.info('[sync-matches] resumen torneo', {
+        tournament: tournament.slug,
+        fixturesProcessed: result.processed,
+        eventsFound: result.eventsFound,
+        goalsInserted: result.goalsInserted,
       })
     } catch (error) {
       addFixtureError(result, null, 'fetch-fixtures', error)
@@ -1484,6 +1583,8 @@ export async function syncProdeMatches(
     teamsUpdated: results.reduce((sum, item) => sum + item.teamsUpdated, 0),
     matchesCreated: results.reduce((sum, item) => sum + item.matchesCreated, 0),
     matchesUpdated: results.reduce((sum, item) => sum + item.matchesUpdated, 0),
+    eventsFound: results.reduce((sum, item) => sum + item.eventsFound, 0),
+    goalsInserted: results.reduce((sum, item) => sum + item.goalsInserted, 0),
     created: results.reduce((sum, item) => sum + item.created, 0),
     updated: results.reduce((sum, item) => sum + item.updated, 0),
     skipped: results.reduce((sum, item) => sum + item.skipped, 0),

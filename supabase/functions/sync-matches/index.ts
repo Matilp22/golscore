@@ -37,6 +37,30 @@ type ApiFixture = {
   }
 }
 
+type ApiFixtureEvent = {
+  id?: number | string
+  team?: {
+    id?: number
+    name?: string
+  }
+  player?: {
+    id?: number
+    name?: string
+  }
+  assist?: {
+    id?: number
+    name?: string
+  }
+  time?: {
+    elapsed?: number | null
+    extra?: number | null
+  }
+  type?: string
+  detail?: string | null
+}
+
+const ALLOWED_GOAL_DETAILS = new Set(['Normal Goal', 'Penalty', 'Own Goal'])
+
 const TOURNAMENTS: Tournament[] = [
   {
     slug: 'liga-profesional-argentina',
@@ -51,6 +75,13 @@ const TOURNAMENTS: Tournament[] = [
     externalLeagueId: 129,
     season: 2026,
     country: 'Argentina',
+  },
+  {
+    slug: 'copa-argentina',
+    name: 'Copa Argentina',
+    externalLeagueId: 130,
+    season: 2026,
+    country: 'World',
   },
   {
     slug: 'mundial-2026',
@@ -69,6 +100,122 @@ function getFixtureRoundValue(round?: string | null) {
 
 function normalizeUrl(value: string) {
   return value.trim().replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '')
+}
+
+function getEventExternalId(fixture: ApiFixture, event: ApiFixtureEvent) {
+  if (event.id !== undefined && event.id !== null) return String(event.id)
+
+  return [
+    fixture.fixture.id,
+    event.time?.elapsed ?? 'minute',
+    event.team?.id ?? 'team',
+    event.player?.name ?? 'player',
+    event.detail ?? 'detail',
+  ].join(':')
+}
+
+function isGoalEventForScoreboard(event: ApiFixtureEvent) {
+  return (
+    event.type === 'Goal' &&
+    ALLOWED_GOAL_DETAILS.has(event.detail ?? '') &&
+    event.time?.elapsed !== null &&
+    event.time?.elapsed !== undefined &&
+    Boolean(event.player?.name)
+  )
+}
+
+async function fetchFixtureEvents(
+  footballApiBaseUrl: string,
+  footballApiKey: string,
+  fixtureId: number,
+) {
+  const eventsUrl = new URL(`${footballApiBaseUrl}/fixtures/events`)
+  eventsUrl.searchParams.set('fixture', String(fixtureId))
+
+  const response = await fetch(eventsUrl.toString(), {
+    headers: { 'x-apisports-key': footballApiKey },
+  })
+
+  if (!response.ok) throw new Error(`API-Football respondio ${response.status}`)
+
+  const payload = await response.json()
+  const apiErrors = payload?.errors ? Object.values(payload.errors).filter(Boolean) : []
+
+  if (apiErrors.length) {
+    throw new Error(apiErrors.join(' | '))
+  }
+
+  return (payload?.response ?? []) as ApiFixtureEvent[]
+}
+
+async function syncMatchEvents(
+  supabase: ReturnType<typeof createClient>,
+  footballApiBaseUrl: string,
+  footballApiKey: string,
+  fixture: ApiFixture,
+  matchId: string | number,
+  homeTeamId: string | number,
+  awayTeamId: string | number,
+) {
+  try {
+    const events = await fetchFixtureEvents(footballApiBaseUrl, footballApiKey, fixture.fixture.id)
+    const eventRows = events
+      .filter(isGoalEventForScoreboard)
+      .map((event) => ({
+        match_id: matchId,
+        external_event_id: getEventExternalId(fixture, event),
+        team_id:
+          event.team?.id === fixture.teams.home.id
+            ? homeTeamId
+            : event.team?.id === fixture.teams.away.id
+              ? awayTeamId
+              : null,
+        player_name: event.player?.name as string,
+        assist_name: event.assist?.name ?? null,
+        minute: event.time?.elapsed as number,
+        extra_minute: event.time?.extra ?? null,
+        type: event.type as string,
+        detail: event.detail ?? null,
+      }))
+
+    console.info('[sync-match-events] eventos recibidos', {
+      fixtureId: fixture.fixture.id,
+      matchId,
+      totalEvents: events.length,
+      goalEvents: eventRows.length,
+      allowedDetails: [...ALLOWED_GOAL_DETAILS],
+    })
+
+    const deleteResponse = await supabase.from('match_events').delete().eq('match_id', matchId)
+
+    if (deleteResponse.error) throw deleteResponse.error
+
+    if (!eventRows.length) return { eventsFound: events.length, goalsInserted: 0 }
+
+    const upsertResponse = await supabase
+      .from('match_events')
+      .upsert(eventRows, { onConflict: 'match_id,external_event_id' })
+
+    if (upsertResponse.error) throw upsertResponse.error
+
+    console.info('[sync-match-events] goles insertados en match_events', {
+      fixtureId: fixture.fixture.id,
+      matchId,
+      insertedGoals: eventRows.length,
+    })
+
+    return {
+      eventsFound: events.length,
+      goalsInserted: eventRows.length,
+    }
+  } catch (error) {
+    console.warn('[sync-match-events] No se pudieron sincronizar eventos; se omiten.', {
+      fixtureId: fixture.fixture.id,
+      message: error instanceof Error ? error.message : String(error),
+    })
+
+    return { eventsFound: 0, goalsInserted: 0 }
+  }
 }
 
 function json(body: unknown, status = 200) {
@@ -123,6 +270,9 @@ Deno.serve(async (req) => {
       externalLeagueId: tournament.externalLeagueId,
       season: tournament.season,
       fetched: 0,
+      processed: 0,
+      eventsFound: 0,
+      goalsInserted: 0,
       created: 0,
       updated: 0,
       skipped: 0,
@@ -195,6 +345,8 @@ Deno.serve(async (req) => {
             continue
           }
 
+          result.processed += 1
+
           const { data: existing } = await supabase
             .from('matches')
             .select('id')
@@ -213,29 +365,67 @@ Deno.serve(async (req) => {
             away_score: item.goals.away,
           }
 
-          const { error: matchError } = existing
-            ? await supabase.from('matches').update(matchPayload).eq('id', existing.id)
-            : await supabase.from('matches').insert(matchPayload)
+          const matchResult = existing
+            ? await supabase
+              .from('matches')
+              .update(matchPayload)
+              .eq('id', existing.id)
+              .select('id')
+              .single()
+            : await supabase
+              .from('matches')
+              .insert(matchPayload)
+              .select('id')
+              .single()
 
-          if (matchError && !existing) {
-            const { error: fallbackError } = await supabase
+          if (matchResult.error && !existing) {
+            const fallbackResult = await supabase
               .from('matches')
               .insert({
                 id: item.fixture.id,
                 ...matchPayload,
               })
+              .select('id')
+              .single()
 
-            if (!fallbackError) {
+            if (!fallbackResult.error && fallbackResult.data?.id) {
+              const eventSync = await syncMatchEvents(
+                supabase,
+                footballApiBaseUrl,
+                footballApiKey,
+                item,
+                fallbackResult.data.id,
+                homeTeam.id,
+                awayTeam.id,
+              )
+              result.eventsFound += eventSync.eventsFound
+              result.goalsInserted += eventSync.goalsInserted
               result.created += 1
               continue
             }
 
             throw new Error(
-              `${matchError.message}; fallback con id fallo: ${fallbackError.message}`,
+              `${matchResult.error.message}; fallback con id fallo: ${fallbackResult.error?.message}`,
             )
           }
 
-          if (matchError) throw new Error(matchError.message)
+          if (matchResult.error) throw new Error(matchResult.error.message)
+
+          const matchId = existing?.id ?? matchResult.data?.id
+          if (!matchId) throw new Error(`No se pudo resolver id interno del fixture ${item.fixture.id}`)
+
+          const eventSync = await syncMatchEvents(
+            supabase,
+            footballApiBaseUrl,
+            footballApiKey,
+            item,
+            matchId,
+            homeTeam.id,
+            awayTeam.id,
+          )
+          result.eventsFound += eventSync.eventsFound
+          result.goalsInserted += eventSync.goalsInserted
+
           if (existing) result.updated += 1
           else result.created += 1
         } catch (error) {
@@ -246,6 +436,13 @@ Deno.serve(async (req) => {
       result.errors.push(error instanceof Error ? error.message : 'Error desconocido')
     }
 
+    console.info('[sync-matches] resumen torneo', {
+      tournament: tournament.slug,
+      fixturesProcessed: result.processed,
+      eventsFound: result.eventsFound,
+      goalsInserted: result.goalsInserted,
+    })
+
     tournaments.push(result)
   }
 
@@ -254,6 +451,9 @@ Deno.serve(async (req) => {
     processedTournaments: tournaments.length,
     created: tournaments.reduce((sum, item) => sum + item.created, 0),
     updated: tournaments.reduce((sum, item) => sum + item.updated, 0),
+    processed: tournaments.reduce((sum, item) => sum + item.processed, 0),
+    eventsFound: tournaments.reduce((sum, item) => sum + item.eventsFound, 0),
+    goalsInserted: tournaments.reduce((sum, item) => sum + item.goalsInserted, 0),
     skipped: tournaments.reduce((sum, item) => sum + item.skipped, 0),
     tournaments,
   })

@@ -799,11 +799,10 @@ async function fetchHomeMatchRows(
   supabase: ReturnType<typeof getSupabaseAdminClient>,
   fixtureIds: number[]
 ) {
-  const filter = `external_id.in.(${fixtureIds.join(',')}),id.in.(${fixtureIds.join(',')})`
   const primary = await supabase
     .from('matches')
     .select('id, external_id, broadcast_channel, home_team_id, away_team_id')
-    .or(filter)
+    .in('external_id', fixtureIds)
 
   if (!primary.error) {
     return (primary.data ?? []) as HomeMatchRow[]
@@ -820,7 +819,7 @@ async function fetchHomeMatchRows(
   const fallback = await supabase
     .from('matches')
     .select('id, external_id, home_team_id, away_team_id')
-    .or(filter)
+    .in('external_id', fixtureIds)
 
   if (fallback.error) throw fallback.error
 
@@ -853,11 +852,13 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
     const supabase = getSupabaseAdminClient()
     const matchRows = await fetchHomeMatchRows(supabase, fixtureIds)
     const extrasByFixtureId = new Map<number, HomeMatchExtras>()
-    const matchRowsByMatchId = new Map<number, HomeMatchRow>()
+    const matchRowsByMatchId = new Map<string, HomeMatchRow>()
 
     for (const row of matchRows) {
       const fixtureId = Number(row.external_id ?? row.id)
-      const matchId = Number(row.id)
+      const matchId = String(row.id)
+
+      if (!Number.isFinite(fixtureId)) continue
 
       matchRowsByMatchId.set(matchId, row)
       extrasByFixtureId.set(fixtureId, {
@@ -890,9 +891,11 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
     const goalEvents = ((eventsResponse.data ?? []) as StoredMatchEventRow[]).filter(
       (event) => event.type.toLowerCase() === 'goal'
     )
+    let mappedHomeGoals = 0
+    let mappedAwayGoals = 0
 
     for (const event of goalEvents) {
-      const matchRow = matchRowsByMatchId.get(Number(event.match_id))
+      const matchRow = matchRowsByMatchId.get(String(event.match_id))
       if (!matchRow) continue
 
       const fixtureId = Number(matchRow.external_id ?? matchRow.id)
@@ -900,10 +903,12 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
       const goal = mapStoredGoalEvent(event)
       if (!extras || !goal) continue
 
-      if (event.team_id !== null && Number(event.team_id) === Number(matchRow.home_team_id)) {
+      if (event.team_id !== null && String(event.team_id) === String(matchRow.home_team_id)) {
         extras.goalScorers.home.push(goal)
-      } else if (event.team_id !== null && Number(event.team_id) === Number(matchRow.away_team_id)) {
+        mappedHomeGoals += 1
+      } else if (event.team_id !== null && String(event.team_id) === String(matchRow.away_team_id)) {
         extras.goalScorers.away.push(goal)
+        mappedAwayGoals += 1
       }
     }
 
@@ -911,6 +916,16 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
       extras.goalScorers.home.sort(sortGoalScorers)
       extras.goalScorers.away.sort(sortGoalScorers)
     }
+
+    console.info('[home:match-extras] goleadores leidos desde Supabase', {
+      fixtures: fixtureIds.length,
+      matchedRows: matchRows.length,
+      matchIds: matchIds.length,
+      storedEvents: eventsResponse.data?.length ?? 0,
+      goalEvents: goalEvents.length,
+      mappedHomeGoals,
+      mappedAwayGoals,
+    })
 
     return extrasByFixtureId
   } catch (error) {

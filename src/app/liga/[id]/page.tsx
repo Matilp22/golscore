@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import CurrentRoundNavigator from '@/frontend/components/CurrentRoundNavigator'
 import CopaArgentinaMatchList from '@/frontend/components/CopaArgentinaMatchList'
 import LeaderListInteractive from '@/frontend/components/LeaderListInteractive'
+import PlayoffBracket from '@/frontend/components/PlayoffBracket'
 import {
   ApiFootballError,
   getLeagueFixtures,
@@ -583,6 +584,20 @@ function splitPrimaryGroups(
     primaryGroups: groups,
     secondaryGroups: [] as Array<{ name: string; rows: LeagueStandingRow[] }>,
   }
+}
+
+function getZoneRows(
+  groups: Array<{ name: string; rows: LeagueStandingRow[] }>,
+  zone: 'a' | 'b'
+) {
+  return groups.find((group) => {
+    const name = normalizeGroupName(group.name)
+    return (
+      name.includes(`zona ${zone}`) ||
+      name.includes(`grupo ${zone}`) ||
+      name.includes(`group ${zone}`)
+    )
+  })?.rows ?? null
 }
 
 function isDerivedTableGroup(name: string) {
@@ -1448,6 +1463,9 @@ export default async function LigaPage({ params }: PageProps) {
   const visibleSecondaryGroups = secondaryGroups.filter(
     (group) => !isDerivedTableGroup(group.name)
   )
+  const zoneAStandings = getZoneRows(primaryGroups, 'a')
+  const zoneBStandings = getZoneRows(primaryGroups, 'b')
+  const showLigaProfesionalBracket = tournament.key === 'argentina-liga-profesional'
   const baseRows = primaryGroups.flatMap((group) => group.rows)
   const annualTable = tournament.showAnnualTable ? buildAnnualTable(baseRows) : []
   if (!promedioTable.length && tournament.showPromedios) {
@@ -1574,6 +1592,13 @@ export default async function LigaPage({ params }: PageProps) {
               </p>
             </SectionCard>
           )}
+
+          {showLigaProfesionalBracket ? (
+            <PlayoffBracket
+              zoneAStandings={zoneAStandings}
+              zoneBStandings={zoneBStandings}
+            />
+          ) : null}
 
           {visibleSecondaryGroups.length ? (
             <div className="space-y-4">
