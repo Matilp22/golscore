@@ -8,6 +8,11 @@ import {
   normalizeLeagueName,
   type AllowedTournament,
 } from '@/shared/config/prode-leagues'
+import {
+  TOURNAMENT_PAGE_CONFIGS,
+  getTournamentConfig,
+  type TournamentPageConfig,
+} from '@/shared/config/tournament-pages'
 import { isFinishedStatus } from '@/shared/utils/match-status'
 
 type ApiFixture = {
@@ -77,6 +82,21 @@ type ApiFixtureEvent = {
   detail?: string | null
 }
 
+type ApiLeague = {
+  league?: {
+    id?: number
+    name?: string
+    logo?: string | null
+  }
+  country?: {
+    name?: string | null
+  }
+  seasons?: Array<{
+    year?: number
+    current?: boolean
+  }>
+}
+
 export type SyncTournamentResult = {
   slug: string
   name: string
@@ -124,6 +144,7 @@ export type SyncMatchesResult = {
   created: number
   updated: number
   skipped: number
+  homeScoreboard: HomeScoreboardSyncResult | null
   tournaments: SyncTournamentResult[]
 }
 
@@ -135,8 +156,11 @@ type DbIdRow = {
 
 type SyncOptions = {
   competition?: string | null
+  date?: string | null
   debug?: boolean
   limit?: number | null
+  offset?: number | null
+  onlyEvents?: boolean
 }
 
 type UpsertAction = 'created' | 'updated'
@@ -155,7 +179,71 @@ type SyncMatchEventsResult = {
   goalsInserted: number
 }
 
+type HomeScoreboardSyncResult = {
+  dates: string[]
+  fetched: number
+  selected: number
+  processed: number
+  skipped: number
+  eventsFound: number
+  goalsInserted: number
+  leagues: Array<{
+    leagueId: number
+    name: string
+    country?: string
+    fixtures: number
+  }>
+  sampleErrors: Array<{
+    fixtureId: number | null
+    stage: string
+    message: string
+  }>
+}
+
+export type AvailableLeagueRow = {
+  id: DbId
+  name: string | null
+  external_id: number | string | null
+  season: number | null
+  country?: string | null
+}
+
+export type SyncLeaguesOptions = {
+  debug?: boolean
+  limit?: number | null
+  offset?: number | null
+}
+
+export type SyncLeaguesResult = {
+  fetched: number
+  targeted: number
+  processedTargets: number
+  inserted: number
+  updated: number
+  skipped: number
+  sampleErrors: Array<{
+    competition: string
+    message: string
+  }>
+  leagues: AvailableLeagueRow[]
+}
+
+export type SyncLeagueEventsOptions = {
+  competition: string
+  date?: string | null
+  debug?: boolean
+  limit?: number | null
+  offset?: number | null
+  onlyEvents?: boolean
+}
+
 const ALLOWED_GOAL_DETAILS = new Set(['Normal Goal', 'Penalty', 'Own Goal'])
+const DEFAULT_SYNC_LIMIT = 20
+const MAX_SYNC_LIMIT = 50
+
+type EventTournamentConfig = TournamentPageConfig & {
+  externalLeagueId?: number | null
+}
 
 export type SyncSingleFixtureResult = {
   fixtureId: number
@@ -277,6 +365,10 @@ function hasResolvedScore(fixture: ApiFixture) {
   return getFixtureHomeScore(fixture) !== null && getFixtureAwayScore(fixture) !== null
 }
 
+function hasAnyFixtureGoals(fixture: ApiFixture) {
+  return (getFixtureHomeScore(fixture) ?? 0) > 0 || (getFixtureAwayScore(fixture) ?? 0) > 0
+}
+
 function shouldRecalculateProdePoints(fixture: ApiFixture) {
   return isFinishedStatus(fixture.fixture.status.short) && hasResolvedScore(fixture)
 }
@@ -308,11 +400,289 @@ function getTeamLogoUrl(team: { id: number; logo?: string }) {
   return team.logo || `https://media.api-sports.io/football/teams/${team.id}.png`
 }
 
-function getTournamentSelection(slug?: string | null) {
-  if (!slug) return [...ALLOWED_TOURNAMENTS]
+function getBuenosAiresTodayISO() {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Argentina/Buenos_Aires',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
 
+  return formatter.format(new Date())
+}
+
+function addDaysToISO(isoDate: string, amount: number) {
+  const [year, month, day] = isoDate.split('-').map(Number)
+  const utcDate = new Date(Date.UTC(year, month - 1, day))
+  utcDate.setUTCDate(utcDate.getUTCDate() + amount)
+
+  const y = utcDate.getUTCFullYear()
+  const m = String(utcDate.getUTCMonth() + 1).padStart(2, '0')
+  const d = String(utcDate.getUTCDate()).padStart(2, '0')
+
+  return `${y}-${m}-${d}`
+}
+
+function getArgentinaDateKey(dateString: string) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Argentina/Buenos_Aires',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(dateString))
+}
+
+function getTournamentSelection(slug?: string | null) {
+  if (!slug) return []
+
+  const normalizedSlug = slugifyLeagueName(slug)
   const tournament = getAllowedTournamentBySlug(slug)
-  return tournament ? [tournament] : []
+
+  if (tournament) return [tournament]
+
+  const fallbackTournament = ALLOWED_TOURNAMENTS.find((candidate) => {
+    if (String(candidate.externalLeagueId) === slug) return true
+    if (slugifyLeagueName(candidate.slug) === normalizedSlug) return true
+    if (slugifyLeagueName(candidate.name) === normalizedSlug) return true
+
+    return candidate.aliases.some((alias) => slugifyLeagueName(alias) === normalizedSlug)
+  })
+
+  return fallbackTournament ? [fallbackTournament] : []
+}
+
+function slugifyLeagueName(value: string | null | undefined) {
+  return normalizeLeagueName(value)
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+function getBatchLimit(value: number | null | undefined) {
+  if (!value || value <= 0) return DEFAULT_SYNC_LIMIT
+
+  return Math.min(Math.floor(value), MAX_SYNC_LIMIT)
+}
+
+function getBatchOffset(value: number | null | undefined) {
+  if (!value || value <= 0) return 0
+
+  return Math.floor(value)
+}
+
+function fixtureMatchesTournamentConfig(fixture: ApiFixture, tournament: EventTournamentConfig) {
+  if (
+    tournament.externalLeagueId !== undefined &&
+    tournament.externalLeagueId !== null
+  ) {
+    return fixture.league.id === tournament.externalLeagueId
+  }
+
+  const fixtureLeague = normalizeLeagueName(fixture.league.name)
+  const fixtureCountry = normalizeLeagueName(fixture.league.country)
+  const tournamentCountry = normalizeLeagueName(tournament.country)
+  const countryMatches =
+    !tournamentCountry ||
+    tournamentCountry === fixtureCountry ||
+    tournamentCountry === 'world'
+
+  if (!countryMatches) return false
+
+  return tournament.searchTerms.some((term) => {
+    const normalizedTerm = normalizeLeagueName(term)
+
+    return (
+      fixtureLeague === normalizedTerm ||
+      fixtureLeague.includes(normalizedTerm) ||
+      normalizedTerm.includes(fixtureLeague)
+    )
+  })
+}
+
+function leagueMatchesTournamentConfig(league: ApiLeague, tournament: TournamentPageConfig) {
+  const leagueName = normalizeLeagueName(league.league?.name)
+  const leagueCountry = normalizeLeagueName(league.country?.name)
+  const tournamentCountry = normalizeLeagueName(tournament.country)
+  const countryMatches =
+    !tournamentCountry ||
+    tournamentCountry === leagueCountry ||
+    tournamentCountry === 'world'
+
+  if (!countryMatches || !leagueName) return false
+
+  return tournament.searchTerms.some((term) => {
+    const normalizedTerm = normalizeLeagueName(term)
+
+    return leagueName === normalizedTerm || containsNormalizedPhrase(leagueName, normalizedTerm)
+  })
+}
+
+function getLeagueTournamentMatchScore(league: ApiLeague, tournament: TournamentPageConfig) {
+  if (!leagueMatchesTournamentConfig(league, tournament)) return 0
+
+  const leagueName = normalizeLeagueName(league.league?.name)
+  const tournamentTitle = normalizeLeagueName(tournament.title)
+  let score = leagueName === tournamentTitle ? 120 : 0
+
+  for (const term of tournament.searchTerms) {
+    const normalizedTerm = normalizeLeagueName(term)
+
+    if (leagueName === normalizedTerm) {
+      score = Math.max(score, 110)
+    } else if (containsNormalizedPhrase(leagueName, normalizedTerm)) {
+      score = Math.max(score, 80)
+    }
+  }
+
+  return score
+}
+
+function containsNormalizedPhrase(value: string, phrase: string) {
+  if (!value || !phrase) return false
+
+  return ` ${value} `.includes(` ${phrase} `)
+}
+
+function fixtureMatchesHomeTournament(fixture: ApiFixture) {
+  return TOURNAMENT_PAGE_CONFIGS.some((tournament) =>
+    fixtureMatchesTournamentConfig(fixture, tournament)
+  )
+}
+
+function getEventTournamentConfig(competition: string) {
+  const directMatch = getTournamentConfig(competition)
+
+  if (directMatch) return directMatch
+
+  const normalizedCompetition = normalizeLeagueName(competition)
+  const competitionSlug = slugifyLeagueName(competition)
+
+  return (
+    TOURNAMENT_PAGE_CONFIGS.find((tournament) => {
+      if (normalizeLeagueName(tournament.title) === normalizedCompetition) return true
+      if (normalizeLeagueName(tournament.key) === normalizedCompetition) return true
+      if (slugifyLeagueName(tournament.title) === competitionSlug) return true
+      if (slugifyLeagueName(tournament.key) === competitionSlug) return true
+
+      return tournament.searchTerms.some(
+        (term) =>
+          normalizeLeagueName(term) === normalizedCompetition ||
+          slugifyLeagueName(term) === competitionSlug
+      )
+    }) ?? null
+  )
+}
+
+export async function getAvailableLeagues(supabase: SupabaseClient) {
+  const { data, error } = await withTimeout(
+    supabase
+      .from('leagues')
+      .select('id, name, external_id, season, country')
+      .order('name', { ascending: true }),
+    'available leagues lookup'
+  )
+
+  if (error) {
+    throw new Error(`No se pudieron leer ligas disponibles: ${error.message}`)
+  }
+
+  return (data ?? []) as AvailableLeagueRow[]
+}
+
+async function getEventTournamentConfigFromDb(
+  supabase: SupabaseClient,
+  competition: string
+): Promise<EventTournamentConfig | null> {
+  const availableLeagues = await getAvailableLeagues(supabase)
+  const configuredTournament = getEventTournamentConfig(competition)
+  const normalizedCompetition = normalizeLeagueName(competition)
+  const competitionSlug = slugifyLeagueName(competition)
+  const externalId = Number(competition)
+  const matchingLeague = availableLeagues
+    .map((league) => {
+      const apiLeague: ApiLeague = {
+        league: {
+          id: Number(league.external_id),
+          name: league.name ?? undefined,
+        },
+        country: {
+          name: league.country ?? undefined,
+        },
+      }
+      let score = 0
+
+      if (configuredTournament) {
+        score = Math.max(score, getLeagueTournamentMatchScore(apiLeague, configuredTournament))
+      }
+
+      const name = league.name ?? ''
+
+      if (Number.isFinite(externalId) && Number(league.external_id) === externalId) {
+        score = Math.max(score, 130)
+      }
+      if (normalizeLeagueName(name) === normalizedCompetition) {
+        score = Math.max(score, 120)
+      }
+      if (slugifyLeagueName(name) === competitionSlug) {
+        score = Math.max(score, 120)
+      }
+
+      return { league, score }
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)[0]?.league ?? null
+
+  if (!matchingLeague?.name) return null
+
+  return {
+    key: slugifyLeagueName(matchingLeague.name),
+    title: matchingLeague.name,
+    sectionKey: configuredTournament?.sectionKey ?? 'db',
+    country: matchingLeague.country ?? configuredTournament?.country,
+    searchTerms: [matchingLeague.name],
+    externalLeagueId:
+      matchingLeague.external_id === null || matchingLeague.external_id === undefined
+        ? null
+        : Number(matchingLeague.external_id),
+  }
+}
+
+async function getEventTournamentConfigFromCompetition(
+  supabase: SupabaseClient,
+  competition: string
+) {
+  return (
+    (await getEventTournamentConfigFromDb(supabase, competition)) ??
+    getEventTournamentConfig(competition)
+  )
+}
+
+function createEmptyHomeScoreboardResult(dates: string[]): HomeScoreboardSyncResult {
+  return {
+    dates,
+    fetched: 0,
+    selected: 0,
+    processed: 0,
+    skipped: 0,
+    eventsFound: 0,
+    goalsInserted: 0,
+    leagues: [],
+    sampleErrors: [],
+  }
+}
+
+function addHomeScoreboardError(
+  result: HomeScoreboardSyncResult,
+  fixtureId: number | null,
+  stage: string,
+  error: unknown
+) {
+  if (result.sampleErrors.length >= 10) return
+
+  result.sampleErrors.push({
+    fixtureId,
+    stage,
+    message: error instanceof Error ? error.message : 'Error desconocido',
+  })
 }
 
 function summarizeFixtureRounds(fixtures: ApiFixture[]) {
@@ -370,6 +740,43 @@ async function fetchTournamentFixtures(tournament: AllowedTournament) {
       timezone: 'America/Argentina/Buenos_Aires',
     },
     { logContext: `sync-matches:${tournament.slug}` }
+  )
+  const apiErrors = payload.errors ? Object.values(payload.errors).filter(Boolean) : []
+
+  if (apiErrors.length) {
+    throw new Error(apiErrors.join(' | '))
+  }
+
+  return payload.response ?? []
+}
+
+async function fetchFixturesByDate(date: string) {
+  const { payload } = await requestFootballApi<ApiFixture[]>(
+    '/fixtures',
+    {
+      date,
+      timezone: 'America/Argentina/Buenos_Aires',
+    },
+    { logContext: `sync-home-scoreboard:${date}` }
+  )
+  const apiErrors = payload.errors ? Object.values(payload.errors).filter(Boolean) : []
+
+  if (apiErrors.length) {
+    throw new Error(apiErrors.join(' | '))
+  }
+
+  return (payload.response ?? []).filter(
+    (fixture) => getArgentinaDateKey(fixture.fixture.date) === date
+  )
+}
+
+async function fetchCurrentLeagues() {
+  const { payload } = await requestFootballApi<ApiLeague[]>(
+    '/leagues',
+    {
+      current: 'true',
+    },
+    { logContext: 'sync-leagues:current' }
   )
   const apiErrors = payload.errors ? Object.values(payload.errors).filter(Boolean) : []
 
@@ -556,6 +963,154 @@ async function upsertLeague(
   return {
     id: (data as DbIdRow).id,
     action: 'created' as const,
+  }
+}
+
+async function upsertLeagueFromFixture(
+  supabase: SupabaseClient,
+  fixture: ApiFixture,
+  debug?: boolean
+) {
+  const leagueExternalId = fixture.league.id
+  const leagueName = fixture.league.name
+  const payload = {
+    external_id: leagueExternalId,
+    name: leagueName,
+    country: fixture.league.country ?? null,
+    season: fixture.league.season ?? new Date(fixture.fixture.date).getUTCFullYear(),
+  }
+
+  const { data: existingByExternalId, error: externalIdError } = await withTimeout(
+    supabase
+      .from('leagues')
+      .select('id')
+      .eq('external_id', leagueExternalId)
+      .maybeSingle(),
+    `home leagues lookup ${leagueExternalId}`
+  )
+
+  if (externalIdError) {
+    throw new Error(`No se pudo buscar la liga ${leagueName}: ${externalIdError.message}`)
+  }
+
+  if (existingByExternalId) {
+    const { data, error } = await withTimeout(
+      supabase
+        .from('leagues')
+        .update(payload)
+        .eq('id', (existingByExternalId as DbIdRow).id)
+        .select('id')
+        .single(),
+      `home leagues update ${leagueExternalId}`
+    )
+
+    if (error) throw new Error(`No se pudo actualizar la liga ${leagueName}: ${error.message}`)
+
+    logDebug(debug, 'home league updated', { leagueExternalId, leagueName })
+
+    return {
+      id: (data as DbIdRow).id,
+      action: 'updated' as const,
+    }
+  }
+
+  const { data, error } = await withTimeout(
+    supabase
+      .from('leagues')
+      .insert(payload)
+      .select('id')
+      .single(),
+    `home leagues insert ${leagueExternalId}`
+  )
+
+  if (error) throw new Error(`No se pudo guardar la liga ${leagueName}: ${error.message}`)
+
+  logDebug(debug, 'home league inserted', { leagueExternalId, leagueName })
+
+  return {
+    id: (data as DbIdRow).id,
+    action: 'created' as const,
+  }
+}
+
+function getLeagueSeason(apiLeague: ApiLeague) {
+  const currentSeason = apiLeague.seasons?.find((season) => season.current && season.year)
+  const latestSeason = [...(apiLeague.seasons ?? [])]
+    .filter((season) => typeof season.year === 'number')
+    .sort((a, b) => (b.year ?? 0) - (a.year ?? 0))[0]
+
+  return currentSeason?.year ?? latestSeason?.year ?? new Date().getUTCFullYear()
+}
+
+async function upsertLeagueFromApi(
+  supabase: SupabaseClient,
+  apiLeague: ApiLeague,
+  debug?: boolean
+) {
+  const externalId = apiLeague.league?.id
+  const name = apiLeague.league?.name?.trim()
+
+  if (!externalId || !name) {
+    throw new Error('Liga de API-Football sin id o nombre.')
+  }
+
+  const payload = {
+    external_id: externalId,
+    name,
+    country: apiLeague.country?.name ?? null,
+    season: getLeagueSeason(apiLeague),
+  }
+
+  const { data: existingByExternalId, error: externalIdError } = await withTimeout(
+    supabase
+      .from('leagues')
+      .select('id')
+      .eq('external_id', externalId)
+      .maybeSingle(),
+    `sync-leagues lookup ${externalId}`
+  )
+
+  if (externalIdError) {
+    throw new Error(`No se pudo buscar la liga ${name}: ${externalIdError.message}`)
+  }
+
+  if (existingByExternalId) {
+    const { data, error } = await withTimeout(
+      supabase
+        .from('leagues')
+        .update(payload)
+        .eq('id', (existingByExternalId as DbIdRow).id)
+        .select('id, name, external_id, season')
+        .single(),
+      `sync-leagues update ${externalId}`
+    )
+
+    if (error) throw new Error(`No se pudo actualizar la liga ${name}: ${error.message}`)
+
+    logDebug(debug, 'league updated from API', { externalId, name })
+
+    return {
+      action: 'updated' as const,
+      league: data as AvailableLeagueRow,
+    }
+  }
+
+  const { data, error } = await withTimeout(
+    supabase
+      .from('leagues')
+      .insert(payload)
+      .select('id, name, external_id, season')
+      .single(),
+    `sync-leagues insert ${externalId}`
+  )
+
+  if (error) throw new Error(`No se pudo guardar la liga ${name}: ${error.message}`)
+
+  logDebug(debug, 'league inserted from API', { externalId, name })
+
+  return {
+    action: 'created' as const,
+    league: data as AvailableLeagueRow,
   }
 }
 
@@ -1020,6 +1575,8 @@ async function syncMatchEventsIfSupported(
 ): Promise<SyncMatchEventsResult> {
   const emptyResult = { eventsFound: 0, goalsInserted: 0 }
 
+  if (!hasAnyFixtureGoals(fixture)) return emptyResult
+
   try {
     if (await hasStoredFinalGoalEvents(supabase, matchId, fixture, debug)) return emptyResult
 
@@ -1045,6 +1602,7 @@ async function syncMatchEventsIfSupported(
 
     console.info('[sync-match-events] eventos recibidos', {
       fixtureId: fixture.fixture.id,
+      league: fixture.league.name,
       matchId,
       totalEvents: events.length,
       goalEvents: eventRows.length,
@@ -1082,6 +1640,7 @@ async function syncMatchEventsIfSupported(
     })
     console.info('[sync-match-events] goles insertados en match_events', {
       fixtureId: fixture.fixture.id,
+      league: fixture.league.name,
       matchId,
       insertedGoals: eventRows.length,
     })
@@ -1352,15 +1911,365 @@ export async function syncProdeFixtureById(
   }
 }
 
+export async function syncHomeScoreboardMatches(
+  supabase: SupabaseClient,
+  debug?: boolean
+): Promise<HomeScoreboardSyncResult> {
+  const today = getBuenosAiresTodayISO()
+  const dates = [addDaysToISO(today, -1), today, addDaysToISO(today, 1)]
+  const result = createEmptyHomeScoreboardResult(dates)
+  const fixturesById = new Map<number, ApiFixture>()
+
+  for (const date of dates) {
+    try {
+      const fixtures = await fetchFixturesByDate(date)
+      result.fetched += fixtures.length
+
+      for (const fixture of fixtures) {
+        if (!fixtureMatchesHomeTournament(fixture)) continue
+        fixturesById.set(fixture.fixture.id, fixture)
+      }
+    } catch (error) {
+      addHomeScoreboardError(result, null, `fetch-home-fixtures:${date}`, error)
+      console.warn('[sync-home-scoreboard] No se pudieron leer fixtures del dia.', {
+        date,
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  const selectedFixtures = [...fixturesById.values()].sort(compareFixturesByApiOrder)
+  result.selected = selectedFixtures.length
+
+  const leagueCounts = new Map<number, {
+    leagueId: number
+    name: string
+    country?: string
+    fixtures: number
+  }>()
+
+  for (const fixture of selectedFixtures) {
+    if (!fixture.league.id || !fixture.teams.home.id || !fixture.teams.away.id) {
+      result.skipped += 1
+      continue
+    }
+
+    const currentLeague = leagueCounts.get(fixture.league.id) ?? {
+      leagueId: fixture.league.id,
+      name: fixture.league.name,
+      country: fixture.league.country,
+      fixtures: 0,
+    }
+    currentLeague.fixtures += 1
+    leagueCounts.set(fixture.league.id, currentLeague)
+
+    try {
+      const league = await upsertLeagueFromFixture(supabase, fixture, debug)
+      const [homeTeam, awayTeam] = await Promise.all([
+        upsertTeam(supabase, fixture.teams.home, debug),
+        upsertTeam(supabase, fixture.teams.away, debug),
+      ])
+      const matchUpsert = await upsertMatch(
+        supabase,
+        fixture,
+        league.id,
+        homeTeam.id,
+        awayTeam.id,
+        debug
+      )
+      const eventSync = await syncMatchEventsIfSupported(
+        supabase,
+        fixture,
+        matchUpsert.id,
+        homeTeam.id,
+        awayTeam.id,
+        debug
+      )
+
+      result.processed += 1
+      result.eventsFound += eventSync.eventsFound
+      result.goalsInserted += eventSync.goalsInserted
+
+      console.info('events processed', {
+        fixtureId: fixture.fixture.id,
+        league: fixture.league.name,
+        eventsFound: eventSync.eventsFound,
+        goalsStored: eventSync.goalsInserted,
+      })
+    } catch (error) {
+      result.skipped += 1
+      addHomeScoreboardError(result, fixture.fixture.id, 'home-fixture-processing', error)
+      console.warn('[sync-home-scoreboard] Fixture omitido.', {
+        fixtureId: fixture.fixture.id,
+        league: fixture.league.name,
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  result.leagues = [...leagueCounts.values()].sort((a, b) => {
+    if (b.fixtures !== a.fixtures) return b.fixtures - a.fixtures
+    return a.name.localeCompare(b.name)
+  })
+
+  console.info('[sync-home-scoreboard] resumen', {
+    dates: result.dates,
+    fetched: result.fetched,
+    selected: result.selected,
+    processed: result.processed,
+    eventsFound: result.eventsFound,
+    goalsInserted: result.goalsInserted,
+    leagues: result.leagues.map((league) => league.name),
+  })
+
+  return result
+}
+
+export async function syncVisibleHomeLeagues(
+  supabase: SupabaseClient,
+  options: SyncLeaguesOptions = {}
+): Promise<SyncLeaguesResult> {
+  const limit = options.limit && options.limit > 0 ? Math.floor(options.limit) : null
+  const offset = getBatchOffset(options.offset)
+  const apiLeagues = await fetchCurrentLeagues()
+  const targetConfigs = limit
+    ? TOURNAMENT_PAGE_CONFIGS.slice(offset, offset + Math.min(limit, MAX_SYNC_LIMIT))
+    : TOURNAMENT_PAGE_CONFIGS.slice(offset)
+  const result: SyncLeaguesResult = {
+    fetched: apiLeagues.length,
+    targeted: TOURNAMENT_PAGE_CONFIGS.length,
+    processedTargets: targetConfigs.length,
+    inserted: 0,
+    updated: 0,
+    skipped: 0,
+    sampleErrors: [],
+    leagues: [],
+  }
+  const usedExternalIds = new Set<number>()
+
+  for (const tournament of targetConfigs) {
+    const matchingLeague = apiLeagues
+      .map((league) => ({
+        league,
+        score: usedExternalIds.has(league.league?.id ?? 0)
+          ? 0
+          : getLeagueTournamentMatchScore(league, tournament),
+      }))
+      .filter((item) => item.score > 0)
+      .sort((a, b) => b.score - a.score)[0]?.league ?? null
+
+    if (!matchingLeague?.league?.id) {
+      result.skipped += 1
+
+      if (result.sampleErrors.length < 10) {
+        result.sampleErrors.push({
+          competition: tournament.key,
+          message: 'No se encontro liga actual en API-Football para esta competencia.',
+        })
+      }
+
+      continue
+    }
+
+    try {
+      const upsert = await upsertLeagueFromApi(supabase, matchingLeague, options.debug)
+
+      usedExternalIds.add(matchingLeague.league.id)
+
+      if (upsert.action === 'created') result.inserted += 1
+      if (upsert.action === 'updated') result.updated += 1
+
+      result.leagues.push(upsert.league)
+    } catch (error) {
+      result.skipped += 1
+
+      if (result.sampleErrors.length < 10) {
+        result.sampleErrors.push({
+          competition: tournament.key,
+          message: error instanceof Error ? error.message : 'Error desconocido',
+        })
+      }
+    }
+  }
+
+  console.info('[sync-leagues] resumen', {
+    fetched: result.fetched,
+    targeted: result.targeted,
+    processedTargets: result.processedTargets,
+    inserted: result.inserted,
+    updated: result.updated,
+    skipped: result.skipped,
+  })
+
+  return result
+}
+
+export async function syncLeagueEvents(
+  supabase: SupabaseClient,
+  options: SyncLeagueEventsOptions
+): Promise<HomeScoreboardSyncResult> {
+  const tournament = await getEventTournamentConfigFromCompetition(
+    supabase,
+    options.competition
+  )
+
+  if (!tournament) {
+    throw new Error(`Competencia no encontrada para eventos: ${options.competition}`)
+  }
+
+  const date = options.date || getBuenosAiresTodayISO()
+  const limit = getBatchLimit(options.limit)
+  const offset = getBatchOffset(options.offset)
+  const result = createEmptyHomeScoreboardResult([date])
+
+  let fixtures: ApiFixture[] = []
+
+  try {
+    fixtures = await fetchFixturesByDate(date)
+    result.fetched = fixtures.length
+  } catch (error) {
+    addHomeScoreboardError(result, null, `fetch-league-fixtures:${date}`, error)
+    console.warn('[sync-league-events] No se pudieron leer fixtures del dia.', {
+      competition: tournament.key,
+      date,
+      message: error instanceof Error ? error.message : String(error),
+    })
+
+    return result
+  }
+
+  const matchingFixtures = fixtures
+    .filter((fixture) => fixtureMatchesTournamentConfig(fixture, tournament))
+    .sort(compareFixturesByApiOrder)
+  const selectedFixtures = matchingFixtures.slice(offset, offset + limit)
+  result.selected = matchingFixtures.length
+
+  const leagueCounts = new Map<number, {
+    leagueId: number
+    name: string
+    country?: string
+    fixtures: number
+  }>()
+
+  for (const fixture of selectedFixtures) {
+    if (!fixture.league.id || !fixture.teams.home.id || !fixture.teams.away.id) {
+      result.skipped += 1
+      continue
+    }
+
+    const currentLeague = leagueCounts.get(fixture.league.id) ?? {
+      leagueId: fixture.league.id,
+      name: fixture.league.name,
+      country: fixture.league.country,
+      fixtures: 0,
+    }
+    currentLeague.fixtures += 1
+    leagueCounts.set(fixture.league.id, currentLeague)
+
+    try {
+      const league = await upsertLeagueFromFixture(supabase, fixture, options.debug)
+      const [homeTeam, awayTeam] = await Promise.all([
+        upsertTeam(supabase, fixture.teams.home, options.debug),
+        upsertTeam(supabase, fixture.teams.away, options.debug),
+      ])
+      const matchUpsert = await upsertMatch(
+        supabase,
+        fixture,
+        league.id,
+        homeTeam.id,
+        awayTeam.id,
+        options.debug
+      )
+      const eventSync = await syncMatchEventsIfSupported(
+        supabase,
+        fixture,
+        matchUpsert.id,
+        homeTeam.id,
+        awayTeam.id,
+        options.debug
+      )
+
+      result.processed += 1
+      result.eventsFound += eventSync.eventsFound
+      result.goalsInserted += eventSync.goalsInserted
+
+      console.info('events processed', {
+        fixtureId: fixture.fixture.id,
+        league: fixture.league.name,
+        eventsFound: eventSync.eventsFound,
+        goalsStored: eventSync.goalsInserted,
+      })
+    } catch (error) {
+      result.skipped += 1
+      addHomeScoreboardError(result, fixture.fixture.id, 'league-event-processing', error)
+      console.warn('[sync-league-events] Fixture omitido.', {
+        fixtureId: fixture.fixture.id,
+        league: fixture.league.name,
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  result.leagues = [...leagueCounts.values()].sort((a, b) => {
+    if (b.fixtures !== a.fixtures) return b.fixtures - a.fixtures
+    return a.name.localeCompare(b.name)
+  })
+
+  console.info('[sync-league-events] resumen', {
+    competition: tournament.key,
+    date,
+    limit,
+    offset,
+    fetched: result.fetched,
+    selected: result.selected,
+    processed: result.processed,
+    eventsFound: result.eventsFound,
+    goalsInserted: result.goalsInserted,
+    leagues: result.leagues.map((league) => league.name),
+  })
+
+  return result
+}
+
 export async function syncProdeMatches(
   supabase: SupabaseClient,
   options: SyncOptions = {}
 ): Promise<SyncMatchesResult> {
-  const tournaments = getTournamentSelection(options.competition)
-  const limit = options.limit && options.limit > 0 ? Math.floor(options.limit) : null
+  if (!options.competition) {
+    throw new Error('Debe indicar competition para evitar timeout')
+  }
 
-  if (options.competition && !tournaments.length) {
-    throw new Error(`Torneo no permitido: ${options.competition}`)
+  const tournaments = getTournamentSelection(options.competition)
+  const limit = getBatchLimit(options.limit)
+  const offset = getBatchOffset(options.offset)
+
+  if (!tournaments.length) {
+    const homeScoreboard = await syncLeagueEvents(supabase, {
+      competition: options.competition,
+      date: options.date,
+      debug: options.debug,
+      limit,
+      offset,
+      onlyEvents: options.onlyEvents,
+    })
+
+    return {
+      processedTournaments: 0,
+      fetched: homeScoreboard.fetched,
+      processed: homeScoreboard.processed,
+      discarded: 0,
+      teamsCreated: 0,
+      teamsUpdated: 0,
+      matchesCreated: 0,
+      matchesUpdated: 0,
+      eventsFound: homeScoreboard.eventsFound,
+      goalsInserted: homeScoreboard.goalsInserted,
+      created: 0,
+      updated: 0,
+      skipped: homeScoreboard.skipped,
+      homeScoreboard,
+      tournaments: [],
+    }
   }
 
   const results: SyncTournamentResult[] = []
@@ -1395,15 +2304,22 @@ export async function syncProdeMatches(
       result.fetched = fixtures.length
       result.roundSummary = summarizeFixtureRounds(fixtures)
       const orderedFixtures = [...fixtures].sort(compareFixturesByApiOrder)
-      const fixturesToProcess = orderedFixtures
+      const dateFilteredFixtures = options.date
+        ? orderedFixtures.filter((fixture) => getArgentinaDateKey(fixture.fixture.date) === options.date)
+        : orderedFixtures
+      const fixturesToProcess = dateFilteredFixtures.slice(offset, offset + limit)
 
       logDebug(options.debug, 'fixtures fetched', {
         tournament: tournament.slug,
         fetched: fixtures.length,
+        date: options.date ?? null,
+        availableAfterDateFilter: dateFilteredFixtures.length,
         processing: fixturesToProcess.length,
-        limitIgnored: limit,
+        limit,
+        offset,
+        onlyEvents: Boolean(options.onlyEvents),
         roundSummary: result.roundSummary,
-        order: orderedFixtures.map((fixture) => ({
+        order: fixturesToProcess.map((fixture) => ({
           round: fixture.league.round ?? null,
           date: fixture.fixture.date,
           fixtureId: fixture.fixture.id,
@@ -1509,6 +2425,13 @@ export async function syncProdeMatches(
           result.eventsFound += eventSync.eventsFound
           result.goalsInserted += eventSync.goalsInserted
 
+          console.info('events processed', {
+            fixtureId: fixture.fixture.id,
+            league: fixture.league.name,
+            eventsFound: eventSync.eventsFound,
+            goalsStored: eventSync.goalsInserted,
+          })
+
           if (matchUpsert.action === 'created') {
             result.created += 1
             result.matchesCreated += 1
@@ -1519,7 +2442,7 @@ export async function syncProdeMatches(
             result.matchesUpdated += 1
           }
 
-          if (shouldRecalculateProdePoints(fixture)) {
+          if (!options.onlyEvents && shouldRecalculateProdePoints(fixture)) {
             try {
               await recalculateProdePoints(supabase, matchUpsert.id)
               logDebug(options.debug, 'prode points recalculated', {
@@ -1588,6 +2511,7 @@ export async function syncProdeMatches(
     created: results.reduce((sum, item) => sum + item.created, 0),
     updated: results.reduce((sum, item) => sum + item.updated, 0),
     skipped: results.reduce((sum, item) => sum + item.skipped, 0),
+    homeScoreboard: null,
     tournaments: results,
   }
 }

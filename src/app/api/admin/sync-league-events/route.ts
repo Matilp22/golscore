@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
-import { getAvailableLeagues, syncProdeMatches } from '@/server/prode/sync-matches'
+import { getAvailableLeagues, syncLeagueEvents } from '@/server/prode/sync-matches'
 
 function isAuthorized(request: Request) {
   const cronSecret = process.env.CRON_SECRET
@@ -8,32 +8,28 @@ function isAuthorized(request: Request) {
 
   if (!isProduction) {
     if (!cronSecret) {
-      console.info('[sync-matches] Ejecucion local autorizada sin CRON_SECRET.')
+      console.info('[sync-league-events] Ejecucion local autorizada sin CRON_SECRET.')
     }
 
     return true
   }
 
   if (!cronSecret) {
-    console.warn('[sync-matches] Rechazado: CRON_SECRET no esta configurado en produccion.')
+    console.warn('[sync-league-events] Rechazado: CRON_SECRET no esta configurado en produccion.')
     return false
   }
 
   const authorized = request.headers.get('x-cron-secret') === cronSecret
 
   if (!authorized) {
-    console.warn('[sync-matches] Rechazado: x-cron-secret faltante o invalido.')
+    console.warn('[sync-league-events] Rechazado: x-cron-secret faltante o invalido.')
   }
 
   return authorized
 }
 
 function isCompetitionNotFound(error: unknown) {
-  return (
-    error instanceof Error &&
-    (error.message.startsWith('Competencia no encontrada') ||
-      error.message.startsWith('Torneo no permitido'))
-  )
+  return error instanceof Error && error.message.startsWith('Competencia no encontrada')
 }
 
 async function getSyncOptions(request: Request) {
@@ -42,16 +38,17 @@ async function getSyncOptions(request: Request) {
   const competition =
     searchParams.get('competition') ??
     (typeof body?.competition === 'string' ? body.competition : null)
-  const debugValue = searchParams.get('debug') ?? body?.debug
   const date = searchParams.get('date') ?? (typeof body?.date === 'string' ? body.date : null)
+  const debugValue = searchParams.get('debug') ?? body?.debug
   const limitValue = searchParams.get('limit') ?? body?.limit
-  const offsetValue = searchParams.get('offset') ?? searchParams.get('cursor') ?? body?.offset ?? body?.cursor
+  const offsetValue =
+    searchParams.get('offset') ?? searchParams.get('cursor') ?? body?.offset ?? body?.cursor
   const onlyEventsValue = searchParams.get('onlyEvents') ?? body?.onlyEvents
 
   return {
     competition,
-    debug: debugValue === true || debugValue === 'true' || debugValue === '1',
     date,
+    debug: debugValue === true || debugValue === 'true' || debugValue === '1',
     limit: Number.isFinite(Number(limitValue)) ? Number(limitValue) : null,
     offset: Number.isFinite(Number(offsetValue)) ? Number(offsetValue) : null,
     onlyEvents:
@@ -78,16 +75,23 @@ export async function GET(request: Request) {
       )
     }
 
-    const result = await syncProdeMatches(supabase, options)
+    const result = await syncLeagueEvents(supabase, {
+      competition: options.competition,
+      date: options.date,
+      debug: options.debug,
+      limit: options.limit,
+      offset: options.offset,
+      onlyEvents: options.onlyEvents,
+    })
 
     return NextResponse.json({ ok: true, ...result })
   } catch (error) {
-    console.error('[sync-matches] Error completo', error)
+    console.error('[sync-league-events] Error completo', error)
 
     if (isCompetitionNotFound(error)) {
       const supabase = getSupabaseAdminClient()
       const availableLeagues = await getAvailableLeagues(supabase).catch((lookupError) => {
-        console.warn('[sync-matches] No se pudieron listar ligas disponibles.', lookupError)
+        console.warn('[sync-league-events] No se pudieron listar ligas disponibles.', lookupError)
         return []
       })
 
@@ -104,7 +108,8 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         ok: false,
-        error: error instanceof Error ? error.message : 'No se pudo sincronizar partidos.',
+        error:
+          error instanceof Error ? error.message : 'No se pudieron sincronizar eventos de liga.',
       },
       { status: 500 }
     )
