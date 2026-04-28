@@ -1,6 +1,5 @@
-const CACHE_NAME = 'fulboapp-cache-v1'
+const CACHE_NAME = 'fulboapp-cache-v2'
 const STATIC_ASSETS = [
-  '/',
   '/manifest.json',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
@@ -37,8 +36,14 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return
   if (url.origin !== self.location.origin) return
   if (url.pathname.startsWith('/api/')) return
+  if (url.pathname.includes('/matches')) return
+  if (url.pathname.includes('/fixtures')) return
   if (url.pathname.startsWith('/_next/data/')) return
   if (url.search) return
+  if (request.mode === 'navigate') {
+    event.respondWith(fetch(request))
+    return
+  }
 
   event.respondWith(
     caches.match(request).then((cachedResponse) => {

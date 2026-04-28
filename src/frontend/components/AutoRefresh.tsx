@@ -1,6 +1,6 @@
 'use client'
 
-import { startTransition } from 'react'
+import { startTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAutoRefresh } from '@/frontend/hooks/useAutoRefresh'
 
@@ -16,6 +16,13 @@ export default function AutoRefresh({
   initialUpdatedAt,
 }: AutoRefreshProps) {
   const router = useRouter()
+
+  useEffect(() => {
+    startTransition(() => {
+      router.refresh()
+    })
+  }, [router])
+
   useAutoRefresh({
     intervalMs,
     initialUpdatedAt,

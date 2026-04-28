@@ -1,4 +1,5 @@
-﻿export const revalidate = 30
+export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
 
 import AutoRefresh from '@/frontend/components/AutoRefresh'
 import MatchRow from '@/frontend/components/MatchRow'
