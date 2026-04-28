@@ -4,7 +4,6 @@ export const fetchCache = 'force-no-store'
 import AutoRefresh from '@/frontend/components/AutoRefresh'
 import MatchRow from '@/frontend/components/MatchRow'
 import Image from 'next/image'
-import Link from 'next/link'
 import {
   ApiFootballError,
   getMatchesByDate,
@@ -943,23 +942,9 @@ export default async function HomePage({
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-transparent text-white">
-      <div className="w-full px-0 py-3 lg:mx-auto lg:max-w-7xl lg:px-5 lg:py-6">
-        <header className="relative mb-4 w-full rounded-2xl bg-[#111418]/95 px-2 py-3 shadow-[0_10px_30px_rgba(0,0,0,0.16)] sm:px-3 md:px-4 md:py-4">
-          <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
-            <Link
-              href="/prode"
-              className="inline-flex min-h-11 items-center justify-center rounded-xl border border-[#25553d] bg-[#163828] px-4 py-2 text-sm font-semibold text-[#7ff0b2] transition hover:bg-[#1b4330]"
-            >
-              Prode
-            </Link>
-            <AutoRefresh
-              intervalMs={refreshIntervalMs}
-              showButton
-              initialUpdatedAt={renderedAt}
-            />
-          </div>
-
-          <div className="flex flex-col gap-4">
+      <div className="w-full px-0 py-1 lg:mx-auto lg:max-w-7xl lg:px-5 lg:py-4">
+        <header className="relative mb-4 w-full px-2 pt-1 sm:px-3 md:px-0 md:pt-0">
+          <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
             <div>
               <h1 className="max-w-full break-words text-[2.65rem] font-black leading-none tracking-normal text-white sm:text-5xl md:text-7xl">
                 FulboApp
@@ -969,21 +954,27 @@ export default async function HomePage({
               </p>
             </div>
 
-            <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:justify-center">
-              {dayOptions.map((day) => (
-                <a
-                  key={day.value}
-                  href={`/?date=${day.value}`}
-                  className={`flex min-h-11 items-center justify-center rounded-lg border px-2 py-2 text-center text-sm font-semibold transition sm:px-3 ${
-                    selectedDate === day.value
-                      ? 'border-[#2d6d4d] bg-[#163828] text-[#7ff0b2]'
-                      : 'border-white/8 bg-[#15191e] text-[#c7d0da] hover:border-white/14 hover:bg-[#181d23]'
-                  }`}
-                >
-                  {day.label}
-                </a>
-              ))}
-            </div>
+            <AutoRefresh
+              intervalMs={refreshIntervalMs}
+              showButton
+              initialUpdatedAt={renderedAt}
+            />
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:justify-center">
+            {dayOptions.map((day) => (
+              <a
+                key={day.value}
+                href={`/?date=${day.value}`}
+                className={`flex min-h-11 items-center justify-center rounded-lg border px-2 py-2 text-center text-sm font-semibold transition sm:px-3 ${
+                  selectedDate === day.value
+                    ? 'border-[#2d6d4d] bg-[#163828] text-[#7ff0b2]'
+                    : 'border-white/8 bg-[#15191e] text-[#c7d0da] hover:border-white/14 hover:bg-[#181d23]'
+                }`}
+              >
+                {day.label}
+              </a>
+            ))}
           </div>
         </header>
 
@@ -997,13 +988,13 @@ export default async function HomePage({
             ) : null}
 
             {visibleCompetitions.length ? (
-              <section className="w-full min-w-0 overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
-                <div className="divide-y divide-white/7">
+              <section className="w-full min-w-0 space-y-3">
+                <div className="space-y-3">
                   {visibleCompetitions.map((competition) => (
                     <div
                       id={competition.key}
                       key={competition.key}
-                      className="scroll-mt-5 px-0 py-0"
+                      className="scroll-mt-5 overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92"
                     >
                       <div className="border-y border-[#25553d]/45 bg-[#132019] px-3 py-3 shadow-[inset_0_1px_0_rgba(127,240,178,0.08)] sm:px-4">
                         <div className="flex min-w-0 items-center justify-between gap-3">

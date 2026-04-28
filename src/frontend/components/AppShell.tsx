@@ -44,7 +44,7 @@ export default function AppShell({ auth, children }: AppShellProps) {
   return (
     <>
       <header className="sticky top-0 z-40 border-b border-white/7 bg-[#0a0d0b]/92 backdrop-blur">
-        <div className="mx-auto flex min-h-16 w-full max-w-7xl items-center justify-between gap-3 px-3 sm:px-4 lg:px-5">
+        <div className="mx-auto flex min-h-16 w-full max-w-7xl flex-wrap items-center justify-between gap-3 px-3 py-2 sm:px-4 lg:flex-nowrap lg:px-5 lg:py-0">
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <Link
               href="/"
@@ -74,7 +74,15 @@ export default function AppShell({ auth, children }: AppShellProps) {
             )}
           </div>
 
-          <div className="min-w-0 shrink-0">{auth}</div>
+          <div className="ml-auto flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-2">
+            <Link
+              href="/prode"
+              className="inline-flex min-h-10 items-center justify-center rounded-xl border border-[#25553d] bg-[#163828] px-3 py-2 text-sm font-semibold text-[#7ff0b2] transition hover:bg-[#1b4330] sm:px-4"
+            >
+              Prode
+            </Link>
+            {auth}
+          </div>
         </div>
 
         {isHome ? null : (
