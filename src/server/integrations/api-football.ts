@@ -874,7 +874,6 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
       .from('match_events')
       .select('match_id, team_id, player_name, minute, extra_minute, type, detail')
       .in('match_id', matchIds)
-      .eq('type', 'Goal')
 
     if (eventsResponse.error) {
       const message = eventsResponse.error.message.toLowerCase()
@@ -888,7 +887,11 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
       throw eventsResponse.error
     }
 
-    for (const event of (eventsResponse.data ?? []) as StoredMatchEventRow[]) {
+    const goalEvents = ((eventsResponse.data ?? []) as StoredMatchEventRow[]).filter(
+      (event) => event.type.toLowerCase() === 'goal'
+    )
+
+    for (const event of goalEvents) {
       const matchRow = matchRowsByMatchId.get(Number(event.match_id))
       if (!matchRow) continue
 

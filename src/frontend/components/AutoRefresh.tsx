@@ -18,6 +18,12 @@ export default function AutoRefresh({
   const router = useRouter()
 
   useEffect(() => {
+    const isStandalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      Boolean((navigator as Navigator & { standalone?: boolean }).standalone)
+
+    if (!isStandalone) return
+
     startTransition(() => {
       router.refresh()
     })

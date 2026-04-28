@@ -1005,7 +1005,7 @@ export default async function HomePage({
                       key={competition.key}
                       className="scroll-mt-5 px-0 py-0"
                     >
-                      <div className="border-b border-white/7 bg-[#10151a] px-3 py-3 sm:px-4">
+                      <div className="border-y border-[#25553d]/45 bg-[#132019] px-3 py-3 shadow-[inset_0_1px_0_rgba(127,240,178,0.08)] sm:px-4">
                         <div className="flex min-w-0 items-center justify-between gap-3">
                           <div className="flex min-w-0 items-center gap-3">
                             {competition.logo ? (
@@ -1024,13 +1024,13 @@ export default async function HomePage({
                               </div>
                             )}
                             <div className="min-w-0">
-                              <h2 className="break-words text-base font-bold text-[#f3f6fa] md:text-lg">
+                              <h2 className="break-words text-[1.05rem] font-black text-[#f3f6fa] md:text-xl">
                                 {competition.title}
                               </h2>
                             </div>
                           </div>
 
-                          <div className="shrink-0 rounded-md border border-white/7 bg-white/[0.04] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#94a0ae] sm:px-2.5 sm:text-[11px]">
+                          <div className="shrink-0 rounded-md border border-[#25553d]/45 bg-[#0f1714] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9ed6b8] sm:px-2.5 sm:text-[11px]">
                             {competition.matches.length} partido{competition.matches.length !== 1 ? 's' : ''}
                           </div>
                         </div>

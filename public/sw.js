@@ -1,14 +1,70 @@
-const CACHE_NAME = 'fulboapp-cache-v2'
+const STATIC_CACHE = 'fulboapp-static-v3'
+const PAGE_CACHE = 'fulboapp-pages-v3'
 const STATIC_ASSETS = [
   '/manifest.json',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
 ]
 
+function isDynamicRequest(url) {
+  return (
+    url.pathname.startsWith('/api/') ||
+    url.pathname.startsWith('/_next/data/') ||
+    url.pathname.includes('/matches') ||
+    url.pathname.includes('/fixtures') ||
+    url.pathname.includes('/results') ||
+    url.pathname.includes('/prode')
+  )
+}
+
+function isStaticAsset(request, url) {
+  return (
+    request.destination === 'script' ||
+    request.destination === 'style' ||
+    request.destination === 'image' ||
+    request.destination === 'font' ||
+    url.pathname.startsWith('/_next/static/') ||
+    url.pathname.startsWith('/icons/') ||
+    url.pathname === '/manifest.json'
+  )
+}
+
+async function networkFirst(request) {
+  const cache = await caches.open(PAGE_CACHE)
+
+  try {
+    const response = await fetch(request)
+
+    if (response.ok) {
+      await cache.put(request, response.clone())
+    }
+
+    return response
+  } catch (error) {
+    const cachedResponse = await cache.match(request)
+    if (cachedResponse) return cachedResponse
+    throw error
+  }
+}
+
+async function staleWhileRevalidate(request) {
+  const cache = await caches.open(STATIC_CACHE)
+  const cachedResponse = await cache.match(request)
+  const fetchPromise = fetch(request).then((response) => {
+    if (response.ok) {
+      cache.put(request, response.clone())
+    }
+
+    return response
+  })
+
+  return cachedResponse || fetchPromise
+}
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
-      .open(CACHE_NAME)
+      .open(STATIC_CACHE)
       .then((cache) => cache.addAll(STATIC_ASSETS))
       .then(() => self.skipWaiting())
   )
@@ -21,7 +77,7 @@ self.addEventListener('activate', (event) => {
       .then((cacheNames) =>
         Promise.all(
           cacheNames
-            .filter((cacheName) => cacheName !== CACHE_NAME)
+            .filter((cacheName) => ![STATIC_CACHE, PAGE_CACHE].includes(cacheName))
             .map((cacheName) => caches.delete(cacheName))
         )
       )
@@ -35,38 +91,14 @@ self.addEventListener('fetch', (event) => {
 
   if (request.method !== 'GET') return
   if (url.origin !== self.location.origin) return
-  if (url.pathname.startsWith('/api/')) return
-  if (url.pathname.includes('/matches')) return
-  if (url.pathname.includes('/fixtures')) return
-  if (url.pathname.startsWith('/_next/data/')) return
-  if (url.search) return
+  if (isDynamicRequest(url)) return
+
   if (request.mode === 'navigate') {
-    event.respondWith(fetch(request))
+    event.respondWith(networkFirst(request))
     return
   }
 
-  event.respondWith(
-    caches.match(request).then((cachedResponse) => {
-      if (cachedResponse) return cachedResponse
-
-      return fetch(request).then((response) => {
-        const shouldCache =
-          response.ok &&
-          (
-            url.pathname.startsWith('/_next/static/') ||
-            url.pathname.startsWith('/icons/') ||
-            url.pathname === '/manifest.json'
-          )
-
-        if (shouldCache) {
-          const responseToCache = response.clone()
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(request, responseToCache)
-          })
-        }
-
-        return response
-      })
-    })
-  )
+  if (isStaticAsset(request, url)) {
+    event.respondWith(staleWhileRevalidate(request))
+  }
 })

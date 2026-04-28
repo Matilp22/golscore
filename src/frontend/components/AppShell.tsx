@@ -1,6 +1,7 @@
 ﻿'use client'
 
 import { useEffect, useState, type ReactNode } from 'react'
+import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import BackButton from '@/frontend/components/BackButton'
 import SidebarNav from '@/frontend/components/SidebarNav'
@@ -42,19 +43,46 @@ export default function AppShell({ auth, children }: AppShellProps) {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setIsOpen(true)}
-        className="fixed left-3 top-3 z-40 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-[#10151a]/95 text-white shadow-[0_10px_30px_rgba(0,0,0,0.3)] backdrop-blur transition hover:border-[#7ff0b2]/40 lg:hidden"
-        aria-label="Abrir menú"
-        aria-expanded={isOpen}
-      >
-        <span className="flex flex-col gap-1.5" aria-hidden="true">
-          <span className="h-0.5 w-5 rounded-full bg-[#7ff0b2]" />
-          <span className="h-0.5 w-5 rounded-full bg-[#7ff0b2]" />
-          <span className="h-0.5 w-5 rounded-full bg-[#7ff0b2]" />
-        </span>
-      </button>
+      <header className="sticky top-0 z-40 border-b border-white/7 bg-[#0a0d0b]/92 backdrop-blur">
+        <div className="mx-auto flex min-h-16 w-full max-w-7xl items-center justify-between gap-3 px-3 sm:px-4 lg:px-5">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+            <Link
+              href="/"
+              className="shrink-0 text-xl font-black tracking-normal text-white transition hover:text-[#7ff0b2] sm:text-2xl"
+            >
+              FulboApp
+            </Link>
+
+            <button
+              type="button"
+              onClick={() => setIsOpen(true)}
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-[#10151a]/95 text-white shadow-[0_10px_30px_rgba(0,0,0,0.22)] transition hover:border-[#7ff0b2]/40 lg:hidden"
+              aria-label="Abrir menú"
+              aria-expanded={isOpen}
+            >
+              <span className="flex flex-col gap-1.5" aria-hidden="true">
+                <span className="h-0.5 w-5 rounded-full bg-[#7ff0b2]" />
+                <span className="h-0.5 w-5 rounded-full bg-[#7ff0b2]" />
+                <span className="h-0.5 w-5 rounded-full bg-[#7ff0b2]" />
+              </span>
+            </button>
+
+            {isHome ? null : (
+              <div className="hidden sm:block">
+                <BackButton />
+              </div>
+            )}
+          </div>
+
+          <div className="min-w-0 shrink-0">{auth}</div>
+        </div>
+
+        {isHome ? null : (
+          <div className="mx-auto w-full max-w-7xl px-3 pb-2 sm:hidden">
+            <BackButton />
+          </div>
+        )}
+      </header>
 
       {isOpen ? (
         <div className="fixed inset-0 z-50 lg:hidden">
@@ -67,7 +95,7 @@ export default function AppShell({ auth, children }: AppShellProps) {
           <aside className="absolute bottom-0 left-0 top-0 flex w-[min(82vw,300px)] max-w-full flex-col border-r border-white/10 bg-[#0f1317] shadow-[18px_0_42px_rgba(0,0,0,0.42)]">
             <div className="flex items-center justify-between border-b border-white/8 px-3 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#7ff0b2]">
-                FulboApp
+                Secciones
               </p>
               <button
                 type="button"
@@ -83,17 +111,11 @@ export default function AppShell({ auth, children }: AppShellProps) {
         </div>
       ) : null}
 
-      <div className={`grid w-full max-w-none gap-3 px-1 pb-3 pt-16 sm:px-2 md:px-5 md:pb-6 md:pt-16 lg:mx-auto lg:max-w-7xl lg:gap-4 lg:px-5 lg:pt-4 ${isHome ? '' : 'lg:grid-cols-[210px_minmax(0,1fr)]'}`}>
-        {isHome ? null : (
-          <aside className="hidden h-fit rounded-2xl border border-white/8 bg-[#0f1317]/88 p-2 lg:sticky lg:top-4 lg:mt-[68px] lg:block lg:max-h-[calc(100vh-6.25rem)] lg:overflow-y-auto">
-            {sidebar}
-          </aside>
-        )}
+      <div className="grid w-full max-w-none gap-3 px-1 pb-3 pt-3 sm:px-2 md:px-5 md:pb-6 lg:mx-auto lg:max-w-7xl lg:grid-cols-[210px_minmax(0,1fr)] lg:gap-4 lg:px-5 lg:pt-4">
+        <aside className="hidden h-fit rounded-2xl border border-white/8 bg-[#0f1317]/88 p-2 lg:sticky lg:top-20 lg:block lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto">
+          {sidebar}
+        </aside>
         <div className="min-w-0">
-          <div className="mb-3 flex min-h-10 items-center justify-between gap-3">
-            <div>{isHome ? null : <BackButton />}</div>
-            {auth}
-          </div>
           {children}
         </div>
       </div>
