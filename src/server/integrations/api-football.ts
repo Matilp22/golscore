@@ -103,6 +103,7 @@ type FixtureListItem = {
 
 export type MatchListItem = {
   id: number
+  externalId: number
   leagueId?: number
   league: string
   leagueLogo?: string
@@ -131,6 +132,7 @@ export type MatchGoalScorer = {
 export type MatchGoalScorers = {
   home: MatchGoalScorer[]
   away: MatchGoalScorer[]
+  unassigned?: MatchGoalScorer[]
 }
 
 export type MatchListItemWithGoalScorers = MatchListItem & {
@@ -681,6 +683,7 @@ export async function getMatchesByDate(date: string): Promise<MatchListItem[]> {
 
   const mappedFixtures = [...dedupedFixtures.values()].map((item): MatchListItem => ({
     id: item.fixture.id,
+    externalId: item.fixture.id,
     leagueId: item.league.id,
     league: item.league.name,
     leagueLogo: item.league.logo,
@@ -727,6 +730,7 @@ export async function getMatchesByDate(date: string): Promise<MatchListItem[]> {
   if (storedFixtures.length) {
     return storedFixtures.map((item): MatchListItem => ({
       id: item.fixtureId,
+      externalId: item.fixtureId,
       leagueId: item.leagueId,
       league: item.leagueName,
       leagueLogo: item.leagueLogo,
@@ -752,10 +756,6 @@ export async function getMatchesByDate(date: string): Promise<MatchListItem[]> {
   }
 
   return mappedFixtures
-}
-
-function hasAnyGoals(match: MatchListItem) {
-  return (match.goalsHome ?? 0) > 0 || (match.goalsAway ?? 0) > 0
 }
 
 function getGoalKind(detail?: string | null): MatchGoalScorer['kind'] {
@@ -795,42 +795,85 @@ type HomeMatchExtras = {
   goalScorers: MatchGoalScorers
 }
 
-async function fetchHomeMatchRows(
-  supabase: ReturnType<typeof getSupabaseAdminClient>,
-  fixtureIds: number[]
-) {
-  const primary = await supabase
-    .from('matches')
-    .select('id, external_id, broadcast_channel, home_team_id, away_team_id')
-    .in('external_id', fixtureIds)
+function createEmptyGoalScorers(): MatchGoalScorers {
+  return { home: [], away: [], unassigned: [] }
+}
 
-  if (!primary.error) {
-    return (primary.data ?? []) as HomeMatchRow[]
+function serializeGoalEventForLog(event: StoredMatchEventRow) {
+  return {
+    match_id: event.match_id,
+    team_id: event.team_id,
+    minute: event.extra_minute ? `${event.minute}+${event.extra_minute}` : event.minute,
+    player: event.player_name,
+    detail: event.detail,
+  }
+}
+
+function chunkArray<T>(items: T[], size: number) {
+  const chunks: T[][] = []
+
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size))
   }
 
-  const message = primary.error.message.toLowerCase()
-  const isMissingBroadcastColumn =
-    primary.error.code === '42703' ||
-    message.includes('broadcast_channel') ||
-    message.includes('schema cache')
+  return chunks
+}
 
-  if (!isMissingBroadcastColumn) throw primary.error
+async function fetchHomeMatchRowsByExternalId(
+  supabase: ReturnType<typeof getSupabaseAdminClient>,
+  externalFixtureIds: number[]
+) {
+  const externalIds = [...new Set(externalFixtureIds.flatMap((id) => [id, String(id)]))]
+  const rows: HomeMatchRow[] = []
+  let missingBroadcastColumn = false
 
-  const fallback = await supabase
-    .from('matches')
-    .select('id, external_id, home_team_id, away_team_id')
-    .in('external_id', fixtureIds)
+  for (const chunk of chunkArray(externalIds, 100)) {
+    const primary = await supabase
+      .from('matches')
+      .select('id, external_id, broadcast_channel, home_team_id, away_team_id')
+      .in('external_id', chunk)
 
-  if (fallback.error) throw fallback.error
+    if (!primary.error) {
+      rows.push(...((primary.data ?? []) as HomeMatchRow[]))
+      continue
+    }
 
-  return ((fallback.data ?? []) as Array<Omit<HomeMatchRow, 'broadcast_channel'>>).map((row) => ({
-    ...row,
-    broadcast_channel: null,
-  }))
+    const message = primary.error.message.toLowerCase()
+    missingBroadcastColumn =
+      primary.error.code === '42703' ||
+      message.includes('broadcast_channel') ||
+      message.includes('schema cache')
+
+    if (!missingBroadcastColumn) throw primary.error
+
+    break
+  }
+
+  if (!missingBroadcastColumn) return rows
+
+  const fallbackRows: HomeMatchRow[] = []
+
+  for (const chunk of chunkArray(externalIds, 100)) {
+    const fallback = await supabase
+      .from('matches')
+      .select('id, external_id, home_team_id, away_team_id')
+      .in('external_id', chunk)
+
+    if (fallback.error) throw fallback.error
+
+    fallbackRows.push(
+      ...((fallback.data ?? []) as Array<Omit<HomeMatchRow, 'broadcast_channel'>>).map((row) => ({
+        ...row,
+        broadcast_channel: null,
+      }))
+    )
+  }
+
+  return fallbackRows
 }
 
 function mapStoredGoalEvent(row: StoredMatchEventRow): MatchGoalScorer | null {
-  if (!row.minute || !row.player_name) return null
+  if (row.minute === null || row.minute === undefined || !row.player_name) return null
 
   return {
     minute: row.minute,
@@ -841,65 +884,118 @@ function mapStoredGoalEvent(row: StoredMatchEventRow): MatchGoalScorer | null {
 }
 
 async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
-  const fixtureIds = [
-    ...new Set(matches.map((match) => match.id).filter((id) => Number.isFinite(id))),
+  const externalFixtureIds = [
+    ...new Set(
+      matches
+        .map((match) => match.externalId ?? match.id)
+        .filter((id) => Number.isFinite(id))
+    ),
   ]
   const empty = new Map<number, HomeMatchExtras>()
 
-  if (!fixtureIds.length) return empty
+  if (!externalFixtureIds.length) return empty
 
   try {
     const supabase = getSupabaseAdminClient()
-    const matchRows = await fetchHomeMatchRows(supabase, fixtureIds)
-    const extrasByFixtureId = new Map<number, HomeMatchExtras>()
+    const matchRows = await fetchHomeMatchRowsByExternalId(supabase, externalFixtureIds)
+    const visibleMatchesByExternalId = new Map(
+      matches.map((match) => [match.externalId ?? match.id, match])
+    )
+    const matchRowsByExternalId = new Map<number, HomeMatchRow>()
+    const extrasByExternalId = new Map<number, HomeMatchExtras>()
     const matchRowsByMatchId = new Map<string, HomeMatchRow>()
 
     for (const row of matchRows) {
-      const fixtureId = Number(row.external_id ?? row.id)
+      const externalId = Number(row.external_id)
       const matchId = String(row.id)
 
-      if (!Number.isFinite(fixtureId)) continue
+      if (!Number.isFinite(externalId)) continue
 
       matchRowsByMatchId.set(matchId, row)
-      extrasByFixtureId.set(fixtureId, {
+      matchRowsByExternalId.set(externalId, row)
+      extrasByExternalId.set(externalId, {
         broadcastChannel: row.broadcast_channel,
-        goalScorers: { home: [], away: [] },
+        goalScorers: createEmptyGoalScorers(),
       })
     }
 
     const matchIds = [...matchRowsByMatchId.keys()]
 
-    if (!matchIds.length) return extrasByFixtureId
+    if (!matchIds.length) {
+      for (const match of matches) {
+        console.info('match events ' + JSON.stringify({
+          homeTeamName: match.home,
+          awayTeamName: match.away,
+          external_id: match.externalId ?? match.id,
+          matchId: match.id,
+          internal_match_id: null,
+          date: match.date,
+          league: match.league,
+          home_team_id: match.homeId ?? null,
+          away_team_id: match.awayId ?? null,
+          eventsFound: 0,
+          events: [],
+          reason: 'no-matches-row-for-visible-external-id',
+        }))
+      }
 
-    const eventsResponse = await supabase
-      .from('match_events')
-      .select('match_id, team_id, player_name, minute, extra_minute, type, detail')
-      .in('match_id', matchIds)
-
-    if (eventsResponse.error) {
-      const message = eventsResponse.error.message.toLowerCase()
-      const isMissingOptionalEventsTable =
-        eventsResponse.error.code === '42P01' ||
-        eventsResponse.error.code === 'PGRST205' ||
-        message.includes('match_events') ||
-        message.includes('schema cache')
-
-      if (isMissingOptionalEventsTable) return extrasByFixtureId
-      throw eventsResponse.error
+      return extrasByExternalId
     }
 
-    const goalEvents = ((eventsResponse.data ?? []) as StoredMatchEventRow[]).filter(
+    const eventRows: StoredMatchEventRow[] = []
+
+    for (const chunk of chunkArray(matchIds, 100)) {
+      const eventsResponse = await supabase
+        .from('match_events')
+        .select('match_id, team_id, player_name, minute, extra_minute, type, detail')
+        .in('match_id', chunk)
+
+      if (eventsResponse.error) {
+        const message = eventsResponse.error.message.toLowerCase()
+        const isMissingOptionalEventsTable =
+          eventsResponse.error.code === '42P01' ||
+          eventsResponse.error.code === 'PGRST205' ||
+          message.includes('match_events') ||
+          message.includes('schema cache')
+
+        if (isMissingOptionalEventsTable) return extrasByExternalId
+        throw eventsResponse.error
+      }
+
+      eventRows.push(...((eventsResponse.data ?? []) as StoredMatchEventRow[]))
+    }
+
+    const goalEvents = eventRows.filter(
       (event) => event.type.toLowerCase() === 'goal'
+    )
+    const eventsFoundByMatchId = goalEvents.reduce<Map<string, number>>((accumulator, event) => {
+      const matchId = String(event.match_id)
+      accumulator.set(matchId, (accumulator.get(matchId) ?? 0) + 1)
+
+      return accumulator
+    }, new Map())
+    const eventsByMatchId = goalEvents.reduce<Map<string, StoredMatchEventRow[]>>(
+      (accumulator, event) => {
+        const matchId = String(event.match_id)
+        const current = accumulator.get(matchId) ?? []
+        current.push(event)
+        accumulator.set(matchId, current)
+
+        return accumulator
+      },
+      new Map()
     )
     let mappedHomeGoals = 0
     let mappedAwayGoals = 0
+    let unassignedGoals = 0
 
     for (const event of goalEvents) {
       const matchRow = matchRowsByMatchId.get(String(event.match_id))
       if (!matchRow) continue
 
-      const fixtureId = Number(matchRow.external_id ?? matchRow.id)
-      const extras = extrasByFixtureId.get(fixtureId)
+      const externalId = Number(matchRow.external_id)
+      const visibleMatch = visibleMatchesByExternalId.get(externalId)
+      const extras = extrasByExternalId.get(externalId)
       const goal = mapStoredGoalEvent(event)
       if (!extras || !goal) continue
 
@@ -909,25 +1005,57 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
       } else if (event.team_id !== null && String(event.team_id) === String(matchRow.away_team_id)) {
         extras.goalScorers.away.push(goal)
         mappedAwayGoals += 1
+      } else if (event.team_id !== null && String(event.team_id) === String(visibleMatch?.homeId)) {
+        extras.goalScorers.home.push(goal)
+        mappedHomeGoals += 1
+      } else if (event.team_id !== null && String(event.team_id) === String(visibleMatch?.awayId)) {
+        extras.goalScorers.away.push(goal)
+        mappedAwayGoals += 1
+      } else {
+        extras.goalScorers.unassigned?.push(goal)
+        unassignedGoals += 1
       }
     }
 
-    for (const extras of extrasByFixtureId.values()) {
+    for (const extras of extrasByExternalId.values()) {
       extras.goalScorers.home.sort(sortGoalScorers)
       extras.goalScorers.away.sort(sortGoalScorers)
+      extras.goalScorers.unassigned?.sort(sortGoalScorers)
     }
 
-    console.info('[home:match-extras] goleadores leidos desde Supabase', {
-      fixtures: fixtureIds.length,
+    for (const match of matches) {
+      const externalId = match.externalId ?? match.id
+      const row = matchRowsByExternalId.get(externalId) ?? null
+      const internalMatchId = row ? String(row.id) : null
+      const foundEvents = internalMatchId ? eventsByMatchId.get(internalMatchId) ?? [] : []
+
+      console.info('match events ' + JSON.stringify({
+        homeTeamName: match.home,
+        awayTeamName: match.away,
+        external_id: row?.external_id ?? externalId,
+        matchId: match.id,
+        internal_match_id: row?.id ?? null,
+        date: match.date,
+        league: match.league,
+        home_team_id: row?.home_team_id ?? match.homeId ?? null,
+        away_team_id: row?.away_team_id ?? match.awayId ?? null,
+        eventsFound: internalMatchId ? eventsFoundByMatchId.get(internalMatchId) ?? 0 : 0,
+        events: foundEvents.map(serializeGoalEventForLog),
+      }))
+    }
+
+    console.info('[home:match-extras] goleadores leidos desde Supabase ' + JSON.stringify({
+      visibleExternalIds: externalFixtureIds.length,
       matchedRows: matchRows.length,
       matchIds: matchIds.length,
-      storedEvents: eventsResponse.data?.length ?? 0,
+      storedEvents: eventRows.length,
       goalEvents: goalEvents.length,
       mappedHomeGoals,
       mappedAwayGoals,
-    })
+      unassignedGoals,
+    }))
 
-    return extrasByFixtureId
+    return extrasByExternalId
   } catch (error) {
     console.warn(
       '[home:match-extras] No se pudieron leer goleadores/canales desde Supabase; se omiten en Home.',
@@ -947,10 +1075,11 @@ export async function withGoalScorers(
 
   return matches.map((match) => ({
     ...match,
-    goalScorers: hasAnyGoals(match)
-      ? extrasByFixtureId.get(match.id)?.goalScorers || { home: [], away: [] }
-      : { home: [], away: [] },
-    broadcastChannel: extrasByFixtureId.get(match.id)?.broadcastChannel || null,
+    goalScorers:
+      extrasByFixtureId.get(match.externalId ?? match.id)?.goalScorers ||
+      createEmptyGoalScorers(),
+    broadcastChannel:
+      extrasByFixtureId.get(match.externalId ?? match.id)?.broadcastChannel || null,
   }))
 }
 

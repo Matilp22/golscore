@@ -200,6 +200,14 @@ type HomeScoreboardSyncResult = {
   }>
 }
 
+export type SyncHomeMatchesOptions = {
+  date?: string | null
+  debug?: boolean
+  limit?: number | null
+  offset?: number | null
+  liveOnly?: boolean
+}
+
 export type AvailableLeagueRow = {
   id: DbId
   name: string | null
@@ -238,6 +246,7 @@ export type SyncLeagueEventsOptions = {
 }
 
 const ALLOWED_GOAL_DETAILS = new Set(['Normal Goal', 'Penalty', 'Own Goal'])
+const LIVE_EVENT_SYNC_STATUSES = new Set(['LIVE', '1H', 'HT', '2H', 'ET', 'BT', 'P'])
 const DEFAULT_SYNC_LIMIT = 20
 const MAX_SYNC_LIMIT = 50
 
@@ -371,6 +380,10 @@ function hasAnyFixtureGoals(fixture: ApiFixture) {
 
 function shouldRecalculateProdePoints(fixture: ApiFixture) {
   return isFinishedStatus(fixture.fixture.status.short) && hasResolvedScore(fixture)
+}
+
+function isLiveEventSyncStatus(statusShort: string) {
+  return LIVE_EVENT_SYNC_STATUSES.has(statusShort)
 }
 
 function getUpdatedFields(
@@ -1496,14 +1509,18 @@ function isGoalEventForScoreboard(event: ApiFixtureEvent) {
   )
 }
 
-function isMissingOptionalMatchEvents(error: { code?: string; message: string }) {
-  const message = error.message.toLowerCase()
+function isMissingOptionalMatchEvents(error: { code?: string; message?: string } | unknown) {
+  const errorObject =
+    typeof error === 'object' && error !== null
+      ? (error as { code?: string; message?: string })
+      : {}
+  const message = (errorObject.message ?? String(error)).toLowerCase()
 
   return (
-    error.code === '42P01' ||
-    error.code === '42703' ||
-    error.code === 'PGRST204' ||
-    error.code === 'PGRST205' ||
+    errorObject.code === '42P01' ||
+    errorObject.code === '42703' ||
+    errorObject.code === 'PGRST204' ||
+    errorObject.code === 'PGRST205' ||
     message.includes('match_events') ||
     message.includes('schema cache')
   )
@@ -1565,6 +1582,24 @@ async function hasStoredFinalGoalEvents(
   return hasCompleteEvents
 }
 
+async function deleteStoredMatchEvents(
+  supabase: SupabaseClient,
+  matchId: DbId,
+  fixtureId: number
+) {
+  const deleteResponse = await withTimeout(
+    supabase.from('match_events').delete().eq('match_id', matchId),
+    `match_events delete ${fixtureId}`
+  )
+
+  if (deleteResponse.error) {
+    if (isMissingOptionalMatchEvents(deleteResponse.error)) return false
+    throw deleteResponse.error
+  }
+
+  return true
+}
+
 async function syncMatchEventsIfSupported(
   supabase: SupabaseClient,
   fixture: ApiFixture,
@@ -1574,8 +1609,27 @@ async function syncMatchEventsIfSupported(
   debug?: boolean
 ): Promise<SyncMatchEventsResult> {
   const emptyResult = { eventsFound: 0, goalsInserted: 0 }
+  const statusShort = fixture.fixture.status.short
+  const hasFixtureGoals = hasAnyFixtureGoals(fixture)
+  const shouldFetchEvents = hasFixtureGoals || isLiveEventSyncStatus(statusShort)
 
-  if (!hasAnyFixtureGoals(fixture)) return emptyResult
+  if (!shouldFetchEvents) {
+    if (isFinishedStatus(statusShort) && !hasFixtureGoals) {
+      try {
+        await deleteStoredMatchEvents(supabase, matchId, fixture.fixture.id)
+      } catch (error) {
+        if (!isMissingOptionalMatchEvents(error)) {
+          console.warn('[sync-match-events] No se pudieron limpiar eventos sin goles.', {
+            fixtureId: fixture.fixture.id,
+            matchId,
+            message: error instanceof Error ? error.message : String(error),
+          })
+        }
+      }
+    }
+
+    return emptyResult
+  }
 
   try {
     if (await hasStoredFinalGoalEvents(supabase, matchId, fixture, debug)) return emptyResult
@@ -1609,15 +1663,8 @@ async function syncMatchEventsIfSupported(
       allowedDetails: [...ALLOWED_GOAL_DETAILS],
     })
 
-    const deleteResponse = await withTimeout(
-      supabase.from('match_events').delete().eq('match_id', matchId),
-      `match_events delete ${fixture.fixture.id}`
-    )
-
-    if (deleteResponse.error) {
-      if (isMissingOptionalMatchEvents(deleteResponse.error)) return emptyResult
-      throw deleteResponse.error
-    }
+    const deleted = await deleteStoredMatchEvents(supabase, matchId, fixture.fixture.id)
+    if (!deleted) return emptyResult
 
     if (!eventRows.length) return { eventsFound: events.length, goalsInserted: 0 }
 
@@ -1913,10 +1960,22 @@ export async function syncProdeFixtureById(
 
 export async function syncHomeScoreboardMatches(
   supabase: SupabaseClient,
-  debug?: boolean
+  options: SyncHomeMatchesOptions | boolean = {}
 ): Promise<HomeScoreboardSyncResult> {
+  const normalizedOptions =
+    typeof options === 'boolean'
+      ? { debug: options }
+      : options
+  const debug = normalizedOptions.debug
   const today = getBuenosAiresTodayISO()
-  const dates = [addDaysToISO(today, -1), today, addDaysToISO(today, 1)]
+  const dates = normalizedOptions.date
+    ? [normalizedOptions.date]
+    : [addDaysToISO(today, -1), today, addDaysToISO(today, 1)]
+  const limit = normalizedOptions.limit && normalizedOptions.limit > 0
+    ? Math.min(Math.floor(normalizedOptions.limit), MAX_SYNC_LIMIT)
+    : null
+  const offset = getBatchOffset(normalizedOptions.offset)
+  const liveOnly = Boolean(normalizedOptions.liveOnly)
   const result = createEmptyHomeScoreboardResult(dates)
   const fixturesById = new Map<number, ApiFixture>()
 
@@ -1938,7 +1997,12 @@ export async function syncHomeScoreboardMatches(
     }
   }
 
-  const selectedFixtures = [...fixturesById.values()].sort(compareFixturesByApiOrder)
+  const selectedFixtures = [...fixturesById.values()]
+    .filter((fixture) => !liveOnly || isLiveEventSyncStatus(fixture.fixture.status.short))
+    .sort(compareFixturesByApiOrder)
+  const fixturesToProcess = limit
+    ? selectedFixtures.slice(offset, offset + limit)
+    : selectedFixtures.slice(offset)
   result.selected = selectedFixtures.length
 
   const leagueCounts = new Map<number, {
@@ -1948,7 +2012,7 @@ export async function syncHomeScoreboardMatches(
     fixtures: number
   }>()
 
-  for (const fixture of selectedFixtures) {
+  for (const fixture of fixturesToProcess) {
     if (!fixture.league.id || !fixture.teams.home.id || !fixture.teams.away.id) {
       result.skipped += 1
       continue
@@ -2014,8 +2078,12 @@ export async function syncHomeScoreboardMatches(
 
   console.info('[sync-home-scoreboard] resumen', {
     dates: result.dates,
+    liveOnly,
     fetched: result.fetched,
     selected: result.selected,
+    processedBatch: fixturesToProcess.length,
+    limit,
+    offset,
     processed: result.processed,
     eventsFound: result.eventsFound,
     goalsInserted: result.goalsInserted,

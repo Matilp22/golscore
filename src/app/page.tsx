@@ -850,6 +850,96 @@ function sortCompetitionsForSection(
   })
 }
 
+function getHomeCompetitionPriority(competition: CompetitionBucket) {
+  const text = normalizeText(
+    `${competition.key} ${competition.title} ${competition.sectionTitle}`
+  )
+  const isMainArgentinaLeague =
+    !text.includes('reserva') &&
+    !text.includes('femenina') &&
+    !text.includes('women')
+
+  if (
+    competition.key === 'argentina-liga-profesional' ||
+    (
+      isMainArgentinaLeague &&
+      (
+        text.includes('liga argentina') ||
+        text.includes('liga profesional argentina') ||
+        text.includes('argentina liga profesional') ||
+        text.includes('liga profesional')
+      )
+    )
+  ) {
+    return 1
+  }
+
+  if (
+    competition.key === 'selecciones-mundial' ||
+    text.includes('mundial 2026') ||
+    text === 'mundial' ||
+    text.includes(' world cup ')
+  ) {
+    return 2
+  }
+
+  if (
+    competition.key === 'internacional-libertadores' ||
+    text.includes('copa libertadores') ||
+    text.includes('conmebol libertadores') ||
+    text.includes('libertadores')
+  ) {
+    return 3
+  }
+
+  if (
+    competition.key === 'internacional-sudamericana' ||
+    text.includes('copa sudamericana') ||
+    text.includes('conmebol sudamericana') ||
+    text.includes('sudamericana')
+  ) {
+    return 4
+  }
+
+  if (
+    competition.key === 'internacional-champions' ||
+    text.includes('uefa champions league') ||
+    text.includes('champions league')
+  ) {
+    return 5
+  }
+
+  if (
+    competition.key === 'argentina-primera-nacional' ||
+    text.includes('primera nacional')
+  ) {
+    return 6
+  }
+
+  if (
+    competition.key === 'argentina-primera-b-metro' ||
+    text.includes('primera b metro') ||
+    text.includes('primera b metropolitana')
+  ) {
+    return 7
+  }
+
+  return Number.MAX_SAFE_INTEGER
+}
+
+function sortHomeCompetitions(competitions: CompetitionBucket[]) {
+  return competitions
+    .map((competition, index) => ({ competition, index }))
+    .sort((a, b) => {
+      const aPriority = getHomeCompetitionPriority(a.competition)
+      const bPriority = getHomeCompetitionPriority(b.competition)
+
+      if (aPriority !== bPriority) return aPriority - bPriority
+      return a.index - b.index
+    })
+    .map(({ competition }) => competition)
+}
+
 function groupMatchesWithPromiedosStructure(matches: ApiMatch[]): SectionBucket[] {
   const cleanMatches = matches.filter((match) => !isYouthLeague(match))
   const assignedMatchIds = new Set<number>()
@@ -935,7 +1025,9 @@ export default async function HomePage({
   const visibleSections = groupedSections.filter(
     (section) => section.competitions.length > 0
   )
-  const visibleCompetitions = visibleSections.flatMap((section) => section.competitions)
+  const visibleCompetitions = sortHomeCompetitions(
+    visibleSections.flatMap((section) => section.competitions)
+  )
   const hasLiveMatches = dateMatches.some((match) => isLiveStatus(match.statusShort))
   const refreshIntervalMs = hasLiveMatches ? 60000 : 300000
   const renderedAt = new Date().toISOString()
@@ -958,6 +1050,11 @@ export default async function HomePage({
               intervalMs={refreshIntervalMs}
               showButton
               initialUpdatedAt={renderedAt}
+              syncBeforeRefreshUrl={
+                hasLiveMatches
+                  ? `/api/home/live-sync?date=${encodeURIComponent(selectedDate)}`
+                  : null
+              }
             />
           </div>
 

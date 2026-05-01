@@ -84,8 +84,9 @@ function formatGoalScorer(goal: MatchGoalScorer) {
 function GoalScorersLine({ goalScorers }: { goalScorers?: MatchGoalScorers }) {
   const homeGoals = goalScorers?.home.map(formatGoalScorer).join('; ') || ''
   const awayGoals = goalScorers?.away.map(formatGoalScorer).join('; ') || ''
+  const unassignedGoals = goalScorers?.unassigned?.map(formatGoalScorer).join('; ') || ''
 
-  if (!homeGoals && !awayGoals) return null
+  if (!homeGoals && !awayGoals && !unassignedGoals) return null
 
   const clampStyle = {
     display: '-webkit-box',
@@ -93,16 +94,31 @@ function GoalScorersLine({ goalScorers }: { goalScorers?: MatchGoalScorers }) {
     WebkitBoxOrient: 'vertical',
   } as const
 
+  if (unassignedGoals && !homeGoals && !awayGoals) {
+    return (
+      <div className="mt-2 min-w-0 overflow-hidden break-words text-[11px] leading-snug text-[#8d98a7]" style={clampStyle}>
+        Goles: {unassignedGoals}
+      </div>
+    )
+  }
+
   return (
-    <div className="mt-2 grid min-w-0 grid-cols-[minmax(0,1fr)_72px_minmax(0,1fr)] gap-2 text-[11px] leading-snug text-[#8d98a7] md:grid-cols-[minmax(0,1fr)_92px_minmax(0,1fr)_112px] md:gap-3">
-      <div className="min-w-0 overflow-hidden break-words" style={clampStyle}>
-        {homeGoals}
+    <div className="mt-2 space-y-1 text-[11px] leading-snug text-[#8d98a7]">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_72px_minmax(0,1fr)] gap-2 md:grid-cols-[minmax(0,1fr)_92px_minmax(0,1fr)_112px] md:gap-3">
+        <div className="min-w-0 overflow-hidden break-words" style={clampStyle}>
+          {homeGoals}
+        </div>
+        <div aria-hidden="true" />
+        <div className="min-w-0 overflow-hidden break-words text-right" style={clampStyle}>
+          {awayGoals}
+        </div>
+        <div aria-hidden="true" className="hidden md:block" />
       </div>
-      <div aria-hidden="true" />
-      <div className="min-w-0 overflow-hidden break-words text-right" style={clampStyle}>
-        {awayGoals}
-      </div>
-      <div aria-hidden="true" className="hidden md:block" />
+      {unassignedGoals ? (
+        <div className="min-w-0 overflow-hidden break-words" style={clampStyle}>
+          Goles: {unassignedGoals}
+        </div>
+      ) : null}
     </div>
   )
 }

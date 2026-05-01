@@ -1,6 +1,6 @@
 'use client'
 
-import { startTransition, useEffect } from 'react'
+import { startTransition, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAutoRefresh } from '@/frontend/hooks/useAutoRefresh'
 
@@ -9,13 +9,29 @@ type AutoRefreshProps = {
   showButton?: boolean
   className?: string
   initialUpdatedAt?: number | string | Date
+  syncBeforeRefreshUrl?: string | null
 }
 
 export default function AutoRefresh({
   intervalMs = 300000,
   initialUpdatedAt,
+  syncBeforeRefreshUrl,
 }: AutoRefreshProps) {
   const router = useRouter()
+
+  const refreshWithOptionalSync = useCallback(async () => {
+    if (syncBeforeRefreshUrl) {
+      await fetch(syncBeforeRefreshUrl, {
+        cache: 'no-store',
+      }).catch((error) => {
+        console.warn('[auto-refresh] No se pudo sincronizar partidos en vivo.', error)
+      })
+    }
+
+    startTransition(() => {
+      router.refresh()
+    })
+  }, [router, syncBeforeRefreshUrl])
 
   useEffect(() => {
     const isStandalone =
@@ -24,18 +40,14 @@ export default function AutoRefresh({
 
     if (!isStandalone) return
 
-    startTransition(() => {
-      router.refresh()
-    })
-  }, [router])
+    void refreshWithOptionalSync()
+  }, [refreshWithOptionalSync])
 
   useAutoRefresh({
     intervalMs,
     initialUpdatedAt,
     onRefresh: () => {
-      startTransition(() => {
-        router.refresh()
-      })
+      return refreshWithOptionalSync()
     },
   })
 
