@@ -1,6 +1,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import type { MatchGoalScorer, MatchGoalScorers } from '@/lib/api-football'
+import { formatEventMinute } from '@/shared/utils/event-minute'
 
 type MatchRowProps = {
   id?: number | string
@@ -67,10 +68,6 @@ function TeamBadge({
 }
 
 function formatGoalScorer(goal: MatchGoalScorer) {
-  const minute =
-    goal.extraMinute && goal.extraMinute > 0
-      ? `${goal.minute}+${goal.extraMinute}'`
-      : `${goal.minute}'`
   const suffix =
     goal.kind === 'penalty'
       ? ' (P)'
@@ -78,7 +75,7 @@ function formatGoalScorer(goal: MatchGoalScorer) {
         ? ' (e/c)'
         : ''
 
-  return `${minute} ${goal.player}${suffix}`
+  return `${formatEventMinute(goal.minute, goal.extraMinute)} ${goal.player}${suffix}`
 }
 
 function GoalScorersLine({ goalScorers }: { goalScorers?: MatchGoalScorers }) {

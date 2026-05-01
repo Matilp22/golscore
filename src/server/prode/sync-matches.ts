@@ -1493,6 +1493,7 @@ function getEventExternalId(fixture: ApiFixture, event: ApiFixtureEvent) {
   return [
     fixture.fixture.id,
     event.time?.elapsed ?? 'minute',
+    event.time?.extra ?? 'no-extra',
     event.team?.id ?? 'team',
     event.player?.name ?? 'player',
     event.detail ?? 'detail',
@@ -1535,51 +1536,6 @@ function shouldIgnoreEventSyncError(error: unknown) {
     message.includes('limit of requests') ||
     message.includes('429')
   )
-}
-
-async function hasStoredFinalGoalEvents(
-  supabase: SupabaseClient,
-  matchId: DbId,
-  fixture: ApiFixture,
-  debug?: boolean
-) {
-  const expectedGoals = (getFixtureHomeScore(fixture) ?? 0) + (getFixtureAwayScore(fixture) ?? 0)
-
-  if (!isFinishedStatus(fixture.fixture.status.short) || expectedGoals <= 0) return false
-
-  const response = await withTimeout(
-    supabase
-      .from('match_events')
-      .select('id', { count: 'exact', head: true })
-      .eq('match_id', matchId)
-      .eq('type', 'Goal'),
-    `match_events count ${fixture.fixture.id}`
-  )
-
-  if (response.error) {
-    if (isMissingOptionalMatchEvents(response.error)) return false
-
-    console.warn('[sync-match-events] No se pudo revisar eventos guardados; se intentara sincronizar.', {
-      fixtureId: fixture.fixture.id,
-      matchId,
-      message: response.error.message,
-    })
-    return false
-  }
-
-  const storedGoals = response.count ?? 0
-  const hasCompleteEvents = storedGoals >= expectedGoals
-
-  if (hasCompleteEvents) {
-    logDebug(debug, 'match events already synced for final score', {
-      fixtureId: fixture.fixture.id,
-      matchId,
-      storedGoals,
-      expectedGoals,
-    })
-  }
-
-  return hasCompleteEvents
 }
 
 async function deleteStoredMatchEvents(
@@ -1632,27 +1588,47 @@ async function syncMatchEventsIfSupported(
   }
 
   try {
-    if (await hasStoredFinalGoalEvents(supabase, matchId, fixture, debug)) return emptyResult
+    logDebug(debug, 'syncing match events from API-Football', {
+      fixtureId: fixture.fixture.id,
+      matchId,
+      status: statusShort,
+      hasFixtureGoals,
+    })
 
     const events = await fetchFixtureEvents(fixture.fixture.id)
     const eventRows = events
       .filter(isGoalEventForScoreboard)
-      .map((event) => ({
-        match_id: matchId,
-        external_event_id: getEventExternalId(fixture, event),
-        team_id:
+      .map((event) => {
+        const storedMinute = event.time?.elapsed as number
+        const storedExtraMinute = event.time?.extra ?? null
+        const teamId =
           event.team?.id === fixture.teams.home.id
             ? homeTeamId
             : event.team?.id === fixture.teams.away.id
               ? awayTeamId
-              : null,
-        player_name: event.player?.name as string,
-        assist_name: event.assist?.name ?? null,
-        minute: event.time?.elapsed as number,
-        extra_minute: event.time?.extra ?? null,
-        type: event.type as string,
-        detail: event.detail ?? null,
-      }))
+              : null
+
+        console.info('event time', {
+          fixtureId: fixture.fixture.id,
+          player: event.player?.name ?? null,
+          elapsed: event.time?.elapsed ?? null,
+          extra: event.time?.extra ?? null,
+          storedMinute,
+          storedExtraMinute,
+        })
+
+        return {
+          match_id: matchId,
+          external_event_id: getEventExternalId(fixture, event),
+          team_id: teamId,
+          player_name: event.player?.name as string,
+          assist_name: event.assist?.name ?? null,
+          minute: storedMinute,
+          extra_minute: storedExtraMinute,
+          type: event.type as string,
+          detail: event.detail ?? null,
+        }
+      })
 
     console.info('[sync-match-events] eventos recibidos', {
       fixtureId: fixture.fixture.id,

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 
 import type { LeaderStatType, PlayerEventMatch } from '@/lib/api-football'
+import { formatEventMinute } from '@/shared/utils/event-minute'
 
 type PlayerIncidentsListProps = {
   leagueId?: number
@@ -176,7 +177,9 @@ export default function PlayerIncidentsList({
                     className="inline-flex rounded-full border border-white/8 bg-[#0f1317] px-3 py-1 text-xs font-semibold text-[#dce5ef]"
                   >
                     {event.label}
-                    {event.minute ? ` ${event.minute}'` : ''}
+                    {event.minute !== null && event.minute !== undefined
+                      ? ` ${formatEventMinute(event.minute, event.extraMinute)}`
+                      : ''}
                   </span>
                 ))}
               </div>

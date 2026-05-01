@@ -10,6 +10,7 @@
 } from '@/lib/api-football'
 import AutoRefresh from '@/frontend/components/AutoRefresh'
 import FormationTeamPanel from '@/frontend/components/FormationTeamPanel'
+import { formatEventMinute } from '@/shared/utils/event-minute'
 import Image from 'next/image'
 import Link from 'next/link'
 
@@ -39,9 +40,34 @@ function translateStatus(statusLong: string) {
   return map[statusLong] || statusLong
 }
 
-function formatStatusLabel(statusLong: string, elapsed?: number | null) {
+function formatMatchTime(dateString: string) {
+  return new Date(dateString).toLocaleTimeString('es-AR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'America/Argentina/Buenos_Aires',
+  })
+}
+
+function isHeaderLiveStatus(statusShort: string) {
+  return ['LIVE', '1H', '2H', 'ET', 'BT', 'P', 'HT'].includes(statusShort)
+}
+
+function formatHeaderStatusLabel(
+  statusShort: string,
+  statusLong: string,
+  elapsed: number | null | undefined,
+  dateString: string
+) {
   if (elapsed) return `${elapsed}'`
-  return translateStatus(statusLong)
+  if (statusShort === 'HT') return 'ET'
+  if (statusShort === 'NS') return formatMatchTime(dateString)
+  if (statusShort === 'TBD') return 'A confirmar'
+  if (['FT', 'AET', 'PEN'].includes(statusShort) || statusLong.toLowerCase().includes('finished')) {
+    return 'FINAL'
+  }
+
+  return translateStatus(statusLong).toUpperCase()
 }
 
 function translateCountry(country: string) {
@@ -699,7 +725,7 @@ function TeamLogo({
   name: string
   size?: 'sm' | 'md'
 }) {
-  const classes = size === 'sm' ? 'h-8 w-8' : 'h-16 w-16'
+  const classes = size === 'sm' ? 'h-8 w-8' : 'h-[42px] w-[42px] md:h-16 md:w-16'
 
   return (
     <div className={`flex ${classes} items-center justify-center overflow-hidden`}>
@@ -718,19 +744,48 @@ function TeamLogo({
   )
 }
 
-function TeamPanelLink({
+function MatchTeamCard({
   id,
+  logo,
+  name,
+  role,
+  colors,
+  side,
 }: {
   id?: number
+  logo?: string
+  name: string
+  role: 'Local' | 'Visitante'
+  colors: TeamStyle
+  side: 'home' | 'away'
 }) {
-  if (!id) return null
+  const card = (
+    <div
+      className={`flex h-[94px] min-w-0 flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2 text-center transition md:h-full md:flex-row md:gap-3 md:rounded-2xl md:px-4 md:py-4 ${
+        side === 'away' ? 'md:flex-row-reverse md:text-right' : 'md:text-left'
+      }`}
+      style={getPanelStyle(colors)}
+    >
+      <TeamLogo logo={logo} name={name} />
+      <div className="min-w-0">
+        <p className="line-clamp-2 text-[11px] font-black leading-tight text-white md:truncate md:text-xl">
+          {name}
+        </p>
+        <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-[#dce5ef] md:mt-1 md:text-xs md:tracking-[0.12em]">
+          {role}
+        </p>
+      </div>
+    </div>
+  )
+
+  if (!id) return card
 
   return (
     <Link
       href={`/equipo/${id}`}
-      className="mt-2 inline-flex rounded-lg border border-white/8 bg-[#161a20] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-[#c8d0da] transition hover:bg-[#1c2128]"
+      className="block h-[94px] min-w-0 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7ff0b2] md:h-full md:rounded-2xl"
     >
-      Ver equipo
+      {card}
     </Link>
   )
 }
@@ -822,6 +877,7 @@ type PlayerFieldState = {
   displayName: string
   displayNumber?: number
   substitutionMinute?: number | null
+  substitutionExtraMinute?: number | null
   substitutionReplacementName?: string | null
   goals: number
   yellowCards: number
@@ -879,6 +935,7 @@ function getPlayerFieldState(
     displayName: abbreviatePlayerName(displayName),
     displayNumber,
     substitutionMinute: substitutionEvent?.time?.elapsed ?? null,
+    substitutionExtraMinute: substitutionEvent?.time?.extra ?? null,
     substitutionReplacementName: substitutionEvent?.assist?.name
       ? abbreviatePlayerName(substitutionEvent.assist.name)
       : null,
@@ -936,14 +993,16 @@ function FieldSideIncidences({
 
 function FieldSubstitutionBadge({
   substitutionMinute,
+  substitutionExtraMinute,
 }: {
   substitutionMinute?: number | null
+  substitutionExtraMinute?: number | null
 }) {
   if (!substitutionMinute) return null
 
   return (
     <div className="mt-0.5 max-w-[76px] text-center leading-tight sm:max-w-[104px]">
-      <div className="text-[9px] font-black text-[#ff8f8f] sm:text-[11px]">&darr; {substitutionMinute}&apos;</div>
+      <div className="text-[9px] font-black text-[#ff8f8f] sm:text-[11px]">&darr; {formatEventMinute(substitutionMinute, substitutionExtraMinute)}</div>
     </div>
   )
 }
@@ -1025,9 +1084,10 @@ function PlayerOnField({
         {playerState.displayName}
       </div>
       <div className="mx-auto flex w-fit justify-center">
-        <FieldSubstitutionBadge
-          substitutionMinute={playerState.substitutionMinute}
-        />
+                <FieldSubstitutionBadge
+                  substitutionMinute={playerState.substitutionMinute}
+                  substitutionExtraMinute={playerState.substitutionExtraMinute}
+                />
       </div>
     </div>
   )
@@ -1175,6 +1235,7 @@ function buildPanelPlayers({
           : undefined,
       substitutionDirection,
       substitutionMinute: playerOutEvent?.time?.elapsed ?? playerInEvent?.time?.elapsed ?? null,
+      substitutionExtraMinute: playerOutEvent?.time?.extra ?? playerInEvent?.time?.extra ?? null,
     }
   })
 }
@@ -1243,6 +1304,13 @@ export default async function PartidoDetallePage({ params }: PageProps) {
 
   const homeColors = getTeamStyle(homeTeam.name, true, homeLineup, 'player')
   const awayColors = getTeamStyle(awayTeam.name, false, awayLineup, 'player')
+  const headerStatusLabel = formatHeaderStatusLabel(
+    status.short,
+    status.long,
+    status.elapsed,
+    fixture.fixture.date
+  )
+  const headerStatusIsLive = isHeaderLiveStatus(status.short)
   const homeTeamEvents = events.filter((event) => isHomeEvent(event, homeTeam.name))
   const awayTeamEvents = events.filter((event) => isAwayEvent(event, awayTeam.name))
   const homeCaptainReference = getCaptainReference(homeLineup)
@@ -1299,41 +1367,37 @@ export default async function PartidoDetallePage({ params }: PageProps) {
             </h1>
           </div>
 
-          <div className="grid gap-3 px-2 py-3 md:grid-cols-[1fr_auto_1fr] md:items-start md:gap-4 md:px-4 md:py-5">
-            <div
-              className="flex items-center gap-3 rounded-2xl border px-2 py-3 md:justify-start md:px-4 md:py-4"
-              style={getPanelStyle(homeColors)}
-            >
-              <TeamLogo logo={homeTeam.logo} name={homeTeam.name} />
-              <div className="min-w-0">
-                <p className="truncate text-lg font-bold text-white md:text-xl">{homeTeam.name}</p>
-                <p className="text-xs uppercase tracking-[0.12em] text-[#8d98a7]">Local</p>
-                <TeamPanelLink id={homeTeam.id} />
-              </div>
-            </div>
+          <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-2 py-2.5 md:gap-4 md:px-4 md:py-5">
+            <MatchTeamCard
+              id={homeTeam.id}
+              logo={homeTeam.logo}
+              name={homeTeam.name}
+              role="Local"
+              colors={homeColors}
+              side="home"
+            />
 
-            <div className="pt-1 text-center md:self-start">
-              <div className="inline-flex rounded-md border border-[#25553d] bg-[#163828] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#7ff0b2]">
-                {formatStatusLabel(status.long, status.elapsed)}
+            <div className="flex min-w-[76px] flex-col items-center justify-center text-center md:min-w-[150px] md:self-start md:pt-1">
+              <div
+                className={`max-w-full truncate text-xs font-black uppercase tracking-[0.08em] md:rounded-md md:border md:border-[#25553d] md:bg-[#163828] md:px-3 md:py-1 md:text-[11px] md:tracking-[0.16em] ${
+                  headerStatusIsLive ? 'text-[#7ff0b2]' : 'text-[#dce5ef]'
+                }`}
+              >
+                {headerStatusLabel}
               </div>
-              <div className="mt-2 text-5xl font-black leading-none tracking-tight text-white md:text-6xl">
+              <div className="mt-1 whitespace-nowrap text-3xl font-black leading-none tracking-normal text-white md:mt-2 md:text-6xl">
                 {goals.home ?? '-'} <span className="text-[#566170]">-</span> {goals.away ?? '-'}
               </div>
             </div>
 
-            <div
-              className="flex items-center gap-3 rounded-2xl border px-2 py-3 md:justify-end md:px-4 md:py-4"
-              style={getPanelStyle(awayColors)}
-            >
-              <div className="min-w-0 text-right">
-                <p className="truncate text-lg font-bold text-white md:text-xl">{awayTeam.name}</p>
-                <p className="text-xs uppercase tracking-[0.12em] text-[#8d98a7]">Visitante</p>
-                <div className="flex justify-end">
-                  <TeamPanelLink id={awayTeam.id} />
-                </div>
-              </div>
-              <TeamLogo logo={awayTeam.logo} name={awayTeam.name} />
-            </div>
+            <MatchTeamCard
+              id={awayTeam.id}
+              logo={awayTeam.logo}
+              name={awayTeam.name}
+              role="Visitante"
+              colors={awayColors}
+              side="away"
+            />
           </div>
 
           <div className="grid gap-3 border-t border-white/6 bg-[#13181d] px-2 py-3 text-sm text-[#c8d0da] md:grid-cols-3 md:px-4">
@@ -1381,12 +1445,15 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                   {[...events].reverse().map((event, index) => {
                     const isHome = isHomeEvent(event, homeTeam.name)
                     const isAway = isAwayEvent(event, awayTeam.name)
-                    const minuteLabel = event.time?.elapsed ? `${event.time.elapsed}'` : '-'
+                    const minuteLabel = formatEventMinute(
+                      event.time?.elapsed,
+                      event.time?.extra
+                    )
                     const style = getEventTypeStyle(event)
 
                     return (
                       <div
-                        key={`${event.time?.elapsed || 'x'}-${index}`}
+                        key={`${event.time?.elapsed || 'x'}-${event.time?.extra || 0}-${index}`}
                         className="grid grid-cols-[1fr_56px_1fr] items-center border-b border-white/6 px-2 py-3 last:border-b-0 md:grid-cols-[1fr_72px_1fr] md:px-4"
                       >
                         <div className="min-w-0 pr-3">

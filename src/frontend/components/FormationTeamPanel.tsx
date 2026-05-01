@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { formatEventMinute } from '@/shared/utils/event-minute'
 
 type TeamStyle = {
   shirt: string
@@ -21,6 +22,7 @@ type PanelPlayer = {
   substitutionLabel?: string
   substitutionDirection?: 'in' | 'out'
   substitutionMinute?: number | null
+  substitutionExtraMinute?: number | null
 }
 
 type FormationTeamPanelProps = {
@@ -192,7 +194,9 @@ export default function FormationTeamPanel({
                       }`}
                     >
                       {player.substitutionDirection === 'in' ? <>&uarr;</> : <>&darr;</>}{' '}
-                      {player.substitutionMinute ? `${player.substitutionMinute}'` : ''}
+                      {player.substitutionMinute
+                        ? formatEventMinute(player.substitutionMinute, player.substitutionExtraMinute)
+                        : ''}
                     </p>
                     <p className="truncate text-[10px] text-[#9fb0c2]">
                       {player.substitutionLabel} {player.replacedPlayerName}

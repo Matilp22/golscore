@@ -108,6 +108,7 @@ function getEventExternalId(fixture: ApiFixture, event: ApiFixtureEvent) {
   return [
     fixture.fixture.id,
     event.time?.elapsed ?? 'minute',
+    event.time?.extra ?? 'no-extra',
     event.team?.id ?? 'team',
     event.player?.name ?? 'player',
     event.detail ?? 'detail',
@@ -161,22 +162,37 @@ async function syncMatchEvents(
     const events = await fetchFixtureEvents(footballApiBaseUrl, footballApiKey, fixture.fixture.id)
     const eventRows = events
       .filter(isGoalEventForScoreboard)
-      .map((event) => ({
-        match_id: matchId,
-        external_event_id: getEventExternalId(fixture, event),
-        team_id:
+      .map((event) => {
+        const storedMinute = event.time?.elapsed as number
+        const storedExtraMinute = event.time?.extra ?? null
+        const teamId =
           event.team?.id === fixture.teams.home.id
             ? homeTeamId
             : event.team?.id === fixture.teams.away.id
               ? awayTeamId
-              : null,
-        player_name: event.player?.name as string,
-        assist_name: event.assist?.name ?? null,
-        minute: event.time?.elapsed as number,
-        extra_minute: event.time?.extra ?? null,
-        type: event.type as string,
-        detail: event.detail ?? null,
-      }))
+              : null
+
+        console.info('event time', {
+          fixtureId: fixture.fixture.id,
+          player: event.player?.name ?? null,
+          elapsed: event.time?.elapsed ?? null,
+          extra: event.time?.extra ?? null,
+          storedMinute,
+          storedExtraMinute,
+        })
+
+        return {
+          match_id: matchId,
+          external_event_id: getEventExternalId(fixture, event),
+          team_id: teamId,
+          player_name: event.player?.name as string,
+          assist_name: event.assist?.name ?? null,
+          minute: storedMinute,
+          extra_minute: storedExtraMinute,
+          type: event.type as string,
+          detail: event.detail ?? null,
+        }
+      })
 
     console.info('[sync-match-events] eventos recibidos', {
       fixtureId: fixture.fixture.id,

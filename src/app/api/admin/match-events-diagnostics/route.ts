@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
+import { formatEventMinute } from '@/shared/utils/event-minute'
 
 type MatchEventRow = {
   id: string
@@ -211,7 +212,7 @@ export async function GET(request: Request) {
         league_external_id: league?.external_id ?? null,
         match_date: match?.match_date ?? null,
         team: team?.name ?? null,
-        minute: event.extra_minute ? `${event.minute}+${event.extra_minute}` : event.minute,
+        minute: formatEventMinute(event.minute, event.extra_minute),
         player: event.player_name,
         assist: event.assist_name,
         type: event.type,

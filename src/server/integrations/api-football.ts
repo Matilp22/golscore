@@ -8,6 +8,7 @@ import {
 import { getFootballApiConfig } from '@/server/config/env'
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { isFinishedStatus } from '@/shared/utils/match-status'
+import { formatEventMinute } from '@/shared/utils/event-minute'
 
 type ApiFootballResponse<T> = {
   errors?: Record<string, string>
@@ -473,6 +474,7 @@ export type PlayerEventMatch = {
   goalsAway: number | null
   events: Array<{
     minute: number | null
+    extraMinute?: number | null
     label: string
   }>
 }
@@ -803,7 +805,7 @@ function serializeGoalEventForLog(event: StoredMatchEventRow) {
   return {
     match_id: event.match_id,
     team_id: event.team_id,
-    minute: event.extra_minute ? `${event.minute}+${event.extra_minute}` : event.minute,
+    minute: formatEventMinute(event.minute, event.extra_minute),
     player: event.player_name,
     detail: event.detail,
   }
@@ -1795,6 +1797,7 @@ export async function getPlayerEventMatches(
       .filter((event) => eventMatchesPlayer(event, playerId, statType, playerName))
       .map((event) => ({
         minute: event.time?.elapsed ?? null,
+        extraMinute: event.time?.extra ?? null,
         label: getEventLabel(event, statType),
       }))
 

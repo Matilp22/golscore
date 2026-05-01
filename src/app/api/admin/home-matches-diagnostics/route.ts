@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getMatchesByDate } from '@/lib/api-football'
+import { formatEventMinute } from '@/shared/utils/event-minute'
 
 type MatchRow = {
   id: string | number
@@ -129,7 +130,7 @@ export async function GET(request: Request) {
         events_count: events.length,
         events: events.map((event) => ({
           team_id: event.team_id,
-          minute: event.extra_minute ? `${event.minute}+${event.extra_minute}` : event.minute,
+          minute: formatEventMinute(event.minute, event.extra_minute),
           player: event.player_name,
           type: event.type,
           detail: event.detail,
