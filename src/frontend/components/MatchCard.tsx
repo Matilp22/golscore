@@ -23,7 +23,7 @@ function Chip({ label }: { label: string }) {
   }
 
   return (
-    <span className={`rounded-full px-3 py-1 text-[10px] font-bold tracking-wide ${styles[label]}`}>
+    <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold tracking-wide ${styles[label]}`}>
       {label}
     </span>
   )
@@ -45,63 +45,63 @@ export default function MatchCard({
   return (
     <Link
       href={`/partido/${id}`}
-      className="block rounded-3xl border border-white/10 bg-zinc-900/85 p-5 shadow-lg shadow-black/20 transition hover:border-emerald-500/30"
+      className="block rounded-2xl border border-white/10 bg-zinc-900/85 p-3 shadow-lg shadow-black/20 transition hover:border-emerald-500/30"
     >
-      <div className="mb-4 flex items-center justify-between gap-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-400">{league}</p>
-          <p className="mt-1 text-xs text-zinc-500">{country || minute || time}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">{league}</p>
+          <p className="mt-0.5 text-[10px] text-zinc-500">{country || minute || time}</p>
         </div>
         <Chip label={status} />
       </div>
 
-      <div className="space-y-4">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center overflow-hidden">
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center overflow-hidden">
               {homeLogo ? (
                 <Image
                   src={homeLogo}
                   alt={home}
-                  width={40}
-                  height={40}
-                  className="h-10 w-10 object-contain"
+                  width={28}
+                  height={28}
+                  className="h-7 w-7 object-contain"
                 />
               ) : (
                 <span>•</span>
               )}
             </div>
-            <span className="text-sm font-medium text-white md:text-base">{home}</span>
+            <span className="text-xs font-medium text-white md:text-sm">{home}</span>
           </div>
-          <span className="text-xl font-extrabold tracking-wide text-white">
+          <span className="text-base font-extrabold tracking-wide text-white">
             {score.split(' - ')[0] || '-'}
           </span>
         </div>
 
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center overflow-hidden">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center overflow-hidden">
               {awayLogo ? (
                 <Image
                   src={awayLogo}
                   alt={away}
-                  width={40}
-                  height={40}
-                  className="h-10 w-10 object-contain"
+                  width={28}
+                  height={28}
+                  className="h-7 w-7 object-contain"
                 />
               ) : (
                 <span>•</span>
               )}
             </div>
-            <span className="text-sm font-medium text-white md:text-base">{away}</span>
+            <span className="text-xs font-medium text-white md:text-sm">{away}</span>
           </div>
-          <span className="text-xl font-extrabold tracking-wide text-white">
+          <span className="text-base font-extrabold tracking-wide text-white">
             {score.split(' - ')[1] || '-'}
           </span>
         </div>
       </div>
 
-      <div className="mt-4 border-t border-white/5 pt-3 text-xs text-zinc-500">
+      <div className="mt-2 border-t border-white/5 pt-2 text-[10px] text-zinc-500">
         Ver detalle del partido
       </div>
     </Link>

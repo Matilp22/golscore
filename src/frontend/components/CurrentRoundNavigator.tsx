@@ -111,14 +111,14 @@ export default function CurrentRoundNavigator({
   if (!selectedRound) return null
 
   return (
-    <section className="w-full overflow-hidden rounded-3xl border border-white/8 bg-[#0f1317]/92">
-      <div className="border-b border-white/6 bg-[#13181d] px-4 py-3">
-        <div className="flex items-center justify-between gap-3">
+    <section className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
+      <div className="border-b border-white/6 bg-[#13181d] px-2.5 py-2 md:px-3">
+        <div className="flex items-center justify-between gap-2">
           <button
             type="button"
             onClick={() => canGoPrev && setSelectedIndex((current) => current - 1)}
             disabled={!canGoPrev}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/8 bg-white/[0.03] text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/8 bg-white/[0.03] text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
             aria-label="Fecha anterior"
           >
             <span className="text-lg font-bold">‹</span>
@@ -128,11 +128,11 @@ export default function CurrentRoundNavigator({
             <button
               type="button"
               onClick={() => setIsOpen((current) => !current)}
-              className="mx-auto flex min-w-[180px] max-w-full items-center justify-center gap-2 rounded-2xl border border-white/8 bg-[#10151a] px-4 py-2.5 text-white transition hover:border-white/12 hover:bg-[#151b21]"
+            className="mx-auto flex min-w-[160px] max-w-full items-center justify-center gap-1.5 rounded-xl border border-white/8 bg-[#10151a] px-3 py-1.5 text-white transition hover:border-white/12 hover:bg-[#151b21]"
               aria-expanded={isOpen}
               aria-haspopup="listbox"
             >
-              <span className="truncate text-base font-black uppercase tracking-[0.08em] md:text-lg">
+              <span className="truncate text-sm font-black uppercase tracking-[0.07em] md:text-base">
                 {selectedRound.label}
               </span>
               <span className="text-[#8fa0b1]">
@@ -178,7 +178,7 @@ export default function CurrentRoundNavigator({
             type="button"
             onClick={() => canGoNext && setSelectedIndex((current) => current + 1)}
             disabled={!canGoNext}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/8 bg-white/[0.03] text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/8 bg-white/[0.03] text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
             aria-label="Fecha siguiente"
           >
             <span className="text-lg font-bold">›</span>
@@ -186,11 +186,11 @@ export default function CurrentRoundNavigator({
         </div>
       </div>
 
-      <div className="p-4">
-        <div className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#11161b]">
+      <div className="p-2 md:p-3">
+        <div className="w-full overflow-hidden rounded-xl border border-white/8 bg-[#11161b]">
           {selectedRound.days.map(([day, matches]) => (
             <div key={day} className="border-b border-white/10 last:border-b-0">
-              <div className="border-b border-white/8 bg-[#141a20] px-4 py-2 text-center text-sm font-bold text-white last:border-b-0">
+              <div className="border-b border-white/8 bg-[#141a20] px-3 py-1.5 text-center text-xs font-bold text-white last:border-b-0">
                 {day}
               </div>
 
@@ -198,39 +198,39 @@ export default function CurrentRoundNavigator({
                 <Link
                   key={match.id}
                   href={`/partido/${match.id}`}
-                  className="grid grid-cols-[74px_minmax(0,1fr)] items-center border-b border-white/8 text-sm transition hover:bg-[#151b21] focus-visible:bg-[#151b21] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7ff0b2]/60 focus-visible:ring-inset last:border-b-0"
+                  className="grid grid-cols-[58px_minmax(0,1fr)] items-center border-b border-white/8 text-xs transition hover:bg-[#151b21] focus-visible:bg-[#151b21] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7ff0b2]/60 focus-visible:ring-inset last:border-b-0 md:grid-cols-[64px_minmax(0,1fr)]"
                 >
-                  <div className="border-r border-white/8 px-3 py-3 text-center font-bold text-[#7ff0b2]">
+                  <div className="border-r border-white/8 px-2 py-1.5 text-center font-bold text-[#7ff0b2]">
                     {getMatchStatusLabel(match)}
                   </div>
 
-                  <div className="px-3 py-3">
-                    <div className="grid grid-cols-[minmax(0,1fr)_52px_minmax(0,1fr)] items-center gap-2">
-                      <div className="flex items-center justify-end gap-2 text-right">
+                  <div className="px-2 py-1.5">
+                    <div className="grid grid-cols-[minmax(0,1fr)_44px_minmax(0,1fr)] items-center gap-1.5">
+                      <div className="flex items-center justify-end gap-1.5 text-right">
                         <span className="truncate font-semibold text-[#dce5ef]">{match.home}</span>
                         {match.homeLogo ? (
                           <Image
                             src={match.homeLogo}
                             alt={match.home}
-                            width={18}
-                            height={18}
-                            className="h-[18px] w-[18px] object-contain"
+                            width={16}
+                            height={16}
+                            className="h-4 w-4 object-contain"
                           />
                         ) : null}
                       </div>
 
-                      <div className="text-center text-base font-black text-white">
+                      <div className="text-center text-sm font-black text-white">
                         {getMatchScoreLabel(match)}
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
                         {match.awayLogo ? (
                           <Image
                             src={match.awayLogo}
                             alt={match.away}
-                            width={18}
-                            height={18}
-                            className="h-[18px] w-[18px] object-contain"
+                            width={16}
+                            height={16}
+                            className="h-4 w-4 object-contain"
                           />
                         ) : null}
                         <span className="truncate font-semibold text-[#dce5ef]">{match.away}</span>

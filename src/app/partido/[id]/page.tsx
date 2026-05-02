@@ -1,6 +1,7 @@
 ﻿import {
   ApiFootballError,
   getMatchDetail,
+  type MatchBroadcaster,
   type MatchEvent,
   type MatchFixture,
   type MatchLineup,
@@ -1290,6 +1291,18 @@ export default async function PartidoDetallePage({ params }: PageProps) {
   const awayTeam = fixture.teams.away
   const goals = fixture.goals
   const status = fixture.fixture.status
+  const broadcastChannel =
+    typeof data.broadcastChannel === 'string' ? data.broadcastChannel : null
+  const broadcastLogoUrl =
+    typeof data.broadcastLogoUrl === 'string' ? data.broadcastLogoUrl : null
+  const broadcasters: MatchBroadcaster[] = Array.isArray(data.broadcasters)
+    ? data.broadcasters
+    : broadcastChannel
+      ? [{ name: broadcastChannel, logoUrl: broadcastLogoUrl, country: null }]
+      : []
+  const broadcastLabel = broadcasters.map((broadcaster) => broadcaster.name).join(' / ')
+  const headerBroadcastLogo =
+    broadcasters.find((broadcaster) => broadcaster.logoUrl)?.logoUrl ?? broadcastLogoUrl
   const stats: MatchStatisticsTeam[] = Array.isArray(data.statistics) ? data.statistics : []
   const events: MatchEvent[] = Array.isArray(data.events) ? data.events : []
   const lineups: MatchLineup[] = Array.isArray(data.lineups) ? data.lineups : []
@@ -1359,12 +1372,33 @@ export default async function PartidoDetallePage({ params }: PageProps) {
           />
 
           <div className="border-b border-white/6 px-2 py-3 md:px-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#7ff0b2]">
-              {translateCountry(fixture.league.country)}
-            </p>
-            <h1 className="mt-1 text-lg font-bold text-white md:text-xl">
-              {translateLeagueName(fixture.league.name)}
-            </h1>
+            <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#7ff0b2] md:text-[11px]">
+                  {translateCountry(fixture.league.country)}
+                </p>
+                <h1 className="mt-1 text-base font-bold text-white md:text-xl">
+                  {translateLeagueName(fixture.league.name)}
+                </h1>
+              </div>
+
+              {broadcastLabel ? (
+                <div className="flex max-w-full items-center gap-1.5 text-[10px] font-semibold text-[#dce5ef] md:text-xs">
+                  {headerBroadcastLogo ? (
+                    <Image
+                      src={headerBroadcastLogo}
+                      alt={broadcastLabel}
+                      width={18}
+                      height={18}
+                      className="h-[18px] w-[18px] shrink-0 object-contain"
+                    />
+                  ) : (
+                    <span className="h-2 w-2 shrink-0 rounded-sm bg-[#7ff0b2]/80" aria-hidden="true" />
+                  )}
+                  <span className="truncate">TV: {broadcastLabel}</span>
+                </div>
+              ) : null}
+            </div>
           </div>
 
           <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-2 py-2.5 md:gap-4 md:px-4 md:py-5">

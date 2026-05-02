@@ -136,9 +136,17 @@ export type MatchGoalScorers = {
   unassigned?: MatchGoalScorer[]
 }
 
+export type MatchBroadcaster = {
+  name: string
+  logoUrl?: string | null
+  country?: string | null
+}
+
 export type MatchListItemWithGoalScorers = MatchListItem & {
   goalScorers: MatchGoalScorers
+  broadcasters?: MatchBroadcaster[]
   broadcastChannel?: string | null
+  broadcastLogoUrl?: string | null
 }
 
 export type LeagueFixtureSummary = {
@@ -778,6 +786,7 @@ type HomeMatchRow = {
   id: number | string
   external_id: number | string | null
   broadcast_channel: string | null
+  broadcast_logo_url: string | null
   home_team_id: number | string | null
   away_team_id: number | string | null
 }
@@ -792,8 +801,17 @@ type StoredMatchEventRow = {
   detail: string | null
 }
 
+type HomeMatchBroadcastRow = {
+  match_id: number | string
+  broadcaster_name: string
+  broadcaster_logo_url: string | null
+  country: string | null
+}
+
 type HomeMatchExtras = {
+  broadcasters: MatchBroadcaster[]
   broadcastChannel: string | null
+  broadcastLogoUrl: string | null
   goalScorers: MatchGoalScorers
 }
 
@@ -832,7 +850,7 @@ async function fetchHomeMatchRowsByExternalId(
   for (const chunk of chunkArray(externalIds, 100)) {
     const primary = await supabase
       .from('matches')
-      .select('id, external_id, broadcast_channel, home_team_id, away_team_id')
+      .select('id, external_id, broadcast_channel, broadcast_logo_url, home_team_id, away_team_id')
       .in('external_id', chunk)
 
     if (!primary.error) {
@@ -844,6 +862,7 @@ async function fetchHomeMatchRowsByExternalId(
     missingBroadcastColumn =
       primary.error.code === '42703' ||
       message.includes('broadcast_channel') ||
+      message.includes('broadcast_logo_url') ||
       message.includes('schema cache')
 
     if (!missingBroadcastColumn) throw primary.error
@@ -867,11 +886,53 @@ async function fetchHomeMatchRowsByExternalId(
       ...((fallback.data ?? []) as Array<Omit<HomeMatchRow, 'broadcast_channel'>>).map((row) => ({
         ...row,
         broadcast_channel: null,
+        broadcast_logo_url: null,
       }))
     )
   }
 
   return fallbackRows
+}
+
+async function fetchHomeBroadcastRowsByMatchId(
+  supabase: ReturnType<typeof getSupabaseAdminClient>,
+  matchIds: string[]
+) {
+  const rows: HomeMatchBroadcastRow[] = []
+
+  for (const chunk of chunkArray(matchIds, 100)) {
+    const response = await supabase
+      .from('match_broadcasts')
+      .select('match_id, broadcaster_name, broadcaster_logo_url, country')
+      .in('match_id', chunk)
+      .order('broadcaster_name', { ascending: true })
+
+    if (response.error) {
+      const message = response.error.message.toLowerCase()
+      const isMissingOptionalBroadcastsTable =
+        response.error.code === '42P01' ||
+        response.error.code === 'PGRST205' ||
+        message.includes('match_broadcasts') ||
+        message.includes('schema cache')
+
+      if (isMissingOptionalBroadcastsTable) return []
+      throw response.error
+    }
+
+    rows.push(...((response.data ?? []) as HomeMatchBroadcastRow[]))
+  }
+
+  return rows
+}
+
+function getLegacyBroadcaster(row: HomeMatchRow): MatchBroadcaster | null {
+  if (!row.broadcast_channel) return null
+
+  return {
+    name: row.broadcast_channel,
+    logoUrl: row.broadcast_logo_url,
+    country: null,
+  }
 }
 
 function mapStoredGoalEvent(row: StoredMatchEventRow): MatchGoalScorer | null {
@@ -893,7 +954,7 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
         .filter((id) => Number.isFinite(id))
     ),
   ]
-  const empty = new Map<number, HomeMatchExtras>()
+  const empty = new Map<string, HomeMatchExtras>()
 
   if (!externalFixtureIds.length) return empty
 
@@ -901,10 +962,10 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
     const supabase = getSupabaseAdminClient()
     const matchRows = await fetchHomeMatchRowsByExternalId(supabase, externalFixtureIds)
     const visibleMatchesByExternalId = new Map(
-      matches.map((match) => [match.externalId ?? match.id, match])
+      matches.map((match) => [String(match.externalId ?? match.id), match])
     )
-    const matchRowsByExternalId = new Map<number, HomeMatchRow>()
-    const extrasByExternalId = new Map<number, HomeMatchExtras>()
+    const matchRowsByExternalId = new Map<string, HomeMatchRow>()
+    const extrasByExternalId = new Map<string, HomeMatchExtras>()
     const matchRowsByMatchId = new Map<string, HomeMatchRow>()
 
     for (const row of matchRows) {
@@ -913,10 +974,15 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
 
       if (!Number.isFinite(externalId)) continue
 
+      const externalKey = String(row.external_id)
+
       matchRowsByMatchId.set(matchId, row)
-      matchRowsByExternalId.set(externalId, row)
-      extrasByExternalId.set(externalId, {
+      matchRowsByExternalId.set(externalKey, row)
+      const legacyBroadcaster = getLegacyBroadcaster(row)
+      extrasByExternalId.set(externalKey, {
+        broadcasters: legacyBroadcaster ? [legacyBroadcaster] : [],
         broadcastChannel: row.broadcast_channel,
+        broadcastLogoUrl: row.broadcast_logo_url,
         goalScorers: createEmptyGoalScorers(),
       })
     }
@@ -943,6 +1009,59 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
 
       return extrasByExternalId
     }
+
+    const broadcastRows = await fetchHomeBroadcastRowsByMatchId(supabase, matchIds)
+    const broadcastsByMatchId = broadcastRows.reduce<Map<string, MatchBroadcaster[]>>(
+      (accumulator, row) => {
+        const matchId = String(row.match_id)
+        const current = accumulator.get(matchId) ?? []
+
+        current.push({
+          name: row.broadcaster_name,
+          logoUrl: row.broadcaster_logo_url,
+          country: row.country,
+        })
+        accumulator.set(matchId, current)
+
+        return accumulator
+      },
+      new Map()
+    )
+
+    for (const [matchId, broadcasters] of broadcastsByMatchId.entries()) {
+      const row = matchRowsByMatchId.get(matchId)
+      const externalId = row ? Number(row.external_id) : NaN
+      const extras = Number.isFinite(externalId) ? extrasByExternalId.get(String(row?.external_id)) : null
+
+      if (!extras || broadcasters.length === 0) continue
+
+      extras.broadcasters = broadcasters
+      extras.broadcastChannel = broadcasters.map((broadcaster) => broadcaster.name).join(' / ')
+      extras.broadcastLogoUrl = broadcasters.find((broadcaster) => broadcaster.logoUrl)?.logoUrl ?? null
+    }
+
+    console.info('[home-broadcasts]', {
+      visibleMatches: matches.length,
+      matchedRows: matchRows.length,
+      broadcastersLoaded: broadcastRows.length,
+      matches: matches.map((match) => {
+        const externalId = match.externalId ?? match.id
+        const row = matchRowsByExternalId.get(String(externalId)) ?? null
+        const extras = extrasByExternalId.get(String(externalId)) ?? null
+        const broadcastersForMatch = extras?.broadcasters ?? []
+
+        return {
+          home: match.home,
+          away: match.away,
+          matchId: row?.id ?? match.id,
+          externalId,
+          broadcastersForMatch: broadcastersForMatch.map((broadcaster) => ({
+            name: broadcaster.name,
+            hasLogo: Boolean(broadcaster.logoUrl),
+          })),
+        }
+      }),
+    })
 
     const eventRows: StoredMatchEventRow[] = []
 
@@ -995,9 +1114,9 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
       const matchRow = matchRowsByMatchId.get(String(event.match_id))
       if (!matchRow) continue
 
-      const externalId = Number(matchRow.external_id)
-      const visibleMatch = visibleMatchesByExternalId.get(externalId)
-      const extras = extrasByExternalId.get(externalId)
+      const externalKey = String(matchRow.external_id)
+      const visibleMatch = visibleMatchesByExternalId.get(externalKey)
+      const extras = extrasByExternalId.get(externalKey)
       const goal = mapStoredGoalEvent(event)
       if (!extras || !goal) continue
 
@@ -1027,7 +1146,7 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
 
     for (const match of matches) {
       const externalId = match.externalId ?? match.id
-      const row = matchRowsByExternalId.get(externalId) ?? null
+      const row = matchRowsByExternalId.get(String(externalId)) ?? null
       const internalMatchId = row ? String(row.id) : null
       const foundEvents = internalMatchId ? eventsByMatchId.get(internalMatchId) ?? [] : []
 
@@ -1050,6 +1169,7 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
       visibleExternalIds: externalFixtureIds.length,
       matchedRows: matchRows.length,
       matchIds: matchIds.length,
+      broadcastRows: broadcastRows.length,
       storedEvents: eventRows.length,
       goalEvents: goalEvents.length,
       mappedHomeGoals,
@@ -1078,19 +1198,84 @@ export async function withGoalScorers(
   return matches.map((match) => ({
     ...match,
     goalScorers:
-      extrasByFixtureId.get(match.externalId ?? match.id)?.goalScorers ||
+      extrasByFixtureId.get(String(match.externalId ?? match.id))?.goalScorers ||
       createEmptyGoalScorers(),
+    broadcasters:
+      extrasByFixtureId.get(String(match.externalId ?? match.id))?.broadcasters || [],
     broadcastChannel:
-      extrasByFixtureId.get(match.externalId ?? match.id)?.broadcastChannel || null,
+      extrasByFixtureId.get(String(match.externalId ?? match.id))?.broadcastChannel || null,
+    broadcastLogoUrl:
+      extrasByFixtureId.get(String(match.externalId ?? match.id))?.broadcastLogoUrl || null,
   }))
 }
 
+async function getMatchBroadcastByExternalId(externalId: number) {
+  try {
+    const supabase = getSupabaseAdminClient()
+    const response = await supabase
+      .from('matches')
+      .select('id, broadcast_channel, broadcast_logo_url')
+      .eq('external_id', externalId)
+      .maybeSingle()
+
+    if (response.error) {
+      const message = response.error.message.toLowerCase()
+      const isMissingBroadcastColumn =
+        response.error.code === '42703' ||
+        message.includes('broadcast_channel') ||
+        message.includes('broadcast_logo_url') ||
+        message.includes('schema cache')
+
+      if (isMissingBroadcastColumn) return { channel: null, logoUrl: null, broadcasters: [] }
+      throw response.error
+    }
+
+    const matchId = response.data?.id ? String(response.data.id) : null
+    const broadcastRows = matchId
+      ? await fetchHomeBroadcastRowsByMatchId(supabase, [matchId])
+      : []
+    const broadcasters = broadcastRows.map((row) => ({
+      name: row.broadcaster_name,
+      logoUrl: row.broadcaster_logo_url,
+      country: row.country,
+    }))
+
+    if (broadcasters.length) {
+      return {
+        channel: broadcasters.map((broadcaster) => broadcaster.name).join(' / '),
+        logoUrl: broadcasters.find((broadcaster) => broadcaster.logoUrl)?.logoUrl ?? null,
+        broadcasters,
+      }
+    }
+
+    return {
+      channel: response.data?.broadcast_channel ?? null,
+      logoUrl: response.data?.broadcast_logo_url ?? null,
+      broadcasters: response.data?.broadcast_channel
+        ? [{
+            name: response.data.broadcast_channel,
+            logoUrl: response.data.broadcast_logo_url,
+            country: null,
+          }]
+        : [],
+    }
+  } catch (error) {
+    console.warn('[match-broadcast] No se pudo leer televisacion del partido.', {
+      externalId,
+      message: error instanceof Error ? error.message : String(error),
+    })
+
+    return { channel: null, logoUrl: null, broadcasters: [] }
+  }
+}
+
 export async function getMatchDetail(id: number) {
-  const [fixture, events, statistics, lineups] = await Promise.all([
+  const [fixture, events, statistics, lineups, broadcast] = await Promise.all([
     apiFootball('/fixtures', { id }, { revalidate: 30 }),
     apiFootball('/fixtures/events', { fixture: id }, { revalidate: 30 }),
     apiFootball('/fixtures/statistics', { fixture: id }, { revalidate: 30 }),
     apiFootball('/fixtures/lineups', { fixture: id }, { revalidate: 30 }),
+    getMatchBroadcastByExternalId(id),
   ])
 
   return {
@@ -1099,6 +1284,9 @@ export async function getMatchDetail(id: number) {
     statistics:
       (statistics as ApiFootballResponse<MatchStatisticsTeam>).response || [],
     lineups: (lineups as ApiFootballResponse<MatchLineup>).response || [],
+    broadcastChannel: broadcast.channel,
+    broadcastLogoUrl: broadcast.logoUrl,
+    broadcasters: broadcast.broadcasters,
   }
 }
 

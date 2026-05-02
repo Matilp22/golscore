@@ -18,6 +18,7 @@ import {
   getExcludedCompetitionReason,
   isExcludedCompetition,
 } from '@/shared/utils/competition-filter'
+import { formatMatchStatusUnderScore } from '@/shared/utils/match-display'
 
 function getBuenosAiresTodayISO() {
   const formatter = new Intl.DateTimeFormat('en-CA', {
@@ -1139,7 +1140,7 @@ export default async function HomePage({
           </div>
         </header>
 
-          <main className="min-w-0 space-y-4">
+          <main className="min-w-0 space-y-2">
             {dataError ? (
               <div className="rounded-2xl border border-[#5a2a2a] bg-[#3b1919] p-6">
                 <p className="text-sm font-medium text-[#ffd5d5]">
@@ -1149,40 +1150,40 @@ export default async function HomePage({
             ) : null}
 
             {visibleCompetitions.length ? (
-              <section className="w-full min-w-0 space-y-3">
-                <div className="space-y-3">
+              <section className="w-full min-w-0 space-y-2">
+                <div className="space-y-2">
                   {visibleCompetitions.map((competition) => (
                     <div
                       id={competition.key}
                       key={competition.key}
-                      className="scroll-mt-5 overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92"
+                      className="scroll-mt-4 overflow-hidden rounded-xl border border-white/8 bg-[#0f1317]/92"
                     >
-                      <div className="border-y border-[#25553d]/45 bg-[#132019] px-3 py-3 shadow-[inset_0_1px_0_rgba(127,240,178,0.08)] sm:px-4">
-                        <div className="flex min-w-0 items-center justify-between gap-3">
-                          <div className="flex min-w-0 items-center gap-3">
+                      <div className="border-y border-[#25553d]/45 bg-[#132019] px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(127,240,178,0.08)] sm:px-3">
+                        <div className="flex min-w-0 items-center justify-between gap-2">
+                          <div className="flex min-w-0 items-center gap-2">
                             {competition.logo ? (
-                              <div className="flex h-8 w-8 items-center justify-center">
+                              <div className="flex h-6 w-6 items-center justify-center">
                                 <Image
                                   src={competition.logo}
                                   alt={competition.title}
-                                  width={24}
-                                  height={24}
-                                  className="h-6 w-6 object-contain"
+                                  width={20}
+                                  height={20}
+                                  className="h-5 w-5 object-contain"
                                 />
                               </div>
                             ) : (
-                              <div className="flex h-8 w-8 items-center justify-center">
-                                <span className="h-5 w-4 bg-[#6f7884] [clip-path:polygon(50%_0,92%_16%,84%_72%,50%_100%,16%_72%,8%_16%)]" />
+                              <div className="flex h-6 w-6 items-center justify-center">
+                                <span className="h-4 w-3 bg-[#6f7884] [clip-path:polygon(50%_0,92%_16%,84%_72%,50%_100%,16%_72%,8%_16%)]" />
                               </div>
                             )}
                             <div className="min-w-0">
-                              <h2 className="break-words text-[1.05rem] font-black text-[#f3f6fa] md:text-xl">
+                              <h2 className="break-words text-sm font-black text-[#f3f6fa] md:text-base">
                                 {competition.title}
                               </h2>
                             </div>
                           </div>
 
-                          <div className="shrink-0 rounded-md border border-[#25553d]/45 bg-[#0f1714] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9ed6b8] sm:px-2.5 sm:text-[11px]">
+                          <div className="shrink-0 rounded border border-[#25553d]/45 bg-[#0f1714] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.06em] text-[#9ed6b8]">
                             {competition.matches.length} partido{competition.matches.length !== 1 ? 's' : ''}
                           </div>
                         </div>
@@ -1203,8 +1204,15 @@ export default async function HomePage({
                             away={match.away}
                             score={`${match.goalsHome ?? '-'} - ${match.goalsAway ?? '-'}`}
                             status={formatStatus(match.statusShort, match.minute)}
+                            statusUnderScore={formatMatchStatusUnderScore({
+                              statusShort: match.statusShort,
+                              minute: match.minute,
+                              date: match.date,
+                            })}
                             goalScorers={match.goalScorers}
+                            broadcasters={match.broadcasters}
                             broadcastChannel={match.broadcastChannel}
+                            broadcastLogoUrl={match.broadcastLogoUrl}
                           />
                         ))}
                       </div>
