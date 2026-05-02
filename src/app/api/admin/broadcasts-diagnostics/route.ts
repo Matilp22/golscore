@@ -19,6 +19,20 @@ type BroadcastRow = {
   created_at?: string
 }
 
+type BroadcastRuleRow = {
+  id: string
+  league_external_id: string | null
+  league_name: string | null
+  country: string | null
+  home_team_name: string | null
+  away_team_name: string | null
+  broadcaster_name: string
+  broadcaster_logo_url: string | null
+  priority: number | null
+  active: boolean | null
+  created_at?: string
+}
+
 function isAuthorized(request: Request) {
   const cronSecret = process.env.CRON_SECRET
   const isProduction = process.env.NODE_ENV === 'production'
@@ -45,7 +59,7 @@ function addDaysToISO(isoDate: string, amount: number) {
 
   const y = utcDate.getUTCFullYear()
   const m = String(utcDate.getUTCMonth() + 1).padStart(2, '0')
-  const d = String(utcDate.getUTCDate() + 0).padStart(2, '0')
+  const d = String(utcDate.getUTCDate()).padStart(2, '0')
 
   return `${y}-${m}-${d}`
 }
@@ -196,6 +210,7 @@ export async function GET(request: Request) {
       latestResult,
       visibleBroadcastsResult,
       rulesCountResult,
+      activeRulesResult,
       upcomingWithoutTvResult,
       upcomingWithTvResult,
     ] = await Promise.all([
@@ -213,6 +228,13 @@ export async function GET(request: Request) {
       supabase
         .from('broadcast_rules')
         .select('*', { count: 'exact', head: true }),
+      supabase
+        .from('broadcast_rules')
+        .select('id, league_external_id, league_name, country, home_team_name, away_team_name, broadcaster_name, broadcaster_logo_url, priority, active, created_at')
+        .eq('active', true)
+        .order('priority', { ascending: true })
+        .order('created_at', { ascending: true })
+        .limit(20),
       getUpcomingMatchesWithoutBroadcasts(supabase, {
         dateFrom: date,
         dateTo,
@@ -230,6 +252,7 @@ export async function GET(request: Request) {
     let totalMatchBroadcasts = countResult.count ?? 0
     let latestBroadcasts = (latestResult.data ?? []) as BroadcastRow[]
     let totalBroadcastRules = rulesCountResult.count ?? 0
+    let activeRulesSample = (activeRulesResult.data ?? []) as BroadcastRuleRow[]
 
     if (countResult.error) {
       if (!isMissingOptionalBroadcastsTable(countResult.error)) throw countResult.error
@@ -246,6 +269,11 @@ export async function GET(request: Request) {
     if (rulesCountResult.error) {
       if (!isMissingOptionalRulesTable(rulesCountResult.error)) throw rulesCountResult.error
       totalBroadcastRules = 0
+    }
+
+    if (activeRulesResult.error) {
+      if (!isMissingOptionalRulesTable(activeRulesResult.error)) throw activeRulesResult.error
+      activeRulesSample = []
     }
 
     const broadcastsByMatchId = visibleBroadcastsResult.rows.reduce<Map<string, BroadcastRow[]>>(
@@ -304,6 +332,7 @@ export async function GET(request: Request) {
           ? 'No hay broadcasters cargados en Supabase'
           : null,
       latest_broadcasts: latestBroadcasts,
+      active_rules_sample: activeRulesSample,
       visible_matches: visibleDiagnostics,
       upcoming_without_tv: upcomingWithoutTvResult.matches.slice(0, 30),
       upcoming_with_tv: upcomingWithTvResult.matches
