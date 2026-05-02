@@ -1,3 +1,5 @@
+import { isExcludedCompetition } from '@/shared/utils/competition-filter'
+
 export type TournamentPageConfig = {
   key: string
   title: string
@@ -404,15 +406,21 @@ export const TOURNAMENT_PAGE_CONFIGS: TournamentPageConfig[] = [
   },
 ]
 
+export const VISIBLE_TOURNAMENT_PAGE_CONFIGS = TOURNAMENT_PAGE_CONFIGS.filter(
+  (tournament) => !isExcludedCompetition(tournament)
+)
+
 export const SIDEBAR_SECTION_CONFIGS: SidebarSectionConfig[] = Object.keys(
   SECTION_PAGE_TITLES
-).map((sectionKey) => ({
-  key: sectionKey,
-  title: SECTION_PAGE_TITLES[sectionKey],
-  tournaments: TOURNAMENT_PAGE_CONFIGS.filter(
-    (tournament) => tournament.sectionKey === sectionKey
-  ),
-}))
+)
+  .map((sectionKey) => ({
+    key: sectionKey,
+    title: SECTION_PAGE_TITLES[sectionKey],
+    tournaments: VISIBLE_TOURNAMENT_PAGE_CONFIGS.filter(
+      (tournament) => tournament.sectionKey === sectionKey
+    ),
+  }))
+  .filter((section) => section.tournaments.length > 0)
 
 export function getSectionConfig(sectionKey: string) {
   return SIDEBAR_SECTION_CONFIGS.find((section) => section.key === sectionKey)

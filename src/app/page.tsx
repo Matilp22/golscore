@@ -14,6 +14,7 @@ import {
   getSectionConfig,
 } from '@/lib/tournament-pages'
 import { isFinishedStatus, isLiveStatus as isActiveLiveStatus } from '@/shared/utils/match-status'
+import { isExcludedCompetition } from '@/shared/utils/competition-filter'
 
 function getBuenosAiresTodayISO() {
   const formatter = new Intl.DateTimeFormat('en-CA', {
@@ -941,11 +942,28 @@ function sortHomeCompetitions(competitions: CompetitionBucket[]) {
 }
 
 function groupMatchesWithPromiedosStructure(matches: ApiMatch[]): SectionBucket[] {
-  const cleanMatches = matches.filter((match) => !isYouthLeague(match))
+  const cleanMatches = matches.filter(
+    (match) =>
+      !isYouthLeague(match) &&
+      !isExcludedCompetition({
+        league: match.league,
+        country: match.country,
+      })
+  )
   const assignedMatchIds = new Set<number>()
   const competitionBuckets: CompetitionBucket[] = []
 
   for (const rule of LEAGUE_RULES) {
+    if (
+      isExcludedCompetition({
+        key: rule.key,
+        title: rule.baseTitle,
+        sectionTitle: rule.sectionTitle,
+      })
+    ) {
+      continue
+    }
+
     const filtered = cleanMatches.filter((match) => {
       if (assignedMatchIds.has(match.id)) return false
       return rule.match(match)
