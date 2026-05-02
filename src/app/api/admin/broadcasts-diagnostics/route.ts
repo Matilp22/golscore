@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getMatchesByDate } from '@/lib/api-football'
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
+import { getUpcomingMatchesWithoutBroadcasts } from '@/server/broadcasts/admin'
 
 type MatchRow = {
   id: string | number
@@ -37,6 +38,18 @@ function getBuenosAiresTodayISO() {
   }).format(new Date())
 }
 
+function addDaysToISO(isoDate: string, amount: number) {
+  const [year, month, day] = isoDate.split('-').map(Number)
+  const utcDate = new Date(Date.UTC(year, month - 1, day))
+  utcDate.setUTCDate(utcDate.getUTCDate() + amount)
+
+  const y = utcDate.getUTCFullYear()
+  const m = String(utcDate.getUTCMonth() + 1).padStart(2, '0')
+  const d = String(utcDate.getUTCDate() + 0).padStart(2, '0')
+
+  return `${y}-${m}-${d}`
+}
+
 function chunkArray<T>(items: T[], size: number) {
   const chunks: T[][] = []
 
@@ -65,6 +78,17 @@ function isMissingOptionalBroadcastColumns(error: { code?: string; message: stri
     error.code === '42703' ||
     message.includes('broadcast_channel') ||
     message.includes('broadcast_logo_url') ||
+    message.includes('schema cache')
+  )
+}
+
+function isMissingOptionalRulesTable(error: { code?: string; message: string }) {
+  const message = error.message.toLowerCase()
+
+  return (
+    error.code === '42P01' ||
+    error.code === 'PGRST205' ||
+    message.includes('broadcast_rules') ||
     message.includes('schema cache')
   )
 }
@@ -147,6 +171,7 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const date = searchParams.get('date') || getBuenosAiresTodayISO()
+    const dateTo = searchParams.get('dateTo') || searchParams.get('to') || addDaysToISO(date, 14)
     const supabase = getSupabaseAdminClient()
     const visibleMatches = await getMatchesByDate(date)
     const externalIds = [
@@ -166,7 +191,14 @@ export async function GET(request: Request) {
         .map((row) => [String(row.external_id), row])
     )
     const matchIds = [...new Set(matchRows.map((row) => String(row.id)))]
-    const [countResult, latestResult, visibleBroadcastsResult] = await Promise.all([
+    const [
+      countResult,
+      latestResult,
+      visibleBroadcastsResult,
+      rulesCountResult,
+      upcomingWithoutTvResult,
+      upcomingWithTvResult,
+    ] = await Promise.all([
       supabase
         .from('match_broadcasts')
         .select('*', { count: 'exact', head: true }),
@@ -178,10 +210,26 @@ export async function GET(request: Request) {
       matchIds.length
         ? fetchBroadcastRows(supabase, matchIds)
         : Promise.resolve({ rows: [], tableExists: true }),
+      supabase
+        .from('broadcast_rules')
+        .select('*', { count: 'exact', head: true }),
+      getUpcomingMatchesWithoutBroadcasts(supabase, {
+        dateFrom: date,
+        dateTo,
+        includeWithBroadcasts: false,
+        limit: 50,
+      }),
+      getUpcomingMatchesWithoutBroadcasts(supabase, {
+        dateFrom: date,
+        dateTo,
+        includeWithBroadcasts: true,
+        limit: 100,
+      }),
     ])
     let tableExists = visibleBroadcastsResult.tableExists
     let totalMatchBroadcasts = countResult.count ?? 0
     let latestBroadcasts = (latestResult.data ?? []) as BroadcastRow[]
+    let totalBroadcastRules = rulesCountResult.count ?? 0
 
     if (countResult.error) {
       if (!isMissingOptionalBroadcastsTable(countResult.error)) throw countResult.error
@@ -193,6 +241,11 @@ export async function GET(request: Request) {
       if (!isMissingOptionalBroadcastsTable(latestResult.error)) throw latestResult.error
       tableExists = false
       latestBroadcasts = []
+    }
+
+    if (rulesCountResult.error) {
+      if (!isMissingOptionalRulesTable(rulesCountResult.error)) throw rulesCountResult.error
+      totalBroadcastRules = 0
     }
 
     const broadcastsByMatchId = visibleBroadcastsResult.rows.reduce<Map<string, BroadcastRow[]>>(
@@ -243,13 +296,40 @@ export async function GET(request: Request) {
     return NextResponse.json({
       ok: true,
       date,
+      date_to: dateTo,
       total_match_broadcasts: totalMatchBroadcasts,
+      total_broadcast_rules: totalBroadcastRules,
       message:
         !tableExists || totalMatchBroadcasts === 0
           ? 'No hay broadcasters cargados en Supabase'
           : null,
       latest_broadcasts: latestBroadcasts,
       visible_matches: visibleDiagnostics,
+      upcoming_without_tv: upcomingWithoutTvResult.matches.slice(0, 30),
+      upcoming_with_tv: upcomingWithTvResult.matches
+        .filter((match) => match.broadcasters.length > 0)
+        .slice(0, 30),
+      sample_by_league: upcomingWithTvResult.matches.reduce<Record<string, {
+        league: string
+        with_tv: number
+        without_tv: number
+      }>>((accumulator, match) => {
+        const key = match.league || 'Sin liga'
+        const current = accumulator[key] ?? {
+          league: key,
+          with_tv: 0,
+          without_tv: 0,
+        }
+
+        if (match.broadcasters.length > 0) {
+          current.with_tv += 1
+        } else {
+          current.without_tv += 1
+        }
+
+        accumulator[key] = current
+        return accumulator
+      }, {}),
     })
   } catch (error) {
     console.error('[broadcasts-diagnostics] Error completo', error)
