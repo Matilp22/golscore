@@ -8,8 +8,16 @@ type CompetitionFilterInput =
       name?: string | null
       country?: string | null
       league?: string | { name?: string | null; country?: string | null } | null
+      leagueName?: string | null
       sectionTitle?: string | null
       searchTerms?: string[] | null
+      home?: string | null
+      away?: string | null
+      homeTeam?: { name?: string | null } | null
+      awayTeam?: { name?: string | null } | null
+      round?: string | null
+      stage?: string | null
+      group?: string | null
     }
 
 export function normalizeCompetitionText(value: string) {
@@ -31,7 +39,15 @@ function collectCompetitionParts(input: CompetitionFilterInput): string[] {
     input.title,
     input.name,
     input.country,
+    input.leagueName,
     input.sectionTitle,
+    input.home,
+    input.away,
+    input.homeTeam?.name,
+    input.awayTeam?.name,
+    input.round,
+    input.stage,
+    input.group,
     ...(input.searchTerms ?? []),
   ]
 
@@ -44,21 +60,48 @@ function collectCompetitionParts(input: CompetitionFilterInput): string[] {
   return parts.filter((part): part is string => Boolean(part))
 }
 
-function matchesExcludedCompetitionText(text: string) {
+export function getExcludedCompetitionReason(input: CompetitionFilterInput) {
+  const text = normalizeCompetitionText(collectCompetitionParts(input).join(' '))
+
   if (!text) return false
 
-  return (
-    /\b(women|woman|female|feminine|feminile|femenino|femenina|femenil|frauen|fem)\b/.test(text) ||
-    /\b(u|under|sub)\s*(17|18|19|20|21|23)\b/.test(text) ||
-    /\b(youth|juvenil|juveniles)\b/.test(text) ||
-    /\b(reserve|reserves|reserva|reservas|proyeccion)\b/.test(text) ||
-    /\b(amateur|academy|development)\b/.test(text) ||
-    text.includes('promocional amateur')
-  )
+  if (/\b(women|woman|female|feminine|feminile|femenino|femenina|femenil|frauen|fem)\b/.test(text)) {
+    return 'women'
+  }
+
+  if (/\b(u|under|sub)\s*(17|18|19|20|21|23)\b/.test(text)) {
+    return 'youth-age'
+  }
+
+  if (/\b(youth|juvenil|juveniles)\b/.test(text)) {
+    return 'youth'
+  }
+
+  if (/\b(reserve|reserves|reserva|reservas|proyeccion)\b/.test(text)) {
+    return 'reserve'
+  }
+
+  if (/\b(amateur|academy|development)\b/.test(text) || text.includes('promocional amateur')) {
+    return 'non-professional'
+  }
+
+  if (
+    text.includes('premier league 2') ||
+    text.includes('premier league u21') ||
+    text.includes('premier league u23') ||
+    text.includes('professional development league') ||
+    (text.includes('premier league cup') && /\b(u21|u23|development)\b/.test(text))
+  ) {
+    return 'development-league'
+  }
+
+  return false
 }
 
 export function isExcludedCompetition(input: CompetitionFilterInput) {
-  const text = normalizeCompetitionText(collectCompetitionParts(input).join(' '))
+  return Boolean(getExcludedCompetitionReason(input))
+}
 
-  return matchesExcludedCompetitionText(text)
+export function isExcludedMatch(input: CompetitionFilterInput) {
+  return isExcludedCompetition(input)
 }

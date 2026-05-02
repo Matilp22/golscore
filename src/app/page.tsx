@@ -14,7 +14,10 @@ import {
   getSectionConfig,
 } from '@/lib/tournament-pages'
 import { isFinishedStatus, isLiveStatus as isActiveLiveStatus } from '@/shared/utils/match-status'
-import { isExcludedCompetition } from '@/shared/utils/competition-filter'
+import {
+  getExcludedCompetitionReason,
+  isExcludedCompetition,
+} from '@/shared/utils/competition-filter'
 
 function getBuenosAiresTodayISO() {
   const formatter = new Intl.DateTimeFormat('en-CA', {
@@ -147,6 +150,24 @@ function isYouthLeague(match: ApiMatch) {
     league.includes('sub-') ||
     league.includes('sub ')
   )
+}
+
+function isExactLeagueId(match: ApiMatch, leagueId: number) {
+  return match.leagueId === leagueId
+}
+
+function isExactLeagueName(match: ApiMatch, expectedName: string) {
+  return leagueText(match).trim() === expectedName
+}
+
+function getHomeExclusionReason(match: ApiMatch) {
+  return getExcludedCompetitionReason({
+    league: match.league,
+    leagueName: match.league,
+    country: match.country,
+    home: match.home,
+    away: match.away,
+  })
 }
 
 function sortMatches(matches: ApiMatch[]) {
@@ -425,7 +446,10 @@ const LEAGUE_RULES: LeagueRule[] = [
     baseTitle: 'Premier League',
     match: (match) =>
       countryText(match).includes('england') &&
-      leagueText(match).includes('premier league') &&
+      (
+        isExactLeagueId(match, 39) ||
+        isExactLeagueName(match, 'premier league')
+      ) &&
       !isWomenLeague(match),
   },
   {
@@ -457,7 +481,10 @@ const LEAGUE_RULES: LeagueRule[] = [
     baseTitle: 'La Liga',
     match: (match) =>
       countryText(match).includes('spain') &&
-      leagueText(match).includes('la liga') &&
+      (
+        isExactLeagueId(match, 140) ||
+        isExactLeagueName(match, 'la liga')
+      ) &&
       !isWomenLeague(match),
   },
   {
@@ -485,7 +512,10 @@ const LEAGUE_RULES: LeagueRule[] = [
     baseTitle: 'Serie A',
     match: (match) =>
       countryText(match).includes('italy') &&
-      leagueText(match).includes('serie a') &&
+      (
+        isExactLeagueId(match, 135) ||
+        isExactLeagueName(match, 'serie a')
+      ) &&
       !isWomenLeague(match),
   },
   {
@@ -513,7 +543,10 @@ const LEAGUE_RULES: LeagueRule[] = [
     baseTitle: 'Bundesliga',
     match: (match) =>
       countryText(match).includes('germany') &&
-      leagueText(match).includes('bundesliga') &&
+      (
+        isExactLeagueId(match, 78) ||
+        isExactLeagueName(match, 'bundesliga')
+      ) &&
       !isWomenLeague(match),
   },
   {
@@ -559,7 +592,10 @@ const LEAGUE_RULES: LeagueRule[] = [
     baseTitle: 'Ligue 1',
     match: (match) =>
       countryText(match).includes('france') &&
-      leagueText(match).includes('ligue 1') &&
+      (
+        isExactLeagueId(match, 61) ||
+        isExactLeagueName(match, 'ligue 1')
+      ) &&
       !isWomenLeague(match),
   },
   {
@@ -942,14 +978,24 @@ function sortHomeCompetitions(competitions: CompetitionBucket[]) {
 }
 
 function groupMatchesWithPromiedosStructure(matches: ApiMatch[]): SectionBucket[] {
-  const cleanMatches = matches.filter(
-    (match) =>
-      !isYouthLeague(match) &&
-      !isExcludedCompetition({
+  const cleanMatches = matches.filter((match) => {
+    const reason =
+      (isYouthLeague(match) ? 'legacy-youth-filter' : false) ||
+      getHomeExclusionReason(match)
+    const excluded = Boolean(reason)
+
+    if (excluded && process.env.NODE_ENV === 'development') {
+      console.info('[home-filter] excluded match', {
         league: match.league,
-        country: match.country,
+        leagueId: match.leagueId ?? null,
+        home: match.home,
+        away: match.away,
+        reason,
       })
-  )
+    }
+
+    return !excluded
+  })
   const assignedMatchIds = new Set<number>()
   const competitionBuckets: CompetitionBucket[] = []
 

@@ -10,6 +10,7 @@ import {
   toggleFavoriteLeague,
 } from '@/frontend/services/favoriteLeaguesService'
 import type { SidebarSectionConfig, TournamentPageConfig } from '@/lib/tournament-pages'
+import { isExcludedCompetition } from '@/shared/utils/competition-filter'
 
 type SidebarNavProps = {
   sections: SidebarSectionConfig[]
@@ -73,14 +74,26 @@ export default function SidebarNav({
   const [favoriteKeys, setFavoriteKeys] = useState<string[]>([])
   const [remoteFavoriteUserId, setRemoteFavoriteUserId] = useState<string | null>(null)
   const highlighted = new Set(highlightedTournamentKeys)
+  const visibleSections = useMemo(
+    () =>
+      sections
+        .map((section) => ({
+          ...section,
+          tournaments: section.tournaments.filter(
+            (tournament) => !isExcludedCompetition(tournament)
+          ),
+        }))
+        .filter((section) => section.tournaments.length > 0),
+    [sections]
+  )
 
   const tournamentsByKey = useMemo(() => {
     return new Map(
-      sections.flatMap((section) =>
+      visibleSections.flatMap((section) =>
         section.tournaments.map((tournament) => [tournament.key, tournament] as const)
       )
     )
-  }, [sections])
+  }, [visibleSections])
 
   const favoriteTournaments = favoriteKeys
     .map((key) => tournamentsByKey.get(key))
@@ -203,7 +216,7 @@ export default function SidebarNav({
       tournaments: favoriteTournaments,
       isFavorites: true,
     },
-    ...sections.map((section) => ({ ...section, isFavorites: false })),
+    ...visibleSections.map((section) => ({ ...section, isFavorites: false })),
   ]
 
   return (
