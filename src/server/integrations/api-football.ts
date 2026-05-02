@@ -808,6 +808,21 @@ type HomeMatchBroadcastRow = {
   country: string | null
 }
 
+type HomeBroadcastRuleRow = {
+  id: string
+  match_external_id?: string | null
+  match_date?: string | null
+  league_external_id: string | null
+  league_name: string | null
+  country: string | null
+  home_team_name: string | null
+  away_team_name: string | null
+  broadcaster_name: string
+  broadcaster_logo_url: string | null
+  priority: number | null
+  active: boolean | null
+}
+
 type HomeMatchExtras = {
   broadcasters: MatchBroadcaster[]
   broadcastChannel: string | null
@@ -925,6 +940,177 @@ async function fetchHomeBroadcastRowsByMatchId(
   return rows
 }
 
+async function fetchHomeBroadcastRules(
+  supabase: ReturnType<typeof getSupabaseAdminClient>
+) {
+  const response = await supabase
+    .from('broadcast_rules')
+    .select('id, match_external_id, match_date, league_external_id, league_name, country, home_team_name, away_team_name, broadcaster_name, broadcaster_logo_url, priority, active')
+    .eq('active', true)
+    .order('priority', { ascending: true })
+    .order('created_at', { ascending: true })
+
+  if (response.error) {
+    const message = response.error.message.toLowerCase()
+    const isMissingOptionalRulesTable =
+      response.error.code === '42P01' ||
+      response.error.code === 'PGRST205' ||
+      message.includes('broadcast_rules') ||
+      message.includes('schema cache')
+
+    if (isMissingOptionalRulesTable) return []
+    const isMissingSpecificRuleColumn =
+      response.error.code === '42703' ||
+      message.includes('match_external_id') ||
+      message.includes('match_date')
+
+    if (isMissingSpecificRuleColumn) {
+      const fallback = await supabase
+        .from('broadcast_rules')
+        .select('id, league_external_id, league_name, country, home_team_name, away_team_name, broadcaster_name, broadcaster_logo_url, priority, active')
+        .eq('active', true)
+        .order('priority', { ascending: true })
+        .order('created_at', { ascending: true })
+
+      if (fallback.error) return []
+
+      return (fallback.data ?? []) as HomeBroadcastRuleRow[]
+    }
+
+    throw response.error
+  }
+
+  return (response.data ?? []) as HomeBroadcastRuleRow[]
+}
+
+function normalizeBroadcastRuleText(value?: string | number | null) {
+  return String(value ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function textBroadcastRuleMatches(ruleValue: string | null, actualValue?: string | null) {
+  if (!ruleValue) return true
+
+  const ruleText = normalizeBroadcastRuleText(ruleValue)
+  const actualText = normalizeBroadcastRuleText(actualValue)
+
+  if (!ruleText || !actualText) return false
+
+  return actualText.includes(ruleText) || ruleText.includes(actualText)
+}
+
+function teamBroadcastRuleMatches(ruleTeam: string | null, match: MatchListItem) {
+  if (!ruleTeam) return true
+
+  return (
+    textBroadcastRuleMatches(ruleTeam, match.home) ||
+    textBroadcastRuleMatches(ruleTeam, match.away)
+  )
+}
+
+function homeBroadcastRuleMatches(rule: HomeBroadcastRuleRow, match: MatchListItem) {
+  if (
+    rule.match_external_id &&
+    String(rule.match_external_id) !== String(match.externalId ?? match.id)
+  ) {
+    return false
+  }
+
+  if (
+    rule.match_date &&
+    match.date.slice(0, 10) !== rule.match_date.slice(0, 10)
+  ) {
+    return false
+  }
+
+  if (
+    rule.league_external_id &&
+    String(rule.league_external_id) !== String(match.leagueId ?? '')
+  ) {
+    return false
+  }
+
+  return (
+    textBroadcastRuleMatches(rule.league_name, match.league) &&
+    textBroadcastRuleMatches(rule.country, match.country) &&
+    teamBroadcastRuleMatches(rule.home_team_name, match) &&
+    teamBroadcastRuleMatches(rule.away_team_name, match)
+  )
+}
+
+function getHomeBroadcastRuleSpecificity(rule: HomeBroadcastRuleRow) {
+  if (rule.match_external_id) return 0
+  if (rule.home_team_name && rule.away_team_name) return 1
+  if (rule.home_team_name || rule.away_team_name) return 2
+  if (rule.league_external_id || rule.league_name) return 3
+  if (rule.country) return 4
+  return 5
+}
+
+function isSpecificHomeBroadcastRule(rule: HomeBroadcastRuleRow) {
+  return getHomeBroadcastRuleSpecificity(rule) <= 1
+}
+
+function getBestHomeBroadcastRules(rules: HomeBroadcastRuleRow[], match: MatchListItem) {
+  const matchingRules = rules
+    .filter((rule) => isSpecificHomeBroadcastRule(rule) && homeBroadcastRuleMatches(rule, match))
+    .sort((a, b) => {
+      const specificityCompare =
+        getHomeBroadcastRuleSpecificity(a) - getHomeBroadcastRuleSpecificity(b)
+      if (specificityCompare !== 0) return specificityCompare
+      return (a.priority ?? 100) - (b.priority ?? 100)
+    })
+
+  if (!matchingRules.length) return []
+
+  const bestSpecificity = getHomeBroadcastRuleSpecificity(matchingRules[0])
+  const bestPriority = matchingRules[0]?.priority ?? 100
+
+  return matchingRules.filter((rule) =>
+    getHomeBroadcastRuleSpecificity(rule) === bestSpecificity &&
+    (rule.priority ?? 100) === bestPriority
+  )
+}
+
+function applyBroadcastRulesToHomeExtras(
+  matches: MatchListItem[],
+  extrasByExternalId: Map<string, HomeMatchExtras>,
+  rules: HomeBroadcastRuleRow[]
+) {
+  if (!rules.length) return 0
+
+  let applied = 0
+
+  for (const match of matches) {
+    const externalKey = String(match.externalId ?? match.id)
+    const extras = extrasByExternalId.get(externalKey)
+
+    if (!extras || extras.broadcasters.length > 0) continue
+
+    const matchingRules = getBestHomeBroadcastRules(rules, match)
+    if (!matchingRules.length) continue
+
+    extras.broadcasters = matchingRules.map((rule) => ({
+      name: rule.broadcaster_name,
+      logoUrl: rule.broadcaster_logo_url,
+      country: rule.country,
+    }))
+    extras.broadcastChannel = extras.broadcasters
+      .map((broadcaster) => broadcaster.name)
+      .join(' / ')
+    extras.broadcastLogoUrl =
+      extras.broadcasters.find((broadcaster) => broadcaster.logoUrl)?.logoUrl ?? null
+    applied += 1
+  }
+
+  return applied
+}
+
 function getLegacyBroadcaster(row: HomeMatchRow): MatchBroadcaster | null {
   if (!row.broadcast_channel) return null
 
@@ -968,6 +1154,15 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
     const extrasByExternalId = new Map<string, HomeMatchExtras>()
     const matchRowsByMatchId = new Map<string, HomeMatchRow>()
 
+    for (const match of matches) {
+      extrasByExternalId.set(String(match.externalId ?? match.id), {
+        broadcasters: [],
+        broadcastChannel: null,
+        broadcastLogoUrl: null,
+        goalScorers: createEmptyGoalScorers(),
+      })
+    }
+
     for (const row of matchRows) {
       const externalId = Number(row.external_id)
       const matchId = String(row.id)
@@ -979,17 +1174,38 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
       matchRowsByMatchId.set(matchId, row)
       matchRowsByExternalId.set(externalKey, row)
       const legacyBroadcaster = getLegacyBroadcaster(row)
-      extrasByExternalId.set(externalKey, {
-        broadcasters: legacyBroadcaster ? [legacyBroadcaster] : [],
-        broadcastChannel: row.broadcast_channel,
-        broadcastLogoUrl: row.broadcast_logo_url,
+      const existingExtras = extrasByExternalId.get(externalKey) ?? {
+        broadcasters: [],
+        broadcastChannel: null,
+        broadcastLogoUrl: null,
         goalScorers: createEmptyGoalScorers(),
-      })
+      }
+
+      existingExtras.broadcasters = legacyBroadcaster ? [legacyBroadcaster] : existingExtras.broadcasters
+      existingExtras.broadcastChannel = row.broadcast_channel ?? existingExtras.broadcastChannel
+      existingExtras.broadcastLogoUrl = row.broadcast_logo_url ?? existingExtras.broadcastLogoUrl
+      extrasByExternalId.set(externalKey, existingExtras)
     }
 
     const matchIds = [...matchRowsByMatchId.keys()]
+    const broadcastRules = await fetchHomeBroadcastRules(supabase)
 
     if (!matchIds.length) {
+      const ruleMatchesApplied = applyBroadcastRulesToHomeExtras(
+        matches,
+        extrasByExternalId,
+        broadcastRules
+      )
+
+      console.info('[home-broadcasts]', {
+        visibleMatches: matches.length,
+        matchedRows: matchRows.length,
+        broadcastersLoaded: 0,
+        broadcastRules: broadcastRules.length,
+        ruleMatchesApplied,
+        reason: 'no-matches-row-for-visible-external-id',
+      })
+
       for (const match of matches) {
         console.info('match events ' + JSON.stringify({
           homeTeamName: match.home,
@@ -1040,10 +1256,18 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
       extras.broadcastLogoUrl = broadcasters.find((broadcaster) => broadcaster.logoUrl)?.logoUrl ?? null
     }
 
+    const ruleMatchesApplied = applyBroadcastRulesToHomeExtras(
+      matches,
+      extrasByExternalId,
+      broadcastRules
+    )
+
     console.info('[home-broadcasts]', {
       visibleMatches: matches.length,
       matchedRows: matchRows.length,
       broadcastersLoaded: broadcastRows.length,
+      broadcastRules: broadcastRules.length,
+      ruleMatchesApplied,
       matches: matches.map((match) => {
         const externalId = match.externalId ?? match.id
         const row = matchRowsByExternalId.get(String(externalId)) ?? null

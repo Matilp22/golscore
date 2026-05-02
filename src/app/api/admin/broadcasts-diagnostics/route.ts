@@ -21,6 +21,8 @@ type BroadcastRow = {
 
 type BroadcastRuleRow = {
   id: string
+  match_external_id?: string | null
+  match_date?: string | null
   league_external_id: string | null
   league_name: string | null
   country: string | null

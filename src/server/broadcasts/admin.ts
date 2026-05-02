@@ -75,6 +75,8 @@ export type BulkBroadcastInput = {
 
 type BroadcastRuleRow = {
   id: string
+  match_external_id?: string | null
+  match_date?: string | null
   league_external_id: string | null
   league_name: string | null
   country: string | null
@@ -246,7 +248,7 @@ function mapMatchesWithContext(
 async function fetchBroadcastRules(supabase: SupabaseClient) {
   const response = await supabase
     .from('broadcast_rules')
-    .select('id, league_external_id, league_name, country, home_team_name, away_team_name, broadcaster_name, broadcaster_logo_url, priority, active')
+    .select('id, match_external_id, match_date, league_external_id, league_name, country, home_team_name, away_team_name, broadcaster_name, broadcaster_logo_url, priority, active')
     .eq('active', true)
     .order('priority', { ascending: true })
     .order('created_at', { ascending: true })
@@ -260,6 +262,24 @@ async function fetchBroadcastRules(supabase: SupabaseClient) {
       message.includes('schema cache')
 
     if (isMissingRulesTable) return []
+    const isMissingSpecificRuleColumn =
+      response.error.code === '42703' ||
+      message.includes('match_external_id') ||
+      message.includes('match_date')
+
+    if (isMissingSpecificRuleColumn) {
+      const fallback = await supabase
+        .from('broadcast_rules')
+        .select('id, league_external_id, league_name, country, home_team_name, away_team_name, broadcaster_name, broadcaster_logo_url, priority, active')
+        .eq('active', true)
+        .order('priority', { ascending: true })
+        .order('created_at', { ascending: true })
+
+      if (fallback.error) return []
+
+      return (fallback.data ?? []) as BroadcastRuleRow[]
+    }
+
     throw response.error
   }
 
@@ -288,6 +308,20 @@ function teamRuleMatches(ruleTeam: string | null, match: BroadcastMatchRow) {
 
 function broadcastRuleMatches(rule: BroadcastRuleRow, match: BroadcastMatchRow) {
   if (
+    rule.match_external_id &&
+    String(rule.match_external_id) !== String(match.external_id ?? '')
+  ) {
+    return false
+  }
+
+  if (
+    rule.match_date &&
+    match.match_date.slice(0, 10) !== rule.match_date.slice(0, 10)
+  ) {
+    return false
+  }
+
+  if (
     rule.league_external_id &&
     String(rule.league_external_id) !== String(match.league_external_id ?? '')
   ) {
@@ -302,15 +336,37 @@ function broadcastRuleMatches(rule: BroadcastRuleRow, match: BroadcastMatchRow) 
   )
 }
 
+function getRuleSpecificity(rule: BroadcastRuleRow) {
+  if (rule.match_external_id) return 0
+  if (rule.home_team_name && rule.away_team_name) return 1
+  if (rule.home_team_name || rule.away_team_name) return 2
+  if (rule.league_external_id || rule.league_name) return 3
+  if (rule.country) return 4
+  return 5
+}
+
+function isSpecificBroadcastRule(rule: BroadcastRuleRow) {
+  return getRuleSpecificity(rule) <= 1
+}
+
 function getBestMatchingRules(rules: BroadcastRuleRow[], match: BroadcastMatchRow) {
   const matchingRules = rules
-    .filter((rule) => broadcastRuleMatches(rule, match))
-    .sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100))
+    .filter((rule) => isSpecificBroadcastRule(rule) && broadcastRuleMatches(rule, match))
+    .sort((a, b) => {
+      const specificityCompare = getRuleSpecificity(a) - getRuleSpecificity(b)
+      if (specificityCompare !== 0) return specificityCompare
+      return (a.priority ?? 100) - (b.priority ?? 100)
+    })
 
   if (!matchingRules.length) return []
 
+  const bestSpecificity = getRuleSpecificity(matchingRules[0])
   const bestPriority = matchingRules[0]?.priority ?? 100
-  return matchingRules.filter((rule) => (rule.priority ?? 100) === bestPriority)
+
+  return matchingRules.filter((rule) =>
+    getRuleSpecificity(rule) === bestSpecificity &&
+    (rule.priority ?? 100) === bestPriority
+  )
 }
 
 async function hydrateBroadcastMatches(
