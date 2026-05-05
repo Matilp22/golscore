@@ -34,6 +34,11 @@ export default function AutoRefresh({
   }, [router, syncBeforeRefreshUrl])
 
   useEffect(() => {
+    if (syncBeforeRefreshUrl) {
+      void refreshWithOptionalSync()
+      return
+    }
+
     const isStandalone =
       window.matchMedia('(display-mode: standalone)').matches ||
       Boolean((navigator as Navigator & { standalone?: boolean }).standalone)
@@ -41,7 +46,7 @@ export default function AutoRefresh({
     if (!isStandalone) return
 
     void refreshWithOptionalSync()
-  }, [refreshWithOptionalSync])
+  }, [refreshWithOptionalSync, syncBeforeRefreshUrl])
 
   useAutoRefresh({
     intervalMs,

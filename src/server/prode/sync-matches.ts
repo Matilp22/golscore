@@ -17,6 +17,11 @@ import {
 import { getExcludedCompetitionReason } from '@/shared/utils/competition-filter'
 import { isScoreboardGoalEvent } from '@/shared/utils/football-events'
 import { isFinishedStatus } from '@/shared/utils/match-status'
+import {
+  addDaysToISO,
+  getArgentinaDateISO,
+  getArgentinaTodayISO,
+} from '@/shared/utils/argentina-time'
 
 type ApiFixture = {
   fixture: {
@@ -770,36 +775,8 @@ async function safeSyncMatchBroadcastsFromFixture(
   }
 }
 
-function getBuenosAiresTodayISO() {
-  const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Argentina/Buenos_Aires',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  })
-
-  return formatter.format(new Date())
-}
-
-function addDaysToISO(isoDate: string, amount: number) {
-  const [year, month, day] = isoDate.split('-').map(Number)
-  const utcDate = new Date(Date.UTC(year, month - 1, day))
-  utcDate.setUTCDate(utcDate.getUTCDate() + amount)
-
-  const y = utcDate.getUTCFullYear()
-  const m = String(utcDate.getUTCMonth() + 1).padStart(2, '0')
-  const d = String(utcDate.getUTCDate()).padStart(2, '0')
-
-  return `${y}-${m}-${d}`
-}
-
 function getArgentinaDateKey(dateString: string) {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Argentina/Buenos_Aires',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date(dateString))
+  return getArgentinaDateISO(dateString)
 }
 
 function getTournamentSelection(slug?: string | null) {
@@ -2450,7 +2427,7 @@ export async function syncHomeScoreboardMatches(
       ? { debug: options }
       : options
   const debug = normalizedOptions.debug
-  const today = getBuenosAiresTodayISO()
+  const today = getArgentinaTodayISO()
   const rangeStart = normalizedOptions.dateFrom ?? normalizedOptions.date ?? null
   const rangeEnd = normalizedOptions.dateTo ?? rangeStart
   const dates = rangeStart && rangeEnd
@@ -2491,7 +2468,11 @@ export async function syncHomeScoreboardMatches(
   }
 
   const selectedFixtures = [...fixturesById.values()]
-    .filter((fixture) => !liveOnly || isLiveEventSyncStatus(fixture.fixture.status.short))
+    .filter((fixture) =>
+      !liveOnly ||
+      isLiveEventSyncStatus(fixture.fixture.status.short) ||
+      isFinishedStatus(fixture.fixture.status.short)
+    )
     .sort(compareFixturesByApiOrder)
   const fixturesToProcess = limit
     ? selectedFixtures.slice(offset, offset + limit)
@@ -2820,7 +2801,7 @@ export async function syncLeagueEvents(
     throw new Error(`Competencia no encontrada para eventos: ${options.competition}`)
   }
 
-  const date = options.date || getBuenosAiresTodayISO()
+  const date = options.date || getArgentinaTodayISO()
   const limit = getBatchLimit(options.limit)
   const offset = getBatchOffset(options.offset)
   const result = createEmptyHomeScoreboardResult([date])

@@ -1,24 +1,14 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { syncHomeScoreboardMatches } from '@/server/prode/sync-matches'
+import { getArgentinaTodayISO } from '@/shared/utils/argentina-time'
 
 const MIN_SYNC_INTERVAL_MS = 45_000
 const lastSyncByDate = new Map<string, number>()
 
-function getBuenosAiresTodayISO() {
-  const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Argentina/Buenos_Aires',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  })
-
-  return formatter.format(new Date())
-}
-
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
-  const date = searchParams.get('date') || getBuenosAiresTodayISO()
+  const date = searchParams.get('date') || getArgentinaTodayISO()
   const limitValue = Number(searchParams.get('limit') ?? 20)
   const limit = Number.isFinite(limitValue) && limitValue > 0
     ? Math.min(Math.floor(limitValue), 20)

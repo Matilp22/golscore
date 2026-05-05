@@ -18,12 +18,16 @@ const LIVE_STATUSES = new Set([
   'p',
 ])
 
-const NOT_STARTED_OR_INACTIVE_STATUSES = new Set([
+const UPCOMING_STATUSES = new Set([
   'ns',
   'tbd',
+])
+
+const POSTPONED_STATUSES = new Set([
   'pst',
   'canc',
   'abd',
+  'susp',
 ])
 
 export function normalizeMatchStatus(status: string | null | undefined) {
@@ -40,8 +44,16 @@ export function isLiveStatus(status: string | null | undefined) {
   return LIVE_STATUSES.has(normalizeMatchStatus(status))
 }
 
+export function isUpcomingStatus(status: string | null | undefined) {
+  return UPCOMING_STATUSES.has(normalizeMatchStatus(status))
+}
+
+export function isPostponedStatus(status: string | null | undefined) {
+  return POSTPONED_STATUSES.has(normalizeMatchStatus(status))
+}
+
 export function isNotStartedOrInactiveStatus(status: string | null | undefined) {
-  return NOT_STARTED_OR_INACTIVE_STATUSES.has(normalizeMatchStatus(status))
+  return isUpcomingStatus(status) || isPostponedStatus(status)
 }
 
 export function hasStartedStatus(status: string | null | undefined) {

@@ -23,9 +23,10 @@ type MatchRowProps = {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const isLive = status.includes('EN VIVO') || status.includes("'")
-  const isFinal = status === 'FINAL'
-  const isHalf = status === 'ENTRETIEMPO'
+  const normalizedStatus = status.toLowerCase()
+  const isLive = normalizedStatus.includes('en vivo') || status.includes("'")
+  const isFinal = normalizedStatus === 'finalizado' || normalizedStatus === 'final'
+  const isHalf = normalizedStatus === 'entretiempo'
 
   const classes = isLive
     ? 'bg-[#163828] text-[#7ff0b2] border-[#25553d]'
@@ -170,8 +171,14 @@ export default function MatchRow({
   broadcastChannel,
   broadcastLogoUrl,
 }: MatchRowProps) {
-  const isLive = status.includes('EN VIVO')
-  const centerLabel = score === '- - -' ? minute || time || 'vs' : score
+  const normalizedStatus = status.toLowerCase()
+  const isLive = normalizedStatus.includes('en vivo') || normalizedStatus === 'entretiempo'
+  const isScheduled = score === '- - -' && !isLive && normalizedStatus !== 'finalizado'
+  const centerLabel = isScheduled
+    ? time || 'vs'
+    : score === '- - -'
+      ? minute || statusUnderScore || status || 'vs'
+      : score
   const allBroadcasters =
     broadcasters?.length
       ? broadcasters
@@ -179,12 +186,12 @@ export default function MatchRow({
         ? [{ name: broadcastChannel, logoUrl: broadcastLogoUrl, country: null }]
         : []
   const broadcastText = allBroadcasters.map((broadcaster) => broadcaster.name).join(' / ')
-  const isScheduled = score === '- - -'
   const statusCandidate = statusUnderScore || (!isScheduled ? minute || status : '')
   const subScore =
     statusCandidate && String(statusCandidate) !== String(centerLabel)
       ? statusCandidate
       : ''
+  const showMobileStatus = Boolean(status && String(status) !== String(centerLabel))
 
   return (
     <Link
@@ -219,9 +226,11 @@ export default function MatchRow({
 
       <GoalScorersLine goalScorers={goalScorers} />
 
-      <div className="mt-1 flex min-w-0 justify-end md:hidden">
-        <StatusBadge status={status} />
-      </div>
+      {showMobileStatus ? (
+        <div className="mt-1 flex min-w-0 justify-end md:hidden">
+          <StatusBadge status={status} />
+        </div>
+      ) : null}
     </Link>
   )
 }

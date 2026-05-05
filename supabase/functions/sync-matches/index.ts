@@ -13,6 +13,7 @@ type ApiFixture = {
     id: number
     date: string
     status: {
+      elapsed?: number | null
       short: string
     }
   }
@@ -60,6 +61,7 @@ type ApiFixtureEvent = {
 }
 
 const ALLOWED_GOAL_DETAILS = new Set(['Normal Goal', 'Penalty', 'Own Goal'])
+const FINISHED_STATUSES = new Set(['FT', 'AET', 'PEN'])
 
 const TOURNAMENTS: Tournament[] = [
   {
@@ -377,6 +379,9 @@ Deno.serve(async (req) => {
             match_date: item.fixture.date,
             round: getFixtureRoundValue(item.league.round),
             status: item.fixture.status.short,
+            elapsed: FINISHED_STATUSES.has(item.fixture.status.short)
+              ? null
+              : item.fixture.status.elapsed ?? null,
             home_score: item.goals.home,
             away_score: item.goals.away,
           }

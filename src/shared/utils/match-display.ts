@@ -1,4 +1,11 @@
-import { isFinishedStatus, isLiveStatus } from '@/shared/utils/match-status'
+import { formatMatchTimeArgentina } from '@/shared/utils/argentina-time'
+import {
+  isFinishedStatus,
+  isLiveStatus,
+  isPostponedStatus,
+  isUpcomingStatus,
+  normalizeMatchStatus,
+} from '@/shared/utils/match-status'
 
 type MatchStatusDisplayInput = {
   statusShort: string
@@ -6,15 +13,29 @@ type MatchStatusDisplayInput = {
   date?: string | null
 }
 
-function formatMatchTime(dateString?: string | null) {
-  if (!dateString) return 'A confirmar'
+const POSTPONED_STATUS_LABELS: Record<string, string> = {
+  pst: 'Postergado',
+  susp: 'Suspendido',
+  canc: 'Cancelado',
+  abd: 'Suspendido',
+}
 
-  return new Date(dateString).toLocaleTimeString('es-AR', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZone: 'America/Argentina/Buenos_Aires',
-  })
+export function getPostponedStatusLabel(statusShort: string | null | undefined) {
+  return POSTPONED_STATUS_LABELS[normalizeMatchStatus(statusShort)] ?? statusShort ?? 'Suspendido'
+}
+
+export function formatHomeMatchStatus({
+  statusShort,
+  minute,
+  date,
+}: MatchStatusDisplayInput) {
+  if (isFinishedStatus(statusShort)) return 'Finalizado'
+  if (normalizeMatchStatus(statusShort) === 'ht') return 'Entretiempo'
+  if (isLiveStatus(statusShort)) return minute ? `EN VIVO ${minute}'` : 'EN VIVO'
+  if (isUpcomingStatus(statusShort)) return formatMatchTimeArgentina(date)
+  if (isPostponedStatus(statusShort)) return getPostponedStatusLabel(statusShort)
+
+  return statusShort
 }
 
 export function formatMatchStatusUnderScore({
@@ -23,13 +44,10 @@ export function formatMatchStatusUnderScore({
   date,
 }: MatchStatusDisplayInput) {
   if (isFinishedStatus(statusShort)) return 'Finalizado'
-  if (statusShort === 'HT') return 'Entretiempo'
+  if (normalizeMatchStatus(statusShort) === 'ht') return 'Entretiempo'
   if (isLiveStatus(statusShort)) return minute ? `${minute}'` : 'En vivo'
-  if (statusShort === 'NS') return formatMatchTime(date)
-  if (statusShort === 'PST') return 'Postergado'
-  if (statusShort === 'SUSP') return 'Suspendido'
-  if (statusShort === 'CANC') return 'Cancelado'
-  if (statusShort === 'TBD') return 'A confirmar'
+  if (isUpcomingStatus(statusShort)) return formatMatchTimeArgentina(date)
+  if (isPostponedStatus(statusShort)) return getPostponedStatusLabel(statusShort)
 
   return statusShort
 }

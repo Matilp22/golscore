@@ -15,61 +15,24 @@ import {
   getSectionConfig,
   getTournamentConfig,
 } from '@/lib/tournament-pages'
-import { isFinishedStatus, isLiveStatus as isActiveLiveStatus } from '@/shared/utils/match-status'
+import {
+  addDaysToISO,
+  formatMatchTimeArgentina,
+  getArgentinaMatchTimestamp,
+  getArgentinaTodayISO,
+} from '@/shared/utils/argentina-time'
+import {
+  isLiveStatus,
+  isUpcomingStatus,
+} from '@/shared/utils/match-status'
 import {
   getExcludedCompetitionReason,
   isExcludedCompetition,
 } from '@/shared/utils/competition-filter'
-import { formatMatchStatusUnderScore } from '@/shared/utils/match-display'
-
-function getBuenosAiresTodayISO() {
-  const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Argentina/Buenos_Aires',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  })
-
-  return formatter.format(new Date())
-}
-
-function addDaysToISO(isoDate: string, amount: number) {
-  const [year, month, day] = isoDate.split('-').map(Number)
-  const utcDate = new Date(Date.UTC(year, month - 1, day))
-  utcDate.setUTCDate(utcDate.getUTCDate() + amount)
-
-  const y = utcDate.getUTCFullYear()
-  const m = String(utcDate.getUTCMonth() + 1).padStart(2, '0')
-  const d = String(utcDate.getUTCDate()).padStart(2, '0')
-
-  return `${y}-${m}-${d}`
-}
-
-function formatMatchTime(dateString: string) {
-  const date = new Date(dateString)
-  return date.toLocaleTimeString('es-AR', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZone: 'America/Argentina/Buenos_Aires',
-  })
-}
-
-function formatStatus(statusShort: string, minute: number | null) {
-  if (statusShort === '1H' || statusShort === '2H' || statusShort === 'ET') {
-    return minute ? `EN VIVO ${minute}'` : 'EN VIVO'
-  }
-
-  if (statusShort === 'HT') return 'ENTRETIEMPO'
-  if (isFinishedStatus(statusShort)) return 'FINAL'
-  if (statusShort === 'NS') return 'PRÓXIMO'
-
-  return statusShort
-}
-
-function isLiveStatus(statusShort: string) {
-  return isActiveLiveStatus(statusShort)
-}
+import {
+  formatHomeMatchStatus,
+  formatMatchStatusUnderScore,
+} from '@/shared/utils/match-display'
 
 type ApiMatch = MatchListItemWithGoalScorers
 
@@ -176,12 +139,27 @@ function getHomeExclusionReason(match: ApiMatch) {
 
 function sortMatches(matches: ApiMatch[]) {
   return [...matches].sort((a, b) => {
-    const aLive = a.statusShort !== 'NS' ? 0 : 1
-    const bLive = b.statusShort !== 'NS' ? 0 : 1
+    const aLive = !isUpcomingStatus(a.statusShort) ? 0 : 1
+    const bLive = !isUpcomingStatus(b.statusShort) ? 0 : 1
 
     if (aLive !== bLive) return aLive - bLive
-    return new Date(a.date).getTime() - new Date(b.date).getTime()
+    return getArgentinaMatchTimestamp(a.date) - getArgentinaMatchTimestamp(b.date)
   })
+}
+
+function shouldFastRefreshMatch(match: ApiMatch, now: number) {
+  if (isLiveStatus(match.statusShort)) return true
+
+  if (!isUpcomingStatus(match.statusShort)) return false
+
+  const matchTimestamp = getArgentinaMatchTimestamp(match.date)
+  if (!Number.isFinite(matchTimestamp)) return false
+
+  const startsSoonOrAlreadyStarted =
+    matchTimestamp <= now + 15 * 60 * 1000 &&
+    matchTimestamp >= now - 4 * 60 * 60 * 1000
+
+  return startsSoonOrAlreadyStarted
 }
 
 const SECTION_ORDER = [
@@ -1104,7 +1082,7 @@ export default async function HomePage({
 }) {
   const sp = await searchParams
 
-  const todayISO = getBuenosAiresTodayISO()
+  const todayISO = getArgentinaTodayISO()
   const yesterdayISO = addDaysToISO(todayISO, -1)
   const tomorrowISO = addDaysToISO(todayISO, 1)
 
@@ -1164,9 +1142,12 @@ export default async function HomePage({
   const visibleCompetitions = sortHomeCompetitions(
     visibleSections.flatMap((section) => section.competitions)
   )
-  const hasLiveMatches = dateMatches.some((match) => isLiveStatus(match.statusShort))
-  const refreshIntervalMs = hasLiveMatches ? 60000 : 300000
   const renderedAt = new Date().toISOString()
+  const now = Date.parse(renderedAt)
+  const hasFastRefreshMatches = dateMatches.some((match) =>
+    shouldFastRefreshMatch(match, now)
+  )
+  const refreshIntervalMs = hasFastRefreshMatches ? 60000 : 300000
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-transparent text-white">
@@ -1187,7 +1168,7 @@ export default async function HomePage({
               showButton
               initialUpdatedAt={renderedAt}
               syncBeforeRefreshUrl={
-                hasLiveMatches
+                hasFastRefreshMatches
                   ? `/api/home/live-sync?date=${encodeURIComponent(selectedDate)}`
                   : null
               }
@@ -1285,12 +1266,16 @@ export default async function HomePage({
                             country={match.country}
                             homeLogo={match.homeLogo}
                             awayLogo={match.awayLogo}
-                            time={formatMatchTime(match.date)}
+                            time={formatMatchTimeArgentina(match.date)}
                             minute={match.minute ? `${match.minute}'` : ''}
                             home={match.home}
                             away={match.away}
                             score={`${match.goalsHome ?? '-'} - ${match.goalsAway ?? '-'}`}
-                            status={formatStatus(match.statusShort, match.minute)}
+                            status={formatHomeMatchStatus({
+                              statusShort: match.statusShort,
+                              minute: match.minute,
+                              date: match.date,
+                            })}
                             statusUnderScore={formatMatchStatusUnderScore({
                               statusShort: match.statusShort,
                               minute: match.minute,

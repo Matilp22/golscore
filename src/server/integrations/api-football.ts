@@ -10,6 +10,10 @@ import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { isFinishedStatus } from '@/shared/utils/match-status'
 import { formatEventMinute } from '@/shared/utils/event-minute'
 import {
+  addDaysToISO,
+  getArgentinaDateISO,
+} from '@/shared/utils/argentina-time'
+import {
   getGoalKindFromDetail,
   isScoreboardGoalEvent,
 } from '@/shared/utils/football-events'
@@ -541,25 +545,8 @@ function normalizeSearchValue(value: string) {
     .replace(/[\u0300-\u036f]/g, '')
 }
 
-function addDaysToISO(isoDate: string, amount: number) {
-  const [year, month, day] = isoDate.split('-').map(Number)
-  const utcDate = new Date(Date.UTC(year, month - 1, day))
-  utcDate.setUTCDate(utcDate.getUTCDate() + amount)
-
-  const y = utcDate.getUTCFullYear()
-  const m = String(utcDate.getUTCMonth() + 1).padStart(2, '0')
-  const d = String(utcDate.getUTCDate()).padStart(2, '0')
-
-  return `${y}-${m}-${d}`
-}
-
 function getArgentinaDateKey(dateString: string) {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Argentina/Buenos_Aires',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date(dateString))
+  return getArgentinaDateISO(dateString)
 }
 
 function pickBestSeason(seasons?: LeagueSearchSeason[]) {
@@ -662,7 +649,7 @@ async function apiFootball(
     if (shouldPersist) {
       const persistentCache = readPersistentCache<ApiFootballResponse<unknown>>(cacheKey)
 
-      if (persistentCache) {
+      if (persistentCache && (path !== '/fixtures' || !persistentCache.isExpired)) {
         return persistentCache.data
       }
     }
@@ -692,7 +679,7 @@ export async function getMatchesByDate(date: string): Promise<MatchListItem[]> {
         date: requestedDate,
         timezone: 'America/Argentina/Buenos_Aires',
       }, {
-        revalidate: 30,
+        noStore: true,
       }) as Promise<ApiFootballResponse<FixtureListItem>>
     )
   )

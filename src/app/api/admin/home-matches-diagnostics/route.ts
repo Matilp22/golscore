@@ -6,6 +6,7 @@ import {
   getExcludedCompetitionReason,
   isExcludedCompetition,
 } from '@/shared/utils/competition-filter'
+import { getArgentinaTodayISO } from '@/shared/utils/argentina-time'
 import { formatEventMinute } from '@/shared/utils/event-minute'
 import { isScoreboardGoalEvent } from '@/shared/utils/football-events'
 
@@ -43,15 +44,6 @@ function isAuthorized(request: Request) {
   if (!cronSecret) return false
 
   return request.headers.get('x-cron-secret') === cronSecret
-}
-
-function getBuenosAiresTodayISO() {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Argentina/Buenos_Aires',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date())
 }
 
 function chunkArray<T>(items: T[], size: number) {
@@ -129,7 +121,7 @@ export async function GET(request: Request) {
 
   try {
     const { searchParams } = new URL(request.url)
-    const date = searchParams.get('date') || getBuenosAiresTodayISO()
+    const date = searchParams.get('date') || getArgentinaTodayISO()
     const supabase = getSupabaseAdminClient()
     const apiMatches = await getMatchesByDate(date)
     const visibleMatches = apiMatches.filter(isVisibleHomeCompetition)

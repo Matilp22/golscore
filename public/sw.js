@@ -1,5 +1,5 @@
-const STATIC_CACHE = 'fulboapp-static-v3'
-const PAGE_CACHE = 'fulboapp-pages-v3'
+const STATIC_CACHE = 'fulboapp-static-v4'
+const PAGE_CACHE = 'fulboapp-pages-v4'
 const STATIC_ASSETS = [
   '/manifest.json',
   '/icons/icon-192.png',
@@ -10,6 +10,8 @@ function isDynamicRequest(url) {
   return (
     url.pathname.startsWith('/api/') ||
     url.pathname.startsWith('/_next/data/') ||
+    url.pathname === '/' ||
+    url.pathname.startsWith('/partido/') ||
     url.pathname.includes('/matches') ||
     url.pathname.includes('/fixtures') ||
     url.pathname.includes('/results') ||

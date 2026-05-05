@@ -12,6 +12,7 @@
 import AutoRefresh from '@/frontend/components/AutoRefresh'
 import FormationTeamPanel from '@/frontend/components/FormationTeamPanel'
 import SafeImage from '@/frontend/components/SafeImage'
+import { formatMatchTimeArgentina } from '@/shared/utils/argentina-time'
 import { formatEventMinute } from '@/shared/utils/event-minute'
 import Link from 'next/link'
 
@@ -42,12 +43,7 @@ function translateStatus(statusLong: string) {
 }
 
 function formatMatchTime(dateString: string) {
-  return new Date(dateString).toLocaleTimeString('es-AR', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZone: 'America/Argentina/Buenos_Aires',
-  })
+  return formatMatchTimeArgentina(dateString)
 }
 
 function isHeaderLiveStatus(statusShort: string) {
