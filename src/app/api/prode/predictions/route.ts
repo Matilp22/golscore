@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getSupabaseServerClient } from '@/lib/supabase/server'
 import { savePrediction } from '@/server/prode/service'
+import { isFinalMatchStatus } from '@/shared/utils/match-status'
 
 async function getAuthenticatedUser(request: Request) {
   const supabase = await getSupabaseServerClient()
@@ -104,6 +105,16 @@ export async function POST(request: Request) {
     .select('points, exact_hit, partial_hit')
     .eq('prediction_id', prediction.id)
     .maybeSingle()
+  const { data: match } = await getSupabaseAdminClient()
+    .from('matches')
+    .select('status, home_score, away_score')
+    .eq('id', prediction.match_id)
+    .maybeSingle()
+  const hasFinalResult =
+    isFinalMatchStatus(match?.status) &&
+    match?.home_score !== null &&
+    match?.away_score !== null
+  const visiblePredictionScore = hasFinalResult ? predictionScore : null
 
   if (predictionScoreError) {
     console.error('[prode/predictions] Error leyendo prediction_scores', {
@@ -121,9 +132,10 @@ export async function POST(request: Request) {
       matchId: String(prediction.match_id),
       predictedHomeScore: prediction.predicted_home_score,
       predictedAwayScore: prediction.predicted_away_score,
-      points: predictionScore?.points ?? 0,
-      exactHit: predictionScore?.exact_hit ?? false,
-      partialHit: predictionScore?.partial_hit ?? false,
+      points: visiblePredictionScore?.points ?? null,
+      exactHit: visiblePredictionScore?.exact_hit ?? false,
+      partialHit: visiblePredictionScore?.partial_hit ?? false,
+      predictionScoreFound: Boolean(visiblePredictionScore),
       createdAt: prediction.created_at,
       updatedAt: prediction.updated_at,
     },

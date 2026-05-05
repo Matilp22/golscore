@@ -34,6 +34,8 @@ export function isFinishedStatus(status: string | null | undefined) {
   return FINISHED_STATUSES.has(normalizeMatchStatus(status))
 }
 
+export const isFinalMatchStatus = isFinishedStatus
+
 export function isLiveStatus(status: string | null | undefined) {
   return LIVE_STATUSES.has(normalizeMatchStatus(status))
 }

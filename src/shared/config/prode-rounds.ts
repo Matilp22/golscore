@@ -1,8 +1,12 @@
-const LIGA_PROFESIONAL_EXTERNAL_ID = 128
-const WORLD_CUP_EXTERNAL_ID = 1
+import {
+  LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID,
+  getLeagueRoundLabel,
+  getLeagueRoundSortValue,
+  normalizeLeagueRound,
+} from '@/shared/utils/league-rounds'
+import { parseMatchDate } from '@/shared/utils/prediction-lock'
 
 export const SHOW_CLAUSURA = false
-import { parseMatchDate } from '@/shared/utils/prediction-lock'
 
 const FIFTEEN_MINUTES_IN_MS = 15 * 60 * 1000
 
@@ -10,21 +14,7 @@ export function normalizeProdeRound(
   round: string | null | undefined,
   leagueExternalId?: number | null
 ) {
-  if (!round) return null
-
-  const trimmedRound = round.trim()
-
-  if (!trimmedRound) return null
-
-  if (/^\d+$/.test(trimmedRound)) {
-    if (leagueExternalId === WORLD_CUP_EXTERNAL_ID) {
-      return `Group Stage - ${trimmedRound}`
-    }
-
-    return `Regular Season - ${trimmedRound}`
-  }
-
-  return trimmedRound
+  return normalizeLeagueRound(round, leagueExternalId)
 }
 
 export function isVisibleProdeRound(
@@ -36,9 +26,9 @@ export function isVisibleProdeRound(
   if (!normalizedRound) return false
 
   if (
-    leagueExternalId === LIGA_PROFESIONAL_EXTERNAL_ID &&
+    leagueExternalId === LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID &&
     !SHOW_CLAUSURA &&
-    /^Clausura - \d+$/i.test(normalizedRound)
+    /^clausura-fecha-\d+$/i.test(normalizedRound)
   ) {
     return false
   }
@@ -50,31 +40,14 @@ export function getProdeRoundLabel(
   round: string | null | undefined,
   leagueExternalId?: number | null
 ) {
-  const normalizedRound = normalizeProdeRound(round, leagueExternalId)
+  return getLeagueRoundLabel(round, leagueExternalId)
+}
 
-  if (!normalizedRound) return null
-
-  const aperturaMatch = normalizedRound.match(/^Apertura - (\d+)$/i)
-  const regularSeasonMatch = normalizedRound.match(/^Regular Season - (\d+)$/i)
-  const clausuraMatch = normalizedRound.match(/^Clausura - (\d+)$/i)
-  const groupStageMatch = normalizedRound.match(/^Group Stage - (\d+)$/i)
-  const genericPhaseMatch = normalizedRound.match(/^(.+?) - (\d+)$/)
-
-  if (aperturaMatch) return `Apertura - Fecha ${aperturaMatch[1]}`
-  if (clausuraMatch) return `Clausura - Fecha ${clausuraMatch[1]}`
-  if (groupStageMatch) return `Fase de grupos - Fecha ${groupStageMatch[1]}`
-
-  if (regularSeasonMatch) {
-    return leagueExternalId === LIGA_PROFESIONAL_EXTERNAL_ID
-      ? `Apertura - Fecha ${regularSeasonMatch[1]}`
-      : `Fecha ${regularSeasonMatch[1]}`
-  }
-
-  if (genericPhaseMatch) {
-    return `${genericPhaseMatch[1]} - Fecha ${genericPhaseMatch[2]}`
-  }
-
-  return normalizedRound
+export function getProdeRoundSortValue(
+  round: string | null | undefined,
+  leagueExternalId?: number | null
+) {
+  return getLeagueRoundSortValue(round, leagueExternalId)
 }
 
 type ProdeRoundMatch = {

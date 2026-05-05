@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { isFinishedStatus } from '@/shared/utils/match-status'
+import { isFinalMatchStatus } from '@/shared/utils/match-status'
+import { calculatePredictionPoints } from '@/shared/utils/prode-points'
 
 export type RecalculateProdePointsResult = {
   matchId: string | number | null
@@ -27,12 +28,7 @@ type MatchScoreRow = {
   id: string | number
   home_score: number | null
   away_score: number | null
-}
-
-type ResultScoreRow = {
-  match_id: string | number
-  home_score: number | null
-  away_score: number | null
+  status: string | null
 }
 
 type ScoreUpsertRow = {
@@ -42,22 +38,101 @@ type ScoreUpsertRow = {
   points: number
   exact_hit: boolean
   partial_hit: boolean
+  is_exact: boolean
+  is_partial: boolean
   calculated_at: string
+  updated_at: string
 }
 
-function omitCalculatedAt(rows: ScoreUpsertRow[]) {
-  return rows.map((row) => {
-    const { calculated_at: calculatedAt, ...withoutCalculatedAt } = row
-    void calculatedAt
+function getMissingOptionalScoreColumns(error: SupabaseRpcError | null | undefined) {
+  const message = (error?.message ?? '').toLowerCase()
 
-    return withoutCalculatedAt
+  return {
+    calculatedAt:
+      error?.code === 'PGRST204' && message.includes('calculated_at'),
+    updatedAt:
+      error?.code === 'PGRST204' && message.includes('updated_at'),
+    isExact:
+      error?.code === 'PGRST204' && message.includes('is_exact'),
+    isPartial:
+      error?.code === 'PGRST204' && message.includes('is_partial'),
+  }
+}
+
+function omitOptionalScoreColumns(
+  rows: ScoreUpsertRow[],
+  missing: ReturnType<typeof getMissingOptionalScoreColumns>
+) {
+  return rows.map((row) => {
+    const next: Partial<ScoreUpsertRow> = { ...row }
+
+    if (missing.calculatedAt) delete next.calculated_at
+    if (missing.updatedAt) delete next.updated_at
+    if (missing.isExact) delete next.is_exact
+    if (missing.isPartial) delete next.is_partial
+
+    return next
   })
+}
+
+function hasMissingOptionalScoreColumns(
+  missing: ReturnType<typeof getMissingOptionalScoreColumns>
+) {
+  return missing.calculatedAt || missing.updatedAt || missing.isExact || missing.isPartial
 }
 
 type ProfileRow = {
   id: string
   username?: string | null
   display_name?: string | null
+  email?: string | null
+}
+
+async function fetchProfilesForLeaderboards(
+  supabase: SupabaseClient,
+  userIds: string[]
+) {
+  if (!userIds.length) return { data: [] as ProfileRow[], error: null }
+
+  const primary = await supabase
+    .from('profiles')
+    .select('id, username, display_name, email')
+    .in('id', userIds)
+
+  if (!primary.error) {
+    return { data: (primary.data ?? []) as ProfileRow[], error: null }
+  }
+
+  const message = primary.error.message.toLowerCase()
+  const missingOptionalProfileColumn =
+    primary.error.code === '42703' ||
+    primary.error.code === 'PGRST204' ||
+    message.includes('display_name') ||
+    message.includes('email') ||
+    message.includes('schema cache')
+
+  if (!missingOptionalProfileColumn) {
+    return { data: [] as ProfileRow[], error: primary.error }
+  }
+
+  const withEmail = await supabase
+    .from('profiles')
+    .select('id, username, email')
+    .in('id', userIds)
+
+  if (!withEmail.error) {
+    return { data: (withEmail.data ?? []) as ProfileRow[], error: null }
+  }
+
+  const fallback = await supabase
+    .from('profiles')
+    .select('id, username')
+    .in('id', userIds)
+
+  return {
+    data: (fallback.data ?? []) as ProfileRow[],
+    error: fallback.error,
+  }
 }
 
 export class ProdePointsRecalculationError extends Error {
@@ -76,27 +151,16 @@ export class ProdePointsRecalculationError extends Error {
 }
 
 export function isFinalProdeStatus(status: string | null | undefined) {
-  return isFinishedStatus(status)
-}
-
-function getOutcome(homeScore: number, awayScore: number) {
-  return Math.sign(homeScore - awayScore)
+  return isFinalMatchStatus(status)
 }
 
 function calculatePredictionScore(prediction: PredictionRow, homeScore: number, awayScore: number) {
-  const exactHit =
-    prediction.predicted_home_score === homeScore &&
-    prediction.predicted_away_score === awayScore
-  const partialHit =
-    !exactHit &&
-    getOutcome(prediction.predicted_home_score, prediction.predicted_away_score) ===
-      getOutcome(homeScore, awayScore)
-
-  return {
-    points: exactHit ? 3 : partialHit ? 1 : 0,
-    exact_hit: exactHit,
-    partial_hit: partialHit,
-  }
+  return calculatePredictionPoints({
+    predictedHomeScore: prediction.predicted_home_score,
+    predictedAwayScore: prediction.predicted_away_score,
+    realHomeScore: homeScore,
+    realAwayScore: awayScore,
+  })
 }
 
 async function refreshLeaderboards(supabase: SupabaseClient, userIds: string[]) {
@@ -162,10 +226,10 @@ async function refreshLeaderboards(supabase: SupabaseClient, userIds: string[]) 
 
   if (!leaderboardUserIds.length) return
 
-  const { data: profiles, error: profilesError } = await supabase
-    .from('profiles')
-    .select('id, username, display_name')
-    .in('id', leaderboardUserIds)
+  const { data: profiles, error: profilesError } = await fetchProfilesForLeaderboards(
+    supabase,
+    leaderboardUserIds
+  )
 
   if (profilesError) {
     console.error('[prode/points] No se pudieron leer profiles para leaderboards', {
@@ -196,7 +260,7 @@ async function refreshLeaderboards(supabase: SupabaseClient, userIds: string[]) 
     const profile = profilesById.get(score.user_id)
     const current = grouped.get(score.user_id) ?? {
       user_id: score.user_id,
-      name: profile?.username ?? profile?.display_name ?? 'Usuario',
+      name: profile?.display_name ?? profile?.username ?? profile?.email ?? 'Usuario',
       points: 0,
       played: 0,
       exact_hits: 0,
@@ -216,7 +280,7 @@ async function refreshLeaderboards(supabase: SupabaseClient, userIds: string[]) 
 
     return grouped.get(userId) ?? {
       user_id: userId,
-      name: profile?.username ?? profile?.display_name ?? 'Usuario',
+      name: profile?.display_name ?? profile?.username ?? profile?.email ?? 'Usuario',
       points: 0,
       played: 0,
       exact_hits: 0,
@@ -228,6 +292,7 @@ async function refreshLeaderboards(supabase: SupabaseClient, userIds: string[]) 
   const canonicalRows = leaderboardRows.map((row) => ({
     user_id: row.user_id,
     total_points: row.points,
+    played: row.played,
     exact_predictions: row.exact_hits,
     partial_predictions: row.partial_hits,
     updated_at: row.updated_at,
@@ -237,17 +302,25 @@ async function refreshLeaderboards(supabase: SupabaseClient, userIds: string[]) 
     .upsert(canonicalRows, { onConflict: 'user_id' })
 
   if (error) {
-    if (error.code === '42703') {
+    if (error.code === '42703' || error.code === 'PGRST204') {
+      const withoutPlayed = canonicalRows.map(({ played, ...row }) => {
+        void played
+        return row
+      })
+      const retryCanonical = await supabase
+        .from('leaderboards')
+        .upsert(withoutPlayed, { onConflict: 'user_id' })
+
+      if (!retryCanonical.error) return
+
       const { error: legacyError } = await supabase
         .from('leaderboards')
         .upsert(leaderboardRows, { onConflict: 'user_id' })
 
-      if (!legacyError) return
-
       console.error('[prode/points] No se pudo actualizar leaderboards legacy', {
-        message: legacyError.message,
-        code: legacyError.code ?? null,
-        details: legacyError.details ?? null,
+        message: legacyError?.message ?? retryCanonical.error.message,
+        code: legacyError?.code ?? retryCanonical.error.code ?? null,
+        details: legacyError?.details ?? retryCanonical.error.details ?? null,
       })
       return
     }
@@ -291,30 +364,15 @@ async function recalculateProdePointsInApp(
   const matchIds = [...new Set(predictionRows.map((prediction) => String(prediction.match_id)))]
   const { data: matches, error: matchesError } = await supabase
     .from('matches')
-    .select('id, home_score, away_score')
+    .select('id, home_score, away_score, status')
     .in('id', matchIds)
 
   if (matchesError) {
     throw new ProdePointsRecalculationError(matchesError)
   }
 
-  const { data: results, error: resultsError } = await supabase
-    .from('results')
-    .select('match_id, home_score, away_score')
-    .in('match_id', matchIds)
-
-  if (resultsError && resultsError.code !== '42P01' && resultsError.code !== 'PGRST205') {
-    throw new ProdePointsRecalculationError(resultsError)
-  }
-
   const matchesById = new Map(
     ((matches ?? []) as MatchScoreRow[]).map((match) => [String(match.id), match])
-  )
-  const resultsByMatchId = new Map(
-    ((resultsError ? [] : results ?? []) as ResultScoreRow[]).map((result) => [
-      String(result.match_id),
-      result,
-    ])
   )
   const now = new Date().toISOString()
   const scoreRows: ScoreUpsertRow[] = []
@@ -324,11 +382,10 @@ async function recalculateProdePointsInApp(
   for (const prediction of predictionRows) {
     const matchId = String(prediction.match_id)
     const match = matchesById.get(matchId)
-    const result = resultsByMatchId.get(matchId)
-    const homeScore = result?.home_score ?? match?.home_score ?? null
-    const awayScore = result?.away_score ?? match?.away_score ?? null
+    const homeScore = match?.home_score ?? null
+    const awayScore = match?.away_score ?? null
 
-    if (homeScore === null || awayScore === null) {
+    if (!isFinalProdeStatus(match?.status) || homeScore === null || awayScore === null) {
       stalePredictionIds.push(prediction.id)
       continue
     }
@@ -339,6 +396,7 @@ async function recalculateProdePointsInApp(
       match_id: prediction.match_id,
       ...calculatePredictionScore(prediction, homeScore, awayScore),
       calculated_at: now,
+      updated_at: now,
     })
   }
 
@@ -376,10 +434,14 @@ async function recalculateProdePointsInApp(
     .from('prediction_scores')
     .upsert(scoreRows, { onConflict: 'prediction_id' })
 
-  if (scoreError?.code === 'PGRST204' && scoreError.message.includes('calculated_at')) {
+  const missingPredictionScoreColumns = getMissingOptionalScoreColumns(scoreError)
+
+  if (hasMissingOptionalScoreColumns(missingPredictionScoreColumns)) {
     const retry = await supabase
       .from('prediction_scores')
-      .upsert(omitCalculatedAt(scoreRows), { onConflict: 'prediction_id' })
+      .upsert(omitOptionalScoreColumns(scoreRows, missingPredictionScoreColumns), {
+        onConflict: 'prediction_id',
+      })
 
     scoreError = retry.error
   }
@@ -392,10 +454,14 @@ async function recalculateProdePointsInApp(
     .from('points')
     .upsert(scoreRows, { onConflict: 'prediction_id' })
 
-  if (pointsError?.code === 'PGRST204' && pointsError.message.includes('calculated_at')) {
+  const missingPointsColumns = getMissingOptionalScoreColumns(pointsError)
+
+  if (hasMissingOptionalScoreColumns(missingPointsColumns)) {
     const retry = await supabase
       .from('points')
-      .upsert(omitCalculatedAt(scoreRows), { onConflict: 'prediction_id' })
+      .upsert(omitOptionalScoreColumns(scoreRows, missingPointsColumns), {
+        onConflict: 'prediction_id',
+      })
 
     pointsError = retry.error
   }

@@ -9,6 +9,11 @@ import { getFootballApiConfig } from '@/server/config/env'
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { isFinishedStatus } from '@/shared/utils/match-status'
 import { formatEventMinute } from '@/shared/utils/event-minute'
+import {
+  getGoalKindFromDetail,
+  isScoreboardGoalEvent,
+} from '@/shared/utils/football-events'
+import { getExcludedCompetitionReason } from '@/shared/utils/competition-filter'
 
 type ApiFootballResponse<T> = {
   errors?: Record<string, string>
@@ -147,6 +152,7 @@ export type MatchListItemWithGoalScorers = MatchListItem & {
   broadcasters?: MatchBroadcaster[]
   broadcastChannel?: string | null
   broadcastLogoUrl?: string | null
+  persistedInSupabase?: boolean
 }
 
 export type LeagueFixtureSummary = {
@@ -185,9 +191,9 @@ function getApiRoundOrder(round: string) {
 
   if (normalized.includes('round of 64') || normalized.includes('32nd finals')) return 10
   if (normalized.includes('round of 32') || normalized.includes('16th finals')) return 20
-  if (normalized.includes('round of 16') || normalized.includes('octavos')) return 30
-  if (normalized.includes('quarter')) return 40
-  if (normalized.includes('semi')) return 50
+  if (normalized.includes('round of 16') || normalized.includes('8th finals') || normalized.includes('octavos')) return 30
+  if (normalized.includes('quarter') || normalized.includes('cuartos')) return 40
+  if (normalized.includes('semi') || normalized.includes('semifinal')) return 50
   if (normalized.includes('final') && !normalized.includes('semi')) return 60
   return 999
 }
@@ -668,6 +674,17 @@ async function apiFootball(
 }
 
 export async function getMatchesByDate(date: string): Promise<MatchListItem[]> {
+  try {
+    const storedMatches = await fetchStoredHomeMatches(date)
+
+    if (storedMatches.length) return storedMatches
+  } catch (error) {
+    console.warn('[home] No se pudieron leer partidos desde Supabase; se usa API fallback.', {
+      date,
+      message: error instanceof Error ? error.message : String(error),
+    })
+  }
+
   const requestedDates = [addDaysToISO(date, -1), date, addDaysToISO(date, 1)]
   const responses = await Promise.allSettled(
     requestedDates.map((requestedDate) =>
@@ -769,12 +786,7 @@ export async function getMatchesByDate(date: string): Promise<MatchListItem[]> {
 }
 
 function getGoalKind(detail?: string | null): MatchGoalScorer['kind'] {
-  const normalized = (detail || '').toLowerCase()
-
-  if (normalized.includes('own goal')) return 'own-goal'
-  if (normalized.includes('penalty')) return 'penalty'
-
-  return 'regular'
+  return getGoalKindFromDetail(detail)
 }
 
 function sortGoalScorers(a: MatchGoalScorer, b: MatchGoalScorer) {
@@ -789,6 +801,34 @@ type HomeMatchRow = {
   broadcast_logo_url: string | null
   home_team_id: number | string | null
   away_team_id: number | string | null
+}
+
+type StoredHomeMatchRow = {
+  id: number | string
+  external_id: number | string | null
+  league_id: number | string | null
+  home_team_id: number | string | null
+  away_team_id: number | string | null
+  match_date: string
+  home_score: number | null
+  away_score: number | null
+  status: string | null
+  elapsed?: number | null
+}
+
+type StoredHomeLeagueRow = {
+  id: number | string
+  external_id: number | string | null
+  name: string | null
+  country: string | null
+  logo_url?: string | null
+}
+
+type StoredHomeTeamRow = {
+  id: number | string
+  external_id: number | string | null
+  name: string | null
+  logo_url?: string | null
 }
 
 type StoredMatchEventRow = {
@@ -824,6 +864,7 @@ type HomeBroadcastRuleRow = {
 }
 
 type HomeMatchExtras = {
+  persistedInSupabase: boolean
   broadcasters: MatchBroadcaster[]
   broadcastChannel: string | null
   broadcastLogoUrl: string | null
@@ -852,6 +893,170 @@ function chunkArray<T>(items: T[], size: number) {
   }
 
   return chunks
+}
+
+function toFiniteNumber(value: number | string | null | undefined) {
+  const numericValue = Number(value)
+
+  return Number.isFinite(numericValue) ? numericValue : null
+}
+
+async function fetchStoredHomeMatches(date: string): Promise<MatchListItem[]> {
+  const supabase = getSupabaseAdminClient()
+  const fromDate = addDaysToISO(date, -1)
+  const toDate = addDaysToISO(date, 1)
+  const selectWithElapsed =
+    'id, external_id, league_id, home_team_id, away_team_id, match_date, home_score, away_score, status, elapsed'
+  const selectBase =
+    'id, external_id, league_id, home_team_id, away_team_id, match_date, home_score, away_score, status'
+
+  const primaryResponse = await supabase
+    .from('matches')
+    .select(selectWithElapsed)
+    .gte('match_date', `${fromDate}T00:00:00`)
+    .lte('match_date', `${toDate}T23:59:59`)
+    .order('match_date', { ascending: true })
+  let responseData: unknown[] | null = primaryResponse.data
+  let responseError = primaryResponse.error
+
+  if (
+    responseError &&
+    (
+      responseError.code === '42703' ||
+      responseError.code === 'PGRST204' ||
+      responseError.message.toLowerCase().includes('elapsed')
+    )
+  ) {
+    const fallbackResponse = await supabase
+      .from('matches')
+      .select(selectBase)
+      .gte('match_date', `${fromDate}T00:00:00`)
+      .lte('match_date', `${toDate}T23:59:59`)
+      .order('match_date', { ascending: true })
+
+    responseData = fallbackResponse.data
+    responseError = fallbackResponse.error
+  }
+
+  if (responseError) throw responseError
+
+  const matchRows = ((responseData ?? []) as StoredHomeMatchRow[])
+    .filter((match) => getArgentinaDateKey(match.match_date) === date)
+
+  if (!matchRows.length) return []
+
+  const leagueIds = [
+    ...new Set(
+      matchRows
+        .map((match) => match.league_id)
+        .filter((id): id is string | number => id !== null && id !== undefined)
+        .map(String)
+    ),
+  ]
+  const teamIds = [
+    ...new Set(
+      matchRows
+        .flatMap((match) => [match.home_team_id, match.away_team_id])
+        .filter((id): id is string | number => id !== null && id !== undefined)
+        .map(String)
+    ),
+  ]
+  const leagues = new Map<string, StoredHomeLeagueRow>()
+  const teams = new Map<string, StoredHomeTeamRow>()
+
+  for (const chunk of chunkArray(leagueIds, 100)) {
+    const leagueResponse = await supabase
+      .from('leagues')
+      .select('id, external_id, name, country, logo_url')
+      .in('id', chunk)
+
+    if (!leagueResponse.error) {
+      for (const league of (leagueResponse.data ?? []) as StoredHomeLeagueRow[]) {
+        leagues.set(String(league.id), league)
+      }
+      continue
+    }
+
+    const fallback = await supabase
+      .from('leagues')
+      .select('id, external_id, name, country')
+      .in('id', chunk)
+
+    if (fallback.error) throw fallback.error
+
+    for (const league of (fallback.data ?? []) as StoredHomeLeagueRow[]) {
+      leagues.set(String(league.id), { ...league, logo_url: null })
+    }
+  }
+
+  for (const chunk of chunkArray(teamIds, 100)) {
+    const teamResponse = await supabase
+      .from('teams')
+      .select('id, external_id, name, logo_url')
+      .in('id', chunk)
+
+    if (!teamResponse.error) {
+      for (const team of (teamResponse.data ?? []) as StoredHomeTeamRow[]) {
+        teams.set(String(team.id), team)
+      }
+      continue
+    }
+
+    const fallback = await supabase
+      .from('teams')
+      .select('id, external_id, name')
+      .in('id', chunk)
+
+    if (fallback.error) throw fallback.error
+
+    for (const team of (fallback.data ?? []) as StoredHomeTeamRow[]) {
+      teams.set(String(team.id), { ...team, logo_url: null })
+    }
+  }
+
+  return matchRows
+    .map((match): MatchListItem | null => {
+      const externalId = toFiniteNumber(match.external_id)
+      const homeTeam = match.home_team_id ? teams.get(String(match.home_team_id)) : null
+      const awayTeam = match.away_team_id ? teams.get(String(match.away_team_id)) : null
+      const league = match.league_id ? leagues.get(String(match.league_id)) : null
+
+      if (!externalId || !homeTeam?.name || !awayTeam?.name || !league?.name) {
+        return null
+      }
+
+      const excludedReason = getExcludedCompetitionReason({
+        league: league.name,
+        leagueName: league.name,
+        country: league.country ?? undefined,
+        home: homeTeam.name,
+        away: awayTeam.name,
+      })
+
+      if (excludedReason) return null
+
+      return {
+        id: externalId,
+        externalId,
+        leagueId: toFiniteNumber(league.external_id) ?? toFiniteNumber(league.id) ?? undefined,
+        league: league.name,
+        leagueLogo: league.logo_url ?? undefined,
+        country: league.country ?? undefined,
+        date: match.match_date,
+        homeId: toFiniteNumber(homeTeam.external_id) ?? undefined,
+        home: homeTeam.name,
+        awayId: toFiniteNumber(awayTeam.external_id) ?? undefined,
+        away: awayTeam.name,
+        homeLogo: homeTeam.logo_url ?? undefined,
+        awayLogo: awayTeam.logo_url ?? undefined,
+        goalsHome: match.home_score,
+        goalsAway: match.away_score,
+        minute: match.elapsed ?? null,
+        statusShort: match.status ?? 'NS',
+        statusLong: match.status ?? 'No iniciado',
+      }
+    })
+    .filter((match): match is MatchListItem => Boolean(match))
 }
 
 async function fetchHomeMatchRowsByExternalId(
@@ -1145,6 +1350,7 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
   if (!externalFixtureIds.length) return empty
 
   try {
+    const shouldLogHomeExtras = process.env.NODE_ENV === 'development'
     const supabase = getSupabaseAdminClient()
     const matchRows = await fetchHomeMatchRowsByExternalId(supabase, externalFixtureIds)
     const visibleMatchesByExternalId = new Map(
@@ -1156,6 +1362,7 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
 
     for (const match of matches) {
       extrasByExternalId.set(String(match.externalId ?? match.id), {
+        persistedInSupabase: false,
         broadcasters: [],
         broadcastChannel: null,
         broadcastLogoUrl: null,
@@ -1175,12 +1382,14 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
       matchRowsByExternalId.set(externalKey, row)
       const legacyBroadcaster = getLegacyBroadcaster(row)
       const existingExtras = extrasByExternalId.get(externalKey) ?? {
+        persistedInSupabase: false,
         broadcasters: [],
         broadcastChannel: null,
         broadcastLogoUrl: null,
         goalScorers: createEmptyGoalScorers(),
       }
 
+      existingExtras.persistedInSupabase = true
       existingExtras.broadcasters = legacyBroadcaster ? [legacyBroadcaster] : existingExtras.broadcasters
       existingExtras.broadcastChannel = row.broadcast_channel ?? existingExtras.broadcastChannel
       existingExtras.broadcastLogoUrl = row.broadcast_logo_url ?? existingExtras.broadcastLogoUrl
@@ -1197,30 +1406,34 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
         broadcastRules
       )
 
-      console.info('[home-broadcasts]', {
-        visibleMatches: matches.length,
-        matchedRows: matchRows.length,
-        broadcastersLoaded: 0,
-        broadcastRules: broadcastRules.length,
-        ruleMatchesApplied,
-        reason: 'no-matches-row-for-visible-external-id',
-      })
-
-      for (const match of matches) {
-        console.info('match events ' + JSON.stringify({
-          homeTeamName: match.home,
-          awayTeamName: match.away,
-          external_id: match.externalId ?? match.id,
-          matchId: match.id,
-          internal_match_id: null,
-          date: match.date,
-          league: match.league,
-          home_team_id: match.homeId ?? null,
-          away_team_id: match.awayId ?? null,
-          eventsFound: 0,
-          events: [],
+      if (shouldLogHomeExtras) {
+        console.info('[home-broadcasts]', {
+          visibleMatches: matches.length,
+          matchedRows: matchRows.length,
+          broadcastersLoaded: 0,
+          broadcastRules: broadcastRules.length,
+          ruleMatchesApplied,
           reason: 'no-matches-row-for-visible-external-id',
-        }))
+        })
+      }
+
+      if (shouldLogHomeExtras) {
+        for (const match of matches) {
+          console.info('match events ' + JSON.stringify({
+            homeTeamName: match.home,
+            awayTeamName: match.away,
+            external_id: match.externalId ?? match.id,
+            matchId: match.id,
+            internal_match_id: null,
+            date: match.date,
+            league: match.league,
+            home_team_id: match.homeId ?? null,
+            away_team_id: match.awayId ?? null,
+            eventsFound: 0,
+            events: [],
+            reason: 'no-matches-row-for-visible-external-id',
+          }))
+        }
       }
 
       return extrasByExternalId
@@ -1262,30 +1475,32 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
       broadcastRules
     )
 
-    console.info('[home-broadcasts]', {
-      visibleMatches: matches.length,
-      matchedRows: matchRows.length,
-      broadcastersLoaded: broadcastRows.length,
-      broadcastRules: broadcastRules.length,
-      ruleMatchesApplied,
-      matches: matches.map((match) => {
-        const externalId = match.externalId ?? match.id
-        const row = matchRowsByExternalId.get(String(externalId)) ?? null
-        const extras = extrasByExternalId.get(String(externalId)) ?? null
-        const broadcastersForMatch = extras?.broadcasters ?? []
+    if (shouldLogHomeExtras) {
+      console.info('[home-broadcasts]', {
+        visibleMatches: matches.length,
+        matchedRows: matchRows.length,
+        broadcastersLoaded: broadcastRows.length,
+        broadcastRules: broadcastRules.length,
+        ruleMatchesApplied,
+        matches: matches.map((match) => {
+          const externalId = match.externalId ?? match.id
+          const row = matchRowsByExternalId.get(String(externalId)) ?? null
+          const extras = extrasByExternalId.get(String(externalId)) ?? null
+          const broadcastersForMatch = extras?.broadcasters ?? []
 
-        return {
-          home: match.home,
-          away: match.away,
-          matchId: row?.id ?? match.id,
-          externalId,
-          broadcastersForMatch: broadcastersForMatch.map((broadcaster) => ({
-            name: broadcaster.name,
-            hasLogo: Boolean(broadcaster.logoUrl),
-          })),
-        }
-      }),
-    })
+          return {
+            home: match.home,
+            away: match.away,
+            matchId: row?.id ?? match.id,
+            externalId,
+            broadcastersForMatch: broadcastersForMatch.map((broadcaster) => ({
+              name: broadcaster.name,
+              hasLogo: Boolean(broadcaster.logoUrl),
+            })),
+          }
+        }),
+      })
+    }
 
     const eventRows: StoredMatchEventRow[] = []
 
@@ -1310,8 +1525,8 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
       eventRows.push(...((eventsResponse.data ?? []) as StoredMatchEventRow[]))
     }
 
-    const goalEvents = eventRows.filter(
-      (event) => event.type.toLowerCase() === 'goal'
+    const goalEvents = eventRows.filter((event) =>
+      isScoreboardGoalEvent(event.type, event.detail)
     )
     const eventsFoundByMatchId = goalEvents.reduce<Map<string, number>>((accumulator, event) => {
       const matchId = String(event.match_id)
@@ -1368,38 +1583,40 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
       extras.goalScorers.unassigned?.sort(sortGoalScorers)
     }
 
-    for (const match of matches) {
-      const externalId = match.externalId ?? match.id
-      const row = matchRowsByExternalId.get(String(externalId)) ?? null
-      const internalMatchId = row ? String(row.id) : null
-      const foundEvents = internalMatchId ? eventsByMatchId.get(internalMatchId) ?? [] : []
+    if (shouldLogHomeExtras) {
+      for (const match of matches) {
+        const externalId = match.externalId ?? match.id
+        const row = matchRowsByExternalId.get(String(externalId)) ?? null
+        const internalMatchId = row ? String(row.id) : null
+        const foundEvents = internalMatchId ? eventsByMatchId.get(internalMatchId) ?? [] : []
 
-      console.info('match events ' + JSON.stringify({
-        homeTeamName: match.home,
-        awayTeamName: match.away,
-        external_id: row?.external_id ?? externalId,
-        matchId: match.id,
-        internal_match_id: row?.id ?? null,
-        date: match.date,
-        league: match.league,
-        home_team_id: row?.home_team_id ?? match.homeId ?? null,
-        away_team_id: row?.away_team_id ?? match.awayId ?? null,
-        eventsFound: internalMatchId ? eventsFoundByMatchId.get(internalMatchId) ?? 0 : 0,
-        events: foundEvents.map(serializeGoalEventForLog),
+        console.info('match events ' + JSON.stringify({
+          homeTeamName: match.home,
+          awayTeamName: match.away,
+          external_id: row?.external_id ?? externalId,
+          matchId: match.id,
+          internal_match_id: row?.id ?? null,
+          date: match.date,
+          league: match.league,
+          home_team_id: row?.home_team_id ?? match.homeId ?? null,
+          away_team_id: row?.away_team_id ?? match.awayId ?? null,
+          eventsFound: internalMatchId ? eventsFoundByMatchId.get(internalMatchId) ?? 0 : 0,
+          events: foundEvents.map(serializeGoalEventForLog),
+        }))
+      }
+
+      console.info('[home:match-extras] goleadores leidos desde Supabase ' + JSON.stringify({
+        visibleExternalIds: externalFixtureIds.length,
+        matchedRows: matchRows.length,
+        matchIds: matchIds.length,
+        broadcastRows: broadcastRows.length,
+        storedEvents: eventRows.length,
+        goalEvents: goalEvents.length,
+        mappedHomeGoals,
+        mappedAwayGoals,
+        unassignedGoals,
       }))
     }
-
-    console.info('[home:match-extras] goleadores leidos desde Supabase ' + JSON.stringify({
-      visibleExternalIds: externalFixtureIds.length,
-      matchedRows: matchRows.length,
-      matchIds: matchIds.length,
-      broadcastRows: broadcastRows.length,
-      storedEvents: eventRows.length,
-      goalEvents: goalEvents.length,
-      mappedHomeGoals,
-      mappedAwayGoals,
-      unassignedGoals,
-    }))
 
     return extrasByExternalId
   } catch (error) {
@@ -1424,6 +1641,9 @@ export async function withGoalScorers(
     goalScorers:
       extrasByFixtureId.get(String(match.externalId ?? match.id))?.goalScorers ||
       createEmptyGoalScorers(),
+    persistedInSupabase:
+      extrasByFixtureId.get(String(match.externalId ?? match.id))?.persistedInSupabase ??
+      false,
     broadcasters:
       extrasByFixtureId.get(String(match.externalId ?? match.id))?.broadcasters || [],
     broadcastChannel:

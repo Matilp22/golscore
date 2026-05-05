@@ -19,6 +19,14 @@ import {
   type TopPlayerRow,
 } from '@/lib/api-football'
 import { getTournamentConfig } from '@/lib/tournament-pages'
+import {
+  getLeagueFinalPhaseKey,
+  getLeagueRoundLabel,
+  getLeagueRoundSortValue,
+  isLeagueFinalPhaseRound,
+  normalizeLeagueRound,
+  normalizeRoundText,
+} from '@/shared/utils/league-rounds'
 
 type PageProps = {
   params: Promise<{ id: string }>
@@ -29,20 +37,21 @@ function formatAverage(value: number) {
 }
 
 function normalizeRoundName(value: string) {
-  return value
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+  return normalizeRoundText(value)
 }
 
-function getRoundPriority(round: string) {
+function getRoundPriority(round: string, leagueExternalId?: number | null) {
   const normalized = normalizeRoundName(round)
+  const finalPhaseSortValue = getLeagueFinalPhaseKey(round)
+    ? getLeagueRoundSortValue(round, leagueExternalId)
+    : null
 
-  if (normalized.includes('third place') || normalized.includes('3rd place') || normalized.includes('tercer puesto')) return 95
+  if (normalized.includes('third place') || normalized.includes('3rd place') || normalized.includes('tercer puesto')) return 1040
+  if (finalPhaseSortValue !== null) return finalPhaseSortValue
   if (normalized.includes('final') && !normalized.includes('semi')) return 90
   if (normalized.includes('semi')) return 80
-  if (normalized.includes('quarter')) return 70
-  if (normalized.includes('round of 16') || normalized.includes('16th finals') || normalized.includes('dieciseisavos')) return 60
+  if (normalized.includes('quarter') || normalized.includes('cuartos')) return 70
+  if (normalized.includes('round of 16') || normalized.includes('8th finals') || normalized.includes('16th finals') || normalized.includes('dieciseisavos')) return 60
   if (normalized.includes('octavos') || normalized.includes('round of 16')) return 60
   if (normalized.includes('round of 32') || normalized.includes('32nd finals') || normalized.includes('treintaidosavos')) return 50
   if (normalized.includes('round of 64') || normalized.includes('64th finals') || normalized.includes('sesentaicuatroavos')) return 40
@@ -50,16 +59,21 @@ function getRoundPriority(round: string) {
   return 10
 }
 
-function getRoundDisplayName(round: string) {
+function getRoundDisplayName(round: string, leagueExternalId?: number | null) {
   const normalized = normalizeRoundName(round)
+  const leagueRoundLabel = getLeagueRoundLabel(round, leagueExternalId)
+
+  if (leagueRoundLabel && leagueRoundLabel !== round) {
+    return leagueRoundLabel.toUpperCase()
+  }
 
   if (normalized.includes('third place') || normalized.includes('3rd place') || normalized.includes('tercer puesto')) {
     return '3ER PUESTO'
   }
   if (normalized.includes('final') && !normalized.includes('semi')) return 'FINAL'
   if (normalized.includes('semi')) return 'SEMIFINALES'
-  if (normalized.includes('quarter')) return 'CUARTOS DE FINAL'
-  if (normalized.includes('octavos') || normalized.includes('round of 16')) return 'OCTAVOS DE FINAL'
+  if (normalized.includes('quarter') || normalized.includes('cuartos')) return 'CUARTOS DE FINAL'
+  if (normalized.includes('octavos') || normalized.includes('round of 16') || normalized.includes('8th finals')) return 'OCTAVOS DE FINAL'
   if (normalized.includes('round of 32') || normalized.includes('16th finals') || normalized.includes('dieciseisavos')) {
     return '16AVOS DE FINAL'
   }
@@ -193,11 +207,17 @@ function getParticipantKey(participant: Pick<BracketParticipant, 'team' | 'teamI
 
 function getBracketStageKey(round: string): BracketStageKey | null {
   const normalized = normalizeRoundName(round)
+  const finalPhaseKey = getLeagueFinalPhaseKey(round)
+
+  if (finalPhaseKey === 'final') return 'final'
+  if (finalPhaseKey === 'semifinal') return 'sf'
+  if (finalPhaseKey === 'cuartos') return 'qf'
+  if (finalPhaseKey === 'octavos') return 'r16'
 
   if (normalized.includes('final') && !normalized.includes('semi')) return 'final'
   if (normalized.includes('semi')) return 'sf'
-  if (normalized.includes('quarter')) return 'qf'
-  if (normalized.includes('octavos') || normalized.includes('round of 16')) return 'r16'
+  if (normalized.includes('quarter') || normalized.includes('cuartos')) return 'qf'
+  if (normalized.includes('octavos') || normalized.includes('round of 16') || normalized.includes('8th finals')) return 'r16'
   if (normalized.includes('round of 32') || normalized.includes('16th finals') || normalized.includes('dieciseisavos')) return 'r32'
   if (normalized.includes('round of 64') || normalized.includes('32nd finals') || normalized.includes('treintaidosavos')) return 'r64'
 
@@ -943,15 +963,18 @@ function PromediosTable({
   )
 }
 
-function buildKnockoutRounds(fixtures: LeagueFixtureSummary[]) {
+function buildKnockoutRounds(fixtures: LeagueFixtureSummary[], leagueExternalId?: number | null) {
   const knockoutFixtures = fixtures.filter((fixture) => {
     const round = normalizeRoundName(fixture.round)
     return (
+      isLeagueFinalPhaseRound(fixture.round, leagueExternalId) ||
       round.includes('final') ||
       round.includes('semi') ||
       round.includes('quarter') ||
+      round.includes('cuartos') ||
       round.includes('octavos') ||
       round.includes('round of 16') ||
+      round.includes('8th finals') ||
       round.includes('round of 32') ||
       round.includes('round of 64') ||
       round.includes('dieciseisavos') ||
@@ -979,26 +1002,32 @@ function buildKnockoutRounds(fixtures: LeagueFixtureSummary[]) {
         return a.id - b.id
       }),
     }))
-    .sort((a, b) => getRoundPriority(a.round) - getRoundPriority(b.round))
+    .sort((a, b) => getRoundPriority(a.round, leagueExternalId) - getRoundPriority(b.round, leagueExternalId))
 }
 
-function buildCopaArgentinaMatchRounds(rounds: ReturnType<typeof buildKnockoutRounds>) {
+function buildCopaArgentinaMatchRounds(
+  rounds: ReturnType<typeof buildKnockoutRounds>,
+  leagueExternalId?: number | null
+) {
   return rounds.map((round) => ({
     round: round.round,
-    label: getRoundDisplayName(round.round),
+    label: getRoundDisplayName(round.round, leagueExternalId),
     matches: round.matches,
   }))
 }
 
-function isKnockoutRound(round: string) {
+function isKnockoutRound(round: string, leagueExternalId?: number | null) {
   const normalized = normalizeRoundName(round)
 
   return (
+    isLeagueFinalPhaseRound(round, leagueExternalId) ||
     normalized.includes('final') ||
     normalized.includes('semi') ||
     normalized.includes('quarter') ||
+    normalized.includes('cuartos') ||
     normalized.includes('octavos') ||
     normalized.includes('round of 16') ||
+    normalized.includes('8th finals') ||
     normalized.includes('round of 32') ||
     normalized.includes('round of 64') ||
     normalized.includes('dieciseisavos') ||
@@ -1011,7 +1040,11 @@ function isKnockoutRound(round: string) {
   )
 }
 
-function getRoundLabel(round: string) {
+function getRoundLabel(round: string, leagueExternalId?: number | null) {
+  const leagueRoundLabel = getLeagueRoundLabel(round, leagueExternalId)
+
+  if (leagueRoundLabel) return leagueRoundLabel
+
   const numericMatch = round.match(/(\d+)/)
   if (numericMatch) return `Fecha ${numericMatch[1]}`
 
@@ -1026,12 +1059,21 @@ function getRoundNumber(round: string) {
   return match ? Number(match[1]) : null
 }
 
-function getRoundBlocks(fixtures: LeagueFixtureSummary[]) {
+function getRoundBlocks(fixtures: LeagueFixtureSummary[], leagueExternalId?: number | null) {
   const leagueFixtures = fixtures.filter((fixture) => {
-    if (isKnockoutRound(fixture.round)) return false
+    if (isKnockoutRound(fixture.round, leagueExternalId)) return false
 
     const normalized = normalizeRoundName(fixture.round)
+    const normalizedLeagueRound = normalizeLeagueRound(fixture.round, leagueExternalId)
     const roundNumber = getRoundNumber(fixture.round)
+
+    if (
+      typeof normalizedLeagueRound === 'string' &&
+      normalizedLeagueRound.startsWith('apertura-fecha-') &&
+      roundNumber
+    ) {
+      return roundNumber >= 1 && roundNumber <= 16
+    }
 
     if (normalized.includes('apertura') && roundNumber) {
       return roundNumber >= 1 && roundNumber <= 16
@@ -1116,7 +1158,7 @@ function getRoundBlocks(fixtures: LeagueFixtureSummary[]) {
 
     return {
       round: entry.round,
-      label: getRoundLabel(entry.round),
+      label: getRoundLabel(entry.round, leagueExternalId),
       days: [...days.entries()],
     }
   })
@@ -1365,6 +1407,104 @@ function BracketView({
   )
 }
 
+function formatFinalPhaseFixtureDate(dateString: string) {
+  return new Intl.DateTimeFormat('es-AR', {
+    weekday: 'short',
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'America/Argentina/Buenos_Aires',
+  }).format(new Date(dateString))
+}
+
+function getFinalPhaseScore(match: LeagueFixtureSummary) {
+  if (match.goalsHome === null || match.goalsAway === null) return '-'
+
+  return `${match.goalsHome} - ${match.goalsAway}`
+}
+
+function FinalPhasesSection({
+  rounds,
+  leagueExternalId,
+}: {
+  rounds: ReturnType<typeof buildKnockoutRounds>
+  leagueExternalId?: number | null
+}) {
+  if (!rounds.length) return null
+
+  return (
+    <SectionCard
+      title="Fases finales"
+      subtitle="Cruces eliminatorios cargados para esta Liga Profesional"
+    >
+      <div className="space-y-3">
+        {rounds.map((round) => (
+          <div
+            key={round.round}
+            className="overflow-hidden rounded-2xl border border-white/8 bg-[#11161b]"
+          >
+            <div className="border-b border-white/6 bg-[#131b20] px-3 py-2">
+              <h3 className="text-sm font-black text-white md:text-base">
+                {getLeagueRoundLabel(round.round, leagueExternalId) ?? round.round}
+              </h3>
+            </div>
+
+            <div className="grid gap-2 p-2 md:grid-cols-2 md:p-3">
+              {round.matches.map((match) => (
+                <Link
+                  key={match.id}
+                  href={`/partido/${match.id}`}
+                  className="grid min-h-[76px] grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-xl border border-white/7 bg-[#0f151a] p-2 transition hover:border-[#2d6d4d] hover:bg-[#121a20] md:p-3"
+                >
+                  <div className="min-w-0 space-y-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8d98a7]">
+                      {formatFinalPhaseFixtureDate(match.date)}
+                    </p>
+
+                    <div className="grid min-w-0 gap-1">
+                      {[
+                        { name: match.home, logo: match.homeLogo },
+                        { name: match.away, logo: match.awayLogo },
+                      ].map((team) => (
+                        <div key={team.name} className="flex min-w-0 items-center gap-2">
+                          {team.logo ? (
+                            <Image
+                              src={team.logo}
+                              alt={team.name}
+                              width={18}
+                              height={18}
+                              className="h-[18px] w-[18px] object-contain"
+                            />
+                          ) : (
+                            <span className="h-[18px] w-[18px] rounded-full border border-white/10 bg-white/5" />
+                          )}
+                          <span className="truncate text-sm font-semibold text-[#edf2f7]">
+                            {team.name}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex min-w-[58px] flex-col items-center justify-center rounded-lg border border-white/7 bg-[#0c1115] px-2">
+                    <span className="text-base font-black text-white">
+                      {getFinalPhaseScore(match)}
+                    </span>
+                    <span className="mt-1 text-[10px] font-semibold uppercase text-[#8d98a7]">
+                      {match.statusShort}
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </SectionCard>
+  )
+}
+
 export default async function LigaPage({ params }: PageProps) {
   const { id } = await params
   const tournament = getTournamentConfig(id)
@@ -1488,9 +1628,9 @@ export default async function LigaPage({ params }: PageProps) {
         : [],
     }))
   }
-  const knockoutRounds = buildKnockoutRounds(fixtures)
+  const knockoutRounds = buildKnockoutRounds(fixtures, resolvedTournament?.leagueId ?? null)
   const { blocks: currentRoundBlocks, initialIndex: currentRoundInitialIndex } =
-    getRoundBlocks(fixtures)
+    getRoundBlocks(fixtures, resolvedTournament?.leagueId ?? null)
   const compactGroups = primaryGroups.length === 2
   const annualRelegatedTeamId = getAnnualRelegatedTeamId(annualTable)
   const promedioRelegatedTeamId = getPromediosRelegatedTeamId(
@@ -1547,7 +1687,7 @@ export default async function LigaPage({ params }: PageProps) {
             </div>
           ) : null}
 
-          {knockoutRounds.length ? (
+          {knockoutRounds.length && tournament.key !== 'argentina-liga-profesional' ? (
             <BracketView
               rounds={knockoutRounds}
               useCopaArgentinaTree={tournament.key === 'argentina-copa-argentina'}
@@ -1559,7 +1699,12 @@ export default async function LigaPage({ params }: PageProps) {
               title="Partidos de Copa Argentina"
               subtitle="Listado completo por fase"
             >
-              <CopaArgentinaMatchList rounds={buildCopaArgentinaMatchRounds(knockoutRounds)} />
+              <CopaArgentinaMatchList
+                rounds={buildCopaArgentinaMatchRounds(
+                  knockoutRounds,
+                  resolvedTournament?.leagueId ?? null
+                )}
+              />
             </SectionCard>
           ) : null}
 
@@ -1597,6 +1742,13 @@ export default async function LigaPage({ params }: PageProps) {
             <PlayoffBracket
               zoneAStandings={zoneAStandings}
               zoneBStandings={zoneBStandings}
+            />
+          ) : null}
+
+          {tournament.key === 'argentina-liga-profesional' && knockoutRounds.length ? (
+            <FinalPhasesSection
+              rounds={knockoutRounds}
+              leagueExternalId={resolvedTournament?.leagueId ?? null}
             />
           ) : null}
 

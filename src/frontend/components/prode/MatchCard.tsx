@@ -45,8 +45,13 @@ export default function MatchCard({
   onSavePrediction,
 }: MatchCardProps) {
   const predictionPoints = prediction?.points
+  const hasPredictionScore =
+    prediction?.prediction_score_found ??
+    prediction?.predictionScoreFound ??
+    (predictionPoints !== null && predictionPoints !== undefined)
   const pointsLabel =
     predictionPoints === 1 ? '1 pt' : `${Number.isFinite(predictionPoints) ? predictionPoints : 0} pts`
+  const predictionId = prediction?.prediction_id ?? prediction?.id
 
   return (
     <article className="w-full min-w-0 px-3 py-3 sm:px-4">
@@ -58,7 +63,7 @@ export default function MatchCard({
           <span className="text-xs text-[#8d98a7]">{formatDate(match.matchDate)}</span>
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          {prediction && predictionPoints !== undefined ? (
+          {prediction && hasPredictionScore ? (
             <span className="rounded-full border border-[#25553d] bg-[#13251d] px-2 py-0.5 text-[11px] font-bold text-[#7ff0b2]">
               {pointsLabel}
               {prediction.exactHit ? ' exacto' : prediction.partialHit ? ' parcial' : ''}
@@ -68,6 +73,7 @@ export default function MatchCard({
       </div>
 
       <PredictionForm
+        key={`${match.id}-${predictionId ?? 'new'}-${prediction?.updatedAt ?? ''}`}
         match={match}
         prediction={prediction}
         draft={draft}

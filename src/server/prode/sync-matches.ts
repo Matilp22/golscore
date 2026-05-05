@@ -10,9 +10,12 @@ import {
 } from '@/shared/config/prode-leagues'
 import {
   TOURNAMENT_PAGE_CONFIGS,
+  VISIBLE_TOURNAMENT_PAGE_CONFIGS,
   getTournamentConfig,
   type TournamentPageConfig,
 } from '@/shared/config/tournament-pages'
+import { getExcludedCompetitionReason } from '@/shared/utils/competition-filter'
+import { isScoreboardGoalEvent } from '@/shared/utils/football-events'
 import { isFinishedStatus } from '@/shared/utils/match-status'
 
 type ApiFixture = {
@@ -24,6 +27,7 @@ type ApiFixture = {
       long?: string
       short: string
     }
+    [key: string]: unknown
   }
   league: {
     id: number
@@ -31,6 +35,7 @@ type ApiFixture = {
     country?: string
     season?: number
     round?: string
+    [key: string]: unknown
   }
   teams: {
     home: {
@@ -44,6 +49,18 @@ type ApiFixture = {
       logo?: string
     }
   }
+  broadcasts?: unknown
+  broadcasters?: unknown
+  broadcast?: unknown
+  tv?: unknown
+  television?: unknown
+  channels?: unknown
+  channel?: unknown
+  streaming?: unknown
+  platforms?: unknown
+  platform?: unknown
+  coverage?: unknown
+  [key: string]: unknown
   goals: {
     home: number | null
     away: number | null
@@ -157,6 +174,9 @@ type DbIdRow = {
 type SyncOptions = {
   competition?: string | null
   date?: string | null
+  dateFrom?: string | null
+  dateTo?: string | null
+  leagueExternalId?: string | number | null
   debug?: boolean
   limit?: number | null
   offset?: number | null
@@ -179,6 +199,12 @@ type SyncMatchEventsResult = {
   goalsInserted: number
 }
 
+type FixtureBroadcast = {
+  broadcaster_name: string
+  broadcaster_logo_url: string | null
+  country: string | null
+}
+
 type HomeScoreboardSyncResult = {
   dates: string[]
   fetched: number
@@ -187,6 +213,7 @@ type HomeScoreboardSyncResult = {
   skipped: number
   eventsFound: number
   goalsInserted: number
+  pointsRecalculated: number
   leagues: Array<{
     leagueId: number
     name: string
@@ -202,6 +229,9 @@ type HomeScoreboardSyncResult = {
 
 export type SyncHomeMatchesOptions = {
   date?: string | null
+  dateFrom?: string | null
+  dateTo?: string | null
+  leagueExternalId?: string | number | null
   debug?: boolean
   limit?: number | null
   offset?: number | null
@@ -245,7 +275,38 @@ export type SyncLeagueEventsOptions = {
   onlyEvents?: boolean
 }
 
-const ALLOWED_GOAL_DETAILS = new Set(['Normal Goal', 'Penalty', 'Own Goal'])
+export type SyncHomeBroadcastsFromApiOptions = {
+  dateFrom: string
+  dateTo: string
+  leagueExternalId?: string | number | null
+  leagueName?: string | null
+  debug?: boolean
+  limit?: number | null
+  offset?: number | null
+}
+
+export type SyncHomeBroadcastsFromApiResult = {
+  dates: string[]
+  fetched: number
+  selected: number
+  processed: number
+  skipped: number
+  broadcastersFound: number
+  broadcastersStored: number
+  sample: Array<{
+    fixtureId: number
+    league: string
+    local: string
+    visitante: string
+    broadcasters: string[]
+  }>
+  sampleErrors: Array<{
+    fixtureId: number | null
+    stage: string
+    message: string
+  }>
+}
+
 const LIVE_EVENT_SYNC_STATUSES = new Set(['LIVE', '1H', 'HT', '2H', 'ET', 'BT', 'P'])
 const DEFAULT_SYNC_LIMIT = 20
 const MAX_SYNC_LIMIT = 50
@@ -289,6 +350,7 @@ export type SyncSingleFixtureResult = {
     away_score: number | null
     status: string | null
   } | null
+  eventSync?: SyncMatchEventsResult
   action: UpsertAction
   matchBefore?: SyncSingleFixtureResult['before']
   matchAfter?: SyncSingleFixtureResult['after']
@@ -413,6 +475,301 @@ function getTeamLogoUrl(team: { id: number; logo?: string }) {
   return team.logo || `https://media.api-sports.io/football/teams/${team.id}.png`
 }
 
+const BROADCAST_SOURCE_KEYS = [
+  'broadcast',
+  'broadcasts',
+  'broadcaster',
+  'broadcasters',
+  'tv',
+  'television',
+  'channel',
+  'channels',
+  'streaming',
+  'platform',
+  'platforms',
+  'transmission',
+  'transmissions',
+]
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function readBroadcastText(value: unknown): string | null {
+  if (typeof value === 'string' && value.trim()) return value.trim()
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+
+  return null
+}
+
+function readBroadcastTextFromKeys(
+  source: Record<string, unknown>,
+  keys: string[]
+) {
+  for (const key of keys) {
+    const value = readBroadcastText(source[key])
+
+    if (value) return value
+  }
+
+  return null
+}
+
+function readBroadcastCountry(value: unknown): string | null {
+  const text = readBroadcastText(value)
+
+  if (text) return text
+  if (!isRecord(value)) return null
+
+  return readBroadcastTextFromKeys(value, ['name', 'country', 'code'])
+}
+
+function collectFixtureBroadcastsFromValue(
+  value: unknown,
+  sourceKey: string
+): FixtureBroadcast[] {
+  if (value === null || value === undefined || typeof value === 'boolean') return []
+
+  const directText = readBroadcastText(value)
+  if (directText) {
+    return [{
+      broadcaster_name: directText,
+      broadcaster_logo_url: null,
+      country: null,
+    }]
+  }
+
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => collectFixtureBroadcastsFromValue(item, sourceKey))
+  }
+
+  if (!isRecord(value)) return []
+
+  const nestedNameSource =
+    value.broadcaster ??
+    value.broadcast ??
+    value.channel ??
+    value.network ??
+    value.provider ??
+    value.platform ??
+    value.tv
+  const nestedName =
+    readBroadcastText(nestedNameSource) ||
+    (isRecord(nestedNameSource)
+      ? readBroadcastTextFromKeys(nestedNameSource, ['name', 'title', 'label'])
+      : null)
+  const directName =
+    readBroadcastTextFromKeys(value, [
+      'broadcaster_name',
+      'broadcasterName',
+      'name',
+      'title',
+      'label',
+      'channel_name',
+      'channelName',
+      'network',
+      'provider',
+      'platform',
+    ]) || nestedName
+  const directLogo =
+    readBroadcastTextFromKeys(value, [
+      'broadcaster_logo_url',
+      'broadcasterLogoUrl',
+      'logo',
+      'logo_url',
+      'logoUrl',
+      'image',
+      'image_url',
+      'imageUrl',
+    ]) ||
+    (isRecord(nestedNameSource)
+      ? readBroadcastTextFromKeys(nestedNameSource, [
+          'logo',
+          'logo_url',
+          'logoUrl',
+          'image',
+          'image_url',
+          'imageUrl',
+        ])
+      : null)
+  const directCountry = readBroadcastCountry(value.country)
+
+  const matches: FixtureBroadcast[] = directName
+    ? [{
+        broadcaster_name: directName,
+        broadcaster_logo_url: directLogo,
+        country: directCountry,
+      }]
+    : []
+
+  for (const [key, child] of Object.entries(value)) {
+    const normalizedKey = key.toLowerCase()
+    const shouldInspectChild =
+      BROADCAST_SOURCE_KEYS.some((candidate) => normalizedKey.includes(candidate)) ||
+      sourceKey.toLowerCase().includes('coverage')
+
+    if (shouldInspectChild) {
+      matches.push(...collectFixtureBroadcastsFromValue(child, key))
+    }
+  }
+
+  return matches
+}
+
+function normalizeBroadcastName(value: string) {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function extractFixtureBroadcasts(fixture: ApiFixture): FixtureBroadcast[] {
+  const sourceEntries: Array<[string, unknown]> = [
+    ['broadcasts', fixture.broadcasts],
+    ['broadcasters', fixture.broadcasters],
+    ['broadcast', fixture.broadcast],
+    ['tv', fixture.tv],
+    ['television', fixture.television],
+    ['channels', fixture.channels],
+    ['channel', fixture.channel],
+    ['streaming', fixture.streaming],
+    ['platforms', fixture.platforms],
+    ['platform', fixture.platform],
+    ['coverage', fixture.coverage],
+    ['fixture.broadcasts', fixture.fixture.broadcasts],
+    ['fixture.broadcasters', fixture.fixture.broadcasters],
+    ['fixture.broadcast', fixture.fixture.broadcast],
+    ['fixture.tv', fixture.fixture.tv],
+    ['fixture.television', fixture.fixture.television],
+    ['fixture.channels', fixture.fixture.channels],
+    ['fixture.channel', fixture.fixture.channel],
+    ['league.broadcasts', fixture.league.broadcasts],
+    ['league.broadcasters', fixture.league.broadcasters],
+    ['league.tv', fixture.league.tv],
+    ['league.coverage', fixture.league.coverage],
+  ]
+  const byName = new Map<string, FixtureBroadcast>()
+
+  for (const [key, value] of sourceEntries) {
+    for (const broadcast of collectFixtureBroadcastsFromValue(value, key)) {
+      const name = broadcast.broadcaster_name.trim()
+      const normalizedName = normalizeBroadcastName(name)
+
+      if (!normalizedName) continue
+
+      const existing = byName.get(normalizedName)
+      byName.set(normalizedName, {
+        broadcaster_name: existing?.broadcaster_name ?? name,
+        broadcaster_logo_url:
+          existing?.broadcaster_logo_url ?? broadcast.broadcaster_logo_url,
+        country: existing?.country ?? broadcast.country ?? fixture.league.country ?? null,
+      })
+    }
+  }
+
+  return [...byName.values()]
+}
+
+function isMissingOptionalMatchBroadcasts(error: { code?: string; message?: string } | unknown) {
+  const errorObject =
+    typeof error === 'object' && error !== null
+      ? (error as { code?: string; message?: string })
+      : {}
+  const message = (errorObject.message ?? String(error)).toLowerCase()
+
+  return (
+    errorObject.code === '42P01' ||
+    errorObject.code === '42703' ||
+    errorObject.code === 'PGRST204' ||
+    errorObject.code === 'PGRST205' ||
+    message.includes('match_broadcasts') ||
+    message.includes('schema cache')
+  )
+}
+
+async function syncMatchBroadcastsFromFixtureIfSupported(
+  supabase: SupabaseClient,
+  fixture: ApiFixture,
+  matchId: DbId,
+  debug?: boolean
+) {
+  const broadcasts = extractFixtureBroadcasts(fixture)
+
+  if (!broadcasts.length) {
+    logDebug(debug, 'fixture has no API broadcaster payload', {
+      fixtureId: fixture.fixture.id,
+      league: fixture.league.name,
+    })
+
+    return { broadcastsFound: 0, broadcastsStored: 0 }
+  }
+
+  const payload = broadcasts.map((broadcast) => ({
+    match_id: matchId,
+    broadcaster_name: broadcast.broadcaster_name,
+    broadcaster_logo_url: broadcast.broadcaster_logo_url,
+    country: broadcast.country,
+  }))
+
+  const response = await withTimeout(
+    supabase
+      .from('match_broadcasts')
+      .upsert(payload, { onConflict: 'match_id,broadcaster_name' }),
+    `match_broadcasts upsert ${fixture.fixture.id}`
+  )
+
+  if (response.error) {
+    if (isMissingOptionalMatchBroadcasts(response.error)) {
+      console.warn('[sync-match-broadcasts] Tabla match_broadcasts no disponible.', {
+        fixtureId: fixture.fixture.id,
+        league: fixture.league.name,
+      })
+
+      return { broadcastsFound: broadcasts.length, broadcastsStored: 0 }
+    }
+
+    throw response.error
+  }
+
+  console.info('[sync-match-broadcasts] emisoras procesadas', {
+    fixtureId: fixture.fixture.id,
+    league: fixture.league.name,
+    broadcastersFound: broadcasts.length,
+    broadcastersStored: payload.length,
+    broadcasters: broadcasts.map((broadcast) => broadcast.broadcaster_name),
+  })
+
+  return { broadcastsFound: broadcasts.length, broadcastsStored: payload.length }
+}
+
+async function safeSyncMatchBroadcastsFromFixture(
+  supabase: SupabaseClient,
+  fixture: ApiFixture,
+  matchId: DbId,
+  debug?: boolean
+) {
+  try {
+    return await syncMatchBroadcastsFromFixtureIfSupported(
+      supabase,
+      fixture,
+      matchId,
+      debug
+    )
+  } catch (error) {
+    console.warn('[sync-match-broadcasts] No se pudo guardar televisacion API.', {
+      fixtureId: fixture.fixture.id,
+      league: fixture.league.name,
+      matchId,
+      message: error instanceof Error ? error.message : String(error),
+    })
+
+    return { broadcastsFound: 0, broadcastsStored: 0 }
+  }
+}
+
 function getBuenosAiresTodayISO() {
   const formatter = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Argentina/Buenos_Aires',
@@ -505,8 +862,7 @@ function fixtureMatchesTournamentConfig(fixture: ApiFixture, tournament: EventTo
 
     return (
       fixtureLeague === normalizedTerm ||
-      fixtureLeague.includes(normalizedTerm) ||
-      normalizedTerm.includes(fixtureLeague)
+      containsNormalizedPhrase(fixtureLeague, normalizedTerm)
     )
   })
 }
@@ -556,7 +912,18 @@ function containsNormalizedPhrase(value: string, phrase: string) {
 }
 
 function fixtureMatchesHomeTournament(fixture: ApiFixture) {
-  return TOURNAMENT_PAGE_CONFIGS.some((tournament) =>
+  const excludedReason = getExcludedCompetitionReason({
+    league: fixture.league.name,
+    leagueName: fixture.league.name,
+    country: fixture.league.country,
+    home: fixture.teams.home.name,
+    away: fixture.teams.away.name,
+    round: fixture.league.round,
+  })
+
+  if (excludedReason) return false
+
+  return VISIBLE_TOURNAMENT_PAGE_CONFIGS.some((tournament) =>
     fixtureMatchesTournamentConfig(fixture, tournament)
   )
 }
@@ -678,9 +1045,22 @@ function createEmptyHomeScoreboardResult(dates: string[]): HomeScoreboardSyncRes
     skipped: 0,
     eventsFound: 0,
     goalsInserted: 0,
+    pointsRecalculated: 0,
     leagues: [],
     sampleErrors: [],
   }
+}
+
+function getInclusiveDateRange(dateFrom: string, dateTo: string, maxDays = 14) {
+  const dates: string[] = []
+  let current = dateFrom
+
+  while (current <= dateTo && dates.length < maxDays) {
+    dates.push(current)
+    current = addDaysToISO(current, 1)
+  }
+
+  return dates
 }
 
 function addHomeScoreboardError(
@@ -737,9 +1117,9 @@ function getApiRoundOrder(round: string | null | undefined) {
 
   if (normalized.includes('round of 64') || normalized.includes('32nd finals')) return 10
   if (normalized.includes('round of 32') || normalized.includes('16th finals')) return 20
-  if (normalized.includes('round of 16') || normalized.includes('octavos')) return 30
-  if (normalized.includes('quarter')) return 40
-  if (normalized.includes('semi')) return 50
+  if (normalized.includes('round of 16') || normalized.includes('8th finals') || normalized.includes('octavos')) return 30
+  if (normalized.includes('quarter') || normalized.includes('cuartos')) return 40
+  if (normalized.includes('semi') || normalized.includes('semifinal')) return 50
   if (normalized.includes('final') && !normalized.includes('semi')) return 60
   return 999
 }
@@ -1376,6 +1756,7 @@ async function upsertMatch(
 
     await updateElapsedIfSupported(supabase, existing.id, fixture, debug)
     await updatePenaltyScoresIfSupported(supabase, existing.id, fixture, debug)
+    await safeSyncMatchBroadcastsFromFixture(supabase, fixture, existing.id, debug)
 
     return {
       id: existing.id,
@@ -1405,6 +1786,7 @@ async function upsertMatch(
   if (!error) {
     await updateElapsedIfSupported(supabase, (data as DbIdRow).id, fixture, debug)
     await updatePenaltyScoresIfSupported(supabase, (data as DbIdRow).id, fixture, debug)
+    await safeSyncMatchBroadcastsFromFixture(supabase, fixture, (data as DbIdRow).id, debug)
 
     return {
       id: (data as DbIdRow).id,
@@ -1464,6 +1846,7 @@ async function upsertMatch(
       if (!updateByIdError) {
         await updateElapsedIfSupported(supabase, fixture.fixture.id, fixture, debug)
         await updatePenaltyScoresIfSupported(supabase, fixture.fixture.id, fixture, debug)
+        await safeSyncMatchBroadcastsFromFixture(supabase, fixture, fixture.fixture.id, debug)
 
         return {
           id: fixture.fixture.id,
@@ -1480,6 +1863,7 @@ async function upsertMatch(
   const fallbackId = (fallbackData as DbIdRow | null)?.id ?? fixture.fixture.id
   await updateElapsedIfSupported(supabase, fallbackId, fixture, debug)
   await updatePenaltyScoresIfSupported(supabase, fallbackId, fixture, debug)
+  await safeSyncMatchBroadcastsFromFixture(supabase, fixture, fallbackId, debug)
 
   return {
     id: fallbackId,
@@ -1502,11 +1886,9 @@ function getEventExternalId(fixture: ApiFixture, event: ApiFixtureEvent) {
 
 function isGoalEventForScoreboard(event: ApiFixtureEvent) {
   return (
-    event.type === 'Goal' &&
-    ALLOWED_GOAL_DETAILS.has(event.detail ?? '') &&
+    isScoreboardGoalEvent(event.type, event.detail) &&
     event.time?.elapsed !== null &&
-    event.time?.elapsed !== undefined &&
-    Boolean(event.player?.name)
+    event.time?.elapsed !== undefined
   )
 }
 
@@ -1596,6 +1978,7 @@ async function syncMatchEventsIfSupported(
     })
 
     const events = await fetchFixtureEvents(fixture.fixture.id)
+    const fallbackKeyOccurrences = new Map<string, number>()
     const eventRows = events
       .filter(isGoalEventForScoreboard)
       .map((event) => {
@@ -1607,6 +1990,18 @@ async function syncMatchEventsIfSupported(
             : event.team?.id === fixture.teams.away.id
               ? awayTeamId
               : null
+        const rawExternalEventId = getEventExternalId(fixture, event)
+        const hasApiEventId = event.id !== undefined && event.id !== null
+        const externalEventId = hasApiEventId
+          ? rawExternalEventId
+          : `${rawExternalEventId}:${fallbackKeyOccurrences.get(rawExternalEventId) ?? 0}`
+
+        if (!hasApiEventId) {
+          fallbackKeyOccurrences.set(
+            rawExternalEventId,
+            (fallbackKeyOccurrences.get(rawExternalEventId) ?? 0) + 1
+          )
+        }
 
         console.info('event time', {
           fixtureId: fixture.fixture.id,
@@ -1619,9 +2014,9 @@ async function syncMatchEventsIfSupported(
 
         return {
           match_id: matchId,
-          external_event_id: getEventExternalId(fixture, event),
+          external_event_id: externalEventId,
           team_id: teamId,
-          player_name: event.player?.name as string,
+          player_name: event.player?.name?.trim() || 'Gol',
           assist_name: event.assist?.name ?? null,
           minute: storedMinute,
           extra_minute: storedExtraMinute,
@@ -1629,6 +2024,14 @@ async function syncMatchEventsIfSupported(
           detail: event.detail ?? null,
         }
       })
+    const dedupedEventRows = [
+      ...eventRows
+        .reduce<Map<string, (typeof eventRows)[number]>>((accumulator, row) => {
+          accumulator.set(String(row.external_event_id), row)
+          return accumulator
+        }, new Map())
+        .values(),
+    ]
 
     console.info('[sync-match-events] eventos recibidos', {
       fixtureId: fixture.fixture.id,
@@ -1636,18 +2039,19 @@ async function syncMatchEventsIfSupported(
       matchId,
       totalEvents: events.length,
       goalEvents: eventRows.length,
-      allowedDetails: [...ALLOWED_GOAL_DETAILS],
+      dedupedGoalEvents: dedupedEventRows.length,
+      allowedDetails: ['Normal Goal', 'Penalty', 'Own Goal'],
     })
 
     const deleted = await deleteStoredMatchEvents(supabase, matchId, fixture.fixture.id)
     if (!deleted) return emptyResult
 
-    if (!eventRows.length) return { eventsFound: events.length, goalsInserted: 0 }
+    if (!dedupedEventRows.length) return { eventsFound: events.length, goalsInserted: 0 }
 
     const insertResponse = await withTimeout(
       supabase
         .from('match_events')
-        .upsert(eventRows, { onConflict: 'match_id,external_event_id' }),
+        .upsert(dedupedEventRows, { onConflict: 'match_id,external_event_id' }),
       `match_events upsert ${fixture.fixture.id}`
     )
 
@@ -1659,18 +2063,18 @@ async function syncMatchEventsIfSupported(
     logDebug(debug, 'match events synced', {
       fixtureId: fixture.fixture.id,
       matchId,
-      events: eventRows.length,
+      events: dedupedEventRows.length,
     })
     console.info('[sync-match-events] goles insertados en match_events', {
       fixtureId: fixture.fixture.id,
       league: fixture.league.name,
       matchId,
-      insertedGoals: eventRows.length,
+      insertedGoals: dedupedEventRows.length,
     })
 
     return {
       eventsFound: events.length,
-      goalsInserted: eventRows.length,
+      goalsInserted: dedupedEventRows.length,
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
@@ -1820,6 +2224,109 @@ async function fetchStoredMatchByExternalId(supabase: SupabaseClient, fixtureId:
   return data as SyncSingleFixtureResult['before']
 }
 
+export async function syncFixtureById(
+  supabase: SupabaseClient,
+  fixtureId: number,
+  options: { debug?: boolean } = {}
+): Promise<SyncSingleFixtureResult> {
+  const fixture = await fetchFixtureById(fixtureId)
+  const before = await fetchStoredMatchByExternalId(supabase, fixtureId)
+  const league = await upsertLeagueFromFixture(supabase, fixture, options.debug)
+  const [homeTeam, awayTeam] = await Promise.all([
+    upsertTeam(supabase, fixture.teams.home, options.debug),
+    upsertTeam(supabase, fixture.teams.away, options.debug),
+  ])
+  const matchUpsert = await upsertMatch(
+    supabase,
+    fixture,
+    league.id,
+    homeTeam.id,
+    awayTeam.id,
+    options.debug
+  )
+  const warnings: string[] = []
+
+  const eventSync = await syncMatchEventsIfSupported(
+    supabase,
+    fixture,
+    matchUpsert.id,
+    homeTeam.id,
+    awayTeam.id,
+    options.debug
+  )
+
+  if (shouldRecalculateProdePoints(fixture)) {
+    try {
+      await recalculateProdePoints(supabase, matchUpsert.id)
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'No se pudieron recalcular puntos.'
+      warnings.push(message)
+      logDebug(options.debug, 'points recalculation failed after fixture sync', {
+        fixtureId,
+        matchId: matchUpsert.id,
+        error: message,
+      })
+    }
+  }
+
+  const after = await fetchStoredMatchByExternalId(supabase, fixtureId)
+  const updatedFields = getUpdatedFields(before, after)
+
+  return {
+    fixtureId,
+    tournament: {
+      slug: slugifyLeagueName(fixture.league.name),
+      name: fixture.league.name,
+      externalLeagueId: fixture.league.id,
+      season:
+        fixture.league.season ??
+        new Date(fixture.fixture.date).getFullYear(),
+    },
+    api: {
+      status: fixture.fixture.status.short,
+      statusLong: fixture.fixture.status.long ?? null,
+      elapsed: fixture.fixture.status.elapsed ?? null,
+      date: fixture.fixture.date,
+      goalsHome: fixture.goals.home,
+      goalsAway: fixture.goals.away,
+      fulltimeHome: fixture.score?.fulltime?.home ?? null,
+      fulltimeAway: fixture.score?.fulltime?.away ?? null,
+      resolvedHomeScore: getFixtureHomeScore(fixture),
+      resolvedAwayScore: getFixtureAwayScore(fixture),
+    },
+    warnings,
+    before,
+    after,
+    eventSync,
+    matchBefore: before,
+    matchAfter: after,
+    apiFixture: {
+      fixture: {
+        id: fixture.fixture.id,
+        date: fixture.fixture.date,
+        status: {
+          short: fixture.fixture.status.short,
+          long: fixture.fixture.status.long ?? null,
+          elapsed: fixture.fixture.status.elapsed ?? null,
+        },
+      },
+      goals: {
+        home: fixture.goals.home,
+        away: fixture.goals.away,
+      },
+      score: {
+        fulltime: {
+          home: fixture.score?.fulltime?.home ?? null,
+          away: fixture.score?.fulltime?.away ?? null,
+        },
+      },
+    },
+    updatedFields,
+    action: matchUpsert.action,
+  }
+}
+
 export async function syncProdeFixtureById(
   supabase: SupabaseClient,
   fixtureId: number,
@@ -1944,14 +2451,17 @@ export async function syncHomeScoreboardMatches(
       : options
   const debug = normalizedOptions.debug
   const today = getBuenosAiresTodayISO()
-  const dates = normalizedOptions.date
-    ? [normalizedOptions.date]
+  const rangeStart = normalizedOptions.dateFrom ?? normalizedOptions.date ?? null
+  const rangeEnd = normalizedOptions.dateTo ?? rangeStart
+  const dates = rangeStart && rangeEnd
+    ? getInclusiveDateRange(rangeStart, rangeEnd)
     : [addDaysToISO(today, -1), today, addDaysToISO(today, 1)]
   const limit = normalizedOptions.limit && normalizedOptions.limit > 0
     ? Math.min(Math.floor(normalizedOptions.limit), MAX_SYNC_LIMIT)
     : null
   const offset = getBatchOffset(normalizedOptions.offset)
   const liveOnly = Boolean(normalizedOptions.liveOnly)
+  const leagueExternalId = normalizedOptions.leagueExternalId
   const result = createEmptyHomeScoreboardResult(dates)
   const fixturesById = new Map<number, ApiFixture>()
 
@@ -1962,6 +2472,13 @@ export async function syncHomeScoreboardMatches(
 
       for (const fixture of fixtures) {
         if (!fixtureMatchesHomeTournament(fixture)) continue
+        if (
+          leagueExternalId !== null &&
+          leagueExternalId !== undefined &&
+          String(fixture.league.id) !== String(leagueExternalId)
+        ) {
+          continue
+        }
         fixturesById.set(fixture.fixture.id, fixture)
       }
     } catch (error) {
@@ -2036,6 +2553,20 @@ export async function syncHomeScoreboardMatches(
         eventsFound: eventSync.eventsFound,
         goalsStored: eventSync.goalsInserted,
       })
+
+      if (shouldRecalculateProdePoints(fixture)) {
+        try {
+          const pointsResult = await recalculateProdePoints(supabase, matchUpsert.id)
+          result.pointsRecalculated += pointsResult.calculated
+          logDebug(debug, 'prode points recalculated from home scoreboard sync', {
+            fixtureId: fixture.fixture.id,
+            matchId: matchUpsert.id,
+            recalculated: pointsResult.calculated,
+          })
+        } catch (error) {
+          addHomeScoreboardError(result, fixture.fixture.id, 'points-recalculation', error)
+        }
+      }
     } catch (error) {
       result.skipped += 1
       addHomeScoreboardError(result, fixture.fixture.id, 'home-fixture-processing', error)
@@ -2055,6 +2586,7 @@ export async function syncHomeScoreboardMatches(
   console.info('[sync-home-scoreboard] resumen', {
     dates: result.dates,
     liveOnly,
+    leagueExternalId: leagueExternalId ?? null,
     fetched: result.fetched,
     selected: result.selected,
     processedBatch: fixturesToProcess.length,
@@ -2069,6 +2601,133 @@ export async function syncHomeScoreboardMatches(
   return result
 }
 
+export async function syncHomeBroadcastsFromApiFixtures(
+  supabase: SupabaseClient,
+  options: SyncHomeBroadcastsFromApiOptions
+): Promise<SyncHomeBroadcastsFromApiResult> {
+  const dates = getInclusiveDateRange(options.dateFrom, options.dateTo)
+  const limit = options.limit && options.limit > 0 ? Math.min(Math.floor(options.limit), 500) : null
+  const offset = getBatchOffset(options.offset)
+  const normalizedLeagueName = normalizeLeagueName(options.leagueName)
+  const result: SyncHomeBroadcastsFromApiResult = {
+    dates,
+    fetched: 0,
+    selected: 0,
+    processed: 0,
+    skipped: 0,
+    broadcastersFound: 0,
+    broadcastersStored: 0,
+    sample: [],
+    sampleErrors: [],
+  }
+  const fixturesById = new Map<number, ApiFixture>()
+
+  for (const date of dates) {
+    try {
+      const fixtures = await fetchFixturesByDate(date)
+      result.fetched += fixtures.length
+
+      for (const fixture of fixtures) {
+        if (!fixtureMatchesHomeTournament(fixture)) continue
+        if (
+          options.leagueExternalId &&
+          String(fixture.league.id) !== String(options.leagueExternalId)
+        ) {
+          continue
+        }
+        if (
+          normalizedLeagueName &&
+          !normalizeLeagueName(fixture.league.name).includes(normalizedLeagueName)
+        ) {
+          continue
+        }
+
+        fixturesById.set(fixture.fixture.id, fixture)
+      }
+    } catch (error) {
+      result.sampleErrors.push({
+        fixtureId: null,
+        stage: `fetch-api-broadcast-fixtures:${date}`,
+        message: error instanceof Error ? error.message : 'Error desconocido',
+      })
+    }
+  }
+
+  const selectedFixtures = [...fixturesById.values()].sort(compareFixturesByApiOrder)
+  const fixturesToProcess = limit
+    ? selectedFixtures.slice(offset, offset + limit)
+    : selectedFixtures.slice(offset)
+  result.selected = selectedFixtures.length
+
+  for (const fixture of fixturesToProcess) {
+    if (!fixture.league.id || !fixture.teams.home.id || !fixture.teams.away.id) {
+      result.skipped += 1
+      continue
+    }
+
+    const apiBroadcasts = extractFixtureBroadcasts(fixture)
+    result.broadcastersFound += apiBroadcasts.length
+
+    if (!apiBroadcasts.length) {
+      result.skipped += 1
+      continue
+    }
+
+    try {
+      const league = await upsertLeagueFromFixture(supabase, fixture, options.debug)
+      const [homeTeam, awayTeam] = await Promise.all([
+        upsertTeam(supabase, fixture.teams.home, options.debug),
+        upsertTeam(supabase, fixture.teams.away, options.debug),
+      ])
+      await upsertMatch(
+        supabase,
+        fixture,
+        league.id,
+        homeTeam.id,
+        awayTeam.id,
+        options.debug
+      )
+
+      result.processed += 1
+      result.broadcastersStored += apiBroadcasts.length
+
+      if (result.sample.length < 20) {
+        result.sample.push({
+          fixtureId: fixture.fixture.id,
+          league: fixture.league.name,
+          local: fixture.teams.home.name,
+          visitante: fixture.teams.away.name,
+          broadcasters: apiBroadcasts.map((broadcast) => broadcast.broadcaster_name),
+        })
+      }
+    } catch (error) {
+      result.skipped += 1
+
+      if (result.sampleErrors.length < 10) {
+        result.sampleErrors.push({
+          fixtureId: fixture.fixture.id,
+          stage: 'api-broadcast-processing',
+          message: error instanceof Error ? error.message : 'Error desconocido',
+        })
+      }
+    }
+  }
+
+  console.info('[sync-api-broadcasts] resumen', {
+    dates,
+    leagueExternalId: options.leagueExternalId ?? null,
+    leagueName: options.leagueName ?? null,
+    fetched: result.fetched,
+    selected: result.selected,
+    processed: result.processed,
+    skipped: result.skipped,
+    broadcastersFound: result.broadcastersFound,
+    broadcastersStored: result.broadcastersStored,
+  })
+
+  return result
+}
+
 export async function syncVisibleHomeLeagues(
   supabase: SupabaseClient,
   options: SyncLeaguesOptions = {}
@@ -2077,11 +2736,11 @@ export async function syncVisibleHomeLeagues(
   const offset = getBatchOffset(options.offset)
   const apiLeagues = await fetchCurrentLeagues()
   const targetConfigs = limit
-    ? TOURNAMENT_PAGE_CONFIGS.slice(offset, offset + Math.min(limit, MAX_SYNC_LIMIT))
-    : TOURNAMENT_PAGE_CONFIGS.slice(offset)
+    ? VISIBLE_TOURNAMENT_PAGE_CONFIGS.slice(offset, offset + Math.min(limit, MAX_SYNC_LIMIT))
+    : VISIBLE_TOURNAMENT_PAGE_CONFIGS.slice(offset)
   const result: SyncLeaguesResult = {
     fetched: apiLeagues.length,
-    targeted: TOURNAMENT_PAGE_CONFIGS.length,
+    targeted: VISIBLE_TOURNAMENT_PAGE_CONFIGS.length,
     processedTargets: targetConfigs.length,
     inserted: 0,
     updated: 0,

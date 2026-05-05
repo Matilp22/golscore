@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
-import { getAvailableLeagues, syncProdeMatches } from '@/server/prode/sync-matches'
+import {
+  getAvailableLeagues,
+  syncHomeScoreboardMatches,
+  syncProdeMatches,
+} from '@/server/prode/sync-matches'
 
 function isAuthorized(request: Request) {
   const cronSecret = process.env.CRON_SECRET
@@ -44,6 +48,17 @@ async function getSyncOptions(request: Request) {
     (typeof body?.competition === 'string' ? body.competition : null)
   const debugValue = searchParams.get('debug') ?? body?.debug
   const date = searchParams.get('date') ?? (typeof body?.date === 'string' ? body.date : null)
+  const dateFrom =
+    searchParams.get('dateFrom') ??
+    (typeof body?.dateFrom === 'string' ? body.dateFrom : null)
+  const dateTo =
+    searchParams.get('dateTo') ??
+    (typeof body?.dateTo === 'string' ? body.dateTo : null)
+  const leagueExternalId =
+    searchParams.get('leagueExternalId') ??
+    (typeof body?.leagueExternalId === 'string' || typeof body?.leagueExternalId === 'number'
+      ? body.leagueExternalId
+      : null)
   const limitValue = searchParams.get('limit') ?? body?.limit
   const offsetValue = searchParams.get('offset') ?? searchParams.get('cursor') ?? body?.offset ?? body?.cursor
   const onlyEventsValue = searchParams.get('onlyEvents') ?? body?.onlyEvents
@@ -52,6 +67,9 @@ async function getSyncOptions(request: Request) {
     competition,
     debug: debugValue === true || debugValue === 'true' || debugValue === '1',
     date,
+    dateFrom,
+    dateTo,
+    leagueExternalId,
     limit: Number.isFinite(Number(limitValue)) ? Number(limitValue) : null,
     offset: Number.isFinite(Number(offsetValue)) ? Number(offsetValue) : null,
     onlyEvents:
@@ -69,6 +87,24 @@ export async function GET(request: Request) {
     const options = await getSyncOptions(request)
 
     if (!options.competition) {
+      if (options.date || options.dateFrom || options.dateTo || options.leagueExternalId) {
+        const homeScoreboard = await syncHomeScoreboardMatches(supabase, {
+          date: options.date,
+          dateFrom: options.dateFrom,
+          dateTo: options.dateTo,
+          leagueExternalId: options.leagueExternalId,
+          debug: options.debug,
+          limit: options.limit,
+          offset: options.offset,
+        })
+
+        return NextResponse.json({
+          ok: true,
+          mode: 'home-scoreboard',
+          homeScoreboard,
+        })
+      }
+
       return NextResponse.json(
         {
           ok: false,

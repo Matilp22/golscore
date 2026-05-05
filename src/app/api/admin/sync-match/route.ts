@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
-import { syncProdeFixtureById } from '@/server/prode/sync-matches'
+import { syncFixtureById, syncProdeFixtureById } from '@/server/prode/sync-matches'
 
 function isAuthorized(request: Request) {
   const cronSecret = process.env.CRON_SECRET
@@ -49,8 +49,22 @@ async function handleRequest(request: Request) {
   try {
     const fixtureId = await getFixtureId(request)
     const debug = new URL(request.url).searchParams.get('debug') === 'true'
+    const source = new URL(request.url).searchParams.get('source') ?? 'auto'
     const supabase = getSupabaseAdminClient()
-    const result = await syncProdeFixtureById(supabase, fixtureId, { debug })
+    const result =
+      source === 'generic' || source === 'home'
+        ? await syncFixtureById(supabase, fixtureId, { debug })
+        : await syncProdeFixtureById(supabase, fixtureId, { debug }).catch((error) => {
+            if (
+              source !== 'auto' ||
+              !(error instanceof Error) ||
+              !error.message.includes('no esta permitida para Prode')
+            ) {
+              throw error
+            }
+
+            return syncFixtureById(supabase, fixtureId, { debug })
+          })
 
     return NextResponse.json({ ok: true, ...result })
   } catch (error) {

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseServerClient } from '@/lib/supabase/server'
 import { getAllowedProdeLeagueIds } from '@/server/prode/scope'
 import { getAllowedProdeLeagueLabel } from '@/shared/config/prode-leagues'
+import { normalizeLeagueRound } from '@/shared/utils/league-rounds'
 import { parseMatchDate } from '@/shared/utils/prediction-lock'
 
 type SportDbError = {
@@ -36,13 +37,6 @@ type TeamRow = {
   logo_url: string | null
 }
 
-type ResultRow = {
-  match_id: string
-  home_score: number | null
-  away_score: number | null
-  status: string | null
-}
-
 type SupabaseServerClient = NonNullable<
   Awaited<ReturnType<typeof getSupabaseServerClient>>
 >
@@ -66,51 +60,10 @@ function prodeError(error: SportDbError, fallback: string) {
   )
 }
 
-function isMissingOptionalRelation(error: SportDbError | null) {
-  return error?.code === '42P01' || error?.code === 'PGRST205'
-}
-
 function getApiSportsLogoUrl(externalId: string | number | null | undefined) {
   if (externalId === null || externalId === undefined || externalId === '') return null
 
   return `https://media.api-sports.io/football/teams/${externalId}.png`
-}
-
-async function fetchResultsInChunks(
-  supabase: SupabaseServerClient,
-  matchIds: string[]
-) {
-  if (!matchIds.length) {
-    return { data: [] as ResultRow[], error: null as SportDbError | null }
-  }
-
-  const chunkSize = 200
-  const chunks: string[][] = []
-
-  for (let index = 0; index < matchIds.length; index += chunkSize) {
-    chunks.push(matchIds.slice(index, index + chunkSize))
-  }
-
-  const chunkResponses = await Promise.all(
-    chunks.map((chunk) =>
-      supabase
-        .from('results')
-        .select('match_id, home_score, away_score, status')
-        .in('match_id', chunk)
-    )
-  )
-
-  const data: ResultRow[] = []
-
-  for (const response of chunkResponses) {
-    if (response.error) {
-      return { data: [] as ResultRow[], error: response.error as SportDbError }
-    }
-
-    data.push(...((response.data ?? []) as ResultRow[]))
-  }
-
-  return { data, error: null as SportDbError | null }
 }
 
 async function fetchTeamsWithLogos(
@@ -215,7 +168,6 @@ export async function GET(request: Request) {
     query = query.in('league_id', allowedLeagueIds)
   }
 
-  if (round) query = query.eq('round', round)
   if (status) query = query.eq('status', status)
 
   if (date) {
@@ -256,11 +208,9 @@ export async function GET(request: Request) {
         .filter(Boolean)
     ),
   ] as string[]
-  const matchIds = rows.map((match) => match.id)
   const [
     { data: leaguesData, error: leaguesError },
     { data: teamsData, error: teamsError },
-    { data: resultsData, error: resultsError },
   ] = await Promise.all([
     leagueIds.length
       ? supabase
@@ -269,14 +219,10 @@ export async function GET(request: Request) {
           .in('id', leagueIds)
       : Promise.resolve({ data: [], error: null }),
     fetchTeamsWithLogos(supabase, teamIds),
-    fetchResultsInChunks(supabase, matchIds),
   ])
 
   if (leaguesError) return prodeError(leaguesError, 'No se pudieron cargar las ligas.')
   if (teamsError) return prodeError(teamsError, 'No se pudieron cargar los equipos.')
-  if (resultsError && !isMissingOptionalRelation(resultsError)) {
-    return prodeError(resultsError, 'No se pudieron cargar los resultados.')
-  }
 
   const leaguesById = new Map(
     ((leaguesData ?? []) as LeagueRow[]).map((league) => [league.id, league])
@@ -284,21 +230,26 @@ export async function GET(request: Request) {
   const teamsById = new Map(
     ((teamsData ?? []) as TeamRow[]).map((team) => [team.id, team])
   )
-  const resultsByMatchId = new Map(
-    ((resultsError ? [] : resultsData ?? []) as ResultRow[]).map((result) => [
-      result.match_id,
-      result,
-    ])
-  )
+  const rowsForResponse = round
+    ? rows.filter((match) => {
+        const league = match.league_id ? leaguesById.get(match.league_id) : null
+        const normalizedRound = normalizeLeagueRound(match.round, league?.external_id)
 
-  const matches = rows.map((match) => {
-    const result = resultsByMatchId.get(match.id)
+        return normalizedRound === round || String(match.round ?? '') === round
+      })
+    : rows
+
+  if (!rowsForResponse.length) {
+    return NextResponse.json({
+      matches: [],
+      meta: { emptyReason: 'matches_empty_for_round' },
+    })
+  }
+
+  const matches = rowsForResponse.map((match) => {
     const league = match.league_id ? leaguesById.get(match.league_id) : null
     const homeTeam = match.home_team_id ? teamsById.get(match.home_team_id) : null
     const awayTeam = match.away_team_id ? teamsById.get(match.away_team_id) : null
-    const homeScore = result?.home_score ?? match.home_score
-    const awayScore = result?.away_score ?? match.away_score
-    const statusValue = result?.status ?? match.status
 
     return {
       id: String(match.id),
@@ -306,10 +257,10 @@ export async function GET(request: Request) {
       homeTeamId: match.home_team_id === null ? null : String(match.home_team_id),
       awayTeamId: match.away_team_id === null ? null : String(match.away_team_id),
       matchDate: match.match_date,
-      status: statusValue,
+      status: match.status,
       round: match.round === null || match.round === undefined ? null : String(match.round),
-      homeScore,
-      awayScore,
+      homeScore: match.home_score,
+      awayScore: match.away_score,
       league: league
         ? {
             id: String(league.id),

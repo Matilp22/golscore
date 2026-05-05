@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { syncBroadcastsFromRules } from '@/server/broadcasts/admin'
+import { syncHomeBroadcastsFromApiFixtures } from '@/server/prode/sync-matches'
 
 function isAuthorized(request: Request) {
   const cronSecret = process.env.CRON_SECRET
@@ -38,6 +39,8 @@ function readString(value: unknown) {
 }
 
 function readNumber(value: unknown) {
+  if (value === null || value === undefined || value === '') return null
+
   const parsed = Number(value)
 
   return Number.isFinite(parsed) ? parsed : null
@@ -77,6 +80,17 @@ async function getSyncOptions(request: Request) {
   const limit =
     readNumber(searchParams.get('limit')) ??
     readNumber((body as Record<string, unknown>).limit)
+  const offset =
+    readNumber(searchParams.get('offset')) ??
+    readNumber(searchParams.get('cursor')) ??
+    readNumber((body as Record<string, unknown>).offset) ??
+    readNumber((body as Record<string, unknown>).cursor)
+  const source =
+    searchParams.get('source') ??
+    searchParams.get('mode') ??
+    readString((body as Record<string, unknown>).source) ??
+    readString((body as Record<string, unknown>).mode) ??
+    'auto'
 
   return {
     dateFrom,
@@ -84,6 +98,8 @@ async function getSyncOptions(request: Request) {
     leagueExternalId,
     leagueName,
     limit,
+    offset,
+    source,
   }
 }
 
@@ -94,9 +110,34 @@ export async function GET(request: Request) {
 
   try {
     const supabase = getSupabaseAdminClient()
-    const result = await syncBroadcastsFromRules(supabase, await getSyncOptions(request))
+    const options = await getSyncOptions(request)
+    const normalizedSource = options.source.toLowerCase()
+    const shouldSyncApi = normalizedSource === 'auto' || normalizedSource === 'api'
+    const shouldSyncRules = normalizedSource === 'auto' || normalizedSource === 'rules'
+    const apiResult = shouldSyncApi
+      ? await syncHomeBroadcastsFromApiFixtures(supabase, options).catch((error) => ({
+          ok: false,
+          error: error instanceof Error ? error.message : 'No se pudo sincronizar TV desde API.',
+        }))
+      : null
+    const rulesResult = shouldSyncRules
+      ? await syncBroadcastsFromRules(supabase, options)
+      : {
+          matchesChecked: 0,
+          rulesLoaded: 0,
+          broadcastsCreated: 0,
+          broadcastsUpdated: 0,
+          skipped: 0,
+          sample: [],
+        }
 
-    return NextResponse.json({ ok: true, ...result })
+    return NextResponse.json({
+      ok: true,
+      source: normalizedSource,
+      api: apiResult,
+      rules: rulesResult,
+      ...rulesResult,
+    })
   } catch (error) {
     console.error('[sync-broadcasts] Error completo', error)
 

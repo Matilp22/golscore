@@ -57,13 +57,27 @@ export type MatchPredictionViewModel = {
 
 export type Prediction = {
   id: string
+  prediction_id?: string
   userId: string
   matchId: EntityId
+  match_id?: EntityId
+  leagueId?: EntityId | null
+  league_id?: EntityId | null
   predictedHomeScore: number
   predictedAwayScore: number
-  points?: number
+  predicted_home_score?: number
+  predicted_away_score?: number
+  realHomeScore?: number | null
+  realAwayScore?: number | null
+  real_home_score?: number | null
+  real_away_score?: number | null
+  points?: number | null
   exactHit?: boolean
   partialHit?: boolean
+  exact_hit?: boolean
+  partial_hit?: boolean
+  predictionScoreFound?: boolean
+  prediction_score_found?: boolean
   createdAt: string
   updatedAt: string
 }

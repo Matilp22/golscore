@@ -18,6 +18,7 @@ import {
 import {
   getCurrentProdeRound,
   getProdeRoundLabel,
+  getProdeRoundSortValue,
   isVisibleProdeRound,
   normalizeProdeRound,
 } from '@/shared/config/prode-rounds'
@@ -55,6 +56,10 @@ export default function ProdePanel() {
   }, [predictionDrafts])
 
   const myRanking = leaderboard.find((row) => row.userId === user?.id)
+  const totalPointsFromPredictions = useMemo(
+    () => predictions.reduce((sum, prediction) => sum + (prediction.points ?? 0), 0),
+    [predictions]
+  )
 
   const filteredMatches = useMemo(
     () =>
@@ -75,14 +80,26 @@ export default function ProdePanel() {
     }
 
     return [...counts.entries()]
-      .map(([value, matchCount]) => ({
-        value,
-        label: getProdeRoundLabel(value, filteredMatches.find((match) =>
+      .map(([value, matchCount]) => {
+        const leagueExternalId = filteredMatches.find((match) =>
           normalizeProdeRound(match.round, match.league?.externalId) === value
-        )?.league?.externalId) ?? value,
-        matchCount,
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label, 'es-AR', { numeric: true }))
+        )?.league?.externalId
+
+        return {
+          value,
+          label: getProdeRoundLabel(value, leagueExternalId) ?? value,
+          matchCount,
+          sortValue: getProdeRoundSortValue(value, leagueExternalId),
+        }
+      })
+      .sort((a, b) => {
+        if (a.sortValue !== b.sortValue) return a.sortValue - b.sortValue
+        return a.label.localeCompare(b.label, 'es-AR', { numeric: true })
+      })
+      .map(({ sortValue, ...round }) => {
+        void sortValue
+        return round
+      })
   }, [filteredMatches])
 
   const currentRound = useMemo(
@@ -324,6 +341,43 @@ export default function ProdePanel() {
       user ? loadPredictions() : Promise.resolve(setPredictions([])),
     ])
   }, [isAuthLoading, loadLeaderboard, loadPredictions, selectedLeagueId, user])
+
+  useEffect(() => {
+    console.info('[prode-ui-debug]', {
+      selectedLeagueId,
+      userId: user?.id ?? null,
+      predictionsCount: predictions.length,
+      predictionsWithPoints: predictions.filter(
+        (prediction) => (prediction.points ?? 0) > 0
+      ).length,
+      leaderboard,
+      myRanking,
+      totalPointsFromPredictions,
+      pointsByPrediction: predictions.map((prediction) => ({
+        prediction_id: prediction.prediction_id ?? prediction.id,
+        match_id: prediction.match_id ?? prediction.matchId,
+        league_id: prediction.league_id ?? prediction.leagueId ?? null,
+        predicted_home_score:
+          prediction.predicted_home_score ?? prediction.predictedHomeScore,
+        predicted_away_score:
+          prediction.predicted_away_score ?? prediction.predictedAwayScore,
+        real_home_score: prediction.real_home_score ?? prediction.realHomeScore ?? null,
+        real_away_score: prediction.real_away_score ?? prediction.realAwayScore ?? null,
+        points: prediction.points ?? 0,
+        exact_hit: prediction.exact_hit ?? prediction.exactHit ?? false,
+        partial_hit: prediction.partial_hit ?? prediction.partialHit ?? false,
+        prediction_score_found:
+          prediction.prediction_score_found ?? prediction.predictionScoreFound ?? null,
+      })),
+    })
+  }, [
+    leaderboard,
+    myRanking,
+    predictions,
+    selectedLeagueId,
+    totalPointsFromPredictions,
+    user?.id,
+  ])
 
   const handleSavePrediction = async (input: {
     matchId: string

@@ -4,6 +4,7 @@ export const fetchCache = 'force-no-store'
 import AutoRefresh from '@/frontend/components/AutoRefresh'
 import MatchRow from '@/frontend/components/MatchRow'
 import Image from 'next/image'
+import Link from 'next/link'
 import {
   ApiFootballError,
   getMatchesByDate,
@@ -12,6 +13,7 @@ import {
 } from '@/lib/api-football'
 import {
   getSectionConfig,
+  getTournamentConfig,
 } from '@/lib/tournament-pages'
 import { isFinishedStatus, isLiveStatus as isActiveLiveStatus } from '@/shared/utils/match-status'
 import {
@@ -77,6 +79,7 @@ type CompetitionBucket = {
   logo?: string
   sectionKey: string
   sectionTitle: string
+  href?: string | null
   matches: ApiMatch[]
 }
 
@@ -218,6 +221,25 @@ const SECTION_TITLES: Record<string, string> = {
   eeuu: 'EEUU',
   selecciones: 'Selecciones',
 }
+
+const HOME_LEAGUE_ID_TO_TOURNAMENT_KEY = new Map<number, string>([
+  [128, 'argentina-liga-profesional'],
+  [129, 'argentina-primera-nacional'],
+  [130, 'argentina-copa-argentina'],
+  [13, 'internacional-libertadores'],
+  [11, 'internacional-sudamericana'],
+  [2, 'internacional-champions'],
+  [3, 'internacional-europa-league'],
+  [848, 'internacional-conference-league'],
+  [39, 'inglaterra-premier-league'],
+  [140, 'espana-la-liga'],
+  [135, 'italia-serie-a'],
+  [78, 'alemania-bundesliga'],
+  [94, 'portugal-primeira-liga'],
+  [61, 'francia-ligue-1'],
+  [71, 'brasil-brasileirao'],
+  [1, 'selecciones-mundial'],
+])
 
 const LEAGUE_RULES: LeagueRule[] = [
   {
@@ -978,6 +1000,25 @@ function sortHomeCompetitions(competitions: CompetitionBucket[]) {
     .map(({ competition }) => competition)
 }
 
+function resolveHomeCompetitionHref(ruleKey: string, sampleMatch?: ApiMatch) {
+  const tournamentKey =
+    getTournamentConfig(ruleKey)?.key ??
+    (sampleMatch?.leagueId
+      ? HOME_LEAGUE_ID_TO_TOURNAMENT_KEY.get(sampleMatch.leagueId)
+      : null)
+  const tournament = tournamentKey ? getTournamentConfig(tournamentKey) : null
+
+  if (tournament) return `/liga/${tournament.key}`
+
+  console.warn('[home] no se pudo resolver link de liga', {
+    ruleKey,
+    leagueId: sampleMatch?.leagueId ?? null,
+    league: sampleMatch?.league ?? null,
+  })
+
+  return null
+}
+
 function groupMatchesWithPromiedosStructure(matches: ApiMatch[]): SectionBucket[] {
   const cleanMatches = matches.filter((match) => {
     const reason =
@@ -1024,6 +1065,7 @@ function groupMatchesWithPromiedosStructure(matches: ApiMatch[]): SectionBucket[
       logo: filtered[0]?.leagueLogo,
       sectionKey: rule.sectionKey,
       sectionTitle: rule.sectionTitle,
+      href: resolveHomeCompetitionHref(rule.key, filtered[0]),
       matches: sortMatches(filtered),
     })
 
@@ -1074,7 +1116,26 @@ export default async function HomePage({
   let dataError: string | null = null
 
   try {
-    dateMatches = await withGoalScorers(await getMatchesByDate(selectedDate))
+    const enrichedMatches = await withGoalScorers(await getMatchesByDate(selectedDate))
+    dateMatches = enrichedMatches.filter((match) => match.persistedInSupabase)
+
+    if (process.env.NODE_ENV === 'development') {
+      const missingMatches = enrichedMatches.filter((match) => !match.persistedInSupabase)
+
+      if (missingMatches.length) {
+        console.info('[home] partidos ocultos por no estar persistidos en Supabase', {
+          selectedDate,
+          hidden: missingMatches.length,
+          sample: missingMatches.slice(0, 20).map((match) => ({
+            externalId: match.externalId ?? match.id,
+            league: match.league,
+            home: match.home,
+            away: match.away,
+          })),
+        })
+      }
+    }
+
     groupedSections = groupMatchesWithPromiedosStructure(dateMatches)
   } catch (error) {
     if (error instanceof ApiFootballError) {
@@ -1177,9 +1238,23 @@ export default async function HomePage({
                               </div>
                             )}
                             <div className="min-w-0">
-                              <h2 className="break-words text-sm font-black text-[#f3f6fa] md:text-base">
-                                {competition.title}
-                              </h2>
+                              {competition.href ? (
+                                <Link
+                                  href={competition.href}
+                                  className="group inline-flex min-w-0 items-center gap-1 text-sm font-black text-[#f3f6fa] transition hover:text-[#7ff0b2] md:text-base"
+                                >
+                                  <span className="break-words decoration-[#7ff0b2]/70 underline-offset-4 group-hover:underline">
+                                    {competition.title}
+                                  </span>
+                                  <span className="text-xs text-[#8d98a7] transition group-hover:text-[#7ff0b2]">
+                                    &gt;
+                                  </span>
+                                </Link>
+                              ) : (
+                                <h2 className="break-words text-sm font-black text-[#f3f6fa] md:text-base">
+                                  {competition.title}
+                                </h2>
+                              )}
                             </div>
                           </div>
 
