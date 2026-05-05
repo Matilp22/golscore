@@ -31,16 +31,16 @@ export default function PointsSummary({
   ]
 
   return (
-    <div className="grid w-full gap-2 sm:grid-cols-3 md:gap-3">
+    <div className="grid w-full grid-cols-3 gap-1.5 sm:gap-2 md:gap-3">
       {summaryItems.map((item) => (
         <div
           key={item.label}
-          className="min-h-[92px] w-full rounded-2xl border border-white/8 bg-[#10151a]/95 p-3 shadow-[0_10px_24px_rgba(0,0,0,0.14)] md:p-4"
+          className="min-h-[68px] w-full min-w-0 rounded-xl border border-white/8 bg-[#10151a]/95 px-2 py-2 shadow-[0_10px_24px_rgba(0,0,0,0.14)] sm:min-h-[84px] sm:rounded-2xl sm:p-3 md:min-h-[92px] md:p-4"
         >
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#9adfb8]">
+          <p className="break-words text-[9px] font-semibold uppercase leading-tight tracking-[0.04em] text-[#9adfb8] sm:text-[11px] sm:tracking-[0.12em]">
             {item.label}
           </p>
-          <p className={`mt-3 text-3xl font-black leading-none ${item.highlight ? 'text-[#7ff0b2]' : 'text-white'}`}>
+          <p className={`mt-1.5 text-2xl font-black leading-none sm:mt-3 sm:text-3xl ${item.highlight ? 'text-[#7ff0b2]' : 'text-white'}`}>
             {item.value}
           </p>
         </div>

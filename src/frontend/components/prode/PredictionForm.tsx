@@ -58,11 +58,13 @@ function TeamLogo({
 
 function TeamLabel({
   align = 'left',
+  className = '',
   logoUrl,
   name,
   role,
 }: {
   align?: 'left' | 'right'
+  className?: string
   logoUrl?: string | null
   name: string
   role: string
@@ -82,7 +84,9 @@ function TeamLabel({
   )
 
   return (
-    <div className={`flex min-w-0 items-center gap-2 ${align === 'right' ? 'justify-end' : ''}`}>
+    <div
+      className={`flex min-w-0 items-center gap-2 ${align === 'right' ? 'justify-end' : ''} ${className}`}
+    >
       {align === 'right' ? (
         <>
           <div className="min-w-0 text-right">
@@ -152,6 +156,8 @@ export default function PredictionForm({
     : isLiveStatus(match.status)
       ? 'En vivo'
       : 'Real'
+  const predictionGridClass =
+    'grid min-w-0 grid-cols-[minmax(0,1fr)_48px_48px_minmax(0,1fr)] items-center gap-2 md:grid-cols-[minmax(140px,1fr)_58px_24px_58px_minmax(140px,1fr)_104px] md:gap-3'
 
   useEffect(() => {
     console.debug('[prode/prediction-form] lock check', {
@@ -214,19 +220,28 @@ export default function PredictionForm({
   return (
     <div>
       {hasRealScore ? (
-        <div className="mb-2 flex justify-center">
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/8 bg-white/[0.035] px-3 py-1 text-xs text-[#aab5c1]">
-            <span className={isLiveStatus(match.status) ? 'font-bold text-[#7ff0b2]' : 'font-semibold'}>
-              {realScoreStatus}
-            </span>
-            <span className="font-black text-white">
-              {match.homeScore} - {match.awayScore}
-            </span>
+        <div className={`${predictionGridClass} mb-1`}>
+          <div className="col-start-2 col-span-2 justify-self-center text-center md:col-start-2 md:col-span-3">
+            <div
+              className="inline-flex flex-col items-center gap-0.5 text-center leading-none text-[#aab5c1]"
+            >
+              <span
+                className={`text-[10px] font-semibold ${
+                  isLiveStatus(match.status) ? 'text-[#7ff0b2]' : 'text-[#8d98a7]'
+                }`}
+              >
+                {realScoreStatus}
+              </span>
+              <span className="text-xs font-black text-white">
+                {match.homeScore} - {match.awayScore}
+              </span>
+            </div>
           </div>
         </div>
       ) : null}
-      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_48px_48px_minmax(0,1fr)] items-center gap-2 md:grid-cols-[minmax(140px,1fr)_58px_24px_58px_minmax(140px,1fr)_104px] md:gap-3">
+      <div className={predictionGridClass}>
         <TeamLabel
+          className="col-start-1"
           name={match.homeTeam?.name ?? 'Local'}
           logoUrl={match.homeTeam?.logoUrl}
           role="Local"

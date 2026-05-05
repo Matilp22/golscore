@@ -28,11 +28,13 @@ function formatDate(value: string) {
     timeZone: 'America/Argentina/Buenos_Aires',
     weekday: 'short',
   }).format(date).replace('.', '')
-  const dayMonth = new Intl.DateTimeFormat('es-AR', {
+  const dayMonthParts = new Intl.DateTimeFormat('es-AR', {
     timeZone: 'America/Argentina/Buenos_Aires',
     day: '2-digit',
     month: '2-digit',
-  }).format(date).replace('/', '-')
+  }).formatToParts(date)
+  const day = dayMonthParts.find((part) => part.type === 'day')?.value.padStart(2, '0') ?? '00'
+  const month = dayMonthParts.find((part) => part.type === 'month')?.value.padStart(2, '0') ?? '00'
   const time = new Intl.DateTimeFormat('es-AR', {
     timeZone: 'America/Argentina/Buenos_Aires',
     hour: '2-digit',
@@ -40,7 +42,7 @@ function formatDate(value: string) {
     hour12: false,
   }).format(date)
 
-  return `${weekday} ${dayMonth} \u00b7 ${time}`
+  return `${weekday} ${day}-${month} \u00b7 ${time}`
 }
 
 export default function MatchCard({
@@ -66,7 +68,7 @@ export default function MatchCard({
     <article className="w-full min-w-0 px-3 py-3.5 sm:px-4">
       <div className="mb-3 flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="rounded-full border border-white/8 bg-white/[0.03] px-2 py-0.5 text-xs text-[#aab5c1]">
+          <span className="text-xs font-semibold uppercase tracking-[0.08em] text-white">
             {formatDate(match.matchDate)}
           </span>
         </div>
