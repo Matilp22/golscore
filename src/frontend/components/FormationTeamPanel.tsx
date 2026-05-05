@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { PlayerPhoto } from '@/frontend/components/AssetImage'
 import { formatEventMinute } from '@/shared/utils/event-minute'
 
 type TeamStyle = {
@@ -13,6 +14,7 @@ type PanelPlayer = {
   id: string
   name: string
   number?: number
+  photo?: string
   style: TeamStyle
   isCaptain?: boolean
   goals?: number
@@ -31,29 +33,6 @@ type FormationTeamPanelProps = {
   starters: PanelPlayer[]
   substitutes: PanelPlayer[]
   align: 'left' | 'right'
-}
-
-function Shirt({
-  number,
-  style,
-}: {
-  number?: number | string
-  style: TeamStyle
-}) {
-  return (
-    <div
-      className="flex h-8 w-7 items-center justify-center border-2 text-[10px] font-black shadow-md"
-      style={{
-        backgroundColor: style.shirt,
-        color: style.text,
-        borderColor: style.border,
-        clipPath:
-          'polygon(18% 0%, 36% 0%, 40% 12%, 60% 12%, 64% 0%, 82% 0%, 100% 18%, 86% 28%, 86% 100%, 14% 100%, 14% 28%, 0% 18%)',
-      }}
-    >
-      {number || ''}
-    </div>
-  )
 }
 
 function CaptainBadge() {
@@ -177,7 +156,27 @@ export default function FormationTeamPanel({
                     <CaptainBadge />
                   </div>
                 ) : null}
-                <Shirt number={player.number} style={player.style} />
+                <div
+                  className="relative rounded-full border-2 bg-[#20262e]"
+                  style={{ borderColor: player.style.border }}
+                >
+                  <PlayerPhoto
+                    src={player.photo}
+                    alt={player.name}
+                    size={36}
+                  />
+                  {player.number ? (
+                    <span
+                      className="absolute -bottom-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full border border-black/35 px-1 text-[8px] font-black"
+                      style={{
+                        backgroundColor: player.style.shirt,
+                        color: player.style.text,
+                      }}
+                    >
+                      {player.number}
+                    </span>
+                  ) : null}
+                </div>
               </div>
 
               <div className={`min-w-0 flex-1 ${align === 'right' ? 'text-right' : 'text-left'}`}>

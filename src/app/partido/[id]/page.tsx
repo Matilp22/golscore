@@ -10,6 +10,7 @@
   type PlayerWrapper,
 } from '@/lib/api-football'
 import AutoRefresh from '@/frontend/components/AutoRefresh'
+import { PlayerPhoto, TeamLogo as AssetTeamLogo } from '@/frontend/components/AssetImage'
 import FormationTeamPanel from '@/frontend/components/FormationTeamPanel'
 import SafeImage from '@/frontend/components/SafeImage'
 import { formatMatchTimeArgentina } from '@/shared/utils/argentina-time'
@@ -726,12 +727,10 @@ function TeamLogo({
 
   return (
     <div className={`flex ${classes} items-center justify-center overflow-hidden`}>
-      <SafeImage
+      <AssetTeamLogo
         src={logo}
         alt={name}
-        imageType="team"
-        width={size === 'sm' ? 32 : 64}
-        height={size === 'sm' ? 32 : 64}
+        size={size === 'sm' ? 32 : 64}
         className={`${classes} object-contain`}
         fallbackClassName={size === 'sm' ? 'h-7 w-6' : 'h-10 w-8 md:h-14 md:w-12'}
       />
@@ -808,28 +807,6 @@ function getPanelStyle(style: TeamStyle) {
     borderColor: `${style.border}66`,
     boxShadow: `inset 0 1px 0 ${style.border}1a`,
   }
-}
-
-function Shirt({
-  number,
-  style,
-}: {
-  number?: number | string
-  style: TeamStyle
-}) {
-  return (
-    <div
-      className="flex h-8 w-6 items-center justify-center text-[10px] font-black sm:h-12 sm:w-10 sm:text-[15px]"
-      style={{
-        backgroundColor: style.shirt,
-        color: style.text,
-        clipPath:
-          'polygon(18% 0%, 36% 0%, 40% 12%, 60% 12%, 64% 0%, 82% 0%, 100% 18%, 86% 28%, 86% 100%, 14% 100%, 14% 28%, 0% 18%)',
-      }}
-    >
-      {number || ''}
-    </div>
-  )
 }
 
 function getStyleForPlayer(
@@ -1068,7 +1045,27 @@ function PlayerOnField({
             <CaptainBadge />
           </div>
         ) : null}
-        <Shirt number={playerState.displayNumber ?? player.number} style={style} />
+        <div
+          className="relative rounded-full border-2 bg-[#20262e] shadow-[0_4px_12px_rgba(0,0,0,0.35)]"
+          style={{ borderColor: style.border }}
+        >
+          <PlayerPhoto
+            src={player.photo}
+            alt={player.name || 'Jugador'}
+            size={fullField ? 34 : 32}
+          />
+          {playerState.displayNumber ?? player.number ? (
+            <span
+              className="absolute -bottom-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full border border-black/35 px-1 text-[8px] font-black shadow"
+              style={{
+                backgroundColor: style.shirt,
+                color: style.text,
+              }}
+            >
+              {playerState.displayNumber ?? player.number}
+            </span>
+          ) : null}
+        </div>
         <FieldSideIncidences
           goals={playerState.goals}
           yellowCards={playerState.yellowCards}
@@ -1214,6 +1211,7 @@ function buildPanelPlayers({
       id: String(player.id || `${teamName}-${index}`),
       name: player.name || 'Jugador',
       number: player.number,
+      photo: player.photo,
       style: getStyleForPlayer(playerWrap, teamName, isHome, lineup),
       isCaptain,
       goals,

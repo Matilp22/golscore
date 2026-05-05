@@ -1,4 +1,4 @@
-import SafeImage from '@/frontend/components/SafeImage'
+import { PlayerPhoto } from '@/frontend/components/AssetImage'
 import PlayerIncidentsList from '@/frontend/components/PlayerIncidentsList'
 import {
   ApiFootballError,
@@ -155,12 +155,10 @@ export default async function JugadorPage({ params, searchParams }: PageProps) {
             <div className="flex flex-col gap-3 px-2 py-3 md:flex-row md:items-center md:justify-between md:gap-4 md:px-4 md:py-5">
               <div className="flex items-center gap-4">
                 <div className="flex h-20 w-20 items-center justify-center overflow-hidden">
-                  <SafeImage
+                  <PlayerPhoto
                     src={player.photo}
                     alt={player.name}
-                    imageType="player"
-                    width={80}
-                    height={80}
+                    size={80}
                     className="h-20 w-20 rounded-full object-cover"
                     fallbackClassName="h-20 w-20 rounded-full"
                   />

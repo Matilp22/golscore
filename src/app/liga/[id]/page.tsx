@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import CurrentRoundNavigator from '@/frontend/components/CurrentRoundNavigator'
 import CopaArgentinaMatchList from '@/frontend/components/CopaArgentinaMatchList'
 import LeaderListInteractive from '@/frontend/components/LeaderListInteractive'
-import SafeImage from '@/frontend/components/SafeImage'
+import { LeagueLogo, TeamLogo } from '@/frontend/components/AssetImage'
 import {
   ApiFootballError,
   getLeagueFixtures,
@@ -914,12 +914,10 @@ function PromediosTable({
               <td className={`${cellPadding} font-semibold`}>{row.rank}</td>
               <td className={cellPadding}>
                 <div className={`flex items-center ${compact ? 'gap-1.5' : 'gap-2'}`}>
-                  <SafeImage
+                  <TeamLogo
                     src={row.teamLogo}
                     alt={row.teamName}
-                    imageType="team"
-                    width={compact ? 18 : 24}
-                    height={compact ? 18 : 24}
+                    size={compact ? 18 : 24}
                     className={`${compact ? 'h-[18px] w-[18px]' : 'h-6 w-6'} object-contain`}
                     fallbackClassName={compact ? 'h-4 w-3' : 'h-5 w-4'}
                   />
@@ -1239,12 +1237,10 @@ function StandingsTable({
               <td className={`${cellPadding} font-semibold`}>{row.rank || index + 1}</td>
               <td className={cellPadding}>
                 <div className={`flex items-center ${compact ? 'gap-1.5' : 'gap-2'}`}>
-                  <SafeImage
+                  <TeamLogo
                     src={row.teamLogo}
                     alt={row.teamName}
-                    imageType="team"
-                    width={compact ? 18 : 24}
-                    height={compact ? 18 : 24}
+                    size={compact ? 18 : 24}
                     className={`${compact ? 'h-[18px] w-[18px]' : 'h-6 w-6'} object-contain`}
                     fallbackClassName={compact ? 'h-4 w-3' : 'h-5 w-4'}
                   />
@@ -1371,12 +1367,10 @@ function BracketView({
                                 }`}
                               >
                                 <div className="flex min-w-0 items-center gap-2">
-                                  <SafeImage
+                                  <TeamLogo
                                     src={team.logo}
                                     alt={team.team}
-                                    imageType="team"
-                                    width={12}
-                                    height={12}
+                                    size={12}
                                     className="h-[12px] w-[12px] object-contain"
                                     fallbackClassName="h-[12px] w-[10px]"
                                   />
@@ -1552,12 +1546,10 @@ export default async function LigaPage({ params }: PageProps) {
               <div className="flex items-center gap-4">
                 {resolvedTournament?.logo ? (
                   <div className="flex h-16 w-16 items-center justify-center">
-                    <SafeImage
+                    <LeagueLogo
                       src={resolvedTournament.logo}
                       alt={resolvedTournament.name}
-                      imageType="league"
-                      width={56}
-                      height={56}
+                      size={56}
                       className="h-14 w-14 object-contain"
                       fallbackClassName="h-12 w-10"
                     />

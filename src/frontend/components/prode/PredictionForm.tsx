@@ -1,7 +1,7 @@
 ﻿'use client'
 
 import { useEffect, useMemo, useState, useTransition } from 'react'
-import SafeImage from '@/frontend/components/SafeImage'
+import { TeamLogo as AssetTeamLogo } from '@/frontend/components/AssetImage'
 import type { Match, Prediction } from '@/frontend/types/prode'
 import { getMatchPredictionLockState } from '@/frontend/types/prode'
 import { isFinalMatchStatus, isLiveStatus } from '@/shared/utils/match-status'
@@ -37,12 +37,10 @@ function TeamLogo({
 }) {
   return (
     <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden">
-      <SafeImage
+      <AssetTeamLogo
         src={logoUrl}
         alt={name}
-        imageType="team"
-        width={32}
-        height={32}
+        size={32}
         className="h-7 w-7 object-contain"
         fallbackClassName="h-6 w-5"
       />

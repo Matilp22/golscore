@@ -4,6 +4,7 @@ import { getAllowedProdeLeagueIds } from '@/server/prode/scope'
 import { getAllowedProdeLeagueLabel } from '@/shared/config/prode-leagues'
 import { normalizeLeagueRound } from '@/shared/utils/league-rounds'
 import { parseMatchDate } from '@/shared/utils/prediction-lock'
+import { getApiSportsTeamLogoUrl } from '@/shared/utils/asset-urls'
 
 type SportDbError = {
   message: string
@@ -28,6 +29,7 @@ type LeagueRow = {
   name: string | null
   country: string | null
   external_id: string | number | null
+  logo_url?: string | null
 }
 
 type TeamRow = {
@@ -58,12 +60,6 @@ function prodeError(error: SportDbError, fallback: string) {
     },
     { status: 500 }
   )
-}
-
-function getApiSportsLogoUrl(externalId: string | number | null | undefined) {
-  if (externalId === null || externalId === undefined || externalId === '') return null
-
-  return `https://media.api-sports.io/football/teams/${externalId}.png`
 }
 
 async function fetchTeamsWithLogos(
@@ -215,7 +211,7 @@ export async function GET(request: Request) {
     leagueIds.length
       ? supabase
           .from('leagues')
-          .select('id, name, country, external_id')
+          .select('id, name, country, external_id, logo_url')
           .in('id', leagueIds)
       : Promise.resolve({ data: [], error: null }),
     fetchTeamsWithLogos(supabase, teamIds),
@@ -268,7 +264,7 @@ export async function GET(request: Request) {
             name: getAllowedProdeLeagueLabel(league.name),
             country: league.country,
             season: parseMatchDate(match.match_date).getFullYear(),
-            logoUrl: null,
+            logoUrl: league.logo_url ?? null,
           }
         : null,
       homeTeam: homeTeam
@@ -276,7 +272,7 @@ export async function GET(request: Request) {
             id: String(homeTeam.id),
             name: homeTeam.name ?? 'Local',
             logo_url: homeTeam.logo_url,
-            logoUrl: homeTeam.logo_url ?? getApiSportsLogoUrl(homeTeam.external_id),
+            logoUrl: homeTeam.logo_url ?? getApiSportsTeamLogoUrl(homeTeam.external_id),
           }
         : null,
       awayTeam: awayTeam
@@ -284,7 +280,7 @@ export async function GET(request: Request) {
             id: String(awayTeam.id),
             name: awayTeam.name ?? 'Visitante',
             logo_url: awayTeam.logo_url,
-            logoUrl: awayTeam.logo_url ?? getApiSportsLogoUrl(awayTeam.external_id),
+            logoUrl: awayTeam.logo_url ?? getApiSportsTeamLogoUrl(awayTeam.external_id),
           }
         : null,
     }

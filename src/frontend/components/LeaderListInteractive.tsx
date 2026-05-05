@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useState } from 'react'
 
-import SafeImage from '@/frontend/components/SafeImage'
+import { PlayerPhoto } from '@/frontend/components/AssetImage'
 import type { LeaderStatType, TopPlayerRow } from '@/lib/api-football'
 
 type LeaderListInteractiveProps = {
@@ -52,12 +52,10 @@ export default function LeaderListInteractive({
                 <>
                   <div className="flex min-w-0 items-center gap-3">
                     <span className="w-6 text-sm font-black text-[#7f8a98]">{displayIndex}</span>
-                    <SafeImage
+                    <PlayerPhoto
                       src={row.photo}
                       alt={row.name}
-                      imageType="player"
-                      width={36}
-                      height={36}
+                      size={36}
                       className="h-9 w-9 rounded-full object-cover"
                       fallbackClassName="h-9 w-9 rounded-full"
                     />

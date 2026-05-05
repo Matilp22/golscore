@@ -2,8 +2,8 @@ export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 
 import AutoRefresh from '@/frontend/components/AutoRefresh'
+import { LeagueLogo } from '@/frontend/components/AssetImage'
 import MatchRow from '@/frontend/components/MatchRow'
-import SafeImage from '@/frontend/components/SafeImage'
 import Link from 'next/link'
 import {
   ApiFootballError,
@@ -1219,12 +1219,10 @@ export default async function HomePage({
                             >
                               {competition.logo ? (
                                 <span className="flex h-6 w-6 shrink-0 items-center justify-center">
-                                  <SafeImage
+                                  <LeagueLogo
                                     src={competition.logo}
                                     alt={competition.title}
-                                    imageType="league"
-                                    width={20}
-                                    height={20}
+                                    size={20}
                                     className="h-5 w-5 object-contain"
                                     fallbackClassName="h-4 w-3"
                                   />
@@ -1236,12 +1234,10 @@ export default async function HomePage({
                             <h2 className="inline-flex min-w-0 items-center gap-2 text-sm font-black text-[#f3f6fa] md:text-base">
                               {competition.logo ? (
                                 <span className="flex h-6 w-6 shrink-0 items-center justify-center">
-                                  <SafeImage
+                                  <LeagueLogo
                                     src={competition.logo}
                                     alt={competition.title}
-                                    imageType="league"
-                                    width={20}
-                                    height={20}
+                                    size={20}
                                     className="h-5 w-5 object-contain"
                                     fallbackClassName="h-4 w-3"
                                   />

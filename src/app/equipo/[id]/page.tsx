@@ -1,4 +1,5 @@
 import SafeImage from '@/frontend/components/SafeImage'
+import { PlayerPhoto, TeamLogo } from '@/frontend/components/AssetImage'
 
 import {
   ApiFootballError,
@@ -53,13 +54,11 @@ function PlayerCard({ player }: { player: TeamSquadPlayer }) {
   return (
     <div className="flex items-center gap-2.5 rounded-xl border border-white/6 bg-[#161a20] px-2.5 py-2">
       <div className="flex h-12 w-12 items-center justify-center overflow-hidden">
-        <SafeImage
+        <PlayerPhoto
           src={player.photo}
           alt={player.name || 'Jugador'}
-          imageType="player"
-          width={48}
-          height={48}
-          className="h-12 w-12 rounded-full object-cover"
+          size={48}
+          className="h-full w-full rounded-full object-cover"
           fallbackClassName="h-12 w-12 rounded-full"
         />
       </div>
@@ -130,12 +129,10 @@ export default async function EquipoPage({ params }: PageProps) {
           <div className="flex flex-col gap-3 px-2 py-3 md:flex-row md:items-center md:justify-between md:gap-4 md:px-4 md:py-5">
             <div className="flex items-center gap-4">
               <div className="flex h-20 w-20 items-center justify-center overflow-hidden">
-                <SafeImage
+                <TeamLogo
                   src={team.logo}
                   alt={team.name}
-                  imageType="team"
-                  width={80}
-                  height={80}
+                  size={80}
                   className="h-20 w-20 object-contain"
                   fallbackClassName="h-16 w-14"
                 />

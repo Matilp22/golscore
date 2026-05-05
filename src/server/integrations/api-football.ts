@@ -18,6 +18,13 @@ import {
   isScoreboardGoalEvent,
 } from '@/shared/utils/football-events'
 import { getExcludedCompetitionReason } from '@/shared/utils/competition-filter'
+import {
+  enrichMatchDetailAssets,
+  enrichPlayerDetailAssets,
+  enrichTeamDetailAssets,
+  enrichTopPlayerAssets,
+  persistFixtureListAssets,
+} from '@/server/assets/image-assets'
 
 type ApiFootballResponse<T> = {
   errors?: Record<string, string>
@@ -77,6 +84,7 @@ type LeagueInfo = {
   country: string
   logo?: string
   round?: string
+  season?: number
 }
 
 type FixtureInfo = {
@@ -283,6 +291,7 @@ export type LineupPlayer = {
   pos?: string
   grid?: string
   captain?: boolean | string
+  photo?: string
 }
 
 export type PlayerWrapper = {
@@ -717,6 +726,7 @@ export async function getMatchesByDate(date: string): Promise<MatchListItem[]> {
   }))
 
   if (mappedFixtures.length) {
+    await persistFixtureListAssets([...dedupedFixtures.values()])
     upsertStoredFixtures(
       mappedFixtures.map((item) => ({
         fixtureId: item.id,
@@ -1708,13 +1718,16 @@ export async function getMatchDetail(id: number) {
     apiFootball('/fixtures/lineups', { fixture: id }, { revalidate: 30 }),
     getMatchBroadcastByExternalId(id),
   ])
+  const rawFixture = (fixture as ApiFootballResponse<MatchFixture>).response?.[0] || null
+  const rawLineups = (lineups as ApiFootballResponse<MatchLineup>).response || []
+  const enriched = await enrichMatchDetailAssets(rawFixture, rawLineups)
 
   return {
-    fixture: (fixture as ApiFootballResponse<MatchFixture>).response?.[0] || null,
+    fixture: enriched.fixture,
     events: (events as ApiFootballResponse<MatchEvent>).response || [],
     statistics:
       (statistics as ApiFootballResponse<MatchStatisticsTeam>).response || [],
-    lineups: (lineups as ApiFootballResponse<MatchLineup>).response || [],
+    lineups: enriched.lineups,
     broadcastChannel: broadcast.channel,
     broadcastLogoUrl: broadcast.logoUrl,
     broadcasters: broadcast.broadcasters,
@@ -1726,10 +1739,13 @@ export async function getTeamDetail(id: number) {
     apiFootball('/teams', { id }, { revalidate: 300 }),
     apiFootball('/players/squads', { team: id }, { revalidate: 300 }),
   ])
+  const rawTeam = (team as ApiFootballResponse<TeamProfile>).response?.[0] || null
+  const rawSquad = (squad as ApiFootballResponse<TeamSquad>).response?.[0] || null
+  const enriched = await enrichTeamDetailAssets(rawTeam, rawSquad)
 
   return {
-    team: (team as ApiFootballResponse<TeamProfile>).response?.[0] || null,
-    squad: (squad as ApiFootballResponse<TeamSquad>).response?.[0] || null,
+    team: enriched.team,
+    squad: enriched.squad,
   }
 }
 
@@ -1753,7 +1769,7 @@ export async function getPlayerDetail(
 
   if (!item?.player) return null
 
-  return {
+  return enrichPlayerDetailAssets({
     player: {
       id: item.player.id,
       name: item.player.name || 'Jugador',
@@ -1796,7 +1812,7 @@ export async function getPlayerDetail(
       yellowCards: stats?.cards?.yellow || 0,
       redCards: stats?.cards?.red || 0,
     },
-  }
+  })
 }
 
 export async function resolveTournament(
@@ -2118,6 +2134,7 @@ export async function getLeagueFixtures(leagueId: number, season: number) {
     logCopaArgentinaFixtureDebug(leagueId, season, mappedFixtures, 'api')
 
     if (mappedFixtures.length) {
+      await persistFixtureListAssets(data.response || [])
       upsertStoredFixtures(
         (data.response || []).map((item) => ({
           fixtureId: item.fixture.id,
@@ -2209,7 +2226,7 @@ async function getTopPlayersByType(
     revalidate: 300,
   })) as ApiFootballResponse<TopPlayerResponseItem>
 
-  return (data.response || [])
+  const rows = (data.response || [])
     .map((item): TopPlayerRow => {
       const stats = item.statistics?.[0]
 
@@ -2224,6 +2241,8 @@ async function getTopPlayersByType(
       }
     })
     .filter((item) => item.value > 0)
+
+  return enrichTopPlayerAssets(rows)
 }
 
 function isPlayedFixture(statusShort: string) {

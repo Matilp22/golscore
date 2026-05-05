@@ -19,17 +19,21 @@ type ApiFixture = {
   }
   league: {
     id: number
+    name?: string
     round?: string
     country?: string
+    logo?: string | null
   }
   teams: {
     home: {
       id: number
       name: string
+      logo?: string | null
     }
     away: {
       id: number
       name: string
+      logo?: string | null
     }
   }
   goals: {
@@ -102,6 +106,19 @@ function getFixtureRoundValue(round?: string | null) {
 
 function normalizeUrl(value: string) {
   return value.trim().replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '')
+}
+
+function getApiSportsTeamLogoUrl(teamId: number) {
+  return `https://media.api-sports.io/football/teams/${teamId}.png`
+}
+
+function getApiSportsLeagueLogoUrl(leagueId: number) {
+  return `https://media.api-sports.io/football/leagues/${leagueId}.png`
+}
+
+function pickAssetUrl(apiUrl: string | null | undefined, fallbackUrl: string) {
+  const trimmed = apiUrl?.trim()
+  return trimmed || fallbackUrl
 }
 
 function getEventExternalId(fixture: ApiFixture, event: ApiFixtureEvent) {
@@ -321,6 +338,9 @@ Deno.serve(async (req) => {
             name: tournament.name,
             country: tournament.country,
             season: tournament.season,
+            logo_url: getApiSportsLeagueLogoUrl(tournament.externalLeagueId),
+            logo_source: 'api-football',
+            logo_last_synced_at: new Date().toISOString(),
           },
           { onConflict: 'external_id' },
         )
@@ -335,7 +355,13 @@ Deno.serve(async (req) => {
             supabase
               .from('teams')
               .upsert(
-                { external_id: item.teams.home.id, name: item.teams.home.name },
+                {
+                  external_id: item.teams.home.id,
+                  name: item.teams.home.name,
+                  logo_url: pickAssetUrl(item.teams.home.logo, getApiSportsTeamLogoUrl(item.teams.home.id)),
+                  logo_source: 'api-football',
+                  logo_last_synced_at: new Date().toISOString(),
+                },
                 { onConflict: 'external_id' },
               )
               .select('id')
@@ -343,7 +369,13 @@ Deno.serve(async (req) => {
             supabase
               .from('teams')
               .upsert(
-                { external_id: item.teams.away.id, name: item.teams.away.name },
+                {
+                  external_id: item.teams.away.id,
+                  name: item.teams.away.name,
+                  logo_url: pickAssetUrl(item.teams.away.logo, getApiSportsTeamLogoUrl(item.teams.away.id)),
+                  logo_source: 'api-football',
+                  logo_last_synced_at: new Date().toISOString(),
+                },
                 { onConflict: 'external_id' },
               )
               .select('id')

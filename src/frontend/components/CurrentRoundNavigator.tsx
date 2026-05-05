@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import SafeImage from '@/frontend/components/SafeImage'
+import { TeamLogo } from '@/frontend/components/AssetImage'
 import type { LeagueFixtureSummary } from '@/lib/api-football'
 import { parseMatchDate } from '@/shared/utils/prediction-lock'
 
@@ -208,12 +208,10 @@ export default function CurrentRoundNavigator({
                     <div className="grid grid-cols-[minmax(0,1fr)_44px_minmax(0,1fr)] items-center gap-1.5">
                       <div className="flex items-center justify-end gap-1.5 text-right">
                         <span className="truncate font-semibold text-[#dce5ef]">{match.home}</span>
-                        <SafeImage
+                        <TeamLogo
                           src={match.homeLogo}
                           alt={match.home}
-                          imageType="team"
-                          width={16}
-                          height={16}
+                          size={16}
                           className="h-4 w-4 object-contain"
                           fallbackClassName="h-3.5 w-3"
                         />
@@ -224,12 +222,10 @@ export default function CurrentRoundNavigator({
                       </div>
 
                       <div className="flex items-center gap-1.5">
-                        <SafeImage
+                        <TeamLogo
                           src={match.awayLogo}
                           alt={match.away}
-                          imageType="team"
-                          width={16}
-                          height={16}
+                          size={16}
                           className="h-4 w-4 object-contain"
                           fallbackClassName="h-3.5 w-3"
                         />

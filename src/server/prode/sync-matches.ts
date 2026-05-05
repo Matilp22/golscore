@@ -22,6 +22,11 @@ import {
   getArgentinaDateISO,
   getArgentinaTodayISO,
 } from '@/shared/utils/argentina-time'
+import {
+  getApiSportsLeagueLogoUrl,
+  getApiSportsTeamLogoUrl,
+  pickStableAssetUrl,
+} from '@/shared/utils/asset-urls'
 
 type ApiFixture = {
   fixture: {
@@ -40,6 +45,7 @@ type ApiFixture = {
     country?: string
     season?: number
     round?: string
+    logo?: string | null
     [key: string]: unknown
   }
   teams: {
@@ -476,8 +482,12 @@ function getUpdatedFields(
   return fields
 }
 
-function getTeamLogoUrl(team: { id: number; logo?: string }) {
-  return team.logo || `https://media.api-sports.io/football/teams/${team.id}.png`
+function getTeamLogoUrl(team: { id: number; logo?: string | null }) {
+  return pickStableAssetUrl(null, team.logo, getApiSportsTeamLogoUrl(team.id))
+}
+
+function getLeagueLogoUrl(league: { id?: number; logo?: string | null }) {
+  return pickStableAssetUrl(null, league.logo, getApiSportsLeagueLogoUrl(league.id))
 }
 
 const BROADCAST_SOURCE_KEYS = [
@@ -1207,6 +1217,12 @@ async function upsertLeague(
     name: tournament.name,
     country: fixture?.league.country ?? (tournament.type === 'cup' ? 'World' : 'Argentina'),
     season: tournament.season,
+    logo_url: getLeagueLogoUrl({
+      id: tournament.externalLeagueId,
+      logo: fixture?.league.logo,
+    }),
+    logo_source: 'api-football',
+    logo_last_synced_at: new Date().toISOString(),
   }
 
   logDebug(debug, 'league lookup by external_id started', {
@@ -1348,6 +1364,9 @@ async function upsertLeagueFromFixture(
     name: leagueName,
     country: fixture.league.country ?? null,
     season: fixture.league.season ?? new Date(fixture.fixture.date).getUTCFullYear(),
+    logo_url: getLeagueLogoUrl(fixture.league),
+    logo_source: 'api-football',
+    logo_last_synced_at: new Date().toISOString(),
   }
 
   const { data: existingByExternalId, error: externalIdError } = await withTimeout(
@@ -1429,6 +1448,12 @@ async function upsertLeagueFromApi(
     name,
     country: apiLeague.country?.name ?? null,
     season: getLeagueSeason(apiLeague),
+    logo_url: getLeagueLogoUrl({
+      id: externalId,
+      logo: apiLeague.league?.logo,
+    }),
+    logo_source: 'api-football',
+    logo_last_synced_at: new Date().toISOString(),
   }
 
   const { data: existingByExternalId, error: externalIdError } = await withTimeout(
@@ -1493,6 +1518,8 @@ async function upsertTeam(
     external_id: team.id,
     name: team.name,
     logo_url: getTeamLogoUrl(team),
+    logo_source: 'api-football',
+    logo_last_synced_at: new Date().toISOString(),
   }
 
   logDebug(debug, 'team lookup by external_id started', {

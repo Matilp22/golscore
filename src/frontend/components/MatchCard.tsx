@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import SafeImage from '@/frontend/components/SafeImage'
+import { TeamLogo } from '@/frontend/components/AssetImage'
 
 type MatchCardProps = {
   id?: number | string
@@ -59,12 +59,10 @@ export default function MatchCard({
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <div className="flex h-7 w-7 items-center justify-center overflow-hidden">
-              <SafeImage
+              <TeamLogo
                 src={homeLogo}
                 alt={home}
-                imageType="team"
-                width={28}
-                height={28}
+                size={28}
                 className="h-7 w-7 object-contain"
                 fallbackClassName="h-6 w-5"
               />
@@ -79,12 +77,10 @@ export default function MatchCard({
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <div className="flex h-7 w-7 items-center justify-center overflow-hidden">
-              <SafeImage
+              <TeamLogo
                 src={awayLogo}
                 alt={away}
-                imageType="team"
-                width={28}
-                height={28}
+                size={28}
                 className="h-7 w-7 object-contain"
                 fallbackClassName="h-6 w-5"
               />

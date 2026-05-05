@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import SafeImage from '@/frontend/components/SafeImage'
+import { TeamLogo } from '@/frontend/components/AssetImage'
 import type { MatchBroadcaster, MatchGoalScorer, MatchGoalScorers } from '@/lib/api-football'
 import { formatEventMinute } from '@/shared/utils/event-minute'
 
@@ -82,12 +83,10 @@ function TeamBadge({
 }) {
   const logoNode = (
     <div className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden">
-      <SafeImage
+      <TeamLogo
         src={logo}
         alt={name}
-        imageType="team"
-        width={20}
-        height={20}
+        size={20}
         className="h-5 w-5 object-contain"
         fallbackClassName="h-4 w-3"
       />
