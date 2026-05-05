@@ -133,12 +133,17 @@ export function getLeagueRoundLabel(
   leagueExternalId?: number | string | null
 ) {
   const normalizedRound = normalizeLeagueRound(round, leagueExternalId)
+  const leagueId = getLeagueExternalIdValue(leagueExternalId)
 
   if (!normalizedRound) return null
 
   const finalPhaseKey = getLeagueFinalPhaseKey(normalizedRound)
 
-  if (finalPhaseKey) return FINAL_PHASE_LABELS[finalPhaseKey]
+  if (finalPhaseKey) {
+    return leagueId === LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID
+      ? `${FINAL_PHASE_LABELS[finalPhaseKey]} - Apertura`
+      : FINAL_PHASE_LABELS[finalPhaseKey]
+  }
 
   const aperturaMatch = normalizedRound.match(/^apertura-fecha-(\d+)$/i)
   const clausuraSlugMatch = normalizedRound.match(/^clausura-fecha-(\d+)$/i)
@@ -147,17 +152,16 @@ export function getLeagueRoundLabel(
   const clausuraRawMatch = String(round ?? '').trim().match(/^Clausura - (\d+)$/i)
   const groupStageMatch = normalizedRound.match(/^Group Stage - (\d+)$/i)
   const genericPhaseMatch = normalizedRound.match(/^(.+?) - (\d+)$/)
-  const leagueId = getLeagueExternalIdValue(leagueExternalId)
 
-  if (aperturaMatch) return `Apertura - Fecha ${aperturaMatch[1]}`
-  if (clausuraSlugMatch) return `Clausura - Fecha ${clausuraSlugMatch[1]}`
-  if (aperturaRawMatch) return `Apertura - Fecha ${aperturaRawMatch[1]}`
-  if (clausuraRawMatch) return `Clausura - Fecha ${clausuraRawMatch[1]}`
+  if (aperturaMatch) return `Fecha ${aperturaMatch[1]} - Apertura`
+  if (clausuraSlugMatch) return `Fecha ${clausuraSlugMatch[1]} - Clausura`
+  if (aperturaRawMatch) return `Fecha ${aperturaRawMatch[1]} - Apertura`
+  if (clausuraRawMatch) return `Fecha ${clausuraRawMatch[1]} - Clausura`
   if (groupStageMatch) return `Fase de grupos - Fecha ${groupStageMatch[1]}`
 
   if (regularSeasonMatch) {
     return leagueId === LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID
-      ? `Apertura - Fecha ${regularSeasonMatch[1]}`
+      ? `Fecha ${regularSeasonMatch[1]} - Apertura`
       : `Fecha ${regularSeasonMatch[1]}`
   }
 

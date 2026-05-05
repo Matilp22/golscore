@@ -1019,6 +1019,16 @@ function resolveHomeCompetitionHref(ruleKey: string, sampleMatch?: ApiMatch) {
   return null
 }
 
+function resolveHomeCompetitionLogo(sampleMatch?: ApiMatch) {
+  if (sampleMatch?.leagueLogo) return sampleMatch.leagueLogo
+
+  if (sampleMatch?.leagueId && Number.isFinite(sampleMatch.leagueId)) {
+    return `https://media.api-sports.io/football/leagues/${sampleMatch.leagueId}.png`
+  }
+
+  return undefined
+}
+
 function groupMatchesWithPromiedosStructure(matches: ApiMatch[]): SectionBucket[] {
   const cleanMatches = matches.filter((match) => {
     const reason =
@@ -1062,7 +1072,7 @@ function groupMatchesWithPromiedosStructure(matches: ApiMatch[]): SectionBucket[
     competitionBuckets.push({
       key: rule.key,
       title: rule.baseTitle,
-      logo: filtered[0]?.leagueLogo,
+      logo: resolveHomeCompetitionLogo(filtered[0]),
       sectionKey: rule.sectionKey,
       sectionTitle: rule.sectionTitle,
       href: resolveHomeCompetitionHref(rule.key, filtered[0]),
@@ -1221,42 +1231,40 @@ export default async function HomePage({
                     >
                       <div className="border-y border-[#25553d]/45 bg-[#132019] px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(127,240,178,0.08)] sm:px-3">
                         <div className="flex min-w-0 items-center justify-between gap-2">
-                          <div className="flex min-w-0 items-center gap-2">
-                            {competition.logo ? (
-                              <div className="flex h-6 w-6 items-center justify-center">
-                                <Image
-                                  src={competition.logo}
-                                  alt={competition.title}
-                                  width={20}
-                                  height={20}
-                                  className="h-5 w-5 object-contain"
-                                />
-                              </div>
-                            ) : (
-                              <div className="flex h-6 w-6 items-center justify-center">
-                                <span className="h-4 w-3 bg-[#6f7884] [clip-path:polygon(50%_0,92%_16%,84%_72%,50%_100%,16%_72%,8%_16%)]" />
-                              </div>
-                            )}
-                            <div className="min-w-0">
-                              {competition.href ? (
-                                <Link
-                                  href={competition.href}
-                                  className="group inline-flex min-w-0 items-center gap-1 text-sm font-black text-[#f3f6fa] transition hover:text-[#7ff0b2] md:text-base"
-                                >
-                                  <span className="break-words decoration-[#7ff0b2]/70 underline-offset-4 group-hover:underline">
-                                    {competition.title}
-                                  </span>
-                                  <span className="text-xs text-[#8d98a7] transition group-hover:text-[#7ff0b2]">
-                                    &gt;
-                                  </span>
-                                </Link>
-                              ) : (
-                                <h2 className="break-words text-sm font-black text-[#f3f6fa] md:text-base">
-                                  {competition.title}
-                                </h2>
-                              )}
-                            </div>
-                          </div>
+                          {competition.href ? (
+                            <Link
+                              href={competition.href}
+                              className="inline-flex min-w-0 items-center gap-2 text-sm font-black text-[#f3f6fa] no-underline transition hover:text-[#7ff0b2] hover:no-underline md:text-base"
+                            >
+                              {competition.logo ? (
+                                <span className="flex h-6 w-6 shrink-0 items-center justify-center">
+                                  <Image
+                                    src={competition.logo}
+                                    alt={competition.title}
+                                    width={20}
+                                    height={20}
+                                    className="h-5 w-5 object-contain"
+                                  />
+                                </span>
+                              ) : null}
+                              <span className="break-words">{competition.title}</span>
+                            </Link>
+                          ) : (
+                            <h2 className="inline-flex min-w-0 items-center gap-2 text-sm font-black text-[#f3f6fa] md:text-base">
+                              {competition.logo ? (
+                                <span className="flex h-6 w-6 shrink-0 items-center justify-center">
+                                  <Image
+                                    src={competition.logo}
+                                    alt={competition.title}
+                                    width={20}
+                                    height={20}
+                                    className="h-5 w-5 object-contain"
+                                  />
+                                </span>
+                              ) : null}
+                              <span className="break-words">{competition.title}</span>
+                            </h2>
+                          )}
 
                           <div className="shrink-0 rounded border border-[#25553d]/45 bg-[#0f1714] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.06em] text-[#9ed6b8]">
                             {competition.matches.length} partido{competition.matches.length !== 1 ? 's' : ''}

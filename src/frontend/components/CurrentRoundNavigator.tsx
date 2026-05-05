@@ -132,7 +132,7 @@ export default function CurrentRoundNavigator({
               aria-expanded={isOpen}
               aria-haspopup="listbox"
             >
-              <span className="truncate text-sm font-black uppercase tracking-[0.07em] md:text-base">
+              <span className="truncate text-sm font-black md:text-base">
                 {selectedRound.label}
               </span>
               <span className="text-[#8fa0b1]">

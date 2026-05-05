@@ -5,7 +5,6 @@ import type { ReactNode } from 'react'
 import CurrentRoundNavigator from '@/frontend/components/CurrentRoundNavigator'
 import CopaArgentinaMatchList from '@/frontend/components/CopaArgentinaMatchList'
 import LeaderListInteractive from '@/frontend/components/LeaderListInteractive'
-import PlayoffBracket from '@/frontend/components/PlayoffBracket'
 import {
   ApiFootballError,
   getLeagueFixtures,
@@ -606,20 +605,6 @@ function splitPrimaryGroups(
   }
 }
 
-function getZoneRows(
-  groups: Array<{ name: string; rows: LeagueStandingRow[] }>,
-  zone: 'a' | 'b'
-) {
-  return groups.find((group) => {
-    const name = normalizeGroupName(group.name)
-    return (
-      name.includes(`zona ${zone}`) ||
-      name.includes(`grupo ${zone}`) ||
-      name.includes(`group ${zone}`)
-    )
-  })?.rows ?? null
-}
-
 function isDerivedTableGroup(name: string) {
   const normalized = normalizeGroupName(name)
 
@@ -1059,8 +1044,16 @@ function getRoundNumber(round: string) {
   return match ? Number(match[1]) : null
 }
 
-function getRoundBlocks(fixtures: LeagueFixtureSummary[], leagueExternalId?: number | null) {
+function getRoundBlocks(
+  fixtures: LeagueFixtureSummary[],
+  leagueExternalId?: number | null,
+  options: { includeFinalPhaseRounds?: boolean } = {}
+) {
+  const includeFinalPhaseRounds = options.includeFinalPhaseRounds ?? false
   const leagueFixtures = fixtures.filter((fixture) => {
+    const finalPhaseKey = getLeagueFinalPhaseKey(fixture.round)
+
+    if (finalPhaseKey) return includeFinalPhaseRounds
     if (isKnockoutRound(fixture.round, leagueExternalId)) return false
 
     const normalized = normalizeRoundName(fixture.round)
@@ -1086,9 +1079,14 @@ function getRoundBlocks(fixtures: LeagueFixtureSummary[], leagueExternalId?: num
   const grouped = new Map<string, LeagueFixtureSummary[]>()
 
   for (const fixture of leagueFixtures) {
-    const current = grouped.get(fixture.round) || []
+    const normalizedLeagueRound = normalizeLeagueRound(fixture.round, leagueExternalId)
+    const roundKey =
+      typeof normalizedLeagueRound === 'string' && normalizedLeagueRound.trim()
+        ? normalizedLeagueRound
+        : fixture.round
+    const current = grouped.get(roundKey) || []
     current.push(fixture)
-    grouped.set(fixture.round, current)
+    grouped.set(roundKey, current)
   }
 
   const now = Date.now()
@@ -1132,10 +1130,10 @@ function getRoundBlocks(fixtures: LeagueFixtureSummary[], leagueExternalId?: num
       matches: [...matches].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
     }))
     .sort((a, b) => {
-      const aMatch = a.round.match(/(\d+)/)
-      const bMatch = b.round.match(/(\d+)/)
+      const aSortValue = getLeagueRoundSortValue(a.round, leagueExternalId)
+      const bSortValue = getLeagueRoundSortValue(b.round, leagueExternalId)
 
-      if (aMatch && bMatch) return Number(aMatch[1]) - Number(bMatch[1])
+      if (aSortValue !== bSortValue) return aSortValue - bSortValue
 
       return a.matches[0]?.date.localeCompare(b.matches[0]?.date || '') || 0
     })
@@ -1298,20 +1296,16 @@ function BracketView({
       title="Cuadro de llaves"
       subtitle="Cruces eliminatorios del torneo"
     >
-      <div className="bracket-scroll overflow-x-auto pb-3">
-        <div className="min-w-max rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,#11161b_0%,#0d1217_100%)] p-3 shadow-[inset_0_0_0_1px_rgba(127,240,178,0.05)]">
-          <div className="mb-3 text-center text-xl font-black tracking-tight text-white">
-            Cuadro
-          </div>
-
-          <div className="flex items-start gap-3">
+      <div className="bracket-scroll overflow-x-auto pb-1">
+        <div className="w-full min-w-max max-w-none md:min-w-full">
+          <div className="flex w-full items-start gap-3">
             {columns.map((column, columnIndex) => {
               const badge = columnIndex === columns.length - 1 ? getRoundBadge(column.label) : null
 
               return (
                 <div
                   key={column.key}
-                  className={`flex w-[191px] flex-shrink-0 flex-col rounded-[18px] border border-white/7 bg-[linear-gradient(180deg,rgba(255,255,255,0.035)_0%,rgba(255,255,255,0.02)_100%)] py-2.5 ${
+                  className={`flex min-w-[191px] flex-1 flex-col rounded-[18px] border border-white/7 bg-[linear-gradient(180deg,rgba(255,255,255,0.035)_0%,rgba(255,255,255,0.02)_100%)] py-2.5 ${
                     columnIndex === 0 ? 'pl-0 pr-2.5' : 'px-2.5'
                   }`}
                 >
@@ -1603,9 +1597,6 @@ export default async function LigaPage({ params }: PageProps) {
   const visibleSecondaryGroups = secondaryGroups.filter(
     (group) => !isDerivedTableGroup(group.name)
   )
-  const zoneAStandings = getZoneRows(primaryGroups, 'a')
-  const zoneBStandings = getZoneRows(primaryGroups, 'b')
-  const showLigaProfesionalBracket = tournament.key === 'argentina-liga-profesional'
   const baseRows = primaryGroups.flatMap((group) => group.rows)
   const annualTable = tournament.showAnnualTable ? buildAnnualTable(baseRows) : []
   if (!promedioTable.length && tournament.showPromedios) {
@@ -1630,7 +1621,9 @@ export default async function LigaPage({ params }: PageProps) {
   }
   const knockoutRounds = buildKnockoutRounds(fixtures, resolvedTournament?.leagueId ?? null)
   const { blocks: currentRoundBlocks, initialIndex: currentRoundInitialIndex } =
-    getRoundBlocks(fixtures, resolvedTournament?.leagueId ?? null)
+    getRoundBlocks(fixtures, resolvedTournament?.leagueId ?? null, {
+      includeFinalPhaseRounds: tournament.key === 'argentina-liga-profesional',
+    })
   const compactGroups = primaryGroups.length === 2
   const annualRelegatedTeamId = getAnnualRelegatedTeamId(annualTable)
   const promedioRelegatedTeamId = getPromediosRelegatedTeamId(
@@ -1687,7 +1680,7 @@ export default async function LigaPage({ params }: PageProps) {
             </div>
           ) : null}
 
-          {knockoutRounds.length && tournament.key !== 'argentina-liga-profesional' ? (
+          {knockoutRounds.length ? (
             <BracketView
               rounds={knockoutRounds}
               useCopaArgentinaTree={tournament.key === 'argentina-copa-argentina'}
@@ -1737,13 +1730,6 @@ export default async function LigaPage({ params }: PageProps) {
               </p>
             </SectionCard>
           )}
-
-          {showLigaProfesionalBracket ? (
-            <PlayoffBracket
-              zoneAStandings={zoneAStandings}
-              zoneBStandings={zoneBStandings}
-            />
-          ) : null}
 
           {tournament.key === 'argentina-liga-profesional' && knockoutRounds.length ? (
             <FinalPhasesSection
