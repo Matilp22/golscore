@@ -1,5 +1,4 @@
-import Image from 'next/image'
-
+import SafeImage from '@/frontend/components/SafeImage'
 import PlayerIncidentsList from '@/frontend/components/PlayerIncidentsList'
 import {
   ApiFootballError,
@@ -70,9 +69,9 @@ function InfoRow({
   value: string
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-white/6 py-3 last:border-b-0">
-      <span className="text-sm text-[#8d98a7]">{label}</span>
-      <span className="text-right text-sm font-semibold text-white">{value}</span>
+    <div className="flex items-center justify-between gap-2 border-b border-white/6 py-2 last:border-b-0">
+      <span className="text-xs text-[#8d98a7]">{label}</span>
+      <span className="text-right text-xs font-semibold text-white">{value}</span>
     </div>
   )
 }
@@ -87,7 +86,7 @@ function SummaryStat({
   accent: string
 }) {
   return (
-    <div className="rounded-xl border border-white/6 bg-[#161a20] px-2 py-3 md:px-4">
+    <div className="rounded-xl border border-white/6 bg-[#161a20] px-2 py-2.5 md:px-3">
       <p className="text-[11px] uppercase tracking-[0.14em] text-[#8d98a7]">{label}</p>
       <p className={`mt-1 text-xl font-black ${accent}`}>{value}</p>
     </div>
@@ -156,17 +155,15 @@ export default async function JugadorPage({ params, searchParams }: PageProps) {
             <div className="flex flex-col gap-3 px-2 py-3 md:flex-row md:items-center md:justify-between md:gap-4 md:px-4 md:py-5">
               <div className="flex items-center gap-4">
                 <div className="flex h-20 w-20 items-center justify-center overflow-hidden">
-                  {player.photo ? (
-                    <Image
-                      src={player.photo}
-                      alt={player.name}
-                      width={80}
-                      height={80}
-                      className="h-20 w-20 object-cover"
-                    />
-                  ) : (
-                    <span className="text-sm text-[#6f7a87]">Sin foto</span>
-                  )}
+                  <SafeImage
+                    src={player.photo}
+                    alt={player.name}
+                    imageType="player"
+                    width={80}
+                    height={80}
+                    className="h-20 w-20 rounded-full object-cover"
+                    fallbackClassName="h-20 w-20 rounded-full"
+                  />
                 </div>
 
                 <div>
@@ -183,7 +180,7 @@ export default async function JugadorPage({ params, searchParams }: PageProps) {
                 </div>
               </div>
 
-              <div className="grid gap-3 text-sm md:grid-cols-3">
+              <div className="grid gap-2 text-sm md:grid-cols-3">
                 <SummaryStat label="Goles" value={statistics.goals} accent="text-[#7ff0b2]" />
                 <SummaryStat
                   label="Asistencias"
@@ -202,11 +199,11 @@ export default async function JugadorPage({ params, searchParams }: PageProps) {
           <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
             <aside className="space-y-4">
               <div className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
-                <div className="border-b border-white/6 bg-[#13181d] px-2 py-3 md:px-4">
+                <div className="border-b border-white/6 bg-[#13181d] px-2 py-2 md:px-3">
                   <h2 className="text-base font-bold text-white">Ficha</h2>
                 </div>
 
-                <div className="px-2 py-1 md:px-4">
+                <div className="px-2 py-1 md:px-3">
                   <InfoRow label="Edad" value={String(player.age || 'No disponible')} />
                   <InfoRow label="Nacionalidad" value={player.nationality || 'No disponible'} />
                   <InfoRow label="Nacimiento" value={formatDate(player.birthDate)} />
@@ -224,11 +221,11 @@ export default async function JugadorPage({ params, searchParams }: PageProps) {
               </div>
 
               <div className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
-                <div className="border-b border-white/6 bg-[#13181d] px-2 py-3 md:px-4">
+                <div className="border-b border-white/6 bg-[#13181d] px-2 py-2 md:px-3">
                   <h2 className="text-base font-bold text-white">Temporada</h2>
                 </div>
 
-                <div className="px-2 py-1 md:px-4">
+                <div className="px-2 py-1 md:px-3">
                   <InfoRow label="Competencia" value={league?.name || 'No disponible'} />
                   <InfoRow label="País" value={league?.country || 'No disponible'} />
                   <InfoRow label="Apariciones" value={String(statistics.appearances)} />

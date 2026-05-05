@@ -1,5 +1,5 @@
-import Image from 'next/image'
 import Link from 'next/link'
+import SafeImage from '@/frontend/components/SafeImage'
 import type { MatchBroadcaster, MatchGoalScorer, MatchGoalScorers } from '@/lib/api-football'
 import { formatEventMinute } from '@/shared/utils/event-minute'
 
@@ -56,17 +56,15 @@ function BroadcastBadge({
 
   return (
     <div className={`flex min-w-0 items-center gap-1.5 text-[10px] font-semibold text-[#aab6c4] ${className}`}>
-      {logoUrl ? (
-        <Image
-          src={logoUrl}
-          alt={label}
-          width={16}
-          height={16}
-          className="h-4 w-4 shrink-0 object-contain"
-        />
-      ) : (
-        <span className="h-2 w-2 shrink-0 rounded-sm bg-[#7ff0b2]/80" aria-hidden="true" />
-      )}
+      <SafeImage
+        src={logoUrl}
+        alt={label}
+        imageType="broadcast"
+        width={16}
+        height={16}
+        className="h-4 w-4 shrink-0 object-contain"
+        fallbackClassName="h-3 w-3 shrink-0"
+      />
       <span className="min-w-0 truncate">{label}</span>
     </div>
   )
@@ -83,11 +81,15 @@ function TeamBadge({
 }) {
   const logoNode = (
     <div className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden">
-      {logo ? (
-        <Image src={logo} alt={name} width={20} height={20} className="h-5 w-5 object-contain" />
-      ) : (
-        <span className="h-3.5 w-2.5 bg-[#6f7884] [clip-path:polygon(50%_0,92%_16%,84%_72%,50%_100%,16%_72%,8%_16%)]" />
-      )}
+      <SafeImage
+        src={logo}
+        alt={name}
+        imageType="team"
+        width={20}
+        height={20}
+        className="h-5 w-5 object-contain"
+        fallbackClassName="h-4 w-3"
+      />
     </div>
   )
 

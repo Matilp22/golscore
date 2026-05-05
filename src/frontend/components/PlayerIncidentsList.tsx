@@ -132,49 +132,49 @@ export default function PlayerIncidentsList({
 
   return (
     <div className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
-      <div className="border-b border-white/6 bg-[#13181d] px-2 py-3 md:px-4">
-        <div className="flex items-center justify-between gap-3">
+      <div className="border-b border-white/6 bg-[#13181d] px-2 py-2 md:px-3">
+        <div className="flex items-center justify-between gap-2">
           <div>
             <h2 className="text-base font-bold text-white">Partidos con incidencias</h2>
-            <p className="mt-1 text-sm text-[#8d98a7]">
+            <p className="mt-0.5 text-xs text-[#8d98a7]">
               Encuentros donde registró {statTypeLabels[statType]}.
             </p>
           </div>
-          <span className="text-[11px] uppercase tracking-[0.16em] text-[#8d98a7]">
+          <span className="text-[10px] uppercase tracking-[0.14em] text-[#8d98a7]">
             {matches.length} partidos
           </span>
         </div>
       </div>
 
       {loading ? (
-        <div className="px-2 py-5 text-sm text-[#8d98a7] md:px-4">Buscando incidencias del jugador...</div>
+        <div className="px-2 py-4 text-xs text-[#8d98a7] md:px-3">Buscando incidencias del jugador...</div>
       ) : error ? (
-        <div className="px-2 py-5 text-sm text-[#ffb1b1] md:px-4">{error}</div>
+        <div className="px-2 py-4 text-xs text-[#ffb1b1] md:px-3">{error}</div>
       ) : matches.length ? (
-        <div className="space-y-3 p-2 md:p-4">
+        <div className="space-y-2 p-2 md:p-3">
           {matches.map((match) => (
             <Link
               key={match.fixtureId}
               href={`/partido/${match.fixtureId}`}
-              className="block rounded-2xl border border-white/6 bg-[#151b22] px-2 py-3 transition duration-300 ease-out hover:-translate-y-0.5 hover:border-white/12 hover:bg-[#19212a] md:px-4 md:py-4"
+              className="block rounded-2xl border border-white/6 bg-[#151b22] px-2 py-2.5 transition duration-300 ease-out hover:-translate-y-0.5 hover:border-white/12 hover:bg-[#19212a] md:px-3"
             >
-              <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7ff0b2]">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7ff0b2]">
                     {translateRoundName(match.round, tournamentName)}
                   </p>
-                  <p className="mt-1 text-base font-semibold text-white">
+                  <p className="mt-0.5 text-[13px] font-semibold text-white">
                     {match.home} {match.goalsHome ?? '-'} - {match.goalsAway ?? '-'} {match.away}
                   </p>
                 </div>
-                <p className="text-xs text-[#8d98a7]">{formatDate(match.date)}</p>
+                <p className="text-[11px] text-[#8d98a7]">{formatDate(match.date)}</p>
               </div>
 
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mt-2 flex flex-wrap gap-1.5">
                 {match.events.map((event, index) => (
                   <span
                     key={`${match.fixtureId}-${index}`}
-                    className="inline-flex rounded-full border border-white/8 bg-[#0f1317] px-3 py-1 text-xs font-semibold text-[#dce5ef]"
+                    className="inline-flex rounded-full border border-white/8 bg-[#0f1317] px-2 py-0.5 text-[11px] font-semibold text-[#dce5ef]"
                   >
                     {event.label}
                     {event.minute !== null && event.minute !== undefined
@@ -187,7 +187,7 @@ export default function PlayerIncidentsList({
           ))}
         </div>
       ) : (
-        <div className="px-2 py-5 text-sm text-[#8d98a7] md:px-4">
+        <div className="px-2 py-4 text-xs text-[#8d98a7] md:px-3">
           No se encontraron partidos con ese registro en este torneo.
         </div>
       )}

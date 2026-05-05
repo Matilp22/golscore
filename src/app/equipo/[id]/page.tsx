@@ -1,4 +1,4 @@
-import Image from 'next/image'
+import SafeImage from '@/frontend/components/SafeImage'
 
 import {
   ApiFootballError,
@@ -42,35 +42,33 @@ function TeamInfoRow({
   value: string
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-white/6 py-3 last:border-b-0">
-      <span className="text-sm text-[#8d98a7]">{label}</span>
-      <span className="text-right text-sm font-semibold text-white">{value}</span>
+    <div className="flex items-center justify-between gap-2 border-b border-white/6 py-2 last:border-b-0">
+      <span className="text-xs text-[#8d98a7]">{label}</span>
+      <span className="text-right text-xs font-semibold text-white">{value}</span>
     </div>
   )
 }
 
 function PlayerCard({ player }: { player: TeamSquadPlayer }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-white/6 bg-[#161a20] px-3 py-3">
+    <div className="flex items-center gap-2.5 rounded-xl border border-white/6 bg-[#161a20] px-2.5 py-2">
       <div className="flex h-12 w-12 items-center justify-center overflow-hidden">
-        {player.photo ? (
-          <Image
-            src={player.photo}
-            alt={player.name || 'Jugador'}
-            width={48}
-            height={48}
-            className="h-12 w-12 object-cover"
-          />
-        ) : (
-          <span className="text-xs text-[#6f7a87]">Sin foto</span>
-        )}
+        <SafeImage
+          src={player.photo}
+          alt={player.name || 'Jugador'}
+          imageType="player"
+          width={48}
+          height={48}
+          className="h-12 w-12 rounded-full object-cover"
+          fallbackClassName="h-12 w-12 rounded-full"
+        />
       </div>
 
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-white">
           {player.name || 'Jugador'}
         </p>
-        <div className="mt-1 flex flex-wrap gap-2 text-xs text-[#8d98a7]">
+        <div className="mt-0.5 flex flex-wrap gap-1.5 text-[11px] text-[#8d98a7]">
           <span>N° {player.number ?? '-'}</span>
           <span>Edad {player.age ?? '-'}</span>
         </div>
@@ -132,17 +130,15 @@ export default async function EquipoPage({ params }: PageProps) {
           <div className="flex flex-col gap-3 px-2 py-3 md:flex-row md:items-center md:justify-between md:gap-4 md:px-4 md:py-5">
             <div className="flex items-center gap-4">
               <div className="flex h-20 w-20 items-center justify-center overflow-hidden">
-                {team.logo ? (
-                  <Image
-                    src={team.logo}
-                    alt={team.name}
-                    width={80}
-                    height={80}
-                    className="h-20 w-20 object-contain"
-                  />
-                ) : (
-                  <span className="text-sm text-[#6f7a87]">Sin logo</span>
-                )}
+                <SafeImage
+                  src={team.logo}
+                  alt={team.name}
+                  imageType="team"
+                  width={80}
+                  height={80}
+                  className="h-20 w-20 object-contain"
+                  fallbackClassName="h-16 w-14"
+                />
               </div>
 
               <div>
@@ -158,16 +154,16 @@ export default async function EquipoPage({ params }: PageProps) {
               </div>
             </div>
 
-            <div className="grid gap-3 text-sm md:grid-cols-3">
-              <div className="rounded-xl border border-white/6 bg-[#161a20] px-2 py-3 md:px-4">
+            <div className="grid gap-2 text-sm md:grid-cols-3">
+              <div className="rounded-xl border border-white/6 bg-[#161a20] px-2 py-2.5 md:px-3">
                 <p className="text-[11px] uppercase tracking-[0.14em] text-[#8d98a7]">Fundado</p>
                 <p className="mt-1 font-semibold text-white">{team.founded || 'No disponible'}</p>
               </div>
-              <div className="rounded-xl border border-white/6 bg-[#161a20] px-2 py-3 md:px-4">
+              <div className="rounded-xl border border-white/6 bg-[#161a20] px-2 py-2.5 md:px-3">
                 <p className="text-[11px] uppercase tracking-[0.14em] text-[#8d98a7]">Código</p>
                 <p className="mt-1 font-semibold text-white">{team.code || 'No disponible'}</p>
               </div>
-              <div className="rounded-xl border border-white/6 bg-[#161a20] px-2 py-3 md:px-4">
+              <div className="rounded-xl border border-white/6 bg-[#161a20] px-2 py-2.5 md:px-3">
                 <p className="text-[11px] uppercase tracking-[0.14em] text-[#8d98a7]">Estadio</p>
                 <p className="mt-1 font-semibold text-white">{venue?.name || 'No disponible'}</p>
               </div>
@@ -178,11 +174,11 @@ export default async function EquipoPage({ params }: PageProps) {
         <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
           <aside className="space-y-4">
             <div className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
-              <div className="border-b border-white/6 bg-[#13181d] px-2 py-3 md:px-4">
+              <div className="border-b border-white/6 bg-[#13181d] px-2 py-2 md:px-3">
                 <h2 className="text-base font-bold text-white">Ficha</h2>
               </div>
 
-              <div className="px-2 py-1 md:px-4">
+              <div className="px-2 py-1 md:px-3">
                 <TeamInfoRow label="País" value={team.country || 'No disponible'} />
                 <TeamInfoRow label="Fundación" value={String(team.founded || 'No disponible')} />
                 <TeamInfoRow label="Estadio" value={venue?.name || 'No disponible'} />
@@ -194,17 +190,19 @@ export default async function EquipoPage({ params }: PageProps) {
 
             {venue?.image ? (
               <div className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
-                <div className="border-b border-white/6 bg-[#13181d] px-2 py-3 md:px-4">
+                <div className="border-b border-white/6 bg-[#13181d] px-2 py-2 md:px-3">
                   <h2 className="text-base font-bold text-white">Estadio</h2>
                 </div>
 
-                <div className="p-2 md:p-4">
-                  <Image
+                <div className="p-2 md:p-3">
+                  <SafeImage
                     src={venue.image}
                     alt={venue.name || 'Estadio'}
+                    imageType="venue"
                     width={600}
                     height={340}
                     className="h-auto w-full rounded-xl object-cover"
+                    fallbackClassName="h-44 w-full rounded-xl"
                   />
                 </div>
               </div>
@@ -213,27 +211,27 @@ export default async function EquipoPage({ params }: PageProps) {
 
           <main className="space-y-4">
             <div className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
-              <div className="border-b border-white/6 bg-[#13181d] px-2 py-3 md:px-4">
+              <div className="border-b border-white/6 bg-[#13181d] px-2 py-2 md:px-3">
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="text-base font-bold text-white">Plantel</h2>
-                  <span className="text-[11px] uppercase tracking-[0.16em] text-[#8d98a7]">
+                  <span className="text-[10px] uppercase tracking-[0.14em] text-[#8d98a7]">
                     {squad.length} jugadores
                   </span>
                 </div>
               </div>
 
               {groupedSquad.length ? (
-                <div className="space-y-3 p-2 md:space-y-4 md:p-4">
+                <div className="space-y-2.5 p-2 md:p-3">
                   {groupedSquad.map((group) => (
-                    <section key={group.key} className="space-y-3">
-                      <div className="flex items-center gap-3">
-                        <div className="h-3 w-3 rounded-full bg-[#7ff0b2]" />
+                    <section key={group.key} className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <div className="h-2.5 w-2.5 rounded-full bg-[#7ff0b2]" />
                         <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-white">
                           {group.title}
                         </h3>
                       </div>
 
-                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
                         {group.players.map((player) => (
                           <PlayerCard key={player.id || `${group.key}-${player.name}`} player={player} />
                         ))}

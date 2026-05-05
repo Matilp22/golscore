@@ -11,8 +11,8 @@
 } from '@/lib/api-football'
 import AutoRefresh from '@/frontend/components/AutoRefresh'
 import FormationTeamPanel from '@/frontend/components/FormationTeamPanel'
+import SafeImage from '@/frontend/components/SafeImage'
 import { formatEventMinute } from '@/shared/utils/event-minute'
-import Image from 'next/image'
 import Link from 'next/link'
 
 type PageProps = {
@@ -730,17 +730,15 @@ function TeamLogo({
 
   return (
     <div className={`flex ${classes} items-center justify-center overflow-hidden`}>
-      {logo ? (
-        <Image
-          src={logo}
-          alt={name}
-          width={size === 'sm' ? 32 : 64}
-          height={size === 'sm' ? 32 : 64}
-          className={`${classes} object-contain`}
-        />
-      ) : (
-        <span className="text-xs text-[#6f7a87]">â€¢</span>
-      )}
+      <SafeImage
+        src={logo}
+        alt={name}
+        imageType="team"
+        width={size === 'sm' ? 32 : 64}
+        height={size === 'sm' ? 32 : 64}
+        className={`${classes} object-contain`}
+        fallbackClassName={size === 'sm' ? 'h-7 w-6' : 'h-10 w-8 md:h-14 md:w-12'}
+      />
     </div>
   )
 }
@@ -799,9 +797,9 @@ function InfoRow({
   value: string
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-white/6 py-3 last:border-b-0">
-      <span className="text-sm text-[#8d98a7]">{label}</span>
-      <span className="text-right text-sm font-semibold text-[#f3f6fa]">{value}</span>
+    <div className="flex items-center justify-between gap-2 border-b border-white/6 py-2 last:border-b-0">
+      <span className="text-xs text-[#8d98a7]">{label}</span>
+      <span className="text-right text-xs font-semibold text-[#f3f6fa]">{value}</span>
     </div>
   )
 }
@@ -1384,17 +1382,15 @@ export default async function PartidoDetallePage({ params }: PageProps) {
 
               {broadcastLabel ? (
                 <div className="flex max-w-full items-center gap-1.5 text-[10px] font-semibold text-[#dce5ef] md:text-xs">
-                  {headerBroadcastLogo ? (
-                    <Image
-                      src={headerBroadcastLogo}
-                      alt={broadcastLabel}
-                      width={18}
-                      height={18}
-                      className="h-[18px] w-[18px] shrink-0 object-contain"
-                    />
-                  ) : (
-                    <span className="h-2 w-2 shrink-0 rounded-sm bg-[#7ff0b2]/80" aria-hidden="true" />
-                  )}
+                  <SafeImage
+                    src={headerBroadcastLogo}
+                    alt={broadcastLabel}
+                    imageType="broadcast"
+                    width={18}
+                    height={18}
+                    className="h-[18px] w-[18px] shrink-0 object-contain"
+                    fallbackClassName="h-3 w-3 shrink-0"
+                  />
                   <span className="truncate">TV: {broadcastLabel}</span>
                 </div>
               ) : null}
@@ -1465,7 +1461,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
 
               {events.length ? (
                 <div>
-                  <div className="grid grid-cols-[1fr_56px_1fr] border-b border-white/6 bg-[#12171c] px-2 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8d98a7] md:grid-cols-[1fr_72px_1fr] md:px-4">
+                  <div className="grid grid-cols-[1fr_56px_1fr] border-b border-white/6 bg-[#12171c] px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8d98a7] md:grid-cols-[1fr_72px_1fr] md:px-3">
                     <div>{homeTeam.name}</div>
                     <div className="text-center">Min</div>
                     <div className="text-right">{awayTeam.name}</div>
@@ -1483,7 +1479,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                     return (
                       <div
                         key={`${event.time?.elapsed || 'x'}-${event.time?.extra || 0}-${index}`}
-                        className="grid grid-cols-[1fr_56px_1fr] items-center border-b border-white/6 px-2 py-3 last:border-b-0 md:grid-cols-[1fr_72px_1fr] md:px-4"
+                        className="grid grid-cols-[1fr_56px_1fr] items-center border-b border-white/6 px-2 py-2 last:border-b-0 md:grid-cols-[1fr_72px_1fr] md:px-3"
                       >
                         <div className="min-w-0 pr-3">
                           {isHome ? (
@@ -1492,10 +1488,10 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                                 <EventIcon kind={style.kind} />
                               </span>
                               <div className="min-w-0">
-                                <p className="truncate text-sm font-semibold text-white">
+                                <p className="truncate text-[13px] font-semibold text-white">
                                   {getEventPrimary(event)}
                                 </p>
-                                <p className="truncate text-xs text-[#8d98a7]">
+                                <p className="truncate text-[11px] text-[#8d98a7]">
                                   {getEventSecondary(event)}
                                 </p>
                               </div>
@@ -1504,7 +1500,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                         </div>
 
                         <div className="text-center">
-                          <span className={`inline-flex rounded-md border px-2 py-1 text-[11px] font-semibold ${style.badge}`}>
+                          <span className={`inline-flex rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${style.badge}`}>
                             {minuteLabel}
                           </span>
                         </div>
@@ -1513,10 +1509,10 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                           {isAway ? (
                             <div className="flex items-center justify-end gap-2 text-right">
                               <div className="min-w-0">
-                                <p className="truncate text-sm font-semibold text-white">
+                                <p className="truncate text-[13px] font-semibold text-white">
                                   {getEventPrimary(event)}
                                 </p>
-                                <p className="truncate text-xs text-[#8d98a7]">
+                                <p className="truncate text-[11px] text-[#8d98a7]">
                                   {getEventSecondary(event)}
                                 </p>
                               </div>
@@ -1628,7 +1624,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
               </div>
 
               {homeStats.length && awayStats.length ? (
-                <div className="space-y-3 px-2 py-3 md:px-4 md:py-4">
+                <div className="space-y-2 px-2 py-2 md:px-3 md:py-3">
                   {homeStats.map((stat, index) => {
                     const awayValue = awayStats[index]?.value
                     const homeNumber = parseStatNumber(stat.value)
@@ -1639,16 +1635,16 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                     return (
                       <div
                         key={`${stat.type}-${index}`}
-                        className="rounded-xl border border-white/6 bg-[#13181d] px-3 py-3"
+                        className="rounded-xl border border-white/6 bg-[#13181d] px-2.5 py-2"
                       >
-                        <div className="mb-2 flex items-center justify-between gap-3">
-                          <span className="text-[15px] font-extrabold text-white">
+                        <div className="mb-1.5 flex items-center justify-between gap-2">
+                          <span className="text-sm font-extrabold text-white">
                             {formatStatValue(stat.value)}
                           </span>
-                          <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#8d98a7]">
+                          <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#8d98a7]">
                             {translateStatType(stat.type)}
                           </span>
-                          <span className="text-[15px] font-extrabold text-white">
+                          <span className="text-sm font-extrabold text-white">
                             {formatStatValue(awayValue)}
                           </span>
                         </div>

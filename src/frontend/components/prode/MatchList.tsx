@@ -103,7 +103,7 @@ export default function MatchList({
     <section className="w-full min-w-0 space-y-3">
       {groups.map((group) => (
         <div key={group.key} className="w-full min-w-0 overflow-hidden rounded-2xl border border-white/8 bg-[#10151a]/95 shadow-[0_10px_24px_rgba(0,0,0,0.12)]">
-          <div className="border-b border-white/7 bg-[#121820] px-3 py-2.5 sm:px-4">
+          <div className="border-b border-white/7 bg-[#121820] px-3 py-2 sm:px-4">
             <h3 className="text-sm font-black text-white">
               {group.label}
             </h3>

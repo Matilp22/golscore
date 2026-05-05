@@ -155,19 +155,19 @@ export default function FormationTeamPanel({
         </button>
       </div>
 
-      <div className="mt-3 rounded-xl border border-white/6 bg-[#161a20] px-2 py-3 md:mt-4 md:px-3">
+      <div className="mt-2 rounded-xl border border-white/6 bg-[#161a20] px-2 py-2 md:mt-3 md:px-3">
         <p className="text-[11px] uppercase tracking-wide text-[#8d98a7]">DT</p>
         <p className="mt-1 text-sm font-semibold text-white">
           {coachName || 'No disponible'}
         </p>
       </div>
 
-      <div className="mt-3 space-y-2 md:mt-4">
+      <div className="mt-2 space-y-1.5 md:mt-3">
         {players.length ? (
           players.map((player) => (
             <div
               key={player.id}
-              className={`flex items-center gap-2 rounded-xl border border-white/6 bg-[#161a20] px-2 py-2 md:gap-3 md:px-3 ${
+              className={`flex items-center gap-2 rounded-xl border border-white/6 bg-[#161a20] px-2 py-1.5 md:gap-2.5 md:px-3 ${
                 align === 'right' ? 'flex-row-reverse text-right' : ''
               }`}
             >
@@ -181,7 +181,7 @@ export default function FormationTeamPanel({
               </div>
 
               <div className={`min-w-0 flex-1 ${align === 'right' ? 'text-right' : 'text-left'}`}>
-                <p className="truncate text-sm font-semibold text-white">
+                <p className="truncate text-[13px] font-semibold text-white">
                   {player.name}
                 </p>
                 {player.replacedPlayerName && player.substitutionLabel ? (

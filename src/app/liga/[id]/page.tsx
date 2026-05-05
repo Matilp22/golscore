@@ -1,10 +1,10 @@
-import Image from 'next/image'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 
 import CurrentRoundNavigator from '@/frontend/components/CurrentRoundNavigator'
 import CopaArgentinaMatchList from '@/frontend/components/CopaArgentinaMatchList'
 import LeaderListInteractive from '@/frontend/components/LeaderListInteractive'
+import SafeImage from '@/frontend/components/SafeImage'
 import {
   ApiFootballError,
   getLeagueFixtures,
@@ -864,21 +864,22 @@ function PromediosTable({
   relegatedTeamIds?: Set<string>
 }) {
   const seasons = rows[0]?.seasonValues.map((entry) => entry.season) || []
+  const cellPadding = compact ? 'px-2 py-1.5' : 'px-2.5 py-2'
 
   return (
     <div className="overflow-x-auto">
-      <table className={`min-w-full ${compact ? 'text-[12px]' : 'text-sm'}`}>
+      <table className={`min-w-full ${compact ? 'text-[12px]' : 'text-[13px]'}`}>
         <thead className="text-left text-[#8d98a7]">
           <tr className="border-b border-white/6">
-            <th className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} font-semibold`}>#</th>
-            <th className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} font-semibold`}>Equipos</th>
-            <th className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} text-center font-semibold`}>Prom</th>
-            <th className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} text-center font-semibold`}>Pts</th>
-            <th className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} text-center font-semibold`}>PJ</th>
+            <th className={`${cellPadding} font-semibold`}>#</th>
+            <th className={`${cellPadding} font-semibold`}>Equipos</th>
+            <th className={`${cellPadding} text-center font-semibold`}>Prom</th>
+            <th className={`${cellPadding} text-center font-semibold`}>Pts</th>
+            <th className={`${cellPadding} text-center font-semibold`}>PJ</th>
             {seasons.map((season) => (
               <th
                 key={season}
-                className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} text-center font-semibold`}
+                className={`${cellPadding} text-center font-semibold`}
               >
                 {String(season).slice(-2)}
               </th>
@@ -910,34 +911,34 @@ function PromediosTable({
                 relegatedTeamIds
               )}`}
             >
-              <td className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} font-semibold`}>{row.rank}</td>
-              <td className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'}`}>
-                <div className={`flex items-center ${compact ? 'gap-2' : 'gap-3'}`}>
-                  {row.teamLogo ? (
-                    <Image
-                      src={row.teamLogo}
-                      alt={row.teamName}
-                      width={compact ? 18 : 24}
-                      height={compact ? 18 : 24}
-                      className={`${compact ? 'h-[18px] w-[18px]' : 'h-6 w-6'} object-contain`}
-                    />
-                  ) : null}
+              <td className={`${cellPadding} font-semibold`}>{row.rank}</td>
+              <td className={cellPadding}>
+                <div className={`flex items-center ${compact ? 'gap-1.5' : 'gap-2'}`}>
+                  <SafeImage
+                    src={row.teamLogo}
+                    alt={row.teamName}
+                    imageType="team"
+                    width={compact ? 18 : 24}
+                    height={compact ? 18 : 24}
+                    className={`${compact ? 'h-[18px] w-[18px]' : 'h-6 w-6'} object-contain`}
+                    fallbackClassName={compact ? 'h-4 w-3' : 'h-5 w-4'}
+                  />
                   <span className={`font-medium ${compact ? 'text-[12px]' : ''}`}>{row.teamName}</span>
                 </div>
               </td>
-              <td className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} text-center font-bold`}>
+              <td className={`${cellPadding} text-center font-bold`}>
                 {row.average.toFixed(3)}
               </td>
-              <td className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} text-center font-semibold`}>
+              <td className={`${cellPadding} text-center font-semibold`}>
                 {row.totalPoints}
               </td>
-              <td className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} text-center`}>
+              <td className={`${cellPadding} text-center`}>
                 {row.totalPlayed}
               </td>
               {row.seasonValues.map((seasonValue) => (
                 <td
                   key={`${row.teamId || row.teamName}-${seasonValue.season}`}
-                  className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} text-center`}
+                  className={`${cellPadding} text-center`}
                 >
                   {seasonValue.points}
                 </td>
@@ -1183,13 +1184,13 @@ function SectionCard({
 }) {
   return (
     <section className="w-full overflow-hidden rounded-3xl border border-white/8 bg-[#0f1317]/92">
-      <div className="border-b border-white/6 bg-[#13181d] px-2 py-3 md:px-4">
+      <div className="border-b border-white/6 bg-[#13181d] px-2 py-2 md:px-3">
         <h2 className="text-base font-bold text-white md:text-lg">{title}</h2>
         {subtitle ? (
-          <p className="mt-1 text-sm text-[#8d98a7]">{subtitle}</p>
+          <p className="mt-0.5 text-xs text-[#8d98a7]">{subtitle}</p>
         ) : null}
       </div>
-      <div className="p-2 md:p-4">{children}</div>
+      <div className="p-2 md:p-3">{children}</div>
     </section>
   )
 }
@@ -1207,23 +1208,25 @@ function StandingsTable({
   variant?: StandingsVariant
   relegatedTeamIds?: Set<string>
 }) {
+  const cellPadding = compact ? 'px-2 py-1.5' : 'px-2.5 py-2'
+
   return (
     <div className="overflow-x-auto">
-      <table className={`min-w-full ${compact ? 'text-[12px]' : 'text-sm'}`}>
+      <table className={`min-w-full ${compact ? 'text-[12px]' : 'text-[13px]'}`}>
         <thead className="text-left text-[#8d98a7]">
           <tr className="border-b border-white/6">
-            <th className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} font-semibold`}>Pos</th>
-            <th className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} font-semibold`}>Equipo</th>
-            <th className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} font-semibold text-center`}>PJ</th>
-            <th className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} font-semibold text-center`}>PG</th>
-            <th className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} font-semibold text-center`}>PE</th>
-            <th className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} font-semibold text-center`}>PP</th>
-            <th className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} font-semibold text-center`}>GF</th>
-            <th className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} font-semibold text-center`}>GC</th>
-            <th className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} font-semibold text-center`}>DG</th>
-            <th className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} font-semibold text-center`}>PTS</th>
+            <th className={`${cellPadding} font-semibold`}>Pos</th>
+            <th className={`${cellPadding} font-semibold`}>Equipo</th>
+            <th className={`${cellPadding} font-semibold text-center`}>PJ</th>
+            <th className={`${cellPadding} font-semibold text-center`}>PG</th>
+            <th className={`${cellPadding} font-semibold text-center`}>PE</th>
+            <th className={`${cellPadding} font-semibold text-center`}>PP</th>
+            <th className={`${cellPadding} font-semibold text-center`}>GF</th>
+            <th className={`${cellPadding} font-semibold text-center`}>GC</th>
+            <th className={`${cellPadding} font-semibold text-center`}>DG</th>
+            <th className={`${cellPadding} font-semibold text-center`}>PTS</th>
             {showAverage ? (
-              <th className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} font-semibold text-center`}>Prom.</th>
+              <th className={`${cellPadding} font-semibold text-center`}>Prom.</th>
             ) : null}
           </tr>
         </thead>
@@ -1233,31 +1236,31 @@ function StandingsTable({
               key={`${row.teamId || row.teamName}-${index}`}
               className={`border-b border-l-2 border-white/6 text-[#dce5ef] last:border-b-0 ${getRowAccent(row, index, rows.length, variant, relegatedTeamIds)}`}
             >
-              <td className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} font-semibold`}>{row.rank || index + 1}</td>
-              <td className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'}`}>
-                <div className={`flex items-center ${compact ? 'gap-2' : 'gap-3'}`}>
-                  {row.teamLogo ? (
-                    <Image
-                      src={row.teamLogo}
-                      alt={row.teamName}
-                      width={compact ? 18 : 24}
-                      height={compact ? 18 : 24}
-                      className={`${compact ? 'h-[18px] w-[18px]' : 'h-6 w-6'} object-contain`}
-                    />
-                  ) : null}
+              <td className={`${cellPadding} font-semibold`}>{row.rank || index + 1}</td>
+              <td className={cellPadding}>
+                <div className={`flex items-center ${compact ? 'gap-1.5' : 'gap-2'}`}>
+                  <SafeImage
+                    src={row.teamLogo}
+                    alt={row.teamName}
+                    imageType="team"
+                    width={compact ? 18 : 24}
+                    height={compact ? 18 : 24}
+                    className={`${compact ? 'h-[18px] w-[18px]' : 'h-6 w-6'} object-contain`}
+                    fallbackClassName={compact ? 'h-4 w-3' : 'h-5 w-4'}
+                  />
                   <span className={`font-medium ${compact ? 'text-[12px]' : ''}`}>{row.teamName}</span>
                 </div>
               </td>
-              <td className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} text-center`}>{row.played}</td>
-              <td className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} text-center`}>{row.won}</td>
-              <td className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} text-center`}>{row.drawn}</td>
-              <td className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} text-center`}>{row.lost}</td>
-              <td className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} text-center`}>{row.goalsFor}</td>
-              <td className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} text-center`}>{row.goalsAgainst}</td>
-              <td className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} text-center`}>{row.goalDifference}</td>
-              <td className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} text-center font-bold`}>{row.points}</td>
+              <td className={`${cellPadding} text-center`}>{row.played}</td>
+              <td className={`${cellPadding} text-center`}>{row.won}</td>
+              <td className={`${cellPadding} text-center`}>{row.drawn}</td>
+              <td className={`${cellPadding} text-center`}>{row.lost}</td>
+              <td className={`${cellPadding} text-center`}>{row.goalsFor}</td>
+              <td className={`${cellPadding} text-center`}>{row.goalsAgainst}</td>
+              <td className={`${cellPadding} text-center`}>{row.goalDifference}</td>
+              <td className={`${cellPadding} text-center font-bold`}>{row.points}</td>
               {showAverage ? (
-                <td className={`${compact ? 'px-2 py-2.5' : 'px-3 py-3'} text-center font-semibold`}>
+                <td className={`${cellPadding} text-center font-semibold`}>
                   {formatAverage(row.average || 0)}
                 </td>
               ) : null}
@@ -1368,17 +1371,15 @@ function BracketView({
                                 }`}
                               >
                                 <div className="flex min-w-0 items-center gap-2">
-                                  {team.logo ? (
-                                    <Image
-                                      src={team.logo}
-                                      alt={team.team}
-                                      width={12}
-                                      height={12}
-                                      className="h-[12px] w-[12px] object-contain"
-                                    />
-                                  ) : (
-                                    <span className="h-[12px] w-[12px] rounded-full border border-white/10 bg-white/5" />
-                                  )}
+                                  <SafeImage
+                                    src={team.logo}
+                                    alt={team.team}
+                                    imageType="team"
+                                    width={12}
+                                    height={12}
+                                    className="h-[12px] w-[12px] object-contain"
+                                    fallbackClassName="h-[12px] w-[10px]"
+                                  />
                                   <span className={`truncate text-[10.5px] font-semibold ${team.isPlaceholder ? 'text-[#98a5b3]' : team.isWinner ? 'text-[#7ff0b2]' : 'text-[#edf2f7]'}`}>
                                     {team.team}
                                   </span>
@@ -1551,12 +1552,14 @@ export default async function LigaPage({ params }: PageProps) {
               <div className="flex items-center gap-4">
                 {resolvedTournament?.logo ? (
                   <div className="flex h-16 w-16 items-center justify-center">
-                    <Image
+                    <SafeImage
                       src={resolvedTournament.logo}
                       alt={resolvedTournament.name}
+                      imageType="league"
                       width={56}
                       height={56}
                       className="h-14 w-14 object-contain"
+                      fallbackClassName="h-12 w-10"
                     />
                   </div>
                 ) : null}

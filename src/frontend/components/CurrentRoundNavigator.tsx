@@ -1,9 +1,9 @@
 ﻿'use client'
 
-import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+import SafeImage from '@/frontend/components/SafeImage'
 import type { LeagueFixtureSummary } from '@/lib/api-football'
 import { parseMatchDate } from '@/shared/utils/prediction-lock'
 
@@ -208,15 +208,15 @@ export default function CurrentRoundNavigator({
                     <div className="grid grid-cols-[minmax(0,1fr)_44px_minmax(0,1fr)] items-center gap-1.5">
                       <div className="flex items-center justify-end gap-1.5 text-right">
                         <span className="truncate font-semibold text-[#dce5ef]">{match.home}</span>
-                        {match.homeLogo ? (
-                          <Image
-                            src={match.homeLogo}
-                            alt={match.home}
-                            width={16}
-                            height={16}
-                            className="h-4 w-4 object-contain"
-                          />
-                        ) : null}
+                        <SafeImage
+                          src={match.homeLogo}
+                          alt={match.home}
+                          imageType="team"
+                          width={16}
+                          height={16}
+                          className="h-4 w-4 object-contain"
+                          fallbackClassName="h-3.5 w-3"
+                        />
                       </div>
 
                       <div className="text-center text-sm font-black text-white">
@@ -224,15 +224,15 @@ export default function CurrentRoundNavigator({
                       </div>
 
                       <div className="flex items-center gap-1.5">
-                        {match.awayLogo ? (
-                          <Image
-                            src={match.awayLogo}
-                            alt={match.away}
-                            width={16}
-                            height={16}
-                            className="h-4 w-4 object-contain"
-                          />
-                        ) : null}
+                        <SafeImage
+                          src={match.awayLogo}
+                          alt={match.away}
+                          imageType="team"
+                          width={16}
+                          height={16}
+                          className="h-4 w-4 object-contain"
+                          fallbackClassName="h-3.5 w-3"
+                        />
                         <span className="truncate font-semibold text-[#dce5ef]">{match.away}</span>
                       </div>
                     </div>

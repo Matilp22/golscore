@@ -62,7 +62,6 @@ export default function MatchCard({
     (predictionPoints !== null && predictionPoints !== undefined)
   const pointsLabel =
     predictionPoints === 1 ? '1 pt' : `${Number.isFinite(predictionPoints) ? predictionPoints : 0} pts`
-  const predictionId = prediction?.prediction_id ?? prediction?.id
 
   return (
     <article className="w-full min-w-0 px-3 py-3.5 sm:px-4">
@@ -83,7 +82,6 @@ export default function MatchCard({
       </div>
 
       <PredictionForm
-        key={`${match.id}-${predictionId ?? 'new'}-${prediction?.updatedAt ?? ''}`}
         match={match}
         prediction={prediction}
         draft={draft}

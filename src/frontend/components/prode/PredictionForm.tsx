@@ -1,7 +1,7 @@
 ﻿'use client'
 
-import Image from 'next/image'
 import { useEffect, useMemo, useState, useTransition } from 'react'
+import SafeImage from '@/frontend/components/SafeImage'
 import type { Match, Prediction } from '@/frontend/types/prode'
 import { getMatchPredictionLockState } from '@/frontend/types/prode'
 import { isFinalMatchStatus, isLiveStatus } from '@/shared/utils/match-status'
@@ -36,22 +36,16 @@ function TeamLogo({
   name: string
 }) {
   return (
-    <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/[0.03]">
-      {logoUrl ? (
-        <Image
-          src={logoUrl}
-          alt={name}
-          width={32}
-          height={32}
-          className="h-7 w-7 object-contain"
-        />
-      ) : (
-        <span
-          aria-hidden="true"
-          className="h-5 w-4 bg-[#8d98a7]"
-          style={{ clipPath: 'polygon(50% 0, 92% 16%, 84% 72%, 50% 100%, 16% 72%, 8% 16%)' }}
-        />
-      )}
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden">
+      <SafeImage
+        src={logoUrl}
+        alt={name}
+        imageType="team"
+        width={32}
+        height={32}
+        className="h-7 w-7 object-contain"
+        fallbackClassName="h-6 w-5"
+      />
     </span>
   )
 }
@@ -117,21 +111,26 @@ export default function PredictionForm({
   onSave,
 }: PredictionFormProps) {
   const hasExistingPrediction = Boolean(prediction)
+  const persistedHome = prediction ? toScoreInputValue(prediction.predictedHomeScore) : ''
+  const persistedAway = prediction ? toScoreInputValue(prediction.predictedAwayScore) : ''
   const [home, setHome] = useState(
-    draft?.home ?? (prediction ? toScoreInputValue(prediction.predictedHomeScore) : '')
+    draft?.home ?? persistedHome
   )
   const [away, setAway] = useState(
-    draft?.away ?? (prediction ? toScoreInputValue(prediction.predictedAwayScore) : '')
+    draft?.away ?? persistedAway
   )
   const [message, setMessage] = useState('')
   const [isPending, startTransition] = useTransition()
   const [isEditing, setIsEditing] = useState(!hasExistingPrediction)
   const lockState = useMemo(() => getMatchPredictionLockState(match), [match])
   const locked = lockState.locked
+  const shouldUseDraftValue = isEditing || Boolean(draft)
+  const homeValue = shouldUseDraftValue ? home : persistedHome
+  const awayValue = shouldUseDraftValue ? away : persistedAway
   const actionLabel =
     locked ? 'Bloqueado' : hasExistingPrediction && !isEditing ? 'Editar' : 'Guardar'
-  const predictedHomeScore = home.trim() === '' ? NaN : Number(home)
-  const predictedAwayScore = away.trim() === '' ? NaN : Number(away)
+  const predictedHomeScore = homeValue.trim() === '' ? NaN : Number(homeValue)
+  const predictedAwayScore = awayValue.trim() === '' ? NaN : Number(awayValue)
   const hasValidScores = useMemo(
     () =>
       Number.isInteger(predictedHomeScore) &&
@@ -176,6 +175,8 @@ export default function PredictionForm({
     setMessage('')
 
     if (hasExistingPrediction && !isEditing) {
+      setHome(draft?.home ?? persistedHome)
+      setAway(draft?.away ?? persistedAway)
       setIsEditing(true)
       onEditingChange?.(match.id, true)
       return
@@ -252,7 +253,7 @@ export default function PredictionForm({
           step="1"
           inputMode="numeric"
           disabled={inputsDisabled}
-          value={home}
+          value={homeValue}
           onFocus={() => onEditingChange?.(match.id, true)}
           onChange={(event) => {
             const nextHome = event.target.value
@@ -271,7 +272,7 @@ export default function PredictionForm({
           step="1"
           inputMode="numeric"
           disabled={inputsDisabled}
-          value={away}
+          value={awayValue}
           onFocus={() => onEditingChange?.(match.id, true)}
           onChange={(event) => {
             const nextAway = event.target.value

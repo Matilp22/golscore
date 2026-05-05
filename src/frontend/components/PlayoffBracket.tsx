@@ -1,5 +1,5 @@
-import Image from 'next/image'
 import type { ReactNode } from 'react'
+import SafeImage from '@/frontend/components/SafeImage'
 import type { LeagueStandingRow } from '@/lib/api-football'
 
 type ZoneName = 'Zona A' | 'Zona B'
@@ -190,17 +190,15 @@ function SkeletonBracket() {
 function TeamSlot({ team, score }: { team: PlayoffTeam; score?: number | null }) {
   return (
     <div className="grid min-w-0 grid-cols-[18px_minmax(0,1fr)_22px] items-center gap-1.5 rounded-lg border border-white/7 bg-[#111820]/88 px-2 py-1.5">
-      {team.logo ? (
-        <Image
-          src={team.logo}
-          alt={team.name}
-          width={18}
-          height={18}
-          className="h-[18px] w-[18px] object-contain"
-        />
-      ) : (
-        <span className="h-[18px] w-[15px] bg-[#6f7884] [clip-path:polygon(50%_0,92%_16%,84%_72%,50%_100%,16%_72%,8%_16%)]" />
-      )}
+      <SafeImage
+        src={team.logo}
+        alt={team.name}
+        imageType="team"
+        width={18}
+        height={18}
+        className="h-[18px] w-[18px] object-contain"
+        fallbackClassName="h-[18px] w-[15px]"
+      />
       <div className="min-w-0">
         <p className="truncate text-[12px] font-bold text-white">{team.name}</p>
         <p className="truncate text-[9px] font-semibold uppercase tracking-[0.06em] text-[#8d98a7]">

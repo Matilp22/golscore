@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import LeaderboardTable from '@/frontend/components/prode/LeaderboardTable'
 import MatchFilters from '@/frontend/components/prode/MatchFilters'
 import MatchList from '@/frontend/components/prode/MatchList'
@@ -53,6 +53,8 @@ export default function ProdePanel() {
   const [editingMatchIds, setEditingMatchIds] = useState<Set<string>>(new Set())
   const [predictionDrafts, setPredictionDrafts] = useState<Record<string, { home: string; away: string }>>({})
   const isEditingPrediction = editingMatchIds.size > 0
+  const hasPredictionDrafts = Object.keys(predictionDrafts).length > 0
+  const editingMatchIdsRef = useRef(editingMatchIds)
 
   const predictionsByMatchId = useMemo(() => {
     return new Map(predictions.map((prediction) => [prediction.matchId, prediction]))
@@ -140,6 +142,10 @@ export default function ProdePanel() {
     return predictions.filter((prediction) => visibleMatchesById.has(prediction.matchId))
   }, [predictions, visibleMatchesById])
 
+  useEffect(() => {
+    editingMatchIdsRef.current = editingMatchIds
+  }, [editingMatchIds])
+
   const loadMatches = useCallback(
     async ({ silent = false } = {}) => {
       if (!selectedLeagueId) return false
@@ -154,9 +160,9 @@ export default function ProdePanel() {
         })
 
         setMatches((currentMatches) =>
-          silent && editingMatchIds.size
+          silent && editingMatchIdsRef.current.size
             ? matchesData.map((match) =>
-                editingMatchIds.has(match.id)
+                editingMatchIdsRef.current.has(match.id)
                   ? currentMatches.find((currentMatch) => currentMatch.id === match.id) ?? match
                   : match
               )
@@ -195,7 +201,7 @@ export default function ProdePanel() {
         }
       }
     },
-    [editingMatchIds, selectedLeagueId]
+    [selectedLeagueId]
   )
 
   const loadLeaderboard = useCallback(async () => {
@@ -251,9 +257,9 @@ export default function ProdePanel() {
         const predictionsData = await getMyPredictions({ leagueId: selectedLeagueId })
 
         setPredictions((currentPredictions) =>
-          silent && editingMatchIds.size
+          silent && editingMatchIdsRef.current.size
             ? predictionsData.map((prediction) =>
-                editingMatchIds.has(prediction.matchId)
+                editingMatchIdsRef.current.has(prediction.matchId)
                   ? currentPredictions.find(
                       (currentPrediction) => currentPrediction.matchId === prediction.matchId
                     ) ?? prediction
@@ -269,7 +275,7 @@ export default function ProdePanel() {
         }
       }
     },
-    [editingMatchIds, selectedLeagueId, user]
+    [selectedLeagueId, user]
   )
 
   const { markUpdatedNow } = useAutoRefresh({
@@ -278,10 +284,11 @@ export default function ProdePanel() {
       Boolean(selectedLeagueId) &&
       !isLeaguesLoading &&
       !isMatchesLoading &&
-      !isEditingPrediction,
+      !isEditingPrediction &&
+      !hasPredictionDrafts,
     refreshOnFocus: false,
     onRefresh: async () => {
-      if (isEditingPrediction) return
+      if (isEditingPrediction || hasPredictionDrafts) return
 
       await loadMatches({ silent: true })
 

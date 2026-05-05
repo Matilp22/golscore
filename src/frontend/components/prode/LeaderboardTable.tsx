@@ -33,10 +33,10 @@ function RankingRows({ rows, emptyMessage }: RankingRowsProps) {
       {rows.map((row, index) => (
         <div
           key={row.userId}
-          className="flex min-w-0 items-center justify-between gap-3 px-3 py-3 text-sm transition hover:bg-white/[0.025] sm:px-4"
+          className="flex min-w-0 items-center justify-between gap-2 px-3 py-2 text-xs transition hover:bg-white/[0.025] sm:px-4"
         >
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/8 bg-white/[0.04] text-xs font-black text-[#9adfb8]">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/8 bg-white/[0.04] text-[11px] font-black text-[#9adfb8]">
               {index + 1}
             </span>
             <div className="min-w-0">
@@ -47,7 +47,7 @@ function RankingRows({ rows, emptyMessage }: RankingRowsProps) {
               </p>
             </div>
           </div>
-          <span className="shrink-0 rounded-lg bg-[#13251d] px-2.5 py-1 text-lg font-black text-[#7ff0b2]">
+          <span className="shrink-0 rounded-lg bg-[#13251d] px-2 py-0.5 text-base font-black text-[#7ff0b2]">
             {row.points} pts
           </span>
         </div>

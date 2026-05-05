@@ -1,5 +1,5 @@
-import Image from 'next/image'
 import Link from 'next/link'
+import SafeImage from '@/frontend/components/SafeImage'
 
 type MatchCardProps = {
   id?: number | string
@@ -59,17 +59,15 @@ export default function MatchCard({
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <div className="flex h-7 w-7 items-center justify-center overflow-hidden">
-              {homeLogo ? (
-                <Image
-                  src={homeLogo}
-                  alt={home}
-                  width={28}
-                  height={28}
-                  className="h-7 w-7 object-contain"
-                />
-              ) : (
-                <span>•</span>
-              )}
+              <SafeImage
+                src={homeLogo}
+                alt={home}
+                imageType="team"
+                width={28}
+                height={28}
+                className="h-7 w-7 object-contain"
+                fallbackClassName="h-6 w-5"
+              />
             </div>
             <span className="text-xs font-medium text-white md:text-sm">{home}</span>
           </div>
@@ -81,17 +79,15 @@ export default function MatchCard({
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <div className="flex h-7 w-7 items-center justify-center overflow-hidden">
-              {awayLogo ? (
-                <Image
-                  src={awayLogo}
-                  alt={away}
-                  width={28}
-                  height={28}
-                  className="h-7 w-7 object-contain"
-                />
-              ) : (
-                <span>•</span>
-              )}
+              <SafeImage
+                src={awayLogo}
+                alt={away}
+                imageType="team"
+                width={28}
+                height={28}
+                className="h-7 w-7 object-contain"
+                fallbackClassName="h-6 w-5"
+              />
             </div>
             <span className="text-xs font-medium text-white md:text-sm">{away}</span>
           </div>

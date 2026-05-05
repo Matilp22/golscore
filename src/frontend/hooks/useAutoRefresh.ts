@@ -44,7 +44,7 @@ export function useAutoRefresh({
 
   const refreshNow = useCallback(async () => {
     if (!enabled || !navigator.onLine || !canRefreshAgain()) return
-    if (pauseWhenHidden && document.visibilityState !== 'visible') return
+    if (pauseWhenHidden && (document.hidden || document.visibilityState !== 'visible')) return
 
     lastRefreshAtRef.current = Date.now()
     setIsRefreshing(true)
@@ -81,7 +81,7 @@ export function useAutoRefresh({
     if (!enabled) return
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
+      if (!document.hidden && document.visibilityState === 'visible') {
         void refreshNow()
       }
     }
