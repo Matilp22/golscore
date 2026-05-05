@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import type { Match, Prediction } from '@/frontend/types/prode'
 import { getMatchPredictionLockState } from '@/frontend/types/prode'
+import { isFinalMatchStatus, isLiveStatus } from '@/shared/utils/match-status'
 
 type PredictionFormProps = {
   match: Match
@@ -145,6 +146,12 @@ export default function PredictionForm({
     (!hasExistingPrediction || isEditing) &&
     hasValidScores
   const buttonDisabled = canEnterEditMode ? false : !canSavePrediction
+  const hasRealScore = match.homeScore !== null && match.awayScore !== null
+  const realScoreStatus = isFinalMatchStatus(match.status)
+    ? 'Final'
+    : isLiveStatus(match.status)
+      ? 'En vivo'
+      : 'Real'
 
   useEffect(() => {
     console.debug('[prode/prediction-form] lock check', {
@@ -206,6 +213,18 @@ export default function PredictionForm({
 
   return (
     <div>
+      {hasRealScore ? (
+        <div className="mb-2 flex justify-center">
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/8 bg-white/[0.035] px-3 py-1 text-xs text-[#aab5c1]">
+            <span className={isLiveStatus(match.status) ? 'font-bold text-[#7ff0b2]' : 'font-semibold'}>
+              {realScoreStatus}
+            </span>
+            <span className="font-black text-white">
+              {match.homeScore} - {match.awayScore}
+            </span>
+          </div>
+        </div>
+      ) : null}
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_48px_48px_minmax(0,1fr)] items-center gap-2 md:grid-cols-[minmax(140px,1fr)_58px_24px_58px_minmax(140px,1fr)_104px] md:gap-3">
         <TeamLabel
           name={match.homeTeam?.name ?? 'Local'}

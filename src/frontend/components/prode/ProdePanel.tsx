@@ -38,12 +38,18 @@ export default function ProdePanel() {
   const [matches, setMatches] = useState<Match[]>([])
   const [predictions, setPredictions] = useState<Prediction[]>([])
   const [leaderboard, setLeaderboard] = useState<LeaderboardRow[]>([])
+  const [roundLeaderboard, setRoundLeaderboard] = useState<LeaderboardRow[]>([])
   const [selectedLeagueId, setSelectedLeagueId] = useState<string | null>(null)
   const [selectedRound, setSelectedRound] = useState<string | null>(null)
+  const [selectedLeaderboardRound, setSelectedLeaderboardRound] = useState<string | null>(null)
+  const [isLeaderboardRoundManuallySelected, setIsLeaderboardRoundManuallySelected] =
+    useState(false)
   const [message, setMessage] = useState('')
   const [rankingMessage, setRankingMessage] = useState('')
+  const [roundRankingMessage, setRoundRankingMessage] = useState('')
   const [isLeaguesLoading, setIsLeaguesLoading] = useState(true)
   const [isMatchesLoading, setIsMatchesLoading] = useState(false)
+  const [isRoundLeaderboardLoading, setIsRoundLeaderboardLoading] = useState(false)
   const [editingMatchIds, setEditingMatchIds] = useState<Set<string>>(new Set())
   const [predictionDrafts, setPredictionDrafts] = useState<Record<string, { home: string; away: string }>>({})
   const isEditingPrediction = editingMatchIds.size > 0
@@ -209,6 +215,31 @@ export default function ProdePanel() {
     }
   }, [selectedLeagueId])
 
+  const loadRoundLeaderboard = useCallback(async () => {
+    if (!selectedLeagueId || !selectedLeaderboardRound) {
+      setRoundLeaderboard([])
+      setIsRoundLeaderboardLoading(false)
+      return
+    }
+
+    setIsRoundLeaderboardLoading(true)
+
+    try {
+      const leaderboardData = await getLeaderboard({
+        leagueId: selectedLeagueId,
+        round: selectedLeaderboardRound,
+      })
+
+      setRoundLeaderboard(leaderboardData)
+      setRoundRankingMessage('')
+    } catch {
+      setRoundLeaderboard([])
+      setRoundRankingMessage('Todavía no hay puntos para esta fecha.')
+    } finally {
+      setIsRoundLeaderboardLoading(false)
+    }
+  }, [selectedLeagueId, selectedLeaderboardRound])
+
   const loadPredictions = useCallback(
     async ({ silent = false } = {}) => {
       if (!user || !selectedLeagueId) {
@@ -256,6 +287,7 @@ export default function ProdePanel() {
 
       await Promise.all([
         loadLeaderboard(),
+        loadRoundLeaderboard(),
         loadPredictions({ silent: true }),
       ])
     },
@@ -334,6 +366,41 @@ export default function ProdePanel() {
   }, [effectiveSelectedRound, matches.length, rounds.length, selectedLeagueId, visibleMatches.length])
 
   useEffect(() => {
+    if (!rounds.length) {
+      setSelectedLeaderboardRound(null)
+      setRoundLeaderboard([])
+      setRoundRankingMessage('')
+      setIsLeaderboardRoundManuallySelected(false)
+      setIsRoundLeaderboardLoading(false)
+      return
+    }
+
+    const fallbackRound = effectiveSelectedRound ?? rounds[0]?.value ?? null
+    const currentStillExists =
+      selectedLeaderboardRound !== null &&
+      rounds.some((round) => round.value === selectedLeaderboardRound)
+
+    if (!currentStillExists) {
+      setSelectedLeaderboardRound(fallbackRound)
+      setIsLeaderboardRoundManuallySelected(false)
+      return
+    }
+
+    if (
+      !isLeaderboardRoundManuallySelected &&
+      fallbackRound &&
+      selectedLeaderboardRound !== fallbackRound
+    ) {
+      setSelectedLeaderboardRound(fallbackRound)
+    }
+  }, [
+    effectiveSelectedRound,
+    isLeaderboardRoundManuallySelected,
+    rounds,
+    selectedLeaderboardRound,
+  ])
+
+  useEffect(() => {
     if (isAuthLoading || !selectedLeagueId) return
 
     void Promise.all([
@@ -341,6 +408,12 @@ export default function ProdePanel() {
       user ? loadPredictions() : Promise.resolve(setPredictions([])),
     ])
   }, [isAuthLoading, loadLeaderboard, loadPredictions, selectedLeagueId, user])
+
+  useEffect(() => {
+    if (!selectedLeagueId || !selectedLeaderboardRound) return
+
+    void loadRoundLeaderboard()
+  }, [loadRoundLeaderboard, selectedLeagueId, selectedLeaderboardRound])
 
   useEffect(() => {
     console.info('[prode-ui-debug]', {
@@ -420,6 +493,7 @@ export default function ProdePanel() {
     const [freshPredictions] = await Promise.all([
       getMyPredictions({ leagueId: selectedLeagueId }),
       loadLeaderboard(),
+      loadRoundLeaderboard(),
     ])
     setPredictions(freshPredictions)
     setMessage('Predicción guardada.')
@@ -480,12 +554,19 @@ export default function ProdePanel() {
               setMatches([])
               setPredictions([])
               setLeaderboard([])
+              setRoundLeaderboard([])
+              setSelectedLeaderboardRound(null)
+              setRoundRankingMessage('')
+              setIsLeaderboardRoundManuallySelected(false)
+              setIsRoundLeaderboardLoading(false)
               setSelectedLeagueId(leagueId)
               setSelectedRound(null)
             }}
             onRoundChange={(round) => {
               setMessage('')
               setSelectedRound(round)
+              setSelectedLeaderboardRound(round)
+              setIsLeaderboardRoundManuallySelected(false)
             }}
           />
           {isLeaguesLoading || isMatchesLoading || isAuthLoading ? (
@@ -514,12 +595,19 @@ export default function ProdePanel() {
         </div>
 
         <div className="w-full min-w-0 space-y-3 md:space-y-4">
-          <LeaderboardTable rows={leaderboard} />
-          {rankingMessage ? (
-            <p className="w-full rounded-2xl border border-white/8 bg-[#10151a]/95 px-3 py-3 text-sm text-[#8d98a7] md:px-4">
-              {rankingMessage}
-            </p>
-          ) : null}
+          <LeaderboardTable
+            rows={leaderboard}
+            roundRows={roundLeaderboard}
+            rounds={rounds}
+            selectedRound={selectedLeaderboardRound}
+            isRoundLoading={isRoundLeaderboardLoading}
+            totalMessage={rankingMessage}
+            roundMessage={roundRankingMessage}
+            onRoundChange={(round) => {
+              setSelectedLeaderboardRound(round)
+              setIsLeaderboardRoundManuallySelected(true)
+            }}
+          />
           <section className="w-full rounded-2xl border border-white/8 bg-[#10151a]/95 shadow-[0_10px_24px_rgba(0,0,0,0.12)]">
             <div className="border-b border-white/7 px-3 py-3 sm:px-4">
               <h2 className="text-lg font-black text-white">Reglas del prode</h2>

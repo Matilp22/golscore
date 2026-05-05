@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { isFinalMatchStatus } from '@/shared/utils/match-status'
+import { normalizeLeagueRound } from '@/shared/utils/league-rounds'
 
 type LeaderboardRow = {
   user_id: string
@@ -20,6 +21,18 @@ type PredictionScoreRow = {
   points: number | null
   exact_hit: boolean | null
   partial_hit: boolean | null
+}
+
+type LeagueRow = {
+  external_id: string | number | null
+}
+
+type LeagueMatchRow = {
+  id: string
+  round: string | number | null
+  status: string | null
+  home_score: number | null
+  away_score: number | null
 }
 
 type ProfileRow = {
@@ -119,14 +132,19 @@ function normalizeRows(rows: LeaderboardRow[], profiles: ProfileRow[]) {
       const partialHits = row.partial_predictions ?? row.partial_hits ?? 0
 
       return {
+        userId: row.user_id,
         user_id: row.user_id,
         username: getDisplayName(row.user_id, profilesById),
         name: getDisplayName(row.user_id, profilesById),
+        totalPoints,
         total_points: totalPoints,
         points: totalPoints,
+        playedPredictions: row.played ?? exactHits + partialHits,
         played: row.played ?? exactHits + partialHits,
+        exactPredictions: exactHits,
         exact_predictions: exactHits,
         exact_hits: exactHits,
+        partialPredictions: partialHits,
         partial_predictions: partialHits,
         partial_hits: partialHits,
       }
@@ -204,11 +222,30 @@ export async function GET(request: Request) {
     const supabase = getSupabaseAdminClient()
     const { searchParams } = new URL(request.url)
     const leagueId = searchParams.get('leagueId')
+    const round = searchParams.get('round')
 
     if (leagueId) {
+      let leagueExternalId: string | number | null = null
+
+      const { data: leagueData, error: leagueError } = await supabase
+        .from('leagues')
+        .select('external_id')
+        .eq('id', leagueId)
+        .maybeSingle()
+
+      if (leagueError) {
+        console.info('[prode/leaderboard] No se pudo leer external_id de liga; se sigue sin normalizacion especifica', {
+          leagueId,
+          code: leagueError.code ?? null,
+          message: leagueError.message,
+        })
+      } else {
+        leagueExternalId = ((leagueData ?? null) as LeagueRow | null)?.external_id ?? null
+      }
+
       const { data: leagueMatchesData, error: leagueMatchesError } = await supabase
         .from('matches')
-        .select('id, status, home_score, away_score')
+        .select('id, round, status, home_score, away_score')
         .eq('league_id', leagueId)
 
       if (leagueMatchesError) {
@@ -223,12 +260,19 @@ export async function GET(request: Request) {
         })
       }
 
-      const matchIds = (leagueMatchesData ?? [])
+      const requestedRound = round
+        ? normalizeLeagueRound(round, leagueExternalId) ?? round
+        : null
+
+      const matchIds = ((leagueMatchesData ?? []) as LeagueMatchRow[])
         .filter(
           (match) =>
             isFinalMatchStatus(match.status) &&
             match.home_score !== null &&
-            match.away_score !== null
+            match.away_score !== null &&
+            (!requestedRound ||
+              normalizeLeagueRound(match.round, leagueExternalId) === requestedRound ||
+              String(match.round ?? '') === round)
         )
         .map((match) => String(match.id))
 
@@ -263,9 +307,11 @@ export async function GET(request: Request) {
 
       console.info('[prode/leaderboard] response debug', {
         leagueId,
+        round,
+        normalizedRound: requestedRound,
         matchesForLeague: matchIds.length,
         predictionScoresRead: scoresData?.length ?? 0,
-        source: 'prediction_scores_by_league',
+        source: requestedRound ? 'prediction_scores_by_league_round' : 'prediction_scores_by_league',
       })
 
       return NextResponse.json({

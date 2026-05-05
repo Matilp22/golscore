@@ -23,15 +23,24 @@ type MatchCardProps = {
 }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat('es-AR', {
+  const date = parseMatchDate(value)
+  const weekday = new Intl.DateTimeFormat('es-AR', {
     timeZone: 'America/Argentina/Buenos_Aires',
     weekday: 'short',
+  }).format(date).replace('.', '')
+  const dayMonth = new Intl.DateTimeFormat('es-AR', {
+    timeZone: 'America/Argentina/Buenos_Aires',
     day: '2-digit',
     month: '2-digit',
+  }).format(date).replace('/', '-')
+  const time = new Intl.DateTimeFormat('es-AR', {
+    timeZone: 'America/Argentina/Buenos_Aires',
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
-  }).format(parseMatchDate(value))
+  }).format(date)
+
+  return `${weekday} ${dayMonth} \u00b7 ${time}`
 }
 
 export default function MatchCard({
@@ -57,9 +66,6 @@ export default function MatchCard({
     <article className="w-full min-w-0 px-3 py-3.5 sm:px-4">
       <div className="mb-3 flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#9adfb8]">
-            {match.league?.name ?? 'Torneo'}
-          </span>
           <span className="rounded-full border border-white/8 bg-white/[0.03] px-2 py-0.5 text-xs text-[#aab5c1]">
             {formatDate(match.matchDate)}
           </span>
