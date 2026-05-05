@@ -35,7 +35,7 @@ function TeamLogo({
   name: string
 }) {
   return (
-    <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden">
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/[0.03]">
       {logoUrl ? (
         <Image
           src={logoUrl}
@@ -70,10 +70,10 @@ function TeamLabel({
     <>
       <TeamLogo logoUrl={logoUrl} name={name} />
       <div className={`min-w-0 ${align === 'right' ? 'text-right' : ''}`}>
-        <p className="break-words text-sm font-black leading-tight text-white md:truncate">
+        <p className="break-words text-sm font-bold leading-tight text-white md:truncate">
           {name}
         </p>
-        <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8d98a7]">
+        <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8d98a7]">
           {role}
         </p>
       </div>
@@ -85,10 +85,10 @@ function TeamLabel({
       {align === 'right' ? (
         <>
           <div className="min-w-0 text-right">
-            <p className="break-words text-sm font-black leading-tight text-white md:truncate">
+            <p className="break-words text-sm font-bold leading-tight text-white md:truncate">
               {name}
             </p>
-            <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8d98a7]">
+            <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8d98a7]">
               {role}
             </p>
           </div>
@@ -206,7 +206,7 @@ export default function PredictionForm({
 
   return (
     <div>
-      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_56px_56px_minmax(0,1fr)] items-center gap-2 md:grid-cols-[minmax(140px,1fr)_64px_28px_64px_minmax(140px,1fr)_112px] md:gap-3">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_48px_48px_minmax(0,1fr)] items-center gap-2 md:grid-cols-[minmax(140px,1fr)_58px_24px_58px_minmax(140px,1fr)_104px] md:gap-3">
         <TeamLabel
           name={match.homeTeam?.name ?? 'Local'}
           logoUrl={match.homeTeam?.logoUrl}
@@ -228,9 +228,9 @@ export default function PredictionForm({
             if (message) setMessage('')
           }}
           aria-label="Pronóstico local"
-          className="h-12 w-full min-w-0 rounded-xl border border-[#c9d1d9] bg-white text-center text-base font-black text-black outline-none focus:border-[#7ff0b2] disabled:bg-[#d8dde3] disabled:text-[#1f2933] disabled:opacity-75 md:h-11"
+          className="h-11 w-full min-w-0 rounded-xl border border-white/10 bg-[#e8eef4] text-center text-base font-black text-[#0b1115] outline-none transition focus:border-[#7ff0b2] focus:ring-2 focus:ring-[#7ff0b2]/20 disabled:bg-[#26303a] disabled:text-[#9aa7b5] disabled:opacity-80"
         />
-        <span className="hidden text-center text-sm font-black text-[#8d98a7] md:block">vs</span>
+        <span className="hidden text-center text-xs font-black uppercase text-[#8d98a7] md:block">vs</span>
         <input
           type="number"
           min="0"
@@ -247,7 +247,7 @@ export default function PredictionForm({
             if (message) setMessage('')
           }}
           aria-label="Pronóstico visitante"
-          className="h-12 w-full min-w-0 rounded-xl border border-[#c9d1d9] bg-white text-center text-base font-black text-black outline-none focus:border-[#7ff0b2] disabled:bg-[#d8dde3] disabled:text-[#1f2933] disabled:opacity-75 md:h-11"
+          className="h-11 w-full min-w-0 rounded-xl border border-white/10 bg-[#e8eef4] text-center text-base font-black text-[#0b1115] outline-none transition focus:border-[#7ff0b2] focus:ring-2 focus:ring-[#7ff0b2]/20 disabled:bg-[#26303a] disabled:text-[#9aa7b5] disabled:opacity-80"
         />
         <TeamLabel
           align="right"
@@ -259,7 +259,7 @@ export default function PredictionForm({
           type="button"
           disabled={buttonDisabled}
           onClick={handleSave}
-          className="col-span-4 h-12 rounded-xl border border-[#25553d] bg-[#163828] px-4 text-sm font-bold text-[#7ff0b2] transition hover:bg-[#1b4330] disabled:cursor-not-allowed disabled:opacity-45 md:col-span-1 md:h-11"
+          className="col-span-4 h-11 rounded-xl border border-[#25553d] bg-[#163828] px-4 text-sm font-bold text-[#7ff0b2] transition hover:bg-[#1b4330] disabled:cursor-not-allowed disabled:opacity-45 md:col-span-1"
         >
           {isPending ? 'Guardando' : actionLabel}
         </button>

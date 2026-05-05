@@ -461,11 +461,11 @@ export default function ProdePanel() {
   )
 
   return (
-    <div className="w-full min-w-0 space-y-4">
+    <div className="w-full min-w-0 space-y-3 md:space-y-4">
       <PointsSummary myRanking={myRanking} predictions={predictions} />
 
-      <div className="grid w-full min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="w-full min-w-0 space-y-4">
+      <div className="grid w-full min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-4">
+        <div className="w-full min-w-0 space-y-3 md:space-y-4">
           <MatchFilters
             leagues={leagues}
             rounds={rounds}
@@ -489,7 +489,7 @@ export default function ProdePanel() {
             }}
           />
           {isLeaguesLoading || isMatchesLoading || isAuthLoading ? (
-            <div className="w-full rounded-2xl border border-white/8 bg-[#111418] p-2 sm:p-3 md:p-4">
+            <div className="w-full rounded-2xl border border-white/8 bg-[#10151a]/95 p-4">
               <h2 className="text-lg font-black text-white">Partidos</h2>
               <p className="mt-2 text-sm text-[#8d98a7]">Cargando partidos...</p>
             </div>
@@ -507,40 +507,39 @@ export default function ProdePanel() {
           )}
 
           {message ? (
-            <div className="w-full rounded-2xl border border-white/8 bg-[#0f1317] px-2 py-3 text-sm text-[#dce7f2] md:px-4">
+            <div className="w-full rounded-2xl border border-white/8 bg-[#10151a]/95 px-3 py-3 text-sm text-[#dce7f2] md:px-4">
               {message}
             </div>
           ) : null}
         </div>
 
-        <div className="w-full min-w-0 space-y-4">
+        <div className="w-full min-w-0 space-y-3 md:space-y-4">
           <LeaderboardTable rows={leaderboard} />
           {rankingMessage ? (
-            <p className="w-full rounded-2xl border border-white/8 bg-[#0f1317] px-2 py-3 text-sm text-[#8d98a7] md:px-4">
+            <p className="w-full rounded-2xl border border-white/8 bg-[#10151a]/95 px-3 py-3 text-sm text-[#8d98a7] md:px-4">
               {rankingMessage}
             </p>
           ) : null}
-          <section className="w-full rounded-2xl border border-white/8 bg-[#111418]">
-            <div className="border-b border-white/8 px-3 py-3 sm:px-4">
+          <section className="w-full rounded-2xl border border-white/8 bg-[#10151a]/95 shadow-[0_10px_24px_rgba(0,0,0,0.12)]">
+            <div className="border-b border-white/7 px-3 py-3 sm:px-4">
               <h2 className="text-lg font-black text-white">Reglas del prode</h2>
             </div>
-            <div className="p-3 sm:p-4">
-              <ul className="space-y-2 text-sm text-[#dce7f2]">
-                <li className="flex gap-2">
-                  <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#7ff0b2]" />
-                  <span>Resultado exacto: 3 puntos</span>
+            <div className="p-3">
+              <ul className="grid gap-2 text-sm text-[#dce7f2]">
+                <li className="flex items-center justify-between gap-3 rounded-xl border border-white/7 bg-white/[0.025] px-3 py-2">
+                  <span>Resultado exacto</span>
+                  <span className="font-black text-[#7ff0b2]">3 pts</span>
                 </li>
-                <li className="flex gap-2">
-                  <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#7ff0b2]" />
-                  <span>Acierto de ganador o empate: 1 punto</span>
+                <li className="flex items-center justify-between gap-3 rounded-xl border border-white/7 bg-white/[0.025] px-3 py-2">
+                  <span>Ganador o empate</span>
+                  <span className="font-black text-[#7ff0b2]">1 pt</span>
                 </li>
-                <li className="flex gap-2">
-                  <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#7ff0b2]" />
-                  <span>Pronóstico incorrecto: 0 puntos</span>
+                <li className="flex items-center justify-between gap-3 rounded-xl border border-white/7 bg-white/[0.025] px-3 py-2">
+                  <span>Incorrecto</span>
+                  <span className="font-black text-[#8d98a7]">0 pts</span>
                 </li>
-                <li className="flex gap-2">
-                  <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#7ff0b2]" />
-                  <span>Las predicciones se bloquean 15 minutos antes del inicio del partido</span>
+                <li className="rounded-xl border border-white/7 bg-white/[0.025] px-3 py-2 text-[#9aa7b5]">
+                  Bloqueo 15 minutos antes del inicio.
                 </li>
               </ul>
             </div>

@@ -766,12 +766,14 @@ function getRowAccent(
   relegatedTeamIds: Set<string> = new Set()
 ) {
   if (variant === 'annual') {
+    const rank = row.rank || index + 1
+
     if (index === 0) return 'border-l-[#39e67a] bg-[#10301f]'
-    if (index >= 1 && index <= 4) return 'border-l-[#f1cc4a] bg-[#2d2610]'
-    if (index >= 5 && index <= 10) return 'border-l-sky-400 bg-sky-950/25'
     if (relegatedTeamIds.has(String(row.teamId || row.teamName))) {
       return 'border-l-[#ff5d73] bg-[#35141a]'
     }
+    if (rank === 2 || rank === 3) return 'border-l-[#f1cc4a] bg-[#2d2610]'
+    if (rank >= 4 && rank <= 9) return 'border-l-sky-400 bg-sky-950/25'
     return 'border-l-transparent'
   }
 
@@ -1401,104 +1403,6 @@ function BracketView({
   )
 }
 
-function formatFinalPhaseFixtureDate(dateString: string) {
-  return new Intl.DateTimeFormat('es-AR', {
-    weekday: 'short',
-    day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'America/Argentina/Buenos_Aires',
-  }).format(new Date(dateString))
-}
-
-function getFinalPhaseScore(match: LeagueFixtureSummary) {
-  if (match.goalsHome === null || match.goalsAway === null) return '-'
-
-  return `${match.goalsHome} - ${match.goalsAway}`
-}
-
-function FinalPhasesSection({
-  rounds,
-  leagueExternalId,
-}: {
-  rounds: ReturnType<typeof buildKnockoutRounds>
-  leagueExternalId?: number | null
-}) {
-  if (!rounds.length) return null
-
-  return (
-    <SectionCard
-      title="Fases finales"
-      subtitle="Cruces eliminatorios cargados para esta Liga Profesional"
-    >
-      <div className="space-y-3">
-        {rounds.map((round) => (
-          <div
-            key={round.round}
-            className="overflow-hidden rounded-2xl border border-white/8 bg-[#11161b]"
-          >
-            <div className="border-b border-white/6 bg-[#131b20] px-3 py-2">
-              <h3 className="text-sm font-black text-white md:text-base">
-                {getLeagueRoundLabel(round.round, leagueExternalId) ?? round.round}
-              </h3>
-            </div>
-
-            <div className="grid gap-2 p-2 md:grid-cols-2 md:p-3">
-              {round.matches.map((match) => (
-                <Link
-                  key={match.id}
-                  href={`/partido/${match.id}`}
-                  className="grid min-h-[76px] grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-xl border border-white/7 bg-[#0f151a] p-2 transition hover:border-[#2d6d4d] hover:bg-[#121a20] md:p-3"
-                >
-                  <div className="min-w-0 space-y-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8d98a7]">
-                      {formatFinalPhaseFixtureDate(match.date)}
-                    </p>
-
-                    <div className="grid min-w-0 gap-1">
-                      {[
-                        { name: match.home, logo: match.homeLogo },
-                        { name: match.away, logo: match.awayLogo },
-                      ].map((team) => (
-                        <div key={team.name} className="flex min-w-0 items-center gap-2">
-                          {team.logo ? (
-                            <Image
-                              src={team.logo}
-                              alt={team.name}
-                              width={18}
-                              height={18}
-                              className="h-[18px] w-[18px] object-contain"
-                            />
-                          ) : (
-                            <span className="h-[18px] w-[18px] rounded-full border border-white/10 bg-white/5" />
-                          )}
-                          <span className="truncate text-sm font-semibold text-[#edf2f7]">
-                            {team.name}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex min-w-[58px] flex-col items-center justify-center rounded-lg border border-white/7 bg-[#0c1115] px-2">
-                    <span className="text-base font-black text-white">
-                      {getFinalPhaseScore(match)}
-                    </span>
-                    <span className="mt-1 text-[10px] font-semibold uppercase text-[#8d98a7]">
-                      {match.statusShort}
-                    </span>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </SectionCard>
-  )
-}
-
 export default async function LigaPage({ params }: PageProps) {
   const { id } = await params
   const tournament = getTournamentConfig(id)
@@ -1731,13 +1635,6 @@ export default async function LigaPage({ params }: PageProps) {
             </SectionCard>
           )}
 
-          {tournament.key === 'argentina-liga-profesional' && knockoutRounds.length ? (
-            <FinalPhasesSection
-              rounds={knockoutRounds}
-              leagueExternalId={resolvedTournament?.leagueId ?? null}
-            />
-          ) : null}
-
           {visibleSecondaryGroups.length ? (
             <div className="space-y-4">
               {visibleSecondaryGroups.map((group) => (
@@ -1755,10 +1652,7 @@ export default async function LigaPage({ params }: PageProps) {
           {tournament.showAnnualTable || tournament.showPromedios ? (
             <div className={compactSummaryTables ? 'grid gap-4 xl:grid-cols-2' : 'space-y-4'}>
               {tournament.showAnnualTable && annualTable.length ? (
-                <SectionCard
-                  title="Tabla anual"
-                  subtitle="Referencia armada con los puntos de la temporada disponible."
-                >
+                <SectionCard title="Tabla anual">
                   <StandingsTable
                     rows={annualTable}
                     variant="annual"
@@ -1768,8 +1662,8 @@ export default async function LigaPage({ params }: PageProps) {
                   <TableLegend
                     items={[
                       { label: 'Campeon de liga', tone: 'bg-[#39e67a]' },
-                      { label: 'Clasificacion a Copa Libertadores', tone: 'bg-[#f1cc4a]' },
-                      { label: 'Clasificacion a Copa Sudamericana', tone: 'bg-sky-400' },
+                      { label: 'Libertadores: 2 y 3', tone: 'bg-[#f1cc4a]' },
+                      { label: 'Sudamericana: 4 a 9', tone: 'bg-sky-400' },
                       { label: 'Descenso', tone: 'bg-[#ff5d73]' },
                     ]}
                   />
@@ -1777,10 +1671,7 @@ export default async function LigaPage({ params }: PageProps) {
               ) : null}
 
               {tournament.showPromedios && promedioTable.length ? (
-                <SectionCard
-                  title="Promedios"
-                  subtitle="Promedio armado con los puntos y partidos acumulados de las ultimas temporadas disponibles."
-                >
+                <SectionCard title="Promedios">
                   <PromediosTable
                     rows={promedioTable}
                     compact={compactSummaryTables}

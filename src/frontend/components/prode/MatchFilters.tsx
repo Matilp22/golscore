@@ -73,17 +73,17 @@ function FilterSelect({
 
   return (
     <div ref={wrapperRef} className="relative min-w-0">
-      <label className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#7ff0b2]">
+      <label className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9adfb8]">
         {label}
       </label>
       <button
         type="button"
         onClick={() => setIsOpen((current) => !current)}
-        className="mt-2 flex h-12 w-full items-center justify-between gap-3 rounded-2xl border border-white/8 bg-[#10151a] px-4 text-left text-white transition hover:border-white/12 hover:bg-[#151b21] md:h-11"
+        className="mt-1.5 flex h-11 w-full items-center justify-between gap-3 rounded-xl border border-white/8 bg-[#0d1217] px-3 text-left text-white transition hover:border-[#7ff0b2]/25 hover:bg-[#111820]"
         aria-expanded={isOpen}
         aria-haspopup="listbox"
       >
-        <span className={`truncate text-sm font-bold ${selectedOption ? 'text-white' : 'text-[#8d98a7]'}`}>
+        <span className={`truncate text-sm font-semibold ${selectedOption ? 'text-white' : 'text-[#8d98a7]'}`}>
           {selectedOption?.label ?? placeholder}
         </span>
         <span className="shrink-0 text-[#8fa0b1]">
@@ -92,8 +92,8 @@ function FilterSelect({
       </button>
 
       {isOpen ? (
-        <div className="absolute left-0 top-[calc(100%+10px)] z-20 w-full overflow-hidden rounded-2xl border border-white/8 bg-[#11161b] shadow-[0_16px_40px_rgba(0,0,0,0.35)]">
-          <div className="max-h-72 overflow-y-auto py-2">
+        <div className="absolute left-0 top-[calc(100%+8px)] z-20 w-full overflow-hidden rounded-xl border border-white/8 bg-[#11161b] shadow-[0_16px_40px_rgba(0,0,0,0.35)]">
+          <div className="max-h-72 overflow-y-auto py-1.5">
             {options.map((option) => {
               const isActive = option.value === value
 
@@ -105,16 +105,16 @@ function FilterSelect({
                     onChange(option.value)
                     setIsOpen(false)
                   }}
-                  className={`flex w-full items-center justify-between px-4 py-3 text-left transition ${
+                  className={`flex w-full items-center justify-between px-3 py-2.5 text-left text-sm transition ${
                     isActive
-                      ? 'bg-[#162028] text-white'
+                      ? 'bg-[#16251d] text-white'
                       : 'text-[#dce5ef] hover:bg-[#161d24]'
                   }`}
                   role="option"
                   aria-selected={isActive}
                 >
                   <span className="font-semibold">{option.label}</span>
-                  {isActive ? <span className="h-2.5 w-2.5 rounded-full bg-[#7ff0b2]" /> : null}
+                  {isActive ? <span className="h-2 w-2 rounded-full bg-[#7ff0b2]" /> : null}
                 </button>
               )
             })}
@@ -159,11 +159,11 @@ export default function MatchFilters({
   )
 
   return (
-    <div className="grid w-full min-w-0 gap-3 rounded-2xl border border-white/8 bg-[#0f1317]/92 p-2 sm:p-3 md:grid-cols-2 md:p-4">
+    <div className="grid w-full min-w-0 gap-3 rounded-2xl border border-white/8 bg-[#10151a]/95 p-3 shadow-[0_10px_24px_rgba(0,0,0,0.12)] md:grid-cols-2 md:p-4">
       <FilterSelect
         label="Liga"
         value={selectedLeagueId}
-        placeholder="Elegí un torneo"
+        placeholder="Elegi un torneo"
         options={leagueOptions}
         onChange={onLeagueChange}
       />

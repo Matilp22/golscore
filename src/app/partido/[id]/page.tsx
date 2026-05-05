@@ -1460,12 +1460,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
           <section className="space-y-4">
             <div className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
               <div className="border-b border-white/6 bg-[#13181d] px-2 py-3 md:px-4">
-                <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-base font-bold text-white">Minuto a minuto</h2>
-                  <span className="text-[11px] uppercase tracking-[0.16em] text-[#8d98a7]">
-                    Cronología
-                  </span>
-                </div>
+                <h2 className="text-base font-bold text-white">Minuto a minuto</h2>
               </div>
 
               {events.length ? (
@@ -1544,12 +1539,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
 
             <div className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
               <div className="border-b border-white/6 bg-[#13181d] px-2 py-3 md:px-4">
-                <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-base font-bold text-white">Formación</h2>
-                  <span className="text-[11px] uppercase tracking-[0.16em] text-[#8d98a7]">
-                    Visual
-                  </span>
-                </div>
+                <h2 className="text-base font-bold text-white">Formación</h2>
               </div>
 
               {homeLineup || awayLineup ? (
@@ -1584,7 +1574,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-white/8 bg-[#12171c] px-2 py-3 text-sm text-[#8d98a7] md:px-4 md:py-4">
-                      Este partido no tiene una formación visual real cargada por la fuente de datos.
+                      Este partido no tiene una formación real cargada por la fuente de datos.
                     </div>
                   )}
 

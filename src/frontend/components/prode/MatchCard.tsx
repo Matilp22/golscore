@@ -54,17 +54,19 @@ export default function MatchCard({
   const predictionId = prediction?.prediction_id ?? prediction?.id
 
   return (
-    <article className="w-full min-w-0 px-3 py-3 sm:px-4">
+    <article className="w-full min-w-0 px-3 py-3.5 sm:px-4">
       <div className="mb-3 flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#7ff0b2]">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#9adfb8]">
             {match.league?.name ?? 'Torneo'}
           </span>
-          <span className="text-xs text-[#8d98a7]">{formatDate(match.matchDate)}</span>
+          <span className="rounded-full border border-white/8 bg-white/[0.03] px-2 py-0.5 text-xs text-[#aab5c1]">
+            {formatDate(match.matchDate)}
+          </span>
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           {prediction && hasPredictionScore ? (
-            <span className="rounded-full border border-[#25553d] bg-[#13251d] px-2 py-0.5 text-[11px] font-bold text-[#7ff0b2]">
+            <span className="rounded-full border border-[#25553d]/70 bg-[#13251d]/80 px-2 py-0.5 text-[11px] font-bold text-[#7ff0b2]">
               {pointsLabel}
               {prediction.exactHit ? ' exacto' : prediction.partialHit ? ' parcial' : ''}
             </span>
