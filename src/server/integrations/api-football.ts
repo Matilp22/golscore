@@ -27,6 +27,10 @@ import {
   enrichTopPlayerAssets,
   persistFixtureListAssets,
 } from '@/server/assets/image-assets'
+import {
+  getApiSportsTeamLogoUrl,
+  pickStableAssetUrl,
+} from '@/shared/utils/asset-urls'
 
 type ApiFootballResponse<T> = {
   errors?: Record<string, string>
@@ -891,6 +895,11 @@ type HomeMatchExtras = {
   liveEvents: HomeLiveEvent[]
 }
 
+type StoredMatchTeamLogos = {
+  homeLogo?: string
+  awayLogo?: string
+}
+
 function createEmptyGoalScorers(): MatchGoalScorers {
   return { home: [], away: [], unassigned: [] }
 }
@@ -930,6 +939,104 @@ function toFiniteNumber(value: number | string | null | undefined) {
   const numericValue = Number(value)
 
   return Number.isFinite(numericValue) ? numericValue : null
+}
+
+async function fetchStoredMatchTeamLogosByExternalId(
+  fixtureId: number
+): Promise<StoredMatchTeamLogos | null> {
+  try {
+    const supabase = getSupabaseAdminClient()
+    const matchResponse = await supabase
+      .from('matches')
+      .select('home_team_id, away_team_id')
+      .eq('external_id', String(fixtureId))
+      .maybeSingle()
+
+    if (matchResponse.error) throw matchResponse.error
+    if (!matchResponse.data) return null
+
+    const match = matchResponse.data as Pick<StoredHomeMatchRow, 'home_team_id' | 'away_team_id'>
+    const teamIds = [match.home_team_id, match.away_team_id]
+      .filter((id): id is string | number => id !== null && id !== undefined)
+      .map(String)
+
+    if (!teamIds.length) return null
+
+    const teamsResponse = await supabase
+      .from('teams')
+      .select('id, external_id, logo_url')
+      .in('id', teamIds)
+
+    if (teamsResponse.error) throw teamsResponse.error
+
+    const teams = new Map(
+      ((teamsResponse.data ?? []) as StoredHomeTeamRow[]).map((team) => [
+        String(team.id),
+        team,
+      ])
+    )
+    const homeTeam = match.home_team_id ? teams.get(String(match.home_team_id)) : null
+    const awayTeam = match.away_team_id ? teams.get(String(match.away_team_id)) : null
+    const homeExternalId = toFiniteNumber(homeTeam?.external_id)
+    const awayExternalId = toFiniteNumber(awayTeam?.external_id)
+
+    return {
+      homeLogo:
+        pickStableAssetUrl(
+          homeTeam?.logo_url,
+          null,
+          getApiSportsTeamLogoUrl(homeExternalId)
+        ) ?? undefined,
+      awayLogo:
+        pickStableAssetUrl(
+          awayTeam?.logo_url,
+          null,
+          getApiSportsTeamLogoUrl(awayExternalId)
+        ) ?? undefined,
+    }
+  } catch (error) {
+    console.warn('[match-detail] No se pudieron leer escudos persistidos del partido.', {
+      fixtureId,
+      message: error instanceof Error ? error.message : String(error),
+    })
+
+    return null
+  }
+}
+
+function applyStoredMatchTeamLogos(
+  fixture: MatchFixture | null,
+  storedLogos: StoredMatchTeamLogos | null
+) {
+  if (!fixture || !storedLogos) return fixture
+
+  const homeExternalId = fixture.teams.home.id
+  const awayExternalId = fixture.teams.away.id
+
+  return {
+    ...fixture,
+    teams: {
+      ...fixture.teams,
+      home: {
+        ...fixture.teams.home,
+        logo:
+          pickStableAssetUrl(
+            storedLogos.homeLogo,
+            fixture.teams.home.logo,
+            getApiSportsTeamLogoUrl(homeExternalId)
+          ) ?? undefined,
+      },
+      away: {
+        ...fixture.teams.away,
+        logo:
+          pickStableAssetUrl(
+            storedLogos.awayLogo,
+            fixture.teams.away.logo,
+            getApiSportsTeamLogoUrl(awayExternalId)
+          ) ?? undefined,
+      },
+    },
+  }
 }
 
 async function fetchStoredHomeMatches(date: string): Promise<MatchListItem[]> {
@@ -1854,9 +1961,12 @@ export async function getMatchDetail(id: number) {
   const rawFixture = (fixture as ApiFootballResponse<MatchFixture>).response?.[0] || null
   const rawLineups = (lineups as ApiFootballResponse<MatchLineup>).response || []
   const enriched = await enrichMatchDetailAssets(rawFixture, rawLineups)
+  const storedTeamLogos = rawFixture
+    ? await fetchStoredMatchTeamLogosByExternalId(id)
+    : null
 
   return {
-    fixture: enriched.fixture,
+    fixture: applyStoredMatchTeamLogos(enriched.fixture, storedTeamLogos),
     events: (events as ApiFootballResponse<MatchEvent>).response || [],
     statistics:
       (statistics as ApiFootballResponse<MatchStatisticsTeam>).response || [],

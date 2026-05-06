@@ -21,25 +21,25 @@ type MatchRowProps = {
   broadcastLogoUrl?: string | null
 }
 
-function StatusBadge({ status }: { status: string }) {
+function formatCenterStatus(status: string, centerLabel: string) {
+  if (!status || status === centerLabel) return ''
+
   const normalizedStatus = status.toLowerCase()
-  const isLive = normalizedStatus.includes('en vivo') || status.includes("'")
-  const isFinal = normalizedStatus === 'finalizado' || normalizedStatus === 'final'
-  const isHalf = normalizedStatus === 'entretiempo'
 
-  const classes = isLive
-    ? 'bg-[#163828] text-[#7ff0b2] border-[#25553d]'
-    : isFinal
-    ? 'bg-[#1c1f24] text-[#b8bec8] border-[#2a3038]'
-    : isHalf
-    ? 'bg-[#3f3616] text-[#f3d36c] border-[#574b20]'
-    : 'bg-[#1c2128] text-[#a8b0bc] border-[#2a3038]'
+  if (normalizedStatus === 'finalizado') return 'FINAL'
+  if (normalizedStatus === 'entretiempo') return 'ENTRETIEMPO'
 
-  return (
-    <span className={`max-w-full whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] ${classes}`}>
-      {status}
-    </span>
-  )
+  return status
+}
+
+function getCenterStatusClass(status: string) {
+  const normalizedStatus = status.toLowerCase()
+
+  if (normalizedStatus.includes('en vivo')) return 'text-[#7ff0b2]'
+  if (normalizedStatus === 'entretiempo') return 'text-[#f3d36c]'
+  if (normalizedStatus === 'finalizado' || normalizedStatus === 'final') return 'text-[#b8bec8]'
+
+  return 'text-[#a8b0bc]'
 }
 
 function BroadcastBadge({
@@ -175,6 +175,7 @@ export default function MatchRow({
     : score === '- - -'
       ? 'vs'
       : score
+  const centerStatus = isTimeStatus ? '' : formatCenterStatus(status, String(centerLabel))
   const allBroadcasters =
     broadcasters?.length
       ? broadcasters
@@ -182,11 +183,6 @@ export default function MatchRow({
         ? [{ name: broadcastChannel, logoUrl: broadcastLogoUrl, country: null }]
         : []
   const broadcastText = allBroadcasters.map((broadcaster) => broadcaster.name).join(' / ')
-  const showStatusBadge = Boolean(
-    status &&
-    !isTimeStatus &&
-    String(status) !== String(centerLabel)
-  )
 
   return (
     <Link
@@ -203,6 +199,11 @@ export default function MatchRow({
           <div className={`rounded-md border border-white/8 bg-[#0f1317] px-1.5 py-0.5 text-[11px] font-black leading-tight text-white sm:text-xs ${isLive ? 'text-[#7ff0b2]' : ''}`}>
             {centerLabel}
           </div>
+          {centerStatus ? (
+            <div className={`mt-0.5 truncate text-[9px] font-black uppercase leading-none ${getCenterStatusClass(status)}`}>
+              {centerStatus}
+            </div>
+          ) : null}
         </div>
 
         <TeamBadge logo={awayLogo} name={away} align="right" />
@@ -215,12 +216,6 @@ export default function MatchRow({
       ) : null}
 
       <GoalScorersLine goalScorers={goalScorers} />
-
-      {showStatusBadge ? (
-        <div className="mt-1 flex min-w-0 justify-end">
-          <StatusBadge status={status} />
-        </div>
-      ) : null}
     </Link>
   )
 }
