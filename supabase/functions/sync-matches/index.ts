@@ -64,7 +64,6 @@ type ApiFixtureEvent = {
   detail?: string | null
 }
 
-const ALLOWED_GOAL_DETAILS = new Set(['Normal Goal', 'Penalty', 'Own Goal'])
 const FINISHED_STATUSES = new Set(['FT', 'AET', 'PEN'])
 
 const TOURNAMENTS: Tournament[] = [
@@ -134,13 +133,81 @@ function getEventExternalId(fixture: ApiFixture, event: ApiFixtureEvent) {
   ].join(':')
 }
 
-function isGoalEventForScoreboard(event: ApiFixtureEvent) {
+function normalizeFootballEventText(value?: string | null) {
+  return (value ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function isScoreboardGoalEvent(type?: string | null, detail?: string | null) {
+  const normalizedType = normalizeFootballEventText(type)
+  const normalizedDetail = normalizeFootballEventText(detail)
+
+  if (normalizedType !== 'goal') return false
+
+  if (
+    normalizedDetail.includes('missed') ||
+    normalizedDetail.includes('shootout') ||
+    normalizedDetail.includes('penalty shoot') ||
+    normalizedDetail.includes('cancelled') ||
+    normalizedDetail.includes('canceled') ||
+    normalizedDetail.includes('var')
+  ) {
+    return false
+  }
+
+  if (!normalizedDetail) return true
+
   return (
-    event.type === 'Goal' &&
-    ALLOWED_GOAL_DETAILS.has(event.detail ?? '') &&
+    normalizedDetail === 'goal' ||
+    normalizedDetail.includes('normal goal') ||
+    normalizedDetail.includes('penalty') ||
+    normalizedDetail.includes('own goal') ||
+    normalizedDetail.includes('autogol') ||
+    normalizedDetail.includes('en contra')
+  )
+}
+
+function isImportantLiveEvent(type?: string | null, detail?: string | null) {
+  const normalizedType = normalizeFootballEventText(type)
+  const normalizedDetail = normalizeFootballEventText(detail)
+
+  if (isScoreboardGoalEvent(type, detail)) return true
+
+  if (
+    normalizedType.includes('card') &&
+    (
+      normalizedDetail.includes('red card') ||
+      normalizedDetail === 'red' ||
+      normalizedDetail.includes('roja')
+    )
+  ) {
+    return true
+  }
+
+  return (
+    normalizedType.includes('penalty') ||
+    normalizedDetail === 'penalty' ||
+    normalizedDetail.includes('penalty confirmed') ||
+    normalizedDetail.includes('penalty awarded') ||
+    normalizedDetail.includes('penalty conceded') ||
+    normalizedDetail.includes('penal') ||
+    (
+      normalizedType.includes('var') &&
+      normalizedDetail.includes('penalty')
+    )
+  )
+}
+
+function isImportantMatchEventForHome(event: ApiFixtureEvent) {
+  return (
+    isImportantLiveEvent(event.type, event.detail) &&
     event.time?.elapsed !== null &&
-    event.time?.elapsed !== undefined &&
-    Boolean(event.player?.name)
+    event.time?.elapsed !== undefined
   )
 }
 
@@ -180,7 +247,7 @@ async function syncMatchEvents(
   try {
     const events = await fetchFixtureEvents(footballApiBaseUrl, footballApiKey, fixture.fixture.id)
     const eventRows = events
-      .filter(isGoalEventForScoreboard)
+      .filter(isImportantMatchEventForHome)
       .map((event) => {
         const storedMinute = event.time?.elapsed as number
         const storedExtraMinute = event.time?.extra ?? null
@@ -204,7 +271,12 @@ async function syncMatchEvents(
           match_id: matchId,
           external_event_id: getEventExternalId(fixture, event),
           team_id: teamId,
-          player_name: event.player?.name as string,
+          player_name:
+            event.player?.name?.trim() ||
+            event.team?.name?.trim() ||
+            event.detail ||
+            event.type ||
+            'Evento',
           assist_name: event.assist?.name ?? null,
           minute: storedMinute,
           extra_minute: storedExtraMinute,
@@ -217,8 +289,7 @@ async function syncMatchEvents(
       fixtureId: fixture.fixture.id,
       matchId,
       totalEvents: events.length,
-      goalEvents: eventRows.length,
-      allowedDetails: [...ALLOWED_GOAL_DETAILS],
+      importantEvents: eventRows.length,
     })
 
     const deleteResponse = await supabase.from('match_events').delete().eq('match_id', matchId)
@@ -233,15 +304,20 @@ async function syncMatchEvents(
 
     if (upsertResponse.error) throw upsertResponse.error
 
-    console.info('[sync-match-events] goles insertados en match_events', {
+    const insertedGoals = eventRows.filter((row) =>
+      isScoreboardGoalEvent(row.type, row.detail)
+    ).length
+
+    console.info('[sync-match-events] eventos importantes insertados en match_events', {
       fixtureId: fixture.fixture.id,
       matchId,
-      insertedGoals: eventRows.length,
+      insertedEvents: eventRows.length,
+      insertedGoals,
     })
 
     return {
       eventsFound: events.length,
-      goalsInserted: eventRows.length,
+      goalsInserted: insertedGoals,
     }
   } catch (error) {
     console.warn('[sync-match-events] No se pudieron sincronizar eventos; se omiten.', {

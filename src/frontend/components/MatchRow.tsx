@@ -9,14 +9,12 @@ type MatchRowProps = {
   league: string
   country?: string
   time?: string
-  minute?: string | number | null
   home: string
   away: string
   homeLogo?: string
   awayLogo?: string
   score: string
   status: string
-  statusUnderScore?: string
   goalScorers?: MatchGoalScorers
   broadcasters?: MatchBroadcaster[]
   broadcastChannel?: string | null
@@ -157,14 +155,12 @@ function GoalScorersLine({ goalScorers }: { goalScorers?: MatchGoalScorers }) {
 export default function MatchRow({
   id = 1,
   time,
-  minute,
   home,
   away,
   homeLogo,
   awayLogo,
   score,
   status,
-  statusUnderScore,
   goalScorers,
   broadcasters,
   broadcastChannel,
@@ -172,11 +168,12 @@ export default function MatchRow({
 }: MatchRowProps) {
   const normalizedStatus = status.toLowerCase()
   const isLive = normalizedStatus.includes('en vivo') || normalizedStatus === 'entretiempo'
-  const isScheduled = score === '- - -' && !isLive && normalizedStatus !== 'finalizado'
+  const isTimeStatus = /^\d{1,2}:\d{2}$/.test(status.trim())
+  const isScheduled = score === '- - -' && !isLive && isTimeStatus
   const centerLabel = isScheduled
     ? time || 'vs'
     : score === '- - -'
-      ? minute || statusUnderScore || status || 'vs'
+      ? 'vs'
       : score
   const allBroadcasters =
     broadcasters?.length
@@ -185,12 +182,11 @@ export default function MatchRow({
         ? [{ name: broadcastChannel, logoUrl: broadcastLogoUrl, country: null }]
         : []
   const broadcastText = allBroadcasters.map((broadcaster) => broadcaster.name).join(' / ')
-  const statusCandidate = statusUnderScore || (!isScheduled ? minute || status : '')
-  const subScore =
-    statusCandidate && String(statusCandidate) !== String(centerLabel)
-      ? statusCandidate
-      : ''
-  const showMobileStatus = Boolean(status && String(status) !== String(centerLabel))
+  const showStatusBadge = Boolean(
+    status &&
+    !isTimeStatus &&
+    String(status) !== String(centerLabel)
+  )
 
   return (
     <Link
@@ -207,11 +203,6 @@ export default function MatchRow({
           <div className={`rounded-md border border-white/8 bg-[#0f1317] px-1.5 py-0.5 text-[11px] font-black leading-tight text-white sm:text-xs ${isLive ? 'text-[#7ff0b2]' : ''}`}>
             {centerLabel}
           </div>
-          {subScore ? (
-            <div className="mt-0.5 truncate text-[9px] font-semibold uppercase leading-none text-[#8d98a7]">
-              {subScore}
-            </div>
-          ) : null}
         </div>
 
         <TeamBadge logo={awayLogo} name={away} align="right" />
@@ -225,8 +216,8 @@ export default function MatchRow({
 
       <GoalScorersLine goalScorers={goalScorers} />
 
-      {showMobileStatus ? (
-        <div className="mt-1 flex min-w-0 justify-end md:hidden">
+      {showStatusBadge ? (
+        <div className="mt-1 flex min-w-0 justify-end">
           <StatusBadge status={status} />
         </div>
       ) : null}

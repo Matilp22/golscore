@@ -1,5 +1,5 @@
-const STATIC_CACHE = 'fulboapp-static-v4'
-const PAGE_CACHE = 'fulboapp-pages-v4'
+const STATIC_CACHE = 'fulboapp-static-v5'
+const PAGE_CACHE = 'fulboapp-pages-v5'
 const STATIC_ASSETS = [
   '/manifest.json',
   '/icons/icon-192.png',
@@ -9,6 +9,7 @@ const STATIC_ASSETS = [
 function isDynamicRequest(url) {
   return (
     url.pathname.startsWith('/api/') ||
+    url.pathname.startsWith('/_next/image') ||
     url.pathname.startsWith('/_next/data/') ||
     url.pathname === '/' ||
     url.pathname.startsWith('/partido/') ||
@@ -23,7 +24,6 @@ function isStaticAsset(request, url) {
   return (
     request.destination === 'script' ||
     request.destination === 'style' ||
-    request.destination === 'image' ||
     request.destination === 'font' ||
     url.pathname.startsWith('/_next/static/') ||
     url.pathname.startsWith('/icons/') ||

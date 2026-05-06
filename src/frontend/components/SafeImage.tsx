@@ -1,7 +1,11 @@
 'use client'
 
 import Image, { type ImageProps } from 'next/image'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import {
+  getAssetHostname,
+  isAllowedRemoteAssetHost,
+} from '@/shared/utils/asset-urls'
 
 type SafeImageType = 'team' | 'league' | 'player' | 'venue' | 'broadcast'
 
@@ -63,6 +67,20 @@ export default function SafeImage({
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
   const failed = Boolean(src && failedSrc === src)
 
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') return
+    if (src && !failed) return
+
+    console.warn('[image-fallback]', {
+      type: imageType,
+      name: alt,
+      url: src ?? null,
+      host: getAssetHostname(src),
+      blockedDomain: src ? !isAllowedRemoteAssetHost(src) : false,
+      reason: src ? 'load-error' : 'missing-src',
+    })
+  }, [alt, failed, imageType, src])
+
   if (!src || failed) {
     return <Fallback imageType={imageType} className={fallbackClassName ?? props.className} />
   }
@@ -74,7 +92,13 @@ export default function SafeImage({
       alt={alt}
       onError={(event) => {
         if (process.env.NODE_ENV === 'development') {
-          console.warn('[image-error]', { type: imageType, name: alt, url: src })
+          console.warn('[image-error]', {
+            type: imageType,
+            name: alt,
+            url: src,
+            host: getAssetHostname(src),
+            blockedDomain: !isAllowedRemoteAssetHost(src),
+          })
         }
 
         setFailedSrc(src)

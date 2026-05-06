@@ -7,7 +7,7 @@ import {
 } from '@/server/cache/cache-db'
 import { getFootballApiConfig } from '@/server/config/env'
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
-import { isFinishedStatus } from '@/shared/utils/match-status'
+import { isFinishedStatus, isLiveStatus } from '@/shared/utils/match-status'
 import { formatEventMinute } from '@/shared/utils/event-minute'
 import {
   addDaysToISO,
@@ -15,7 +15,9 @@ import {
 } from '@/shared/utils/argentina-time'
 import {
   getGoalKindFromDetail,
+  getImportantLiveEventKind,
   isScoreboardGoalEvent,
+  type ImportantLiveEventKind,
 } from '@/shared/utils/football-events'
 import { getExcludedCompetitionReason } from '@/shared/utils/competition-filter'
 import {
@@ -159,8 +161,26 @@ export type MatchBroadcaster = {
   country?: string | null
 }
 
+export type HomeLiveEvent = {
+  id: string
+  matchId: number | string
+  fixtureId: number
+  home: string
+  away: string
+  score: string
+  minute: number | null
+  extraMinute?: number | null
+  playerName?: string | null
+  teamName?: string | null
+  type: string
+  detail?: string | null
+  kind: ImportantLiveEventKind
+  label: string
+}
+
 export type MatchListItemWithGoalScorers = MatchListItem & {
   goalScorers: MatchGoalScorers
+  liveEvents: HomeLiveEvent[]
   broadcasters?: MatchBroadcaster[]
   broadcastChannel?: string | null
   broadcastLogoUrl?: string | null
@@ -829,10 +849,12 @@ type StoredHomeTeamRow = {
 }
 
 type StoredMatchEventRow = {
+  id?: number | string | null
+  external_event_id?: string | number | null
   match_id: number | string
   team_id: number | string | null
-  player_name: string
-  minute: number
+  player_name: string | null
+  minute: number | null
   extra_minute: number | null
   type: string
   detail: string | null
@@ -866,10 +888,22 @@ type HomeMatchExtras = {
   broadcastChannel: string | null
   broadcastLogoUrl: string | null
   goalScorers: MatchGoalScorers
+  liveEvents: HomeLiveEvent[]
 }
 
 function createEmptyGoalScorers(): MatchGoalScorers {
   return { home: [], away: [], unassigned: [] }
+}
+
+function createEmptyHomeMatchExtras(): HomeMatchExtras {
+  return {
+    persistedInSupabase: false,
+    broadcasters: [],
+    broadcastChannel: null,
+    broadcastLogoUrl: null,
+    goalScorers: createEmptyGoalScorers(),
+    liveEvents: [],
+  }
 }
 
 function serializeGoalEventForLog(event: StoredMatchEventRow) {
@@ -1334,6 +1368,87 @@ function mapStoredGoalEvent(row: StoredMatchEventRow): MatchGoalScorer | null {
   }
 }
 
+function getLiveEventLabel(row: StoredMatchEventRow, kind: ImportantLiveEventKind) {
+  if (kind === 'red-card') return 'Tarjeta roja'
+  if (kind === 'penalty') return 'Penal'
+
+  return getGoalKind(row.detail) === 'penalty' ? 'Gol de penal' : 'Gol'
+}
+
+function getLiveEventTeamName(
+  row: StoredMatchEventRow,
+  matchRow: HomeMatchRow,
+  visibleMatch: MatchListItem
+) {
+  if (row.team_id === null || row.team_id === undefined) return null
+
+  if (
+    String(row.team_id) === String(matchRow.home_team_id) ||
+    String(row.team_id) === String(visibleMatch.homeId)
+  ) {
+    return visibleMatch.home
+  }
+
+  if (
+    String(row.team_id) === String(matchRow.away_team_id) ||
+    String(row.team_id) === String(visibleMatch.awayId)
+  ) {
+    return visibleMatch.away
+  }
+
+  return null
+}
+
+function getStoredEventStableId(row: StoredMatchEventRow, matchRow: HomeMatchRow) {
+  if (row.external_event_id !== null && row.external_event_id !== undefined) {
+    return String(row.external_event_id)
+  }
+
+  if (row.id !== null && row.id !== undefined) {
+    return String(row.id)
+  }
+
+  return [
+    matchRow.external_id ?? row.match_id,
+    row.type,
+    row.detail ?? 'detail',
+    row.minute ?? 'minute',
+    row.extra_minute ?? 'no-extra',
+    row.player_name ?? 'player',
+  ].join(':')
+}
+
+function mapStoredLiveEvent(
+  row: StoredMatchEventRow,
+  matchRow: HomeMatchRow,
+  visibleMatch: MatchListItem | undefined
+): HomeLiveEvent | null {
+  if (!visibleMatch || !isLiveStatus(visibleMatch.statusShort)) return null
+
+  const kind = getImportantLiveEventKind(row.type, row.detail)
+  if (!kind) return null
+
+  const fixtureId = Number(matchRow.external_id ?? visibleMatch.externalId ?? visibleMatch.id)
+  if (!Number.isFinite(fixtureId)) return null
+
+  return {
+    id: getStoredEventStableId(row, matchRow),
+    matchId: visibleMatch.id,
+    fixtureId,
+    home: visibleMatch.home,
+    away: visibleMatch.away,
+    score: `${visibleMatch.goalsHome ?? '-'} - ${visibleMatch.goalsAway ?? '-'}`,
+    minute: row.minute,
+    extraMinute: row.extra_minute,
+    playerName: row.player_name,
+    teamName: getLiveEventTeamName(row, matchRow, visibleMatch),
+    type: row.type,
+    detail: row.detail,
+    kind,
+    label: getLiveEventLabel(row, kind),
+  }
+}
+
 async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
   const externalFixtureIds = [
     ...new Set(
@@ -1358,13 +1473,10 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
     const matchRowsByMatchId = new Map<string, HomeMatchRow>()
 
     for (const match of matches) {
-      extrasByExternalId.set(String(match.externalId ?? match.id), {
-        persistedInSupabase: false,
-        broadcasters: [],
-        broadcastChannel: null,
-        broadcastLogoUrl: null,
-        goalScorers: createEmptyGoalScorers(),
-      })
+      extrasByExternalId.set(
+        String(match.externalId ?? match.id),
+        createEmptyHomeMatchExtras()
+      )
     }
 
     for (const row of matchRows) {
@@ -1378,13 +1490,8 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
       matchRowsByMatchId.set(matchId, row)
       matchRowsByExternalId.set(externalKey, row)
       const legacyBroadcaster = getLegacyBroadcaster(row)
-      const existingExtras = extrasByExternalId.get(externalKey) ?? {
-        persistedInSupabase: false,
-        broadcasters: [],
-        broadcastChannel: null,
-        broadcastLogoUrl: null,
-        goalScorers: createEmptyGoalScorers(),
-      }
+      const existingExtras =
+        extrasByExternalId.get(externalKey) ?? createEmptyHomeMatchExtras()
 
       existingExtras.persistedInSupabase = true
       existingExtras.broadcasters = legacyBroadcaster ? [legacyBroadcaster] : existingExtras.broadcasters
@@ -1504,7 +1611,7 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
     for (const chunk of chunkArray(matchIds, 100)) {
       const eventsResponse = await supabase
         .from('match_events')
-        .select('match_id, team_id, player_name, minute, extra_minute, type, detail')
+        .select('id, external_event_id, match_id, team_id, player_name, minute, extra_minute, type, detail')
         .in('match_id', chunk)
 
       if (eventsResponse.error) {
@@ -1524,6 +1631,9 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
 
     const goalEvents = eventRows.filter((event) =>
       isScoreboardGoalEvent(event.type, event.detail)
+    )
+    const importantLiveEvents = eventRows.filter((event) =>
+      Boolean(getImportantLiveEventKind(event.type, event.detail))
     )
     const eventsFoundByMatchId = goalEvents.reduce<Map<string, number>>((accumulator, event) => {
       const matchId = String(event.match_id)
@@ -1574,10 +1684,30 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
       }
     }
 
+    for (const event of importantLiveEvents) {
+      const matchRow = matchRowsByMatchId.get(String(event.match_id))
+      if (!matchRow) continue
+
+      const externalKey = String(matchRow.external_id)
+      const extras = extrasByExternalId.get(externalKey)
+      const liveEvent = mapStoredLiveEvent(
+        event,
+        matchRow,
+        visibleMatchesByExternalId.get(externalKey)
+      )
+
+      if (!extras || !liveEvent) continue
+      extras.liveEvents.push(liveEvent)
+    }
+
     for (const extras of extrasByExternalId.values()) {
       extras.goalScorers.home.sort(sortGoalScorers)
       extras.goalScorers.away.sort(sortGoalScorers)
       extras.goalScorers.unassigned?.sort(sortGoalScorers)
+      extras.liveEvents.sort((a, b) => {
+        if ((a.minute ?? 0) !== (b.minute ?? 0)) return (a.minute ?? 0) - (b.minute ?? 0)
+        return (a.extraMinute ?? 0) - (b.extraMinute ?? 0)
+      })
     }
 
     if (shouldLogHomeExtras) {
@@ -1609,6 +1739,7 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
         broadcastRows: broadcastRows.length,
         storedEvents: eventRows.length,
         goalEvents: goalEvents.length,
+        importantLiveEvents: importantLiveEvents.length,
         mappedHomeGoals,
         mappedAwayGoals,
         unassignedGoals,
@@ -1638,6 +1769,8 @@ export async function withGoalScorers(
     goalScorers:
       extrasByFixtureId.get(String(match.externalId ?? match.id))?.goalScorers ||
       createEmptyGoalScorers(),
+    liveEvents:
+      extrasByFixtureId.get(String(match.externalId ?? match.id))?.liveEvents || [],
     persistedInSupabase:
       extrasByFixtureId.get(String(match.externalId ?? match.id))?.persistedInSupabase ??
       false,

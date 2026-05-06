@@ -3,6 +3,7 @@ export const fetchCache = 'force-no-store'
 
 import AutoRefresh from '@/frontend/components/AutoRefresh'
 import { LeagueLogo } from '@/frontend/components/AssetImage'
+import LiveEventToasts from '@/frontend/components/LiveEventToasts'
 import MatchRow from '@/frontend/components/MatchRow'
 import Link from 'next/link'
 import {
@@ -29,10 +30,7 @@ import {
   getExcludedCompetitionReason,
   isExcludedCompetition,
 } from '@/shared/utils/competition-filter'
-import {
-  formatHomeMatchStatus,
-  formatMatchStatusUnderScore,
-} from '@/shared/utils/match-display'
+import { formatHomeMatchStatus } from '@/shared/utils/match-display'
 
 type ApiMatch = MatchListItemWithGoalScorers
 
@@ -1147,6 +1145,13 @@ export default async function HomePage({
   const hasFastRefreshMatches = dateMatches.some((match) =>
     shouldFastRefreshMatch(match, now)
   )
+  const hasLiveMatches = dateMatches.some((match) => isLiveStatus(match.statusShort))
+  const liveEvents = visibleCompetitions.flatMap((competition) =>
+    competition.matches.flatMap((match) => match.liveEvents || [])
+  )
+  const visibleFixtureIds = visibleCompetitions.flatMap((competition) =>
+    competition.matches.map((match) => match.externalId ?? match.id)
+  )
   const refreshIntervalMs = hasFastRefreshMatches ? 60000 : 300000
 
   return (
@@ -1263,16 +1268,10 @@ export default async function HomePage({
                             homeLogo={match.homeLogo}
                             awayLogo={match.awayLogo}
                             time={formatMatchTimeArgentina(match.date)}
-                            minute={match.minute ? `${match.minute}'` : ''}
                             home={match.home}
                             away={match.away}
                             score={`${match.goalsHome ?? '-'} - ${match.goalsAway ?? '-'}`}
                             status={formatHomeMatchStatus({
-                              statusShort: match.statusShort,
-                              minute: match.minute,
-                              date: match.date,
-                            })}
-                            statusUnderScore={formatMatchStatusUnderScore({
                               statusShort: match.statusShort,
                               minute: match.minute,
                               date: match.date,
@@ -1295,6 +1294,12 @@ export default async function HomePage({
             )}
           </main>
       </div>
+      <LiveEventToasts
+        date={selectedDate}
+        enabled={hasLiveMatches}
+        events={liveEvents}
+        visibleFixtureIds={visibleFixtureIds}
+      />
     </div>
   )
 }

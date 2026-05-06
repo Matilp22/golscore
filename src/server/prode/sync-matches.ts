@@ -15,7 +15,10 @@ import {
   type TournamentPageConfig,
 } from '@/shared/config/tournament-pages'
 import { getExcludedCompetitionReason } from '@/shared/utils/competition-filter'
-import { isScoreboardGoalEvent } from '@/shared/utils/football-events'
+import {
+  isImportantLiveEvent,
+  isScoreboardGoalEvent,
+} from '@/shared/utils/football-events'
 import { isFinishedStatus } from '@/shared/utils/match-status'
 import {
   addDaysToISO,
@@ -1888,9 +1891,9 @@ function getEventExternalId(fixture: ApiFixture, event: ApiFixtureEvent) {
   ].join(':')
 }
 
-function isGoalEventForScoreboard(event: ApiFixtureEvent) {
+function isImportantMatchEventForHome(event: ApiFixtureEvent) {
   return (
-    isScoreboardGoalEvent(event.type, event.detail) &&
+    isImportantLiveEvent(event.type, event.detail) &&
     event.time?.elapsed !== null &&
     event.time?.elapsed !== undefined
   )
@@ -1984,7 +1987,7 @@ async function syncMatchEventsIfSupported(
     const events = await fetchFixtureEvents(fixture.fixture.id)
     const fallbackKeyOccurrences = new Map<string, number>()
     const eventRows = events
-      .filter(isGoalEventForScoreboard)
+      .filter(isImportantMatchEventForHome)
       .map((event) => {
         const storedMinute = event.time?.elapsed as number
         const storedExtraMinute = event.time?.extra ?? null
@@ -2020,7 +2023,12 @@ async function syncMatchEventsIfSupported(
           match_id: matchId,
           external_event_id: externalEventId,
           team_id: teamId,
-          player_name: event.player?.name?.trim() || 'Gol',
+          player_name:
+            event.player?.name?.trim() ||
+            event.team?.name?.trim() ||
+            event.detail ||
+            event.type ||
+            'Evento',
           assist_name: event.assist?.name ?? null,
           minute: storedMinute,
           extra_minute: storedExtraMinute,
@@ -2042,9 +2050,8 @@ async function syncMatchEventsIfSupported(
       league: fixture.league.name,
       matchId,
       totalEvents: events.length,
-      goalEvents: eventRows.length,
-      dedupedGoalEvents: dedupedEventRows.length,
-      allowedDetails: ['Normal Goal', 'Penalty', 'Own Goal'],
+      importantEvents: eventRows.length,
+      dedupedImportantEvents: dedupedEventRows.length,
     })
 
     const deleted = await deleteStoredMatchEvents(supabase, matchId, fixture.fixture.id)
@@ -2069,16 +2076,21 @@ async function syncMatchEventsIfSupported(
       matchId,
       events: dedupedEventRows.length,
     })
-    console.info('[sync-match-events] goles insertados en match_events', {
+    const insertedGoals = dedupedEventRows.filter((row) =>
+      isScoreboardGoalEvent(row.type, row.detail)
+    ).length
+
+    console.info('[sync-match-events] eventos importantes insertados en match_events', {
       fixtureId: fixture.fixture.id,
       league: fixture.league.name,
       matchId,
-      insertedGoals: dedupedEventRows.length,
+      insertedEvents: dedupedEventRows.length,
+      insertedGoals,
     })
 
     return {
       eventsFound: events.length,
-      goalsInserted: dedupedEventRows.length,
+      goalsInserted: insertedGoals,
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

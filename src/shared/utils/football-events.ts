@@ -55,3 +55,50 @@ export function getGoalKindFromDetail(detail?: string | null) {
 
   return 'regular' as const
 }
+
+export type ImportantLiveEventKind = 'goal' | 'penalty' | 'red-card'
+
+export function getImportantLiveEventKind(
+  type?: string | null,
+  detail?: string | null
+): ImportantLiveEventKind | null {
+  const normalizedType = normalizeFootballEventText(type)
+  const normalizedDetail = normalizeFootballEventText(detail)
+
+  if (isScoreboardGoalEvent(type, detail)) return 'goal'
+
+  if (
+    normalizedType.includes('card') &&
+    (
+      normalizedDetail.includes('red card') ||
+      normalizedDetail === 'red' ||
+      normalizedDetail.includes('roja')
+    )
+  ) {
+    return 'red-card'
+  }
+
+  if (
+    normalizedType.includes('penalty') ||
+    normalizedDetail === 'penalty' ||
+    normalizedDetail.includes('penalty confirmed') ||
+    normalizedDetail.includes('penalty awarded') ||
+    normalizedDetail.includes('penalty conceded') ||
+    normalizedDetail.includes('penal') ||
+    (
+      normalizedType.includes('var') &&
+      normalizedDetail.includes('penalty')
+    )
+  ) {
+    return 'penalty'
+  }
+
+  return null
+}
+
+export function isImportantLiveEvent(
+  type?: string | null,
+  detail?: string | null
+) {
+  return Boolean(getImportantLiveEventKind(type, detail))
+}
