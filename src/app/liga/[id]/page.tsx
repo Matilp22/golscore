@@ -2,9 +2,12 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 
 import CurrentRoundNavigator from '@/frontend/components/CurrentRoundNavigator'
+import CopaArgentinaChampions from '@/frontend/components/CopaArgentinaChampions'
 import CopaArgentinaMatchList from '@/frontend/components/CopaArgentinaMatchList'
 import LeaderListInteractive from '@/frontend/components/LeaderListInteractive'
 import { LeagueLogo, TeamLogo } from '@/frontend/components/AssetImage'
+import { getCopaArgentinaChampions } from '@/server/copa-argentina/champions'
+import { buildCopaArgentinaEventLeaders } from '@/server/copa-argentina/stats'
 import {
   ApiFootballError,
   getLeagueFixtures,
@@ -26,6 +29,15 @@ import {
   normalizeLeagueRound,
   normalizeRoundText,
 } from '@/shared/utils/league-rounds'
+import {
+  COPA_ARGENTINA_STAGE_ORDER,
+  getCopaArgentinaParticipantKey,
+  getCopaArgentinaStageKey,
+  getCopaArgentinaStageLabel,
+  getLatestActiveCopaArgentinaRound,
+  getMatchWinner,
+  type CopaArgentinaStageKey,
+} from '@/shared/utils/copa-argentina'
 
 type PageProps = {
   params: Promise<{ id: string }>
@@ -103,7 +115,7 @@ function getRoundBadge(round: string) {
   return null
 }
 
-type BracketStageKey = 'r64' | 'r32' | 'r16' | 'qf' | 'sf' | 'final'
+type BracketStageKey = CopaArgentinaStageKey
 
 type BracketParticipant = {
   team: string
@@ -139,7 +151,7 @@ type BracketSlot = {
   winner: string | null
 }
 
-const BRACKET_STAGE_ORDER: BracketStageKey[] = ['r64', 'r32', 'r16', 'qf', 'sf', 'final']
+const BRACKET_STAGE_ORDER: BracketStageKey[] = [...COPA_ARGENTINA_STAGE_ORDER]
 const BRACKET_CARD_HEIGHT = 48
 const BRACKET_GRID_UNIT = BRACKET_CARD_HEIGHT / 2
 const BRACKET_STAGE_MATCH_COUNTS: Record<BracketStageKey, number> = {
@@ -190,46 +202,16 @@ const COPA_ARGENTINA_2026_R64_POSITION_BY_FIXTURE_ID = new Map(
   COPA_ARGENTINA_2026_R64_FIXTURE_ORDER.map((fixtureId, index) => [fixtureId, index])
 )
 
-function normalizeTeamName(value: string) {
-  return value
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
 function getParticipantKey(participant: Pick<BracketParticipant, 'team' | 'teamId'>) {
-  return participant.teamId ? `id:${participant.teamId}` : `name:${normalizeTeamName(participant.team)}`
+  return getCopaArgentinaParticipantKey(participant)
 }
 
 function getBracketStageKey(round: string): BracketStageKey | null {
-  const normalized = normalizeRoundName(round)
-  const finalPhaseKey = getLeagueFinalPhaseKey(round)
-
-  if (finalPhaseKey === 'final') return 'final'
-  if (finalPhaseKey === 'semifinal') return 'sf'
-  if (finalPhaseKey === 'cuartos') return 'qf'
-  if (finalPhaseKey === 'octavos') return 'r16'
-
-  if (normalized.includes('final') && !normalized.includes('semi')) return 'final'
-  if (normalized.includes('semi')) return 'sf'
-  if (normalized.includes('quarter') || normalized.includes('cuartos')) return 'qf'
-  if (normalized.includes('octavos') || normalized.includes('round of 16') || normalized.includes('8th finals')) return 'r16'
-  if (normalized.includes('round of 32') || normalized.includes('16th finals') || normalized.includes('dieciseisavos')) return 'r32'
-  if (normalized.includes('round of 64') || normalized.includes('32nd finals') || normalized.includes('treintaidosavos')) return 'r64'
-
-  return null
+  return getCopaArgentinaStageKey(round)
 }
 
 function getBracketStageLabel(stageKey: BracketStageKey) {
-  if (stageKey === 'r64') return '32AVOS DE FINAL'
-  if (stageKey === 'r32') return '16AVOS DE FINAL'
-  if (stageKey === 'r16') return 'OCTAVOS DE FINAL'
-  if (stageKey === 'qf') return 'CUARTOS DE FINAL'
-  if (stageKey === 'sf') return 'SEMIFINALES'
-  return 'FINAL'
+  return getCopaArgentinaStageLabel(stageKey)
 }
 
 function getPlaceholderParticipant(): BracketParticipant {
@@ -253,30 +235,9 @@ function createPlaceholderMatch(
 }
 
 function getBracketMatchWinnerKey(match: BracketMatchCard) {
-  const [home, away] = match.participants
+  const winner = getMatchWinner(match)
 
-  if (
-    home.goals !== null &&
-    away.goals !== null &&
-    home.goals !== away.goals
-  ) {
-    return getParticipantKey(home.goals > away.goals ? home : away)
-  }
-
-  if (
-    home.goals !== null &&
-    away.goals !== null &&
-    home.goals === away.goals &&
-    match.homePenaltyScore !== null &&
-    match.homePenaltyScore !== undefined &&
-    match.awayPenaltyScore !== null &&
-    match.awayPenaltyScore !== undefined &&
-    match.homePenaltyScore !== match.awayPenaltyScore
-  ) {
-    return getParticipantKey(match.homePenaltyScore > match.awayPenaltyScore ? home : away)
-  }
-
-  return null
+  return winner ? getParticipantKey(winner) : null
 }
 
 function applyWinnerToMatch(match: BracketMatchCard, winnerKey?: string | null): BracketMatchCard {
@@ -388,8 +349,9 @@ function placeStageMatches(
 ) {
   const matchSlots = Array<BracketMatchCard | null>(BRACKET_STAGE_MATCH_COUNTS[stageKey]).fill(null)
   const unpositioned: BracketMatchCard[] = []
+  const pendingMatches: BracketMatchCard[] = []
 
-  for (const match of matches) {
+  for (const match of sortBracketMatchesByDate(matches)) {
     let bracketPosition: number | null = null
 
     if (stageKey === 'r64' && typeof match.id === 'number') {
@@ -402,7 +364,26 @@ function placeStageMatches(
       if (bracketPosition < 0) bracketPosition = null
     }
 
-    if (bracketPosition === null || bracketPosition < 0 || bracketPosition >= matchSlots.length) {
+    if (
+      bracketPosition === null ||
+      bracketPosition < 0 ||
+      bracketPosition >= matchSlots.length ||
+      matchSlots[bracketPosition] !== null
+    ) {
+      pendingMatches.push(match)
+      continue
+    }
+
+    matchSlots[bracketPosition] = {
+      ...applyWinnerToMatch(match),
+      bracketPosition,
+    }
+  }
+
+  for (const match of pendingMatches) {
+    const bracketPosition = matchSlots.findIndex((slot) => slot === null)
+
+    if (bracketPosition < 0) {
       unpositioned.push(match)
       continue
     }
@@ -416,16 +397,45 @@ function placeStageMatches(
   return { matchSlots, unpositioned }
 }
 
+function getDerivedWinnerParticipant(slot?: BracketSlot): BracketParticipant {
+  const winner = slot ? getMatchWinner(slot.match) : null
+
+  if (!winner) return getPlaceholderParticipant()
+
+  return {
+    team: winner.team,
+    teamId: winner.teamId,
+    logo: winner.logo,
+    goals: null,
+  }
+}
+
+function getDerivedPlaceholderParticipants(
+  slotIndex: number,
+  childSlots?: BracketSlot[]
+): [BracketParticipant, BracketParticipant] | undefined {
+  if (!childSlots) return undefined
+
+  return [
+    getDerivedWinnerParticipant(childSlots[slotIndex * 2]),
+    getDerivedWinnerParticipant(childSlots[slotIndex * 2 + 1]),
+  ]
+}
+
 function createBracketSlot(
   phase: BracketStageKey,
   slotIndex: number,
   stageIndex: number,
-  match: BracketMatchCard | null
+  match: BracketMatchCard | null,
+  childSlots?: BracketSlot[]
 ): BracketSlot {
   const sourceSlotA = stageIndex === 0 ? null : slotIndex * 2
   const sourceSlotB = stageIndex === 0 ? null : slotIndex * 2 + 1
   const slotMatch = {
-    ...(match || createPlaceholderMatch(`${phase}-${slotIndex}`)),
+    ...(match || createPlaceholderMatch(
+      `${phase}-${slotIndex}`,
+      getDerivedPlaceholderParticipants(slotIndex, childSlots)
+    )),
     bracketPosition: slotIndex,
     rowStart: 2 ** stageIndex + slotIndex * 2 ** (stageIndex + 1),
   }
@@ -440,7 +450,7 @@ function createBracketSlot(
   }
 }
 
-function buildBracketTree(fixtures: LeagueFixtureSummary[]): BracketTree {
+function buildCopaArgentinaBracket(fixtures: LeagueFixtureSummary[]): BracketTree {
   const groupedByStage = groupBracketMatchesByStage(fixtures)
   const actualStageKeys = BRACKET_STAGE_ORDER.filter((stageKey) => groupedByStage.has(stageKey))
   if (!actualStageKeys.length) {
@@ -466,7 +476,13 @@ function buildBracketTree(fixtures: LeagueFixtureSummary[]): BracketTree {
       previousStageKey ? slotsByPhase.get(previousStageKey) : undefined
     )
     const phaseSlots = placedStage.matchSlots.map((match, slotIndex) =>
-      createBracketSlot(stageKey, slotIndex, stageIndex, match)
+      createBracketSlot(
+        stageKey,
+        slotIndex,
+        stageIndex,
+        match,
+        previousStageKey ? slotsByPhase.get(previousStageKey) : undefined
+      )
     )
 
     slotsByPhase.set(stageKey, phaseSlots)
@@ -485,7 +501,7 @@ function buildBracketTree(fixtures: LeagueFixtureSummary[]): BracketTree {
   }
 
   if (unpositioned.length) {
-    console.warn('[copa-argentina:bracket] Fixtures sin posición en la llave', {
+    console.warn('[copa-argentina:bracket] Fixtures sin posicion en la llave', {
       fixtures: unpositioned.map(({ stageKey, match }) => ({
         stageKey,
         fixtureId: match.id,
@@ -498,7 +514,7 @@ function buildBracketTree(fixtures: LeagueFixtureSummary[]): BracketTree {
 }
 
 function buildBracketColumns(fixtures: LeagueFixtureSummary[]): BracketColumn[] {
-  return buildBracketTree(fixtures).columns
+  return buildCopaArgentinaBracket(fixtures).columns
 }
 
 function buildGenericBracketColumns(fixtures: LeagueFixtureSummary[]): BracketColumn[] {
@@ -1425,6 +1441,10 @@ export default async function LigaPage({ params }: PageProps) {
   let redCards: TopPlayerRow[] = []
   let fixtures: LeagueFixtureSummary[] = []
   let promedioTable: PromedioRow[] = []
+  const copaArgentinaChampions =
+    tournament.key === 'argentina-copa-argentina'
+      ? await getCopaArgentinaChampions()
+      : []
 
   try {
     resolvedTournament = await resolveTournament(
@@ -1454,6 +1474,15 @@ export default async function LigaPage({ params }: PageProps) {
 
       if (fixturesResult.status === 'fulfilled') {
         fixtures = fixturesResult.value
+      }
+
+      if (tournament.key === 'argentina-copa-argentina') {
+        const copaArgentinaEventLeaders = buildCopaArgentinaEventLeaders(fixtures)
+
+        scorers = copaArgentinaEventLeaders.scorers
+        assists = copaArgentinaEventLeaders.assists
+        yellowCards = copaArgentinaEventLeaders.yellowCards
+        redCards = copaArgentinaEventLeaders.redCards
       }
 
       if (tournament.showPromedios && resolvedTournament.season >= 2026) {
@@ -1522,6 +1551,10 @@ export default async function LigaPage({ params }: PageProps) {
     }))
   }
   const knockoutRounds = buildKnockoutRounds(fixtures, resolvedTournament?.leagueId ?? null)
+  const latestCopaArgentinaRound =
+    tournament.key === 'argentina-copa-argentina'
+      ? getLatestActiveCopaArgentinaRound(knockoutRounds.flatMap((round) => round.matches))
+      : null
   const { blocks: currentRoundBlocks, initialIndex: currentRoundInitialIndex } =
     getRoundBlocks(fixtures, resolvedTournament?.leagueId ?? null, {
       includeFinalPhaseRounds: tournament.key === 'argentina-liga-profesional',
@@ -1574,6 +1607,12 @@ export default async function LigaPage({ params }: PageProps) {
                   </p>
                 </div>
               </div>
+
+              {tournament.key === 'argentina-copa-argentina' ? (
+                <div className="flex justify-start md:justify-end">
+                  <CopaArgentinaChampions champions={copaArgentinaChampions} />
+                </div>
+              ) : null}
             </div>
           </header>
 
@@ -1600,6 +1639,7 @@ export default async function LigaPage({ params }: PageProps) {
                   knockoutRounds,
                   resolvedTournament?.leagueId ?? null
                 )}
+                initialRoundLabel={latestCopaArgentinaRound?.label}
               />
             </SectionCard>
           ) : null}

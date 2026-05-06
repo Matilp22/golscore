@@ -191,6 +191,18 @@ export type MatchListItemWithGoalScorers = MatchListItem & {
   persistedInSupabase?: boolean
 }
 
+export type LeagueFixtureEventSummary = {
+  id: string
+  teamId?: string | number | null
+  teamSide?: 'home' | 'away' | null
+  playerName: string
+  assistName?: string | null
+  minute: number | null
+  extraMinute?: number | null
+  type: string
+  detail?: string | null
+}
+
 export type LeagueFixtureSummary = {
   id: number
   round: string
@@ -207,6 +219,7 @@ export type LeagueFixtureSummary = {
   goalsAway: number | null
   homePenaltyScore?: number | null
   awayPenaltyScore?: number | null
+  events?: LeagueFixtureEventSummary[]
 }
 
 function compareLeagueFixturesByApiOrder(
@@ -858,6 +871,7 @@ type StoredMatchEventRow = {
   match_id: number | string
   team_id: number | string | null
   player_name: string | null
+  assist_name?: string | null
   minute: number | null
   extra_minute: number | null
   type: string
@@ -2345,6 +2359,135 @@ function normalizeStandingGroupName(value: string) {
     .replace(/[\u0300-\u036f]/g, '')
 }
 
+type StoredLeagueFixtureMatchRow = {
+  id: number | string
+  external_id: number | string | null
+  home_team_id: number | string | null
+  away_team_id: number | string | null
+}
+
+function isMissingOptionalStoredEvents(error: { code?: string; message?: string } | null | undefined) {
+  const message = (error?.message ?? '').toLowerCase()
+
+  return (
+    error?.code === '42P01' ||
+    error?.code === '42703' ||
+    error?.code === 'PGRST204' ||
+    error?.code === 'PGRST205' ||
+    message.includes('match_events') ||
+    message.includes('schema cache')
+  )
+}
+
+function mapStoredEventToLeagueFixtureEvent(
+  row: StoredMatchEventRow,
+  matchRow: StoredLeagueFixtureMatchRow
+): LeagueFixtureEventSummary {
+  const teamId = row.team_id ?? null
+  const teamSide =
+    teamId !== null && String(teamId) === String(matchRow.home_team_id)
+      ? 'home'
+      : teamId !== null && String(teamId) === String(matchRow.away_team_id)
+        ? 'away'
+        : null
+
+  return {
+    id: String(
+      row.external_event_id ??
+      row.id ??
+      `${matchRow.external_id ?? matchRow.id}:${row.minute ?? 'minute'}:${row.player_name ?? 'event'}`
+    ),
+    teamId,
+    teamSide,
+    playerName: row.player_name || 'Evento',
+    assistName: row.assist_name ?? null,
+    minute: row.minute,
+    extraMinute: row.extra_minute,
+    type: row.type,
+    detail: row.detail,
+  }
+}
+
+async function enrichLeagueFixturesWithStoredEvents(
+  leagueId: number,
+  fixtures: LeagueFixtureSummary[]
+) {
+  if (leagueId !== 130 || !fixtures.length) return fixtures
+
+  try {
+    const supabase = getSupabaseAdminClient()
+    const externalIds = [
+      ...new Set(fixtures.flatMap((fixture) => [fixture.id, String(fixture.id)])),
+    ]
+    const matchRows: StoredLeagueFixtureMatchRow[] = []
+
+    for (const chunk of chunkArray(externalIds, 100)) {
+      const response = await supabase
+        .from('matches')
+        .select('id, external_id, home_team_id, away_team_id')
+        .in('external_id', chunk)
+
+      if (response.error) throw response.error
+      matchRows.push(...((response.data ?? []) as StoredLeagueFixtureMatchRow[]))
+    }
+
+    if (!matchRows.length) return fixtures
+
+    const matchRowsByMatchId = new Map(matchRows.map((row) => [String(row.id), row]))
+    const matchRowsByExternalId = new Map(
+      matchRows
+        .filter((row) => row.external_id !== null && row.external_id !== undefined)
+        .map((row) => [String(row.external_id), row])
+    )
+    const eventsByMatchId = new Map<string, StoredMatchEventRow[]>()
+
+    for (const chunk of chunkArray([...matchRowsByMatchId.keys()], 100)) {
+      const response = await supabase
+        .from('match_events')
+        .select('id, external_event_id, match_id, team_id, player_name, assist_name, minute, extra_minute, type, detail')
+        .in('match_id', chunk)
+        .order('minute', { ascending: true })
+        .order('extra_minute', { ascending: true })
+
+      if (response.error) {
+        if (isMissingOptionalStoredEvents(response.error)) return fixtures
+        throw response.error
+      }
+
+      for (const event of (response.data ?? []) as StoredMatchEventRow[]) {
+        const matchId = String(event.match_id)
+        const current = eventsByMatchId.get(matchId) ?? []
+        current.push(event)
+        eventsByMatchId.set(matchId, current)
+      }
+    }
+
+    return fixtures.map((fixture) => {
+      const matchRow = matchRowsByExternalId.get(String(fixture.id))
+      if (!matchRow) return fixture
+
+      const events = (eventsByMatchId.get(String(matchRow.id)) ?? [])
+        .map((event) => mapStoredEventToLeagueFixtureEvent(event, matchRow))
+        .sort((a, b) => {
+          if ((a.minute ?? 0) !== (b.minute ?? 0)) return (a.minute ?? 0) - (b.minute ?? 0)
+          return (a.extraMinute ?? 0) - (b.extraMinute ?? 0)
+        })
+
+      return {
+        ...fixture,
+        events,
+      }
+    })
+  } catch (error) {
+    console.warn('[copa-argentina:events] No se pudieron leer incidencias desde Supabase.', {
+      leagueId,
+      message: error instanceof Error ? error.message : String(error),
+    })
+
+    return fixtures
+  }
+}
+
 export async function getLeagueFixtures(leagueId: number, season: number) {
   const storedFixtures = readStoredFixturesByLeagueSeason(leagueId, season)
 
@@ -2374,7 +2517,11 @@ export async function getLeagueFixtures(leagueId: number, season: number) {
       homePenaltyScore: item.score?.penalty?.home ?? null,
       awayPenaltyScore: item.score?.penalty?.away ?? null,
     }))
-    logCopaArgentinaFixtureDebug(leagueId, season, mappedFixtures, 'api')
+    const enrichedMappedFixtures = await enrichLeagueFixturesWithStoredEvents(
+      leagueId,
+      mappedFixtures
+    )
+    logCopaArgentinaFixtureDebug(leagueId, season, enrichedMappedFixtures, 'api')
 
     if (mappedFixtures.length) {
       await persistFixtureListAssets(data.response || [])
@@ -2424,11 +2571,15 @@ export async function getLeagueFixtures(leagueId: number, season: number) {
         homePenaltyScore: item.homePenaltyScore,
         awayPenaltyScore: item.awayPenaltyScore,
       }))
-      logCopaArgentinaFixtureDebug(leagueId, season, refreshedFixtures, 'cache')
-      return refreshedFixtures
+      const enrichedRefreshedFixtures = await enrichLeagueFixturesWithStoredEvents(
+        leagueId,
+        refreshedFixtures
+      )
+      logCopaArgentinaFixtureDebug(leagueId, season, enrichedRefreshedFixtures, 'cache')
+      return enrichedRefreshedFixtures
     }
 
-    return mappedFixtures
+    return enrichedMappedFixtures
   } catch (error) {
     if (storedFixtures.length) {
       const fallbackFixtures = storedFixtures.map((item): LeagueFixtureSummary => ({
@@ -2448,8 +2599,12 @@ export async function getLeagueFixtures(leagueId: number, season: number) {
         homePenaltyScore: item.homePenaltyScore,
         awayPenaltyScore: item.awayPenaltyScore,
       }))
-      logCopaArgentinaFixtureDebug(leagueId, season, fallbackFixtures, 'cache')
-      return fallbackFixtures
+      const enrichedFallbackFixtures = await enrichLeagueFixturesWithStoredEvents(
+        leagueId,
+        fallbackFixtures
+      )
+      logCopaArgentinaFixtureDebug(leagueId, season, enrichedFallbackFixtures, 'cache')
+      return enrichedFallbackFixtures
     }
 
     throw error

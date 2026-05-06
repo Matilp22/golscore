@@ -40,6 +40,16 @@ type ApiFixture = {
     home: number | null
     away: number | null
   }
+  score?: {
+    fulltime?: {
+      home: number | null
+      away: number | null
+    }
+    penalty?: {
+      home: number | null
+      away: number | null
+    }
+  }
 }
 
 type ApiFixtureEvent = {
@@ -204,8 +214,22 @@ function isImportantLiveEvent(type?: string | null, detail?: string | null) {
 }
 
 function isImportantMatchEventForHome(event: ApiFixtureEvent) {
+  const normalizedType = normalizeFootballEventText(event.type)
+  const normalizedDetail = normalizeFootballEventText(event.detail)
+  const isCardEvent =
+    normalizedType.includes('card') &&
+    (
+      normalizedDetail.includes('yellow') ||
+      normalizedDetail.includes('red') ||
+      normalizedDetail.includes('roja')
+    )
+
   return (
-    isImportantLiveEvent(event.type, event.detail) &&
+    (
+      isScoreboardGoalEvent(event.type, event.detail) ||
+      isCardEvent ||
+      isImportantLiveEvent(event.type, event.detail)
+    ) &&
     event.time?.elapsed !== null &&
     event.time?.elapsed !== undefined
   )
@@ -327,6 +351,44 @@ async function syncMatchEvents(
 
     return { eventsFound: 0, goalsInserted: 0 }
   }
+}
+
+async function updatePenaltyScores(
+  supabase: ReturnType<typeof createClient>,
+  fixture: ApiFixture,
+  matchId: string | number,
+) {
+  const homePenaltyScore = fixture.score?.penalty?.home ?? null
+  const awayPenaltyScore = fixture.score?.penalty?.away ?? null
+
+  if (homePenaltyScore === null && awayPenaltyScore === null) return
+
+  const { error } = await supabase
+    .from('matches')
+    .update({
+      home_penalty_score: homePenaltyScore,
+      away_penalty_score: awayPenaltyScore,
+    })
+    .eq('id', matchId)
+
+  if (!error) return
+
+  const message = error.message.toLowerCase()
+  const isMissingPenaltyColumn =
+    message.includes('home_penalty_score') ||
+    message.includes('away_penalty_score') ||
+    message.includes('schema cache')
+
+  if (isMissingPenaltyColumn) {
+    console.warn('[sync-matches] columnas de penales no disponibles; se conserva sync base.', {
+      fixtureId: fixture.fixture.id,
+      matchId,
+      message: error.message,
+    })
+    return
+  }
+
+  throw error
 }
 
 function json(body: unknown, status = 200) {
@@ -518,6 +580,7 @@ Deno.serve(async (req) => {
               .single()
 
             if (!fallbackResult.error && fallbackResult.data?.id) {
+              await updatePenaltyScores(supabase, item, fallbackResult.data.id)
               const eventSync = await syncMatchEvents(
                 supabase,
                 footballApiBaseUrl,
@@ -542,6 +605,8 @@ Deno.serve(async (req) => {
 
           const matchId = existing?.id ?? matchResult.data?.id
           if (!matchId) throw new Error(`No se pudo resolver id interno del fixture ${item.fixture.id}`)
+
+          await updatePenaltyScores(supabase, item, matchId)
 
           const eventSync = await syncMatchEvents(
             supabase,

@@ -13,6 +13,7 @@ type CopaArgentinaMatchListProps = {
     label: string
     matches: LeagueFixtureSummary[]
   }>
+  initialRoundLabel?: string
 }
 
 const ROUND_ORDER = [
@@ -64,14 +65,19 @@ function getStatusLabel(match: LeagueFixtureSummary) {
   return match.statusShort
 }
 
-export default function CopaArgentinaMatchList({ rounds }: CopaArgentinaMatchListProps) {
+export default function CopaArgentinaMatchList({
+  rounds,
+  initialRoundLabel,
+}: CopaArgentinaMatchListProps) {
   const availableRounds = useMemo(
     () =>
       ROUND_ORDER.map((label) => rounds.find((round) => round.label === label))
         .filter((round): round is CopaArgentinaMatchListProps['rounds'][number] => Boolean(round)),
     [rounds]
   )
-  const [selectedRound, setSelectedRound] = useState(availableRounds[0]?.label || '')
+  const [selectedRound, setSelectedRound] = useState(
+    initialRoundLabel || availableRounds[0]?.label || ''
+  )
   const activeRound =
     availableRounds.find((round) => round.label === selectedRound) || availableRounds[0]
 

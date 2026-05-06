@@ -18,6 +18,7 @@ import { getExcludedCompetitionReason } from '@/shared/utils/competition-filter'
 import {
   isImportantLiveEvent,
   isScoreboardGoalEvent,
+  normalizeFootballEventText,
 } from '@/shared/utils/football-events'
 import { isFinishedStatus } from '@/shared/utils/match-status'
 import {
@@ -1892,8 +1893,22 @@ function getEventExternalId(fixture: ApiFixture, event: ApiFixtureEvent) {
 }
 
 function isImportantMatchEventForHome(event: ApiFixtureEvent) {
+  const normalizedType = normalizeFootballEventText(event.type)
+  const normalizedDetail = normalizeFootballEventText(event.detail)
+  const isCardEvent =
+    normalizedType.includes('card') &&
+    (
+      normalizedDetail.includes('yellow') ||
+      normalizedDetail.includes('red') ||
+      normalizedDetail.includes('roja')
+    )
+
   return (
-    isImportantLiveEvent(event.type, event.detail) &&
+    (
+      isScoreboardGoalEvent(event.type, event.detail) ||
+      isCardEvent ||
+      isImportantLiveEvent(event.type, event.detail)
+    ) &&
     event.time?.elapsed !== null &&
     event.time?.elapsed !== undefined
   )
