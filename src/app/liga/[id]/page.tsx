@@ -38,7 +38,15 @@ import {
   getMatchWinner,
   type CopaArgentinaStageKey,
 } from '@/shared/utils/copa-argentina'
-import { getTournamentDisplayOptions } from '@/shared/config/competition-rules'
+import {
+  LEGEND_TONE_CLASSES,
+  ROW_TONE_CLASSES,
+  getStandingRuleForRank,
+  getTournamentDisplayOptions,
+  type CompetitionRule,
+  type GroupMode,
+  type RuleTone,
+} from '@/shared/config/competition-rules'
 
 type PageProps = {
   params: Promise<{ id: string }>
@@ -595,9 +603,51 @@ function getDisplayGroupName(value: string) {
   return value
 }
 
+function isGroupLikeTable(name: string) {
+  const normalized = normalizeGroupName(name)
+
+  return (
+    normalized.includes('grupo') ||
+    normalized.includes('group') ||
+    normalized.includes('zona') ||
+    normalized.includes('conference') ||
+    normalized.includes('conferencia') ||
+    normalized.includes('league phase') ||
+    normalized.includes('fase liga')
+  )
+}
+
 function splitPrimaryGroups(
-  groups: Array<{ name: string; rows: LeagueStandingRow[] }>
+  groups: Array<{ name: string; rows: LeagueStandingRow[] }>,
+  groupMode: GroupMode = 'api_groups'
 ) {
+  if (groupMode === 'league_phase') {
+    const primaryGroups = groups.filter((group) => !isDerivedTableGroup(group.name))
+    const primaryNames = new Set(primaryGroups.map((group) => group.name))
+
+    return {
+      primaryGroups,
+      secondaryGroups: groups.filter((group) => !primaryNames.has(group.name)),
+    }
+  }
+
+  if (
+    ['api_groups', 'zones', 'conferences'].includes(groupMode)
+  ) {
+    const groupedTables = groups.filter(
+      (group) => !isDerivedTableGroup(group.name) && isGroupLikeTable(group.name)
+    )
+
+    if (groupedTables.length >= 2) {
+      const primaryNames = new Set(groupedTables.map((group) => group.name))
+
+      return {
+        primaryGroups: groupedTables,
+        secondaryGroups: groups.filter((group) => !primaryNames.has(group.name)),
+      }
+    }
+  }
+
   const primary = groups.filter((group) => {
     const name = normalizeGroupName(group.name)
     return (
@@ -780,7 +830,9 @@ function getRowAccent(
   index: number,
   rowsLength: number,
   variant: StandingsVariant,
-  relegatedTeamIds: Set<string> = new Set()
+  relegatedTeamIds: Set<string> = new Set(),
+  rule: CompetitionRule | null = null,
+  allowLegacyFallback = true
 ) {
   if (variant === 'annual') {
     const rank = row.rank || index + 1
@@ -822,7 +874,14 @@ function getRowAccent(
     return 'border-l-[#ff7e7e] bg-[#2a1616]'
   }
 
-  if (rowsLength >= 14 && index < 8) {
+  const rank = row.rank || index + 1
+  const configuredRule = getStandingRuleForRank(rule, rank)
+
+  if (configuredRule) {
+    return ROW_TONE_CLASSES[configuredRule.tone]
+  }
+
+  if (allowLegacyFallback && rowsLength >= 14 && index < 8) {
     return 'border-l-[#46d98e] bg-[#10261c]'
   }
 
@@ -844,6 +903,13 @@ function TableLegend({
       ))}
     </div>
   )
+}
+
+function getConfiguredLegendItems(items: Array<{ label: string; tone: RuleTone }>) {
+  return items.map((item) => ({
+    label: item.label,
+    tone: LEGEND_TONE_CLASSES[item.tone],
+  }))
 }
 
 function getAnnualRelegatedTeamId(rows: LeagueStandingRow[]) {
@@ -1217,12 +1283,16 @@ function StandingsTable({
   compact = false,
   variant = 'positions',
   relegatedTeamIds,
+  rule = null,
+  allowLegacyFallback = true,
 }: {
   rows: Array<LeagueStandingRow & { average?: number }>
   showAverage?: boolean
   compact?: boolean
   variant?: StandingsVariant
   relegatedTeamIds?: Set<string>
+  rule?: CompetitionRule | null
+  allowLegacyFallback?: boolean
 }) {
   const cellPadding = compact ? 'px-2 py-1.5' : 'px-2.5 py-2'
 
@@ -1250,7 +1320,7 @@ function StandingsTable({
           {rows.map((row, index) => (
             <tr
               key={`${row.teamId || row.teamName}-${index}`}
-              className={`border-b border-l-2 border-white/6 text-[#dce5ef] last:border-b-0 ${getRowAccent(row, index, rows.length, variant, relegatedTeamIds)}`}
+              className={`border-b border-l-2 border-white/6 text-[#dce5ef] last:border-b-0 ${getRowAccent(row, index, rows.length, variant, relegatedTeamIds, rule, allowLegacyFallback)}`}
             >
               <td className={`${cellPadding} font-semibold`}>{row.rank || index + 1}</td>
               <td className={cellPadding}>
@@ -1526,7 +1596,10 @@ export default async function LigaPage({ params }: PageProps) {
         : 'No se pudo cargar la información del torneo.'
   }
 
-  const { primaryGroups, secondaryGroups } = splitPrimaryGroups(standings)
+  const { primaryGroups, secondaryGroups } = splitPrimaryGroups(
+    standings,
+    displayOptions.groupMode
+  )
   const visibleSecondaryGroups = secondaryGroups.filter(
     (group) => !isDerivedTableGroup(group.name)
   )
@@ -1564,6 +1637,9 @@ export default async function LigaPage({ params }: PageProps) {
       includeFinalPhaseRounds: tournament.key === 'argentina-liga-profesional',
     })
   const compactGroups = primaryGroups.length === 2
+  const configuredLegendItems = displayOptions.protected
+    ? []
+    : getConfiguredLegendItems(displayOptions.legendItems)
   const annualRelegatedTeamId = getAnnualRelegatedTeamId(annualTable)
   const promedioRelegatedTeamId = getPromediosRelegatedTeamId(
     promedioTable,
@@ -1576,6 +1652,8 @@ export default async function LigaPage({ params }: PageProps) {
     ? new Set([promedioRelegatedTeamId])
     : new Set<string>()
   const compactSummaryTables = annualTable.length > 0 && promedioTable.length > 0
+  const visibleTournamentTitle = displayOptions.visibleNameEs
+  const visibleTournamentCountry = displayOptions.countryNameEs
 
   return (
     <div className="min-h-screen bg-transparent text-white">
@@ -1599,10 +1677,10 @@ export default async function LigaPage({ params }: PageProps) {
 
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#7ff0b2]">
-                    {resolvedTournament?.country || tournament.country || 'Torneo'}
+                    {visibleTournamentCountry}
                   </p>
                   <h1 className="mt-1 text-2xl font-bold text-white md:text-3xl">
-                    {tournament.title}
+                    {visibleTournamentTitle}
                   </h1>
                   <p className="mt-1 text-sm text-[#8d98a7]">
                     {resolvedTournament
@@ -1663,11 +1741,19 @@ export default async function LigaPage({ params }: PageProps) {
                   title={getDisplayGroupName(group.name)}
                   subtitle="Tabla de posiciones"
                 >
-                  <StandingsTable rows={group.rows} compact={compactGroups} />
+                  <StandingsTable
+                    rows={group.rows}
+                    compact={compactGroups}
+                    rule={displayOptions.rule}
+                    allowLegacyFallback={displayOptions.protected}
+                  />
+                  {configuredLegendItems.length ? (
+                    <TableLegend items={configuredLegendItems} />
+                  ) : null}
                 </SectionCard>
               ))}
             </div>
-          ) : (
+          ) : displayOptions.hideEmptyStandings ? null : (
             <SectionCard
               title="Tabla de posiciones"
               subtitle="Algunos torneos de copa no publican tabla tradicional."
@@ -1686,7 +1772,14 @@ export default async function LigaPage({ params }: PageProps) {
                   title={getDisplayGroupName(group.name)}
                   subtitle="Tabla complementaria"
                 >
-                  <StandingsTable rows={group.rows} />
+                  <StandingsTable
+                    rows={group.rows}
+                    rule={displayOptions.rule}
+                    allowLegacyFallback={displayOptions.protected}
+                  />
+                  {configuredLegendItems.length ? (
+                    <TableLegend items={configuredLegendItems} />
+                  ) : null}
                 </SectionCard>
               ))}
             </div>

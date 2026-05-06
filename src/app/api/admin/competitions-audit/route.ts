@@ -3,8 +3,13 @@ import { NextResponse } from 'next/server'
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import {
   COMPETITION_RULES,
+  GENERAL_COMPETITION_REFERENCE_SOURCES,
   PROTECTED_COMPETITION_KEYS,
+  PROTECTED_COMPETITION_REASON,
+  getCompetitionCountryNameEs,
   getCompetitionRule,
+  getCompetitionVisibleNameEs,
+  getProtectedCompetitionAudit,
 } from '@/shared/config/competition-rules'
 import { VISIBLE_TOURNAMENT_PAGE_CONFIGS } from '@/shared/config/tournament-pages'
 import { getLeagueFinalPhaseKey } from '@/shared/utils/league-rounds'
@@ -69,6 +74,52 @@ function hasKnockoutRound(rounds: string[]) {
   })
 }
 
+function hasGroupRound(rounds: string[]) {
+  return rounds.some((round) => {
+    const normalized = normalize(round)
+
+    return (
+      normalized.includes('group') ||
+      normalized.includes('grupo') ||
+      normalized.includes('zona') ||
+      normalized.includes('conference') ||
+      normalized.includes('conferencia') ||
+      normalized.includes('league phase') ||
+      normalized.includes('fase liga')
+    )
+  })
+}
+
+function detectCompetitionType(rounds: string[]) {
+  const groupsDetected = hasGroupRound(rounds)
+  const bracketDetected = hasKnockoutRound(rounds)
+
+  if (groupsDetected && bracketDetected) return 'group_cup'
+  if (bracketDetected) return 'cup'
+  if (groupsDetected) return 'league_with_groups'
+  if (rounds.length) return 'league'
+
+  return 'unknown'
+}
+
+function getHiddenSections(
+  rule: ReturnType<typeof getCompetitionRule>,
+  protectedCompetition: boolean,
+  bracketDetected: boolean
+) {
+  if (protectedCompetition) return []
+
+  const hiddenSections: string[] = []
+
+  if (rule?.standingsMode === 'none') hiddenSections.push('tabla')
+  if (!rule?.showPromedios) hiddenSections.push('promedios')
+  if (!rule?.showAnnualTable) hiddenSections.push('tabla anual')
+  if (!rule?.hasRelegation) hiddenSections.push('descensos')
+  if (!rule?.showBracket && !bracketDetected) hiddenSections.push('bracket')
+
+  return hiddenSections
+}
+
 export async function GET(request: Request) {
   if (!isAuthorized(request)) {
     return jsonNoStore({ ok: false, error: 'No autorizado' }, { status: 401 })
@@ -124,37 +175,73 @@ export async function GET(request: Request) {
         null
       const detectedRounds = league ? roundsByLeagueId.get(String(league.id)) ?? [] : []
       const protectedCompetition = PROTECTED_COMPETITION_KEYS.has(tournament.key)
+      const protectedAudit = getProtectedCompetitionAudit(tournament.key)
+      const groupsDetected = hasGroupRound(detectedRounds)
+      const bracketDetected = hasKnockoutRound(detectedRounds)
+      const originalName = league?.name ?? tournament.title
+      const visibleNameEs =
+        protectedAudit?.visibleNameEs ??
+        getCompetitionVisibleNameEs(tournament.key, tournament.title)
+      const countryNameEs =
+        protectedAudit?.countryNameEs ??
+        getCompetitionCountryNameEs(
+          tournament.key,
+          league?.country ?? tournament.country ?? null
+        )
+      const hiddenSections = getHiddenSections(rule, protectedCompetition, bracketDetected)
+      const sourceUsed = protectedCompetition
+        ? ['skipped']
+        : Array.from(new Set([
+            ...GENERAL_COMPETITION_REFERENCE_SOURCES,
+            ...(rule?.sourceUsed ?? ['Supabase leagues/matches']),
+          ]))
       const warnings: string[] = []
 
       if (!rule && !protectedCompetition) warnings.push('Sin regla centralizada.')
-      if (!league) warnings.push('No se encontro liga en Supabase para esta competencia visible.')
+      if (!league) warnings.push('No se encontró liga en Supabase para esta competencia visible.')
       if (league && !detectedRounds.length) warnings.push('Sin rounds detectados en matches.')
+      if (protectedCompetition) warnings.push(PROTECTED_COMPETITION_REASON)
+      if (rule?.hasAverages && !rule.showPromedios) {
+        warnings.push('Usa/puede usar tabla de promedios oficial, pero no se calcula si API no la publica.')
+      }
 
       return {
         key: tournament.key,
         name: tournament.title,
+        originalName,
+        visibleNameEs,
+        countryNameEs,
         external_id: league?.external_id ?? fallbackExternalIds[0] ?? null,
         supabase_league_id: league?.id ?? null,
         country: league?.country ?? tournament.country ?? null,
+        skipped: protectedCompetition,
+        reason: protectedCompetition ? PROTECTED_COMPETITION_REASON : null,
         protected: protectedCompetition,
-        type_detected: protectedCompetition ? 'protected' : rule?.type ?? 'unknown',
+        detectedType: protectedCompetition ? 'skipped' : detectCompetitionType(detectedRounds),
+        configuredType: protectedCompetition ? 'unchanged' : rule?.configuredType ?? 'unknown',
+        type_detected: protectedCompetition ? 'protected' : detectCompetitionType(detectedRounds),
+        standingsMode: protectedCompetition ? 'unchanged' : rule?.standingsMode ?? 'unknown',
         standings_mode: protectedCompetition ? 'unchanged' : rule?.standingsMode ?? 'unknown',
+        hasAverages: protectedCompetition ? null : rule?.hasAverages ?? false,
+        hasRelegation: protectedCompetition ? null : rule?.hasRelegation ?? false,
+        relegationMode: protectedCompetition ? 'unchanged' : rule?.relegationMode ?? 'unknown',
+        qualificationRules: protectedCompetition ? [] : rule?.qualificationRules ?? [],
+        relegationRules: protectedCompetition ? [] : rule?.relegationRules ?? [],
+        playoffRules: protectedCompetition ? [] : rule?.playoffRules ?? [],
+        groupsDetected: protectedCompetition ? null : groupsDetected,
+        roundsDetected: detectedRounds,
         rounds_detected: detectedRounds,
-        has_groups:
-          protectedCompetition
-            ? null
-            : rule?.standingsMode === 'groups' ||
-              detectedRounds.some((round) => normalize(round).includes('group')),
-        has_bracket:
-          protectedCompetition
-            ? null
-            : Boolean(rule?.showBracket || hasKnockoutRound(detectedRounds)),
+        bracketDetected: protectedCompetition ? null : bracketDetected,
+        hiddenSections,
+        has_groups: protectedCompetition ? null : groupsDetected,
+        has_bracket: protectedCompetition ? null : Boolean(rule?.showBracket || bracketDetected),
+        sourceUsed,
         rules_applied: protectedCompetition
-          ? ['Protegida: sin cambios automaticos desde esta auditoria.']
+          ? [PROTECTED_COMPETITION_REASON]
           : [
-              ...(rule?.qualificationRules ?? []),
-              ...(rule?.relegationRules ?? []),
-              ...(rule?.roundLabelRules ?? []),
+              ...(rule?.qualificationRules ?? []).map((item) => item.label),
+              ...(rule?.relegationRules ?? []).map((item) => item.label),
+              ...(rule?.roundLabels ?? []),
             ],
         warnings,
       }
@@ -168,7 +255,7 @@ export async function GET(request: Request) {
           visible_competitions: competitions.length,
           protected_competitions: competitions.filter((competition) => competition.protected).length,
           with_rules: competitions.filter(
-            (competition) => competition.protected || competition.type_detected !== 'unknown'
+            (competition) => competition.protected || competition.configuredType !== 'unknown'
           ).length,
           warnings: competitions.reduce((sum, competition) => sum + competition.warnings.length, 0),
         },

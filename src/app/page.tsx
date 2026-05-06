@@ -16,6 +16,7 @@ import {
   getSectionConfig,
   getTournamentConfig,
 } from '@/lib/tournament-pages'
+import { getCompetitionVisibleNameEs } from '@/shared/config/competition-rules'
 import {
   addDaysToISO,
   formatMatchTimeArgentina,
@@ -571,7 +572,7 @@ const LEAGUE_RULES: LeagueRule[] = [
     key: 'portugal-taca-de-portugal',
     sectionKey: 'portugal',
     sectionTitle: 'Portugal',
-    baseTitle: 'Taca de Portugal',
+    baseTitle: 'Taça de Portugal',
     match: (match) => {
       const league = leagueText(match)
       return (
@@ -1047,7 +1048,7 @@ function groupMatchesWithPromiedosStructure(matches: ApiMatch[]): SectionBucket[
 
     competitionBuckets.push({
       key: rule.key,
-      title: rule.baseTitle,
+      title: getCompetitionVisibleNameEs(rule.key, rule.baseTitle),
       logo: resolveHomeCompetitionLogo(filtered[0]),
       sectionKey: rule.sectionKey,
       sectionTitle: rule.sectionTitle,

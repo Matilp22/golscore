@@ -20,7 +20,7 @@ export const SECTION_PAGE_TITLES: Record<string, string> = {
   argentina: 'Argentina',
   internacional: 'Internacional',
   inglaterra: 'Inglaterra',
-  espana: 'Espana',
+  espana: 'España',
   italia: 'Italia',
   alemania: 'Alemania',
   portugal: 'Portugal',
@@ -30,7 +30,7 @@ export const SECTION_PAGE_TITLES: Record<string, string> = {
   paraguay: 'Paraguay',
   colombia: 'Colombia',
   chile: 'Chile',
-  mexico: 'Mexico',
+  mexico: 'México',
   eeuu: 'EEUU',
   selecciones: 'Selecciones',
 }
@@ -224,10 +224,10 @@ export const TOURNAMENT_PAGE_CONFIGS: TournamentPageConfig[] = [
   },
   {
     key: 'portugal-taca-de-portugal',
-    title: 'Taca de Portugal',
+    title: 'Taça de Portugal',
     sectionKey: 'portugal',
     country: 'Portugal',
-    searchTerms: ['Taca de Portugal', 'Taça de Portugal'],
+    searchTerms: ['Taça de Portugal', 'Taca de Portugal'],
   },
   {
     key: 'francia-ligue-1',
@@ -245,10 +245,10 @@ export const TOURNAMENT_PAGE_CONFIGS: TournamentPageConfig[] = [
   },
   {
     key: 'brasil-brasileirao',
-    title: 'Brasileirao',
+    title: 'Brasileirão',
     sectionKey: 'brasil',
     country: 'Brazil',
-    searchTerms: ['Serie A', 'Brasileirao Serie A'],
+    searchTerms: ['Serie A', 'Brasileirão Serie A', 'Brasileirao Serie A'],
   },
   {
     key: 'brasil-copa-do-brasil',
@@ -259,10 +259,10 @@ export const TOURNAMENT_PAGE_CONFIGS: TournamentPageConfig[] = [
   },
   {
     key: 'uruguay-primera-division',
-    title: 'Primera Division',
+    title: 'Primera División',
     sectionKey: 'uruguay',
     country: 'Uruguay',
-    searchTerms: ['Primera Division'],
+    searchTerms: ['Primera División', 'Primera Division'],
   },
   {
     key: 'uruguay-copa-nacional',
@@ -276,7 +276,7 @@ export const TOURNAMENT_PAGE_CONFIGS: TournamentPageConfig[] = [
     title: 'Copa de Primera',
     sectionKey: 'paraguay',
     country: 'Paraguay',
-    searchTerms: ['Division Profesional', 'Copa de Primera'],
+    searchTerms: ['División Profesional', 'Division Profesional', 'Copa de Primera'],
   },
   {
     key: 'paraguay-copa-paraguay',
@@ -301,10 +301,10 @@ export const TOURNAMENT_PAGE_CONFIGS: TournamentPageConfig[] = [
   },
   {
     key: 'chile-primera-division',
-    title: 'Primera Division',
+    title: 'Primera División',
     sectionKey: 'chile',
     country: 'Chile',
-    searchTerms: ['Primera Division'],
+    searchTerms: ['Primera División', 'Primera Division'],
   },
   {
     key: 'chile-copa-chile',
@@ -350,10 +350,10 @@ export const TOURNAMENT_PAGE_CONFIGS: TournamentPageConfig[] = [
   },
   {
     key: 'selecciones-copa-america',
-    title: 'Copa America',
+    title: 'Copa América',
     sectionKey: 'selecciones',
     country: 'World',
-    searchTerms: ['Copa America'],
+    searchTerms: ['Copa América', 'Copa America'],
   },
   {
     key: 'selecciones-eurocopa',
