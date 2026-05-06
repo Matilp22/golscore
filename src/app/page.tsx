@@ -1103,15 +1103,15 @@ export default async function HomePage({
 
   try {
     const enrichedMatches = await withGoalScorers(await getMatchesByDate(selectedDate))
-    dateMatches = enrichedMatches.filter((match) => match.persistedInSupabase)
+    dateMatches = enrichedMatches
 
     if (process.env.NODE_ENV === 'development') {
       const missingMatches = enrichedMatches.filter((match) => !match.persistedInSupabase)
 
       if (missingMatches.length) {
-        console.info('[home] partidos ocultos por no estar persistidos en Supabase', {
+        console.info('[home] partidos servidos por fallback/API sin extras de Supabase', {
           selectedDate,
-          hidden: missingMatches.length,
+          fallback: missingMatches.length,
           sample: missingMatches.slice(0, 20).map((match) => ({
             externalId: match.externalId ?? match.id,
             league: match.league,

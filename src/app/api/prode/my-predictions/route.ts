@@ -3,6 +3,9 @@ import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getSupabaseServerClient } from '@/lib/supabase/server'
 import { isFinalMatchStatus } from '@/shared/utils/match-status'
 
+export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
+
 type PredictionRow = {
   id: string
   user_id: string
@@ -37,6 +40,12 @@ type ApiError = {
   details?: string
 }
 
+function jsonNoStore(body: unknown, init?: ResponseInit) {
+  const response = NextResponse.json(body, init)
+  response.headers.set('Cache-Control', 'no-store, max-age=0')
+  return response
+}
+
 function chunkArray<T>(items: T[], size: number) {
   const chunks: T[][] = []
 
@@ -69,7 +78,7 @@ async function getAuthenticatedUser(request: Request) {
     return {
       supabase: null,
       user: null,
-      error: NextResponse.json({
+      error: jsonNoStore({
         ok: false,
         error: 'Supabase no está configurado.',
         predictions: [],
@@ -108,7 +117,7 @@ export async function GET(request: Request) {
   if (authError) return authError
 
   if (!supabase) {
-    return NextResponse.json({
+    return jsonNoStore({
       ok: false,
       error: 'Supabase no está configurado.',
       predictions: [],
@@ -116,7 +125,7 @@ export async function GET(request: Request) {
   }
 
   if (!user) {
-    return NextResponse.json({ ok: true, predictions: [] })
+    return jsonNoStore({ ok: true, predictions: [] })
   }
 
   try {
@@ -134,7 +143,7 @@ export async function GET(request: Request) {
       matchIdsForLeague = (leagueMatchesData ?? []).map((match) => String(match.id))
 
       if (!matchIdsForLeague.length) {
-        return NextResponse.json({ ok: true, predictions: [] })
+        return jsonNoStore({ ok: true, predictions: [] })
       }
     }
 
@@ -267,10 +276,10 @@ export async function GET(request: Request) {
       }
     })
 
-    return NextResponse.json({ ok: true, predictions })
+    return jsonNoStore({ ok: true, predictions })
   } catch (error) {
     console.error('[prode/my-predictions] Error completo', error)
 
-    return NextResponse.json(getErrorPayload(error))
+    return jsonNoStore(getErrorPayload(error))
   }
 }

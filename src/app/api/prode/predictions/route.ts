@@ -4,6 +4,15 @@ import { getSupabaseServerClient } from '@/lib/supabase/server'
 import { savePrediction } from '@/server/prode/service'
 import { isFinalMatchStatus } from '@/shared/utils/match-status'
 
+export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
+
+function jsonNoStore(body: unknown, init?: ResponseInit) {
+  const response = NextResponse.json(body, init)
+  response.headers.set('Cache-Control', 'no-store, max-age=0')
+  return response
+}
+
 async function getAuthenticatedUser(request: Request) {
   const supabase = await getSupabaseServerClient()
 
@@ -11,7 +20,7 @@ async function getAuthenticatedUser(request: Request) {
     return {
       supabase: null,
       user: null,
-      error: NextResponse.json(
+      error: jsonNoStore(
         { error: 'Supabase no está configurado.' },
         { status: 500 }
       ),
@@ -45,7 +54,7 @@ async function getAuthenticatedUser(request: Request) {
   return {
     supabase,
     user: null,
-    error: NextResponse.json(
+    error: jsonNoStore(
       { error: 'Necesitás iniciar sesión para guardar predicciones.' },
       { status: 401 }
     ),
@@ -71,7 +80,7 @@ export async function POST(request: Request) {
     predictedHomeScore < 0 ||
     predictedAwayScore < 0
   ) {
-    return NextResponse.json(
+    return jsonNoStore(
       { error: 'Datos inválidos para guardar la predicción.' },
       { status: 400 }
     )
@@ -85,7 +94,7 @@ export async function POST(request: Request) {
   })
 
   if (!result.ok) {
-    return NextResponse.json(
+    return jsonNoStore(
       { error: result.error },
       { status: result.status }
     )
@@ -125,7 +134,7 @@ export async function POST(request: Request) {
     })
   }
 
-  return NextResponse.json({
+  return jsonNoStore({
     prediction: {
       id: prediction.id,
       userId: prediction.user_id,

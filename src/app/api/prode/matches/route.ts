@@ -6,6 +6,9 @@ import { normalizeLeagueRound } from '@/shared/utils/league-rounds'
 import { parseMatchDate } from '@/shared/utils/prediction-lock'
 import { getApiSportsTeamLogoUrl } from '@/shared/utils/asset-urls'
 
+export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
+
 type SportDbError = {
   message: string
   code?: string
@@ -43,11 +46,17 @@ type SupabaseServerClient = NonNullable<
   Awaited<ReturnType<typeof getSupabaseServerClient>>
 >
 
+function jsonNoStore(body: unknown, init?: ResponseInit) {
+  const response = NextResponse.json(body, init)
+  response.headers.set('Cache-Control', 'no-store, max-age=0')
+  return response
+}
+
 function prodeError(error: SportDbError, fallback: string) {
   const missingTable = error.code === '42P01'
   const missingColumn = error.code === '42703'
 
-  return NextResponse.json(
+  return jsonNoStore(
     {
       error: missingTable
         ? 'La tabla esperada del prode no existe en Supabase. Ejecuta las migraciones.'
@@ -114,7 +123,7 @@ export async function GET(request: Request) {
   const supabase = await getSupabaseServerClient()
 
   if (!supabase) {
-    return NextResponse.json(
+    return jsonNoStore(
       { error: 'Supabase no esta configurado.', matches: [] },
       { status: 500 }
     )
@@ -137,14 +146,14 @@ export async function GET(request: Request) {
   }
 
   if (!allowedLeagueIds.length) {
-    return NextResponse.json({
+    return jsonNoStore({
       matches: [],
       meta: { emptyReason: 'allowed_leagues_empty' },
     })
   }
 
   if (leagueId && !allowedLeagueIds.includes(leagueId)) {
-    return NextResponse.json({
+    return jsonNoStore({
       matches: [],
       meta: { emptyReason: 'league_not_allowed' },
     })
@@ -190,7 +199,7 @@ export async function GET(request: Request) {
   })
 
   if (!rows.length) {
-    return NextResponse.json({
+    return jsonNoStore({
       matches: [],
       meta: { emptyReason: 'matches_empty' },
     })
@@ -236,7 +245,7 @@ export async function GET(request: Request) {
     : rows
 
   if (!rowsForResponse.length) {
-    return NextResponse.json({
+    return jsonNoStore({
       matches: [],
       meta: { emptyReason: 'matches_empty_for_round' },
     })
@@ -286,5 +295,5 @@ export async function GET(request: Request) {
     }
   })
 
-  return NextResponse.json({ matches })
+  return jsonNoStore({ matches })
 }

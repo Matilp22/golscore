@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { TeamLogo as AssetTeamLogo } from '@/frontend/components/AssetImage'
 import type { Match, Prediction } from '@/frontend/types/prode'
 import { getMatchPredictionLockState } from '@/frontend/types/prode'
@@ -155,19 +155,6 @@ export default function PredictionForm({
       : 'Real'
   const predictionGridClass =
     'grid min-w-0 grid-cols-[minmax(0,1fr)_48px_48px_minmax(0,1fr)] items-center gap-2 md:grid-cols-[minmax(140px,1fr)_58px_24px_58px_minmax(140px,1fr)_104px] md:gap-3'
-
-  useEffect(() => {
-    console.debug('[prode/prediction-form] lock check', {
-      matchId: match.id,
-      match_date: match.matchDate,
-      status: match.status,
-      now: lockState.now.toISOString(),
-      matchStart: lockState.matchStart.toISOString(),
-      lockAt: lockState.lockAt.toISOString(),
-      minutesUntilMatch: Math.round(lockState.minutesUntilMatch * 10) / 10,
-      locked,
-    })
-  }, [locked, lockState, match.id, match.matchDate, match.status])
 
   const handleSave = () => {
     setMessage('')

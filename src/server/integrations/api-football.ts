@@ -49,6 +49,9 @@ type CacheEntry = {
 
 const apiResponseCache = new Map<string, CacheEntry>()
 const inflightApiRequests = new Map<string, Promise<ApiFootballResponse<unknown>>>()
+const API_FOOTBALL_REQUEST_TIMEOUT_MS = 8000
+const HOME_SUPABASE_TIMEOUT_MS = 5000
+const HOME_API_FALLBACK_TIMEOUT_MS = 9000
 
 export class ApiFootballError extends Error {
   code?: string
@@ -591,6 +594,126 @@ function normalizeSearchValue(value: string) {
     .replace(/[\u0300-\u036f]/g, '')
 }
 
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null
+
+  return Promise.race([
+    promise.finally(() => {
+      if (timeoutId) clearTimeout(timeoutId)
+    }),
+    new Promise<T>((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(new Error(message))
+      }, timeoutMs)
+    }),
+  ])
+}
+
+const HOME_FALLBACK_LEAGUE_IDS = new Set([
+  1,
+  2,
+  3,
+  11,
+  13,
+  39,
+  61,
+  71,
+  78,
+  94,
+  128,
+  129,
+  130,
+  135,
+  140,
+  848,
+])
+
+function isHomeApiFallbackFixture(item: FixtureListItem) {
+  const league = normalizeSearchValue(item.league.name || '')
+  const country = normalizeSearchValue(item.league.country || '')
+  const excluded = getExcludedCompetitionReason({
+    league: item.league.name,
+    leagueName: item.league.name,
+    country: item.league.country,
+    home: item.teams.home.name,
+    away: item.teams.away.name,
+  })
+
+  if (excluded) return false
+  if (item.league.id && HOME_FALLBACK_LEAGUE_IDS.has(item.league.id)) return true
+
+  if (country.includes('argentina')) {
+    return (
+      league.includes('liga profesional') ||
+      league.includes('primera division') ||
+      league.includes('primera nacional') ||
+      league.includes('copa argentina') ||
+      league.includes('copa de la liga') ||
+      league.includes('primera b') ||
+      league.includes('federal a') ||
+      league.includes('primera c')
+    )
+  }
+
+  if (
+    league.includes('libertadores') ||
+    league.includes('sudamericana') ||
+    league.includes('champions league') ||
+    league.includes('europa league') ||
+    league.includes('conference league') ||
+    league.includes('intercontinental') ||
+    league.includes('concacaf champions')
+  ) {
+    return true
+  }
+
+  if (country.includes('england')) {
+    return league === 'premier league' || league.includes('fa cup') || league.includes('league cup')
+  }
+
+  if (country.includes('spain')) {
+    return league === 'la liga' || league.includes('copa del rey') || league.includes('super cup')
+  }
+
+  if (country.includes('italy')) {
+    return league === 'serie a' || league.includes('coppa italia') || league.includes('super cup')
+  }
+
+  if (country.includes('germany')) {
+    return league === 'bundesliga' || league.includes('dfb pokal')
+  }
+
+  if (country.includes('portugal')) {
+    return league.includes('primeira liga') || league.includes('taca de portugal') || league.includes('portugal cup')
+  }
+
+  if (country.includes('france')) {
+    return league === 'ligue 1' || league.includes('coupe de france')
+  }
+
+  if (country.includes('brazil')) {
+    return league === 'serie a' || league.includes('brasileirao') || league.includes('copa do brasil')
+  }
+
+  if (country.includes('uruguay')) return league.includes('primera division') || league.includes('copa uruguay')
+  if (country.includes('paraguay')) return league.includes('division profesional') || league.includes('copa de primera')
+  if (country.includes('colombia')) return league.includes('primera a') || league.includes('liga betplay')
+  if (country.includes('chile')) return league.includes('primera division') || league.includes('copa chile')
+  if (country.includes('mexico')) return league.includes('liga mx')
+  if (league.includes('major league soccer')) return true
+
+  return (
+    league.includes('world cup') ||
+    league.includes('copa america') ||
+    league.includes('uefa euro') ||
+    league.includes('european championship')
+  )
+}
+
 function getArgentinaDateKey(dateString: string) {
   return getArgentinaDateISO(dateString)
 }
@@ -653,14 +776,32 @@ async function apiFootball(
   if (existingRequest) return existingRequest
 
   const requestPromise = (async () => {
-    const res = await fetch(url.toString(), {
-      headers: {
-        'x-apisports-key': apiKey,
-      },
-      ...(options?.noStore
-        ? { cache: 'no-store' as const }
-        : { next: { revalidate: ttlSeconds } }),
-    })
+    const abortController = new AbortController()
+    const timeoutId = setTimeout(
+      () => abortController.abort(),
+      API_FOOTBALL_REQUEST_TIMEOUT_MS
+    )
+    let res: Response
+
+    try {
+      res = await fetch(url.toString(), {
+        headers: {
+          'x-apisports-key': apiKey,
+        },
+        signal: abortController.signal,
+        ...(options?.noStore
+          ? { cache: 'no-store' as const }
+          : { next: { revalidate: ttlSeconds } }),
+      })
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error(`API timeout: ${path}`)
+      }
+
+      throw error
+    } finally {
+      clearTimeout(timeoutId)
+    }
 
     if (!res.ok) {
       throw new Error(`API error: ${res.status}`)
@@ -708,7 +849,11 @@ async function apiFootball(
 
 export async function getMatchesByDate(date: string): Promise<MatchListItem[]> {
   try {
-    const storedMatches = await fetchStoredHomeMatches(date)
+    const storedMatches = await withTimeout(
+      fetchStoredHomeMatches(date),
+      HOME_SUPABASE_TIMEOUT_MS,
+      'Supabase home matches timeout'
+    )
 
     if (storedMatches.length) return storedMatches
   } catch (error) {
@@ -719,15 +864,19 @@ export async function getMatchesByDate(date: string): Promise<MatchListItem[]> {
   }
 
   const requestedDates = [addDaysToISO(date, -1), date, addDaysToISO(date, 1)]
-  const responses = await Promise.allSettled(
-    requestedDates.map((requestedDate) =>
-      apiFootball('/fixtures', {
-        date: requestedDate,
-        timezone: 'America/Argentina/Buenos_Aires',
-      }, {
-        noStore: true,
-      }) as Promise<ApiFootballResponse<FixtureListItem>>
-    )
+  const responses = await withTimeout(
+    Promise.allSettled(
+      requestedDates.map((requestedDate) =>
+        apiFootball('/fixtures', {
+          date: requestedDate,
+          timezone: 'America/Argentina/Buenos_Aires',
+        }, {
+          noStore: true,
+        }) as Promise<ApiFootballResponse<FixtureListItem>>
+      )
+    ),
+    HOME_API_FALLBACK_TIMEOUT_MS,
+    'API-Football home fallback timeout'
   )
 
   const dedupedFixtures = new Map<number, FixtureListItem>()
@@ -741,7 +890,8 @@ export async function getMatchesByDate(date: string): Promise<MatchListItem[]> {
     }
   }
 
-  const mappedFixtures = [...dedupedFixtures.values()].map((item): MatchListItem => ({
+  const apiFallbackFixtures = [...dedupedFixtures.values()].filter(isHomeApiFallbackFixture)
+  const mappedFixtures = apiFallbackFixtures.map((item): MatchListItem => ({
     id: item.fixture.id,
     externalId: item.fixture.id,
     leagueId: item.league.id,
@@ -762,30 +912,27 @@ export async function getMatchesByDate(date: string): Promise<MatchListItem[]> {
     statusLong: item.fixture.status.long,
   }))
 
-  if (mappedFixtures.length) {
-    await persistFixtureListAssets([...dedupedFixtures.values()])
-    upsertStoredFixtures(
-      mappedFixtures.map((item) => ({
-        fixtureId: item.id,
-        leagueId: item.leagueId,
-        leagueName: item.league,
-        leagueLogo: item.leagueLogo,
-        country: item.country,
-        dateUtc: item.date,
-        statusShort: item.statusShort,
-        statusLong: item.statusLong,
-        minute: item.minute,
-        homeTeamId: item.homeId,
-        homeTeamName: item.home,
-        homeTeamLogo: item.homeLogo,
-        awayTeamId: item.awayId,
-        awayTeamName: item.away,
-        awayTeamLogo: item.awayLogo,
-        goalsHome: item.goalsHome,
-        goalsAway: item.goalsAway,
-      }))
-    )
-  }
+  upsertStoredFixtures(
+    mappedFixtures.map((item) => ({
+      fixtureId: item.id,
+      leagueId: item.leagueId,
+      leagueName: item.league,
+      leagueLogo: item.leagueLogo,
+      country: item.country,
+      dateUtc: item.date,
+      statusShort: item.statusShort,
+      statusLong: item.statusLong,
+      minute: item.minute,
+      homeTeamId: item.homeId,
+      homeTeamName: item.home,
+      homeTeamLogo: item.homeLogo,
+      awayTeamId: item.awayId,
+      awayTeamName: item.away,
+      awayTeamLogo: item.awayLogo,
+      goalsHome: item.goalsHome,
+      goalsAway: item.goalsAway,
+    }))
+  )
 
   const storedFixtures = readStoredFixturesByDate(date)
   if (storedFixtures.length) {
@@ -1883,7 +2030,22 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
 export async function withGoalScorers(
   matches: MatchListItem[]
 ): Promise<MatchListItemWithGoalScorers[]> {
-  const extrasByFixtureId = await getHomeMatchExtrasByFixtureId(matches)
+  let timeoutId: ReturnType<typeof setTimeout> | null = null
+  const extrasTimeoutMs = 2500
+  const extrasByFixtureId = await Promise.race([
+    getHomeMatchExtrasByFixtureId(matches),
+    new Promise<Map<string, HomeMatchExtras>>((resolve) => {
+      timeoutId = setTimeout(() => {
+        console.warn('[home:match-extras] Supabase tardo demasiado; se renderiza Home sin extras.', {
+          matches: matches.length,
+          timeoutMs: extrasTimeoutMs,
+        })
+        resolve(new Map())
+      }, extrasTimeoutMs)
+    }),
+  ])
+
+  if (timeoutId) clearTimeout(timeoutId)
 
   return matches.map((match) => ({
     ...match,

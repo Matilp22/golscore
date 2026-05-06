@@ -38,6 +38,7 @@ import {
   getMatchWinner,
   type CopaArgentinaStageKey,
 } from '@/shared/utils/copa-argentina'
+import { getTournamentDisplayOptions } from '@/shared/config/competition-rules'
 
 type PageProps = {
   params: Promise<{ id: string }>
@@ -1441,6 +1442,7 @@ export default async function LigaPage({ params }: PageProps) {
   let redCards: TopPlayerRow[] = []
   let fixtures: LeagueFixtureSummary[] = []
   let promedioTable: PromedioRow[] = []
+  const displayOptions = getTournamentDisplayOptions(tournament)
   const copaArgentinaChampions =
     tournament.key === 'argentina-copa-argentina'
       ? await getCopaArgentinaChampions()
@@ -1485,7 +1487,7 @@ export default async function LigaPage({ params }: PageProps) {
         redCards = copaArgentinaEventLeaders.redCards
       }
 
-      if (tournament.showPromedios && resolvedTournament.season >= 2026) {
+      if (displayOptions.showPromedios && resolvedTournament.season >= 2026) {
         const currentTournament = resolvedTournament
         const promedioSeasons = [resolvedTournament.season - 2, resolvedTournament.season - 1, resolvedTournament.season]
         const historicalResults = await Promise.allSettled(
@@ -1529,8 +1531,8 @@ export default async function LigaPage({ params }: PageProps) {
     (group) => !isDerivedTableGroup(group.name)
   )
   const baseRows = primaryGroups.flatMap((group) => group.rows)
-  const annualTable = tournament.showAnnualTable ? buildAnnualTable(baseRows) : []
-  if (!promedioTable.length && tournament.showPromedios) {
+  const annualTable = displayOptions.showAnnualTable ? buildAnnualTable(baseRows) : []
+  if (!promedioTable.length && displayOptions.showPromedios) {
     promedioTable = buildPromediosTable(baseRows).map((row) => ({
       rank: row.rank,
       teamId: row.teamId,
@@ -1550,7 +1552,9 @@ export default async function LigaPage({ params }: PageProps) {
         : [],
     }))
   }
-  const knockoutRounds = buildKnockoutRounds(fixtures, resolvedTournament?.leagueId ?? null)
+  const knockoutRounds = displayOptions.showBracket
+    ? buildKnockoutRounds(fixtures, resolvedTournament?.leagueId ?? null)
+    : []
   const latestCopaArgentinaRound =
     tournament.key === 'argentina-copa-argentina'
       ? getLatestActiveCopaArgentinaRound(knockoutRounds.flatMap((round) => round.matches))
@@ -1688,9 +1692,9 @@ export default async function LigaPage({ params }: PageProps) {
             </div>
           ) : null}
 
-          {tournament.showAnnualTable || tournament.showPromedios ? (
+          {displayOptions.showAnnualTable || displayOptions.showPromedios ? (
             <div className={compactSummaryTables ? 'grid gap-4 xl:grid-cols-2' : 'space-y-4'}>
-              {tournament.showAnnualTable && annualTable.length ? (
+              {displayOptions.showAnnualTable && annualTable.length ? (
                 <SectionCard title="Tabla anual">
                   <StandingsTable
                     rows={annualTable}
@@ -1709,7 +1713,7 @@ export default async function LigaPage({ params }: PageProps) {
                 </SectionCard>
               ) : null}
 
-              {tournament.showPromedios && promedioTable.length ? (
+              {displayOptions.showPromedios && promedioTable.length ? (
                 <SectionCard title="Promedios">
                   <PromediosTable
                     rows={promedioTable}

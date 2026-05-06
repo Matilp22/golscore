@@ -19,23 +19,27 @@ export default function AutoRefresh({
 }: AutoRefreshProps) {
   const router = useRouter()
 
+  const syncWithoutRefresh = useCallback(async () => {
+    if (!syncBeforeRefreshUrl) return
+
+    await fetch(syncBeforeRefreshUrl, {
+      cache: 'no-store',
+    }).catch((error) => {
+      console.warn('[auto-refresh] No se pudo sincronizar partidos en vivo.', error)
+    })
+  }, [syncBeforeRefreshUrl])
+
   const refreshWithOptionalSync = useCallback(async () => {
-    if (syncBeforeRefreshUrl) {
-      await fetch(syncBeforeRefreshUrl, {
-        cache: 'no-store',
-      }).catch((error) => {
-        console.warn('[auto-refresh] No se pudo sincronizar partidos en vivo.', error)
-      })
-    }
+    await syncWithoutRefresh()
 
     startTransition(() => {
       router.refresh()
     })
-  }, [router, syncBeforeRefreshUrl])
+  }, [router, syncWithoutRefresh])
 
   useEffect(() => {
     if (syncBeforeRefreshUrl) {
-      void refreshWithOptionalSync()
+      void syncWithoutRefresh()
       return
     }
 
@@ -46,7 +50,7 @@ export default function AutoRefresh({
     if (!isStandalone) return
 
     void refreshWithOptionalSync()
-  }, [refreshWithOptionalSync, syncBeforeRefreshUrl])
+  }, [refreshWithOptionalSync, syncBeforeRefreshUrl, syncWithoutRefresh])
 
   useAutoRefresh({
     intervalMs,

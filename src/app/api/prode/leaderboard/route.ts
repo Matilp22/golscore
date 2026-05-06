@@ -3,6 +3,9 @@ import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { isFinalMatchStatus } from '@/shared/utils/match-status'
 import { normalizeLeagueRound } from '@/shared/utils/league-rounds'
 
+export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
+
 type LeaderboardRow = {
   user_id: string
   name?: string | null
@@ -51,6 +54,12 @@ type ApiError = {
 type SupabaseListResult = {
   data: unknown[] | null
   error: ApiError | null
+}
+
+function jsonNoStore(body: unknown, init?: ResponseInit) {
+  const response = NextResponse.json(body, init)
+  response.headers.set('Cache-Control', 'no-store, max-age=0')
+  return response
 }
 
 function getErrorPayload(error: unknown) {
@@ -251,7 +260,7 @@ export async function GET(request: Request) {
       if (leagueMatchesError) {
         console.error('[prode/leaderboard] Error leyendo partidos por liga', leagueMatchesError)
 
-        return NextResponse.json({
+        return jsonNoStore({
           ok: false,
           error: leagueMatchesError.message ?? 'No se pudieron leer los partidos del torneo.',
           code: leagueMatchesError.code ?? null,
@@ -277,7 +286,7 @@ export async function GET(request: Request) {
         .map((match) => String(match.id))
 
       if (!matchIds.length) {
-        return NextResponse.json({ ok: true, leaderboard: [] })
+        return jsonNoStore({ ok: true, leaderboard: [] })
       }
 
       const { data: scoresData, error: scoresError } = await fetchScoresByMatchIds(
@@ -288,7 +297,7 @@ export async function GET(request: Request) {
       if (scoresError) {
         console.error('[prode/leaderboard] Error leyendo prediction_scores por liga', scoresError)
 
-        return NextResponse.json({
+        return jsonNoStore({
           ok: false,
           error: scoresError.message ?? 'No se pudo leer el ranking del torneo.',
           code: scoresError.code ?? null,
@@ -314,7 +323,7 @@ export async function GET(request: Request) {
         source: requestedRound ? 'prediction_scores_by_league_round' : 'prediction_scores_by_league',
       })
 
-      return NextResponse.json({
+      return jsonNoStore({
         ok: !profilesResult.error,
         leaderboard: normalizeRows(
           sourceRows,
@@ -387,7 +396,7 @@ export async function GET(request: Request) {
 
     const usingScoreFallback = sourceRows === groupedScoreRows
 
-    return NextResponse.json({
+    return jsonNoStore({
       ok: !scoresResult.error && (usingScoreFallback || !leaderboardResult.error),
       leaderboard: normalizeRows(
         sourceRows,
@@ -401,6 +410,6 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error('[prode/leaderboard] Error completo', error)
 
-    return NextResponse.json(getErrorPayload(error))
+    return jsonNoStore(getErrorPayload(error))
   }
 }

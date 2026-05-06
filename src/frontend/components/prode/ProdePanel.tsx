@@ -64,10 +64,6 @@ export default function ProdePanel() {
   }, [predictionDrafts])
 
   const myRanking = leaderboard.find((row) => row.userId === user?.id)
-  const totalPointsFromPredictions = useMemo(
-    () => predictions.reduce((sum, prediction) => sum + (prediction.points ?? 0), 0),
-    [predictions]
-  )
 
   const filteredMatches = useMemo(
     () =>
@@ -168,20 +164,6 @@ export default function ProdePanel() {
               )
             : matchesData
         )
-
-        console.info('[prode-panel] partidos recibidos', {
-          selectedLeagueId,
-          matches: matchesData.length,
-          rounds: [...new Set(matchesData.map((match) => match.round).filter(Boolean))],
-          normalizedRounds: [
-            ...new Set(
-              matchesData
-                .map((match) => normalizeProdeRound(match.round, match.league?.externalId))
-                .filter(Boolean)
-            ),
-          ],
-          silent,
-        })
 
         return true
       } catch (error: unknown) {
@@ -308,14 +290,6 @@ export default function ProdePanel() {
         if (!active) return
 
         setLeagues(leaguesData)
-        console.info('[prode-panel] ligas detectadas', {
-          count: leaguesData.length,
-          leagues: leaguesData.map((league) => ({
-            id: league.id,
-            externalId: league.externalId,
-            name: league.name,
-          })),
-        })
 
         if (leaguesData[0]) {
           setSelectedLeagueId((current) => {
@@ -361,16 +335,6 @@ export default function ProdePanel() {
       active = false
     }
   }, [loadMatches, markUpdatedNow, selectedLeagueId])
-
-  useEffect(() => {
-    console.info('[prode-panel] filtro aplicado', {
-      selectedLeagueId,
-      selectedRound: effectiveSelectedRound,
-      totalMatchesForLeague: matches.length,
-      visibleMatches: visibleMatches.length,
-      availableRounds: rounds.length,
-    })
-  }, [effectiveSelectedRound, matches.length, rounds.length, selectedLeagueId, visibleMatches.length])
 
   useEffect(() => {
     if (!rounds.length) {
@@ -421,43 +385,6 @@ export default function ProdePanel() {
 
     void loadRoundLeaderboard()
   }, [loadRoundLeaderboard, selectedLeagueId, selectedLeaderboardRound])
-
-  useEffect(() => {
-    console.info('[prode-ui-debug]', {
-      selectedLeagueId,
-      userId: user?.id ?? null,
-      predictionsCount: predictions.length,
-      predictionsWithPoints: predictions.filter(
-        (prediction) => (prediction.points ?? 0) > 0
-      ).length,
-      leaderboard,
-      myRanking,
-      totalPointsFromPredictions,
-      pointsByPrediction: predictions.map((prediction) => ({
-        prediction_id: prediction.prediction_id ?? prediction.id,
-        match_id: prediction.match_id ?? prediction.matchId,
-        league_id: prediction.league_id ?? prediction.leagueId ?? null,
-        predicted_home_score:
-          prediction.predicted_home_score ?? prediction.predictedHomeScore,
-        predicted_away_score:
-          prediction.predicted_away_score ?? prediction.predictedAwayScore,
-        real_home_score: prediction.real_home_score ?? prediction.realHomeScore ?? null,
-        real_away_score: prediction.real_away_score ?? prediction.realAwayScore ?? null,
-        points: prediction.points ?? 0,
-        exact_hit: prediction.exact_hit ?? prediction.exactHit ?? false,
-        partial_hit: prediction.partial_hit ?? prediction.partialHit ?? false,
-        prediction_score_found:
-          prediction.prediction_score_found ?? prediction.predictionScoreFound ?? null,
-      })),
-    })
-  }, [
-    leaderboard,
-    myRanking,
-    predictions,
-    selectedLeagueId,
-    totalPointsFromPredictions,
-    user?.id,
-  ])
 
   const handleSavePrediction = async (input: {
     matchId: string
