@@ -9,6 +9,7 @@ type AssetImageProps = {
   className?: string
   fallbackClassName?: string
   priority?: boolean
+  unoptimized?: boolean
 }
 
 export function TeamLogo({
@@ -18,6 +19,7 @@ export function TeamLogo({
   className,
   fallbackClassName,
   priority,
+  unoptimized,
 }: AssetImageProps) {
   return (
     <span
@@ -33,6 +35,7 @@ export function TeamLogo({
         className={className ?? 'h-full w-full object-contain'}
         fallbackClassName={fallbackClassName ?? 'h-[80%] w-[68%]'}
         priority={priority}
+        unoptimized={unoptimized}
       />
     </span>
   )
@@ -45,6 +48,7 @@ export function LeagueLogo({
   className,
   fallbackClassName,
   priority,
+  unoptimized,
 }: AssetImageProps) {
   return (
     <span
@@ -60,6 +64,7 @@ export function LeagueLogo({
         className={className ?? 'h-full w-full object-contain'}
         fallbackClassName={fallbackClassName ?? 'h-[80%] w-[68%]'}
         priority={priority}
+        unoptimized={unoptimized}
       />
     </span>
   )
@@ -72,6 +77,7 @@ export function PlayerPhoto({
   className,
   fallbackClassName,
   priority,
+  unoptimized,
 }: AssetImageProps) {
   return (
     <span
@@ -87,6 +93,7 @@ export function PlayerPhoto({
         className={className ?? 'h-full w-full rounded-full object-cover'}
         fallbackClassName={fallbackClassName ?? 'h-full w-full rounded-full'}
         priority={priority}
+        unoptimized={unoptimized}
       />
     </span>
   )

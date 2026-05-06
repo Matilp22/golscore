@@ -60,6 +60,7 @@ function PlayerCard({ player }: { player: TeamSquadPlayer }) {
           size={48}
           className="h-full w-full rounded-full object-cover"
           fallbackClassName="h-12 w-12 rounded-full"
+          unoptimized
         />
       </div>
 
@@ -135,6 +136,7 @@ export default async function EquipoPage({ params }: PageProps) {
                   size={80}
                   className="h-20 w-20 object-contain"
                   fallbackClassName="h-16 w-14"
+                  unoptimized
                 />
               </div>
 
@@ -200,6 +202,7 @@ export default async function EquipoPage({ params }: PageProps) {
                     height={340}
                     className="h-auto w-full rounded-xl object-cover"
                     fallbackClassName="h-44 w-full rounded-xl"
+                    unoptimized
                   />
                 </div>
               </div>

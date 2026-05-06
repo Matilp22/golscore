@@ -34,11 +34,18 @@ async function readOptions(request: Request) {
   const { searchParams } = new URL(request.url)
   const body = request.method === 'POST' ? await request.json().catch(() => null) : null
   const fromBody = (key: string) => body?.[key]
+  const teamExternalId =
+    searchParams.get('teamExternalId') ??
+    fromBody('teamExternalId') ??
+    searchParams.get('teamId') ??
+    fromBody('teamId') ??
+    null
 
   return {
     scope: parseScope(searchParams.get('scope') ?? fromBody('scope') ?? null),
     leagueExternalId: searchParams.get('leagueExternalId') ?? fromBody('leagueExternalId') ?? null,
-    teamId: searchParams.get('teamId') ?? fromBody('teamId') ?? null,
+    teamId: teamExternalId,
+    teamExternalId,
     playerId: searchParams.get('playerId') ?? fromBody('playerId') ?? null,
     matchId: searchParams.get('matchId') ?? fromBody('matchId') ?? null,
     season: Number(searchParams.get('season') ?? fromBody('season')) || null,

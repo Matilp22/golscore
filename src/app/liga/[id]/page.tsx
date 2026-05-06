@@ -920,6 +920,7 @@ function PromediosTable({
                     size={compact ? 18 : 24}
                     className={`${compact ? 'h-[18px] w-[18px]' : 'h-6 w-6'} object-contain`}
                     fallbackClassName={compact ? 'h-4 w-3' : 'h-5 w-4'}
+                    unoptimized
                   />
                   <span className={`font-medium ${compact ? 'text-[12px]' : ''}`}>{row.teamName}</span>
                 </div>
@@ -1243,6 +1244,7 @@ function StandingsTable({
                     size={compact ? 18 : 24}
                     className={`${compact ? 'h-[18px] w-[18px]' : 'h-6 w-6'} object-contain`}
                     fallbackClassName={compact ? 'h-4 w-3' : 'h-5 w-4'}
+                    unoptimized
                   />
                   <span className={`font-medium ${compact ? 'text-[12px]' : ''}`}>{row.teamName}</span>
                 </div>
@@ -1373,6 +1375,7 @@ function BracketView({
                                     size={12}
                                     className="h-[12px] w-[12px] object-contain"
                                     fallbackClassName="h-[12px] w-[10px]"
+                                    unoptimized
                                   />
                                   <span className={`truncate text-[10.5px] font-semibold ${team.isPlaceholder ? 'text-[#98a5b3]' : team.isWinner ? 'text-[#7ff0b2]' : 'text-[#edf2f7]'}`}>
                                     {team.team}
@@ -1552,6 +1555,7 @@ export default async function LigaPage({ params }: PageProps) {
                       size={56}
                       className="h-14 w-14 object-contain"
                       fallbackClassName="h-12 w-10"
+                      unoptimized
                     />
                   </div>
                 ) : null}

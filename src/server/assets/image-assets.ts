@@ -986,19 +986,46 @@ export async function getAssetsAudit() {
   const supabase = getSupabaseAdminClient()
 
   const domainRows = await Promise.all([
-    supabase.from('teams').select('id, logo_url').limit(10000),
-    supabase.from('players').select('id, photo_url').limit(10000),
-    supabase.from('leagues').select('id, logo_url').limit(10000),
+    supabase.from('teams').select('id, external_id, name, logo_url').limit(10000),
+    supabase.from('players').select('id, external_id, name, team_external_id, photo_url').limit(10000),
+    supabase.from('leagues').select('id, external_id, name, logo_url').limit(10000),
   ])
   for (const response of domainRows) {
     if (response.error) throw response.error
   }
 
-  const teamRows = (domainRows[0].data ?? []) as Array<{ id: string; logo_url: string | null }>
-  const playerRows = (domainRows[1].data ?? []) as Array<{ id: string; photo_url: string | null }>
-  const leagueRows = (domainRows[2].data ?? []) as Array<{ id: string; logo_url: string | null }>
+  type AuditTeamRow = {
+    id: string
+    external_id: string | number | null
+    name: string | null
+    logo_url: string | null
+  }
+  type AuditPlayerRow = {
+    id: string
+    external_id: string | number | null
+    name: string | null
+    team_external_id: string | number | null
+    photo_url: string | null
+  }
+  type AuditLeagueRow = {
+    id: string
+    external_id: string | number | null
+    name: string | null
+    logo_url: string | null
+  }
+
+  const teamRows = (domainRows[0].data ?? []) as AuditTeamRow[]
+  const playerRows = (domainRows[1].data ?? []) as AuditPlayerRow[]
+  const leagueRows = (domainRows[2].data ?? []) as AuditLeagueRow[]
   const domains = new Map<string, number>()
   const brokenRemoteDomains = new Set<string>()
+  const hasAssetUrl = (value: string | null | undefined) => Boolean(value?.trim())
+  const normalizeName = (value: string | null | undefined) =>
+    (value ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toLowerCase()
 
   for (const rows of [teamRows, playerRows, leagueRows]) {
     for (const row of rows) {
@@ -1013,22 +1040,94 @@ export async function getAssetsAudit() {
   const teamsWithLogo = teamRows.filter((row) => Boolean(row.logo_url?.trim())).length
   const playersWithPhoto = playerRows.filter((row) => Boolean(row.photo_url?.trim())).length
   const leaguesWithLogo = leagueRows.filter((row) => Boolean(row.logo_url?.trim())).length
+  const teamAssetStatus = (
+    externalId: string,
+    names: string[]
+  ) => {
+    const normalizedNames = names.map(normalizeName)
+    const row =
+      teamRows.find((team) => String(team.external_id ?? '') === externalId) ??
+      teamRows.find((team) => normalizedNames.includes(normalizeName(team.name)))
+
+    if (!row) return null
+
+    return {
+      id: row.id,
+      external_id: row.external_id ? String(row.external_id) : null,
+      name: row.name,
+      has_logo_url: hasAssetUrl(row.logo_url),
+      logo_url: row.logo_url,
+      domain: getAssetHostname(row.logo_url),
+      allowed_remote_host: row.logo_url ? isAllowedRemoteAssetHost(row.logo_url) : false,
+    }
+  }
+  const leagueAssetStatus = (
+    externalId: string,
+    names: string[]
+  ) => {
+    const normalizedNames = names.map(normalizeName)
+    const row =
+      leagueRows.find((league) => String(league.external_id ?? '') === externalId) ??
+      leagueRows.find((league) => normalizedNames.some((name) => normalizeName(league.name).includes(name)))
+
+    if (!row) return null
+
+    return {
+      id: row.id,
+      external_id: row.external_id ? String(row.external_id) : null,
+      name: row.name,
+      has_logo_url: hasAssetUrl(row.logo_url),
+      logo_url: row.logo_url,
+      domain: getAssetHostname(row.logo_url),
+      allowed_remote_host: row.logo_url ? isAllowedRemoteAssetHost(row.logo_url) : false,
+    }
+  }
 
   return {
     teams: {
       total: teamRows.length,
       with_logo_url: teamsWithLogo,
       missing_logo_url: teamRows.length - teamsWithLogo,
+      missing_examples: teamRows
+        .filter((row) => !hasAssetUrl(row.logo_url))
+        .slice(0, 10)
+        .map((row) => ({
+          id: row.id,
+          external_id: row.external_id ? String(row.external_id) : null,
+          name: row.name,
+        })),
     },
     players: {
       total: playerRows.length,
       with_photo_url: playersWithPhoto,
       missing_photo_url: playerRows.length - playersWithPhoto,
+      missing_examples: playerRows
+        .filter((row) => !hasAssetUrl(row.photo_url))
+        .slice(0, 10)
+        .map((row) => ({
+          id: row.id,
+          external_id: row.external_id ? String(row.external_id) : null,
+          team_external_id: row.team_external_id ? String(row.team_external_id) : null,
+          name: row.name,
+        })),
     },
     leagues: {
       total: leagueRows.length,
       with_logo_url: leaguesWithLogo,
       missing_logo_url: leagueRows.length - leaguesWithLogo,
+      missing_examples: leagueRows
+        .filter((row) => !hasAssetUrl(row.logo_url))
+        .slice(0, 10)
+        .map((row) => ({
+          id: row.id,
+          external_id: row.external_id ? String(row.external_id) : null,
+          name: row.name,
+        })),
+    },
+    known_assets: {
+      always_ready: teamAssetStatus('3700', ['Always Ready']),
+      lanus: teamAssetStatus('446', ['Lanus', 'Lanús']),
+      conmebol_libertadores: leagueAssetStatus('13', ['CONMEBOL Libertadores', 'Libertadores']),
     },
     domains: [...domains.entries()]
       .map(([domain, count]) => ({ domain, count }))

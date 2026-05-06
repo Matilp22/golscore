@@ -733,6 +733,7 @@ function TeamLogo({
         size={size === 'sm' ? 32 : 64}
         className={`${classes} object-contain`}
         fallbackClassName={size === 'sm' ? 'h-7 w-6' : 'h-10 w-8 md:h-14 md:w-12'}
+        unoptimized
       />
     </div>
   )

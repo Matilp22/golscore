@@ -161,6 +161,7 @@ export default async function JugadorPage({ params, searchParams }: PageProps) {
                     size={80}
                     className="h-20 w-20 rounded-full object-cover"
                     fallbackClassName="h-20 w-20 rounded-full"
+                    unoptimized
                   />
                 </div>
 
