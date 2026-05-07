@@ -41,6 +41,10 @@ type ApiFixture = {
       long?: string
       short: string
     }
+    venue?: {
+      name?: string | null
+      city?: string | null
+    }
     [key: string]: unknown
   }
   league: {
@@ -445,6 +449,20 @@ function getFixtureHomeScore(fixture: ApiFixture) {
 
 function getFixtureAwayScore(fixture: ApiFixture) {
   return fixture.goals.away ?? fixture.score?.fulltime?.away ?? null
+}
+
+function normalizeNullableFixtureText(value: string | null | undefined) {
+  const trimmed = value?.trim()
+
+  return trimmed || null
+}
+
+function getFixtureVenuePayload(fixture: ApiFixture) {
+  return {
+    venue_name: normalizeNullableFixtureText(fixture.fixture.venue?.name),
+    venue_city: normalizeNullableFixtureText(fixture.fixture.venue?.city),
+    venue_country: normalizeNullableFixtureText(fixture.league.country),
+  }
 }
 
 function hasResolvedScore(fixture: ApiFixture) {
@@ -1764,6 +1782,7 @@ async function upsertMatch(
 
     await updateElapsedIfSupported(supabase, existing.id, fixture, debug)
     await updatePenaltyScoresIfSupported(supabase, existing.id, fixture, debug)
+    await updateVenueFieldsIfSupported(supabase, existing.id, fixture, debug)
     await safeSyncMatchBroadcastsFromFixture(supabase, fixture, existing.id, debug)
 
     return {
@@ -1794,6 +1813,7 @@ async function upsertMatch(
   if (!error) {
     await updateElapsedIfSupported(supabase, (data as DbIdRow).id, fixture, debug)
     await updatePenaltyScoresIfSupported(supabase, (data as DbIdRow).id, fixture, debug)
+    await updateVenueFieldsIfSupported(supabase, (data as DbIdRow).id, fixture, debug)
     await safeSyncMatchBroadcastsFromFixture(supabase, fixture, (data as DbIdRow).id, debug)
 
     return {
@@ -1854,6 +1874,7 @@ async function upsertMatch(
       if (!updateByIdError) {
         await updateElapsedIfSupported(supabase, fixture.fixture.id, fixture, debug)
         await updatePenaltyScoresIfSupported(supabase, fixture.fixture.id, fixture, debug)
+        await updateVenueFieldsIfSupported(supabase, fixture.fixture.id, fixture, debug)
         await safeSyncMatchBroadcastsFromFixture(supabase, fixture, fixture.fixture.id, debug)
 
         return {
@@ -1871,6 +1892,7 @@ async function upsertMatch(
   const fallbackId = (fallbackData as DbIdRow | null)?.id ?? fixture.fixture.id
   await updateElapsedIfSupported(supabase, fallbackId, fixture, debug)
   await updatePenaltyScoresIfSupported(supabase, fallbackId, fixture, debug)
+  await updateVenueFieldsIfSupported(supabase, fallbackId, fixture, debug)
   await safeSyncMatchBroadcastsFromFixture(supabase, fixture, fallbackId, debug)
 
   return {
@@ -2207,6 +2229,48 @@ async function updatePenaltyScoresIfSupported(
   }
 
   throw new Error(`No se pudieron guardar penales del partido ${fixture.fixture.id}: ${error.message}`)
+}
+
+async function updateVenueFieldsIfSupported(
+  supabase: SupabaseClient,
+  matchId: DbId,
+  fixture: ApiFixture,
+  debug?: boolean
+) {
+  const payload = getFixtureVenuePayload(fixture)
+
+  if (!payload.venue_name && !payload.venue_city && !payload.venue_country) return
+
+  const { error } = await withTimeout(
+    supabase
+      .from('matches')
+      .update(payload)
+      .eq('id', matchId),
+    `matches venue update ${fixture.fixture.id}`
+  )
+
+  if (!error) return
+
+  const message = error.message.toLowerCase()
+  const isMissingVenueColumn =
+    message.includes('venue_name') ||
+    message.includes('venue_city') ||
+    message.includes('venue_country') ||
+    message.includes('schema cache') ||
+    error.code === '42703' ||
+    error.code === 'PGRST204'
+
+  if (isMissingVenueColumn) {
+    logDebug(debug, 'venue columns missing; base match sync preserved', {
+      fixtureId: fixture.fixture.id,
+      matchId,
+      payload,
+      error: error.message,
+    })
+    return
+  }
+
+  throw new Error(`No se pudo guardar sede del partido ${fixture.fixture.id}: ${error.message}`)
 }
 
 async function fetchStoredMatchByExternalId(supabase: SupabaseClient, fixtureId: number) {

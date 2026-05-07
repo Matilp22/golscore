@@ -223,6 +223,9 @@ export type LeagueFixtureSummary = {
   goalsAway: number | null
   homePenaltyScore?: number | null
   awayPenaltyScore?: number | null
+  venueName?: string | null
+  venueCity?: string | null
+  venueCountry?: string | null
   events?: LeagueFixtureEventSummary[]
 }
 
@@ -2757,6 +2760,9 @@ export async function getLeagueFixtures(leagueId: number, season: number) {
       goalsAway: item.goals.away,
       homePenaltyScore: item.score?.penalty?.home ?? null,
       awayPenaltyScore: item.score?.penalty?.away ?? null,
+      venueName: item.fixture.venue?.name ?? null,
+      venueCity: item.fixture.venue?.city ?? null,
+      venueCountry: item.league.country ?? null,
     }))
     const enrichedMappedFixtures = await enrichLeagueFixturesWithStoredEvents(
       leagueId,
@@ -2789,6 +2795,9 @@ export async function getLeagueFixtures(leagueId: number, season: number) {
           goalsAway: item.goals.away,
           homePenaltyScore: item.score?.penalty?.home ?? null,
           awayPenaltyScore: item.score?.penalty?.away ?? null,
+          venueName: item.fixture.venue?.name ?? null,
+          venueCity: item.fixture.venue?.city ?? null,
+          venueCountry: item.league.country ?? null,
         }))
       )
     }
@@ -2811,6 +2820,9 @@ export async function getLeagueFixtures(leagueId: number, season: number) {
         goalsAway: item.goalsAway,
         homePenaltyScore: item.homePenaltyScore,
         awayPenaltyScore: item.awayPenaltyScore,
+        venueName: item.venueName ?? null,
+        venueCity: item.venueCity ?? null,
+        venueCountry: item.venueCountry ?? item.country ?? null,
       }))
       const enrichedRefreshedFixtures = await enrichLeagueFixturesWithStoredEvents(
         leagueId,
@@ -2839,6 +2851,9 @@ export async function getLeagueFixtures(leagueId: number, season: number) {
         goalsAway: item.goalsAway,
         homePenaltyScore: item.homePenaltyScore,
         awayPenaltyScore: item.awayPenaltyScore,
+        venueName: item.venueName ?? null,
+        venueCity: item.venueCity ?? null,
+        venueCountry: item.venueCountry ?? item.country ?? null,
       }))
       const enrichedFallbackFixtures = await enrichLeagueFixturesWithStoredEvents(
         leagueId,

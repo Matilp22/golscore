@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import CurrentRoundNavigator from '@/frontend/components/CurrentRoundNavigator'
 import CopaArgentinaChampions from '@/frontend/components/CopaArgentinaChampions'
 import CopaArgentinaMatchList from '@/frontend/components/CopaArgentinaMatchList'
+import GroupStageGrid from '@/frontend/components/GroupStage'
 import LeaderListInteractive from '@/frontend/components/LeaderListInteractive'
 import { LeagueLogo, TeamLogo } from '@/frontend/components/AssetImage'
 import { getCopaArgentinaChampions } from '@/server/copa-argentina/champions'
@@ -29,6 +30,11 @@ import {
   normalizeLeagueRound,
   normalizeRoundText,
 } from '@/shared/utils/league-rounds'
+import {
+  ARGENTINA_TIME_ZONE,
+  formatMatchTimeArgentina,
+  toArgentinaDate,
+} from '@/shared/utils/argentina-time'
 import {
   COPA_ARGENTINA_STAGE_ORDER,
   getCopaArgentinaParticipantKey,
@@ -595,14 +601,50 @@ function normalizeGroupName(value: string) {
     .replace(/[\u0300-\u036f]/g, '')
 }
 
-function getDisplayGroupName(value: string) {
-  const match = normalizeGroupName(value).match(/\b(?:group|grupo)\s+([a-z0-9]+)\b/)
+const GROUP_STAGE_ORDER = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
 
-  if (match) {
-    return `Grupo ${match[1].toUpperCase()}`
+function getGroupKeyFromText(value?: string | null) {
+  const normalized = normalizeGroupName(value || '')
+  const match = normalized.match(/\b(?:group|grupo)\s+([a-h])\b/)
+
+  return match ? match[1].toUpperCase() : null
+}
+
+function getDisplayGroupName(value: string) {
+  const groupKey = getGroupKeyFromText(value)
+
+  if (groupKey) {
+    return `Grupo ${groupKey}`
   }
 
   return value
+}
+
+function getGroupId(group: Pick<LeagueStandingGroup, 'name'>) {
+  const groupKey = getGroupKeyFromText(group.name)
+
+  return groupKey ? `group-${groupKey}` : normalizeGroupName(group.name)
+}
+
+function getGroupSortValue(group: Pick<LeagueStandingGroup, 'name'>) {
+  const groupKey = getGroupKeyFromText(group.name)
+
+  if (!groupKey) return Number.MAX_SAFE_INTEGER
+
+  const index = GROUP_STAGE_ORDER.indexOf(groupKey)
+
+  return index >= 0 ? index : Number.MAX_SAFE_INTEGER
+}
+
+function sortGroupStageGroups(groups: LeagueStandingGroup[]) {
+  return [...groups].sort((a, b) => {
+    const sortA = getGroupSortValue(a)
+    const sortB = getGroupSortValue(b)
+
+    if (sortA !== sortB) return sortA - sortB
+
+    return getDisplayGroupName(a.name).localeCompare(getDisplayGroupName(b.name), 'es-AR')
+  })
 }
 
 function isGroupLikeTable(name: string) {
@@ -672,6 +714,138 @@ function splitPrimaryGroups(
     primaryGroups: groups,
     secondaryGroups: [] as Array<{ name: string; rows: LeagueStandingRow[] }>,
   }
+}
+
+function isConmebolGroupStage(key: string, standingsMode: string) {
+  return (
+    standingsMode === 'groups' &&
+    (key === 'internacional-libertadores' || key === 'internacional-sudamericana')
+  )
+}
+
+function normalizeTeamLookupText(value?: string | null) {
+  return (value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function getTeamLookupKeys(teamId: number | undefined, teamName: string) {
+  const keys: string[] = []
+  const normalizedName = normalizeTeamLookupText(teamName)
+
+  if (teamId !== undefined && teamId !== null) keys.push(`id:${teamId}`)
+  if (normalizedName) keys.push(`name:${normalizedName}`)
+
+  return keys
+}
+
+function addTeamGroupMembership(
+  teamGroupsByKey: Map<string, Set<string>>,
+  teamKeys: string[],
+  groupId: string
+) {
+  for (const teamKey of teamKeys) {
+    const current = teamGroupsByKey.get(teamKey) || new Set<string>()
+    current.add(groupId)
+    teamGroupsByKey.set(teamKey, current)
+  }
+}
+
+function getFixtureTeamGroupIds(
+  teamGroupsByKey: Map<string, Set<string>>,
+  teamKeys: string[]
+) {
+  const groupIds = new Set<string>()
+
+  for (const teamKey of teamKeys) {
+    const current = teamGroupsByKey.get(teamKey)
+    if (!current) continue
+
+    for (const groupId of current) {
+      groupIds.add(groupId)
+    }
+  }
+
+  return groupIds
+}
+
+function getSharedFixtureGroupId(homeGroupIds: Set<string>, awayGroupIds: Set<string>) {
+  const shared = [...homeGroupIds].filter((groupId) => awayGroupIds.has(groupId))
+
+  return shared.length === 1 ? shared[0] : null
+}
+
+function isGroupStageFixtureRound(round: string) {
+  const normalized = normalizeRoundName(round)
+
+  return (
+    normalized.includes('group stage') ||
+    normalized.includes('fase de grupos') ||
+    normalized.includes('grupos') ||
+    /\bgroup\b/.test(normalized) ||
+    /\bgrupo\b/.test(normalized)
+  )
+}
+
+function buildFixturesByGroup(
+  fixtures: LeagueFixtureSummary[],
+  groups: LeagueStandingGroup[]
+) {
+  const fixturesByGroup = new Map<string, LeagueFixtureSummary[]>(
+    groups.map((group) => [getGroupId(group), []])
+  )
+  const groupIds = new Set(fixturesByGroup.keys())
+  const teamGroupsByKey = new Map<string, Set<string>>()
+
+  for (const group of groups) {
+    const groupId = getGroupId(group)
+
+    for (const row of group.rows) {
+      addTeamGroupMembership(
+        teamGroupsByKey,
+        getTeamLookupKeys(row.teamId, row.teamName),
+        groupId
+      )
+    }
+  }
+
+  for (const fixture of fixtures) {
+    if (!isGroupStageFixtureRound(fixture.round)) continue
+
+    const directGroupKey = getGroupKeyFromText(fixture.round)
+    const directGroupId = directGroupKey ? `group-${directGroupKey}` : null
+    const groupId =
+      directGroupId && groupIds.has(directGroupId)
+        ? directGroupId
+        : getSharedFixtureGroupId(
+            getFixtureTeamGroupIds(
+              teamGroupsByKey,
+              getTeamLookupKeys(fixture.homeId, fixture.home)
+            ),
+            getFixtureTeamGroupIds(
+              teamGroupsByKey,
+              getTeamLookupKeys(fixture.awayId, fixture.away)
+            )
+          )
+
+    if (!groupId || !fixturesByGroup.has(groupId)) continue
+
+    fixturesByGroup.get(groupId)?.push(fixture)
+  }
+
+  for (const matches of fixturesByGroup.values()) {
+    matches.sort((a, b) => {
+      const dateCompare = new Date(a.date).getTime() - new Date(b.date).getTime()
+      if (dateCompare !== 0) return dateCompare
+      return a.id - b.id
+    })
+  }
+
+  return fixturesByGroup
 }
 
 function isDerivedTableGroup(name: string) {
@@ -928,6 +1102,7 @@ function getTableLegendItems(
   protectedCompetition: boolean
 ) {
   if (protectedCompetition) return []
+  if (rule?.legendItems?.length) return getConfiguredLegendItems(rule.legendItems)
 
   const seen = new Set<string>()
   const items: StandingLegendItem[] = []
@@ -1314,10 +1489,123 @@ function SectionCard({
   )
 }
 
+function formatGroupFixtureDateTime(date: string) {
+  const parsedDate = toArgentinaDate(date)
+
+  if (Number.isNaN(parsedDate.getTime())) return 'Fecha a confirmar'
+
+  const parts = new Intl.DateTimeFormat('es-AR', {
+    weekday: 'short',
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: ARGENTINA_TIME_ZONE,
+  }).formatToParts(parsedDate)
+  const weekday = parts.find((part) => part.type === 'weekday')?.value || ''
+  const day = parts.find((part) => part.type === 'day')?.value || ''
+  const month = parts.find((part) => part.type === 'month')?.value || ''
+  const dayLabel = `${weekday.replace('.', '').slice(0, 3)}`.replace(/^./, (char) =>
+    char.toUpperCase()
+  )
+
+  return `${dayLabel} ${day}-${month} · ${formatMatchTimeArgentina(parsedDate)}`
+}
+
+function getGroupFixtureScoreLabel(fixture: LeagueFixtureSummary) {
+  if (fixture.goalsHome !== null && fixture.goalsAway !== null) {
+    return `${fixture.goalsHome} vs ${fixture.goalsAway}`
+  }
+
+  return 'vs'
+}
+
+function cleanLocationPart(value?: string | null) {
+  const trimmed = value?.trim()
+
+  return trimmed || null
+}
+
+function getGroupFixtureLocationLabel(fixture: LeagueFixtureSummary) {
+  const parts = [
+    cleanLocationPart(fixture.venueName),
+    cleanLocationPart(fixture.venueCity),
+    cleanLocationPart(fixture.venueCountry),
+  ].filter((part): part is string => Boolean(part))
+
+  if (!parts.length) return null
+
+  return `Lugar: ${parts.join(', ')}`
+}
+
+function GroupFixtures({ fixtures }: { fixtures: LeagueFixtureSummary[] }) {
+  if (!fixtures.length) {
+    return (
+      <div className="rounded-xl border border-white/8 bg-[#10151a] px-3 py-4 text-center text-sm text-[#8d98a7]">
+        No hay partidos de grupo disponibles.
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      {fixtures.map((fixture) => {
+        const locationLabel = getGroupFixtureLocationLabel(fixture)
+
+        return (
+          <Link
+            key={fixture.id}
+            href={`/partido/${fixture.id}`}
+            className="block min-w-0 rounded-xl border border-white/8 bg-[#11161b] px-2.5 py-2 text-xs transition hover:border-[#2a5c46] hover:bg-[#151b21] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7ff0b2]/60"
+          >
+            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+              <div className="flex min-w-0 items-center justify-end gap-1.5 text-right">
+                <span className="truncate font-semibold text-[#dce5ef]">{fixture.home}</span>
+                <TeamLogo
+                  src={fixture.homeLogo}
+                  alt={fixture.home}
+                  size={16}
+                  className="h-4 w-4 object-contain"
+                  fallbackClassName="h-3.5 w-3"
+                  unoptimized
+                />
+              </div>
+
+              <span className="shrink-0 rounded-lg border border-white/8 bg-[#0d1216] px-2 py-1 text-[11px] font-black text-white">
+                {getGroupFixtureScoreLabel(fixture)}
+              </span>
+
+              <div className="flex min-w-0 items-center gap-1.5">
+                <TeamLogo
+                  src={fixture.awayLogo}
+                  alt={fixture.away}
+                  size={16}
+                  className="h-4 w-4 object-contain"
+                  fallbackClassName="h-3.5 w-3"
+                  unoptimized
+                />
+                <span className="truncate font-semibold text-[#dce5ef]">{fixture.away}</span>
+              </div>
+            </div>
+
+            <div className="mt-1.5 text-center text-[11px] font-semibold text-[#9eacb8]">
+              {formatGroupFixtureDateTime(fixture.date)}
+            </div>
+            {locationLabel ? (
+              <div className="mt-0.5 text-center text-[11px] text-[#7f8c98]">
+                {locationLabel}
+              </div>
+            ) : null}
+          </Link>
+        )
+      })}
+    </div>
+  )
+}
+
 function StandingsTable({
   rows,
   showAverage = false,
   compact = false,
+  fitNarrow = false,
   variant = 'positions',
   relegatedTeamIds,
   rule = null,
@@ -1326,16 +1614,38 @@ function StandingsTable({
   rows: Array<LeagueStandingRow & { average?: number }>
   showAverage?: boolean
   compact?: boolean
+  fitNarrow?: boolean
   variant?: StandingsVariant
   relegatedTeamIds?: Set<string>
   rule?: CompetitionRule | null
   allowLegacyFallback?: boolean
 }) {
-  const cellPadding = compact ? 'px-2 py-1.5' : 'px-2.5 py-2'
+  const cellPadding = compact
+    ? fitNarrow
+      ? 'px-1.5 py-1.5'
+      : 'px-2 py-1.5'
+    : 'px-2.5 py-2'
+  const teamColumnWidth = showAverage ? '30%' : '34%'
+  const metricColumnWidth = showAverage ? '6.2%' : '7.25%'
 
   return (
-    <div className="overflow-x-auto">
-      <table className={`min-w-full ${compact ? 'text-[12px]' : 'text-[13px]'}`}>
+    <div className={fitNarrow ? 'overflow-hidden' : 'overflow-x-auto'}>
+      <table className={`${fitNarrow ? 'w-full table-fixed' : 'min-w-full'} ${compact ? 'text-[12px]' : 'text-[13px]'}`}>
+        {fitNarrow ? (
+          <colgroup>
+            <col style={{ width: '8%' }} />
+            <col style={{ width: teamColumnWidth }} />
+            <col style={{ width: metricColumnWidth }} />
+            <col style={{ width: metricColumnWidth }} />
+            <col style={{ width: metricColumnWidth }} />
+            <col style={{ width: metricColumnWidth }} />
+            <col style={{ width: metricColumnWidth }} />
+            <col style={{ width: metricColumnWidth }} />
+            <col style={{ width: metricColumnWidth }} />
+            <col style={{ width: metricColumnWidth }} />
+            {showAverage ? <col style={{ width: metricColumnWidth }} /> : null}
+          </colgroup>
+        ) : null}
         <thead className="text-left text-[#8d98a7]">
           <tr className="border-b border-white/6">
             <th className={`${cellPadding} font-semibold`}>Pos</th>
@@ -1361,7 +1671,7 @@ function StandingsTable({
             >
               <td className={`${cellPadding} font-semibold`}>{row.rank || index + 1}</td>
               <td className={cellPadding}>
-                <div className={`flex items-center ${compact ? 'gap-1.5' : 'gap-2'}`}>
+                <div className={`flex min-w-0 items-center ${compact ? 'gap-1.5' : 'gap-2'}`}>
                   <TeamLogo
                     src={row.teamLogo}
                     alt={row.teamName}
@@ -1370,7 +1680,7 @@ function StandingsTable({
                     fallbackClassName={compact ? 'h-4 w-3' : 'h-5 w-4'}
                     unoptimized
                   />
-                  <span className={`font-medium ${compact ? 'text-[12px]' : ''}`}>{row.teamName}</span>
+                  <span className={`min-w-0 truncate font-medium ${compact ? 'text-[12px]' : ''}`}>{row.teamName}</span>
                 </div>
               </td>
               <td className={`${cellPadding} text-center`}>{row.played}</td>
@@ -1637,6 +1947,16 @@ export default async function LigaPage({ params }: PageProps) {
     standings,
     displayOptions.groupMode
   )
+  const showConmebolGroupStage = isConmebolGroupStage(
+    tournament.key,
+    displayOptions.standingsMode
+  )
+  const displayPrimaryGroups = showConmebolGroupStage
+    ? sortGroupStageGroups(primaryGroups)
+    : primaryGroups
+  const fixturesByGroup = showConmebolGroupStage
+    ? buildFixturesByGroup(fixtures, displayPrimaryGroups)
+    : new Map<string, LeagueFixtureSummary[]>()
   const visibleSecondaryGroups = secondaryGroups.filter(
     (group) => !isDerivedTableGroup(group.name)
   )
@@ -1673,7 +1993,7 @@ export default async function LigaPage({ params }: PageProps) {
     getRoundBlocks(fixtures, resolvedTournament?.leagueId ?? null, {
       includeFinalPhaseRounds: tournament.key === 'argentina-liga-profesional',
     })
-  const compactGroups = primaryGroups.length === 2
+  const compactGroups = showConmebolGroupStage || primaryGroups.length === 2
   const annualRelegatedTeamId = getAnnualRelegatedTeamId(annualTable)
   const promedioRelegatedTeamId = getPromediosRelegatedTeamId(
     promedioTable,
@@ -1767,34 +2087,69 @@ export default async function LigaPage({ params }: PageProps) {
             />
           ) : null}
 
-          {primaryGroups.length ? (
-            <div className={compactGroups ? 'grid gap-4 lg:grid-cols-2' : 'space-y-4'}>
-              {primaryGroups.map((group) => {
-                const tableLegendItems = getTableLegendItems(
-                  group.rows,
-                  displayOptions.rule,
-                  displayOptions.protected
-                )
+          {displayPrimaryGroups.length ? (
+            showConmebolGroupStage ? (
+              <GroupStageGrid
+                groups={displayPrimaryGroups.map((group, index) => {
+                  const groupId = getGroupId(group)
+                  const tableLegendItems = getTableLegendItems(
+                    group.rows,
+                    displayOptions.rule,
+                    displayOptions.protected
+                  )
 
-                return (
-                  <SectionCard
-                    key={group.name}
-                    title={getDisplayGroupName(group.name)}
-                    subtitle="Tabla de posiciones"
-                  >
-                    <StandingsTable
-                      rows={group.rows}
-                      compact={compactGroups}
-                      rule={displayOptions.rule}
-                      allowLegacyFallback={displayOptions.protected}
-                    />
-                    {tableLegendItems.length ? (
-                      <TableLegend items={tableLegendItems} />
-                    ) : null}
-                  </SectionCard>
-                )
-              })}
-            </div>
+                  return {
+                    id: `${groupId}-${index}`,
+                    title: getDisplayGroupName(group.name),
+                    table: (
+                      <>
+                        <StandingsTable
+                          rows={group.rows}
+                          compact
+                          fitNarrow
+                          rule={displayOptions.rule}
+                          allowLegacyFallback={false}
+                        />
+                        {tableLegendItems.length ? (
+                          <TableLegend items={tableLegendItems} />
+                        ) : null}
+                      </>
+                    ),
+                    fixtures: (
+                      <GroupFixtures fixtures={fixturesByGroup.get(groupId) || []} />
+                    ),
+                  }
+                })}
+              />
+            ) : (
+              <div className={compactGroups ? 'grid gap-4 lg:grid-cols-2' : 'space-y-4'}>
+                {displayPrimaryGroups.map((group) => {
+                  const tableLegendItems = getTableLegendItems(
+                    group.rows,
+                    displayOptions.rule,
+                    displayOptions.protected
+                  )
+
+                  return (
+                    <SectionCard
+                      key={group.name}
+                      title={getDisplayGroupName(group.name)}
+                      subtitle="Tabla de posiciones"
+                    >
+                      <StandingsTable
+                        rows={group.rows}
+                        compact={compactGroups}
+                        rule={displayOptions.rule}
+                        allowLegacyFallback={displayOptions.protected}
+                      />
+                      {tableLegendItems.length ? (
+                        <TableLegend items={tableLegendItems} />
+                      ) : null}
+                    </SectionCard>
+                  )
+                })}
+              </div>
+            )
           ) : displayOptions.hideEmptyStandings ? null : (
             <SectionCard
               title="Tabla de posiciones"

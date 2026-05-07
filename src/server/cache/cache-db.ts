@@ -20,6 +20,9 @@ export type StoredFixtureInput = {
   goalsAway: number | null
   homePenaltyScore?: number | null
   awayPenaltyScore?: number | null
+  venueName?: string | null
+  venueCity?: string | null
+  venueCountry?: string | null
 }
 
 export type StoredFixture = {
@@ -46,6 +49,9 @@ export type StoredFixture = {
   goalsAway: number | null
   homePenaltyScore?: number | null
   awayPenaltyScore?: number | null
+  venueName?: string | null
+  venueCity?: string | null
+  venueCountry?: string | null
 }
 
 export function readPersistentCache<T>(_cacheKey: string):

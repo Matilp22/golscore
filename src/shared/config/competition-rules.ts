@@ -352,8 +352,12 @@ export const COMPETITION_RULES: CompetitionRule[] = [
     bracketMode: 'knockout_rounds',
     showBracket: true,
     qualificationRules: [
-      { from: 1, to: 2, label: 'Octavos de final', tone: 'libertadores' },
-      { from: 3, to: 3, label: 'Playoff Sudamericana', tone: 'playoff' },
+      { from: 1, to: 2, label: 'Octavos de final Copa Libertadores', tone: 'champions' },
+      { from: 3, to: 3, label: 'Playoffs Copa Sudamericana', tone: 'sudamericana' },
+    ],
+    legendItems: [
+      { label: 'Octavos de final Copa Libertadores', tone: 'champions' },
+      { label: 'Playoffs Copa Sudamericana', tone: 'sudamericana' },
     ],
     playoffRules: ['Fase de grupos y eliminatorias cuando la API publica rounds finales.'],
     roundLabels: ['Grupos', 'Octavos', 'Cuartos', 'Semifinal', 'Final'],
@@ -372,8 +376,12 @@ export const COMPETITION_RULES: CompetitionRule[] = [
     bracketMode: 'knockout_rounds',
     showBracket: true,
     qualificationRules: [
-      { from: 1, to: 1, label: 'Octavos de final', tone: 'sudamericana' },
-      { from: 2, to: 2, label: 'Playoff octavos', tone: 'playoff' },
+      { from: 1, to: 1, label: 'Octavos de final Copa Sudamericana', tone: 'champions' },
+      { from: 2, to: 2, label: 'Playoffs Copa Sudamericana', tone: 'sudamericana' },
+    ],
+    legendItems: [
+      { label: 'Octavos de final Copa Sudamericana', tone: 'champions' },
+      { label: 'Playoffs Copa Sudamericana', tone: 'sudamericana' },
     ],
     playoffRules: ['Grupos, playoff de octavos y eliminatorias si aparecen en rounds.'],
     sourceUsed: [apiDescriptionSource, supabaseSource, 'CONMEBOL reglamento/formato de competiciones'],
