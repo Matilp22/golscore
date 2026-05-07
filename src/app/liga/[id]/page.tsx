@@ -791,6 +791,21 @@ function isGroupStageFixtureRound(round: string) {
   )
 }
 
+function compareFixturesByDateThenId(a: LeagueFixtureSummary, b: LeagueFixtureSummary) {
+  const dateA = new Date(a.date).getTime()
+  const dateB = new Date(b.date).getTime()
+
+  if (Number.isFinite(dateA) && Number.isFinite(dateB) && dateA !== dateB) {
+    return dateA - dateB
+  }
+
+  if (Number.isFinite(dateA) !== Number.isFinite(dateB)) {
+    return Number.isFinite(dateA) ? -1 : 1
+  }
+
+  return a.id - b.id
+}
+
 function buildFixturesByGroup(
   fixtures: LeagueFixtureSummary[],
   groups: LeagueStandingGroup[]
@@ -838,11 +853,7 @@ function buildFixturesByGroup(
   }
 
   for (const matches of fixturesByGroup.values()) {
-    matches.sort((a, b) => {
-      const dateCompare = new Date(a.date).getTime() - new Date(b.date).getTime()
-      if (dateCompare !== 0) return dateCompare
-      return a.id - b.id
-    })
+    matches.sort(compareFixturesByDateThenId)
   }
 
   return fixturesByGroup
@@ -1545,16 +1556,18 @@ function GroupFixtures({ fixtures }: { fixtures: LeagueFixtureSummary[] }) {
     )
   }
 
+  const sortedFixtures = [...fixtures].sort(compareFixturesByDateThenId)
+
   return (
-    <div className="space-y-2">
-      {fixtures.map((fixture) => {
+    <div className="grid min-w-0 grid-cols-1 gap-2 md:grid-cols-2">
+      {sortedFixtures.map((fixture) => {
         const locationLabel = getGroupFixtureLocationLabel(fixture)
 
         return (
           <Link
             key={fixture.id}
             href={`/partido/${fixture.id}`}
-            className="block min-w-0 rounded-xl border border-white/8 bg-[#11161b] px-2.5 py-2 text-xs transition hover:border-[#2a5c46] hover:bg-[#151b21] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7ff0b2]/60"
+            className="block w-full min-w-0 overflow-hidden rounded-xl border border-white/8 bg-[#11161b] px-2.5 py-2 text-xs transition hover:border-[#2a5c46] hover:bg-[#151b21] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7ff0b2]/60"
           >
             <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
               <div className="flex min-w-0 items-center justify-end gap-1.5 text-right">
