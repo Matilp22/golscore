@@ -6,6 +6,7 @@ import CopaArgentinaChampions from '@/frontend/components/CopaArgentinaChampions
 import CopaArgentinaMatchList from '@/frontend/components/CopaArgentinaMatchList'
 import GroupStageGrid from '@/frontend/components/GroupStage'
 import LeaderListInteractive from '@/frontend/components/LeaderListInteractive'
+import TournamentChampionsButton from '@/frontend/components/TournamentChampionsButton'
 import {
   UefaKnockoutBracket,
   UefaMatchPhaseNavigator,
@@ -13,6 +14,10 @@ import {
 import { LeagueLogo, TeamLogo } from '@/frontend/components/AssetImage'
 import { getCopaArgentinaChampions } from '@/server/copa-argentina/champions'
 import { buildCopaArgentinaEventLeaders } from '@/server/copa-argentina/stats'
+import {
+  getTournamentChampions,
+  isChampionsHistoryTournamentKey,
+} from '@/server/tournament-champions'
 import {
   ApiFootballError,
   getLeagueFixtures,
@@ -2002,6 +2007,10 @@ export default async function LigaPage({ params }: PageProps) {
     tournament.key === 'argentina-copa-argentina'
       ? await getCopaArgentinaChampions()
       : []
+  const tournamentChampions =
+    tournament.key !== 'argentina-copa-argentina' && isChampionsHistoryTournamentKey(tournament.key)
+    ? await getTournamentChampions(tournament.key)
+    : []
 
   try {
     resolvedTournament = await resolveTournament(
@@ -2194,6 +2203,15 @@ export default async function LigaPage({ params }: PageProps) {
                   <CopaArgentinaChampions champions={copaArgentinaChampions} />
                 </div>
               ) : null}
+
+              {tournament.key !== 'argentina-copa-argentina' && tournamentChampions.length ? (
+                <div className="flex justify-start md:justify-end">
+                  <TournamentChampionsButton
+                    competitionName={visibleTournamentTitle}
+                    champions={tournamentChampions}
+                  />
+                </div>
+              ) : null}
             </div>
           </header>
 
@@ -2205,7 +2223,7 @@ export default async function LigaPage({ params }: PageProps) {
 
           {isUefaLeaguePhaseTournament ? (
             <>
-              <UefaKnockoutBracket fixtures={fixtures} />
+              <UefaKnockoutBracket fixtures={fixtures} standingsRows={uefaLeaguePhaseRows} />
 
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1.08fr)_minmax(320px,0.92fr)]">
                 <SectionCard

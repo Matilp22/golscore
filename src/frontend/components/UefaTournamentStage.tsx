@@ -4,7 +4,13 @@ import Link from 'next/link'
 import { useMemo, useState } from 'react'
 
 import { TeamLogo } from '@/frontend/components/AssetImage'
-import type { LeagueFixtureSummary } from '@/lib/api-football'
+import type { LeagueFixtureSummary, LeagueStandingRow } from '@/lib/api-football'
+import {
+  getUefaKnockoutRoundLabel,
+  getUefaLeaguePhaseRoundNumber,
+  isUefaLeaguePhaseRound,
+  normalizeUefaKnockoutRound,
+} from '@/shared/utils/uefa-rounds'
 
 type UefaPhaseKey = 'playoffs' | 'roundOf16' | 'quarterFinals' | 'semiFinals' | 'final'
 
@@ -62,23 +68,11 @@ const UEFA_PHASES: UefaPhaseConfig[] = [
 ]
 
 const UEFA_PHASE_INDEX = new Map(UEFA_PHASES.map((phase, index) => [phase.key, index]))
-const UEFA_PHASE_LABELS = new Map(UEFA_PHASES.map((phase) => [phase.key, phase.label]))
 const UEFA_TOTAL_ROWS = 16
-const UEFA_GRID_UNIT = 56
+const UEFA_CARD_HEIGHT = 68
+const UEFA_GRID_UNIT = 40
 const LIVE_STATUSES = new Set(['1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE'])
 const NOT_PLAYED_STATUSES = new Set(['NS', 'TBD', 'PST', 'CANC', 'ABD'])
-const UEFA_EXCLUDED_BRACKET_PATTERNS = [
-  'league stage',
-  'league phase',
-  'fase liga',
-  'group stage',
-  'fase de grupos',
-  'matchday',
-  'regular season',
-  'qualifying',
-  'qualification',
-  'preliminary',
-]
 
 function normalizeText(value?: string | null) {
   return (value || '')
@@ -107,6 +101,14 @@ function getFixtureTeam(fixture: LeagueFixtureSummary, side: 'home' | 'away'): U
   }
 }
 
+function buildLeagueSeedMap(rows: LeagueStandingRow[]) {
+  return new Map(
+    rows
+      .filter((row) => row.rank > 0)
+      .map((row) => [getTeamKey(row.teamId, row.teamName), row.rank] as const)
+  )
+}
+
 function compareFixtures(a: LeagueFixtureSummary, b: LeagueFixtureSummary) {
   const dateA = new Date(a.date).getTime()
   const dateB = new Date(b.date).getTime()
@@ -115,68 +117,6 @@ function compareFixtures(a: LeagueFixtureSummary, b: LeagueFixtureSummary) {
   if (Number.isFinite(dateA) !== Number.isFinite(dateB)) return Number.isFinite(dateA) ? -1 : 1
 
   return a.id - b.id
-}
-
-function getUefaPhaseKey(round: string): UefaPhaseKey | null {
-  const normalized = normalizeText(round)
-
-  if (UEFA_EXCLUDED_BRACKET_PATTERNS.some((pattern) => normalized.includes(pattern))) {
-    return null
-  }
-
-  if (
-    normalized.includes('knockout round play off') ||
-    normalized.includes('knockout phase play off') ||
-    normalized.includes('knockout round playoff') ||
-    normalized.includes('knockout phase playoff') ||
-    normalized === 'play offs' ||
-    normalized === 'play off' ||
-    normalized === 'playoffs' ||
-    normalized.includes('playoff')
-  ) {
-    return 'playoffs'
-  }
-
-  if (
-    normalized.includes('round of 16') ||
-    normalized.includes('8th final') ||
-    normalized.includes('octavo')
-  ) {
-    return 'roundOf16'
-  }
-
-  if (normalized.includes('quarter') || normalized.includes('cuarto')) return 'quarterFinals'
-  if (normalized.includes('semi')) return 'semiFinals'
-  if (/\bfinal\b/.test(normalized)) return 'final'
-
-  return null
-}
-
-function getRoundNumber(round: string) {
-  const normalized = normalizeText(round)
-  const match =
-    normalized.match(/\b(?:regular season|league phase|league stage|fase liga|fecha|round|jornada)\s*-\s*(\d+)\b/) ??
-    normalized.match(/\b(?:regular season|league phase|league stage|fase liga|fecha|round|jornada)\s+(\d+)\b/) ??
-    normalized.match(/\bmatchday\s+(\d+)\b/) ??
-    normalized.match(/^(\d+)$/)
-
-  return match ? Number(match[1]) : null
-}
-
-function isUefaLeaguePhaseRound(round: string) {
-  const normalized = normalizeText(round)
-
-  if (UEFA_EXCLUDED_BRACKET_PATTERNS.some((pattern) => normalized.includes(pattern))) {
-    return (
-      normalized.includes('league stage') ||
-      normalized.includes('league phase') ||
-      normalized.includes('fase liga') ||
-      normalized.includes('matchday') ||
-      normalized.includes('regular season')
-    )
-  }
-
-  return /^\d+$/.test(normalized)
 }
 
 function isPlayed(match: LeagueFixtureSummary) {
@@ -251,25 +191,36 @@ function formatDateTime(date: string) {
   return { day, time }
 }
 
-function formatCompactDateTime(date: string) {
+function formatMatchDayLabel(date: string) {
   const parsedDate = new Date(date)
 
-  if (Number.isNaN(parsedDate.getTime())) return 'A confirmar'
+  if (Number.isNaN(parsedDate.getTime())) return 'Fecha a confirmar'
 
-  const shortDate = new Intl.DateTimeFormat('es-AR', {
+  return new Intl.DateTimeFormat('es-AR', {
+    weekday: 'short',
     day: '2-digit',
     month: '2-digit',
     timeZone: 'America/Argentina/Buenos_Aires',
-  }).format(parsedDate)
+  })
+    .format(parsedDate)
+    .replace('.', '')
+}
 
-  const time = new Intl.DateTimeFormat('es-AR', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZone: 'America/Argentina/Buenos_Aires',
-  }).format(parsedDate)
+function groupMatchesByDay(matches: LeagueFixtureSummary[]) {
+  const grouped = new Map<string, LeagueFixtureSummary[]>()
 
-  return `${shortDate} · ${time}`
+  for (const match of matches) {
+    const key = formatMatchDayLabel(match.date)
+    const current = grouped.get(key) || []
+
+    current.push(match)
+    grouped.set(key, current)
+  }
+
+  return [...grouped.entries()].map(([day, dayMatches]) => [
+    day,
+    [...dayMatches].sort(compareFixtures),
+  ] as const)
 }
 
 function getLocationLabel(match: LeagueFixtureSummary) {
@@ -307,8 +258,21 @@ function getTieStatusLabel(tie: Pick<UefaTie, 'fixtures' | 'isFinal'>) {
   return 'A confirmar'
 }
 
+function getCompactTieStatusLabel(tie: UefaTie) {
+  if (tie.fixtures.some((fixture) => LIVE_STATUSES.has(fixture.statusShort))) return 'En vivo'
+  if (tie.isFinal) return tie.fixtures[0] ? getCompactStatusLabel(tie.fixtures[0]) : 'A definir'
+
+  const playedCount = tie.fixtures.filter(isPlayed).length
+
+  if (playedCount >= 2) return 'Final'
+  if (playedCount === 1) return 'Ida'
+  if (tie.fixtures.length) return 'Prox.'
+
+  return 'A definir'
+}
+
 function getTieAggregateLabel(fixtures: LeagueFixtureSummary[], isFinal: boolean) {
-  if (isFinal) return 'Partido unico'
+  if (isFinal) return 'Partido único'
 
   const playedCount = fixtures.filter(isPlayed).length
   const completedScores = fixtures.filter(
@@ -319,6 +283,13 @@ function getTieAggregateLabel(fixtures: LeagueFixtureSummary[], isFinal: boolean
   if (playedCount < 2 || fixtures.length < 2) return 'Global parcial'
 
   return 'Global'
+}
+
+function getTieAggregateText(tie: UefaTie) {
+  if (tie.isFinal) return 'Partido único'
+  if (tie.aggregate[0] === null || tie.aggregate[1] === null) return tie.aggregateLabel
+
+  return `${tie.aggregateLabel} ${tie.aggregate[0]}-${tie.aggregate[1]}`
 }
 
 function getPenaltyWinnerKey(fixtures: LeagueFixtureSummary[]) {
@@ -377,7 +348,7 @@ function buildUefaTies(fixtures: LeagueFixtureSummary[]) {
   const grouped = new Map<string, LeagueFixtureSummary[]>()
 
   for (const fixture of fixtures) {
-    const phaseKey = getUefaPhaseKey(fixture.round)
+    const phaseKey = normalizeUefaKnockoutRound(fixture.round)
     if (!phaseKey) continue
 
     const homeKey = getTeamKey(fixture.homeId, fixture.home)
@@ -394,7 +365,7 @@ function buildUefaTies(fixtures: LeagueFixtureSummary[]) {
     .map(([id, tieFixtures]): UefaTie => {
       const sortedFixtures = [...tieFixtures].sort(compareFixtures)
       const firstFixture = sortedFixtures[0]
-      const phaseKey = getUefaPhaseKey(firstFixture.round) || 'final'
+      const phaseKey = normalizeUefaKnockoutRound(firstFixture.round) || 'final'
       const teams: [UefaTeamRef, UefaTeamRef] = [
         getFixtureTeam(firstFixture, 'home'),
         getFixtureTeam(firstFixture, 'away'),
@@ -405,7 +376,7 @@ function buildUefaTies(fixtures: LeagueFixtureSummary[]) {
       return {
         id,
         phaseKey,
-        phaseLabel: UEFA_PHASE_LABELS.get(phaseKey) || firstFixture.round,
+        phaseLabel: getUefaKnockoutRoundLabel(phaseKey),
         teams,
         fixtures: sortedFixtures,
         aggregate,
@@ -541,29 +512,48 @@ function TeamRow({
   team,
   score,
   active,
+  seed,
 }: {
   team: UefaTeamRef
   score: number | null
   active: boolean
+  seed?: number
 }) {
   return (
     <div
-      className={`grid min-w-0 grid-cols-[18px_minmax(0,1fr)_28px] items-center gap-1.5 rounded-lg border px-2 py-1.5 ${
+      className={`flex h-[19px] items-center justify-between gap-2 rounded-md px-1.5 py-0.5 ${
         active
-          ? 'border-[#7ff0b2]/25 bg-[#143624] text-[#7ff0b2]'
-          : 'border-white/7 bg-[#111820]/88 text-[#edf2f7]'
+          ? 'bg-[#143624] text-[#7ff0b2] shadow-[inset_0_0_0_1px_rgba(127,240,178,0.2)]'
+          : 'bg-[#121a20]'
       }`}
     >
-      <TeamLogo
-        src={team.logo}
-        alt={team.name}
-        size={18}
-        className="h-[18px] w-[18px] object-contain"
-        fallbackClassName="h-[18px] w-[15px]"
-        unoptimized
-      />
-      <span className="truncate text-[12px] font-bold">{team.name}</span>
-      <span className="flex h-6 w-7 items-center justify-center rounded-md border border-white/8 bg-[#0d1217] text-[11px] font-black">
+      <div className="flex min-w-0 items-center gap-1.5">
+        <TeamLogo
+          src={team.logo}
+          alt={team.name}
+          size={12}
+          className="h-[12px] w-[12px] object-contain"
+          fallbackClassName="h-[12px] w-[10px]"
+          unoptimized
+        />
+        {seed ? (
+          <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-white/10 bg-[#0e1419] px-1 text-[8px] font-black text-[#8d98a7]">
+            {seed}
+          </span>
+        ) : null}
+        <span
+          className={`truncate text-[10.5px] font-semibold ${
+            active ? 'text-[#7ff0b2]' : 'text-[#edf2f7]'
+          }`}
+        >
+          {team.name}
+        </span>
+      </div>
+      <span
+        className={`text-[10.5px] font-black ${
+          active ? 'text-[#7ff0b2]' : 'text-[#dce5ef]'
+        }`}
+      >
         {score ?? '-'}
       </span>
     </div>
@@ -573,30 +563,47 @@ function TeamRow({
 function TieCard({
   tie,
   onSelect,
+  seedByTeamKey,
 }: {
   tie: UefaTie
   onSelect: (tie: UefaTie) => void
+  seedByTeamKey: Map<string, number>
 }) {
   const [scoreA, scoreB] =
     tie.isFinal && tie.fixtures[0]
       ? [tie.fixtures[0].goalsHome, tie.fixtures[0].goalsAway]
       : tie.aggregate
+  const aggregateText = getTieAggregateText(tie)
+  const compactStatus = getCompactTieStatusLabel(tie)
 
   return (
     <button
       type="button"
       onClick={() => onSelect(tie)}
-      className="block h-[96px] w-full overflow-hidden rounded-xl border border-[#2a5c46] bg-[linear-gradient(180deg,#161d24_0%,#11181d_100%)] p-1.5 text-left shadow-[inset_0_0_0_1px_rgba(127,240,178,0.06)] transition hover:border-[#3a7c5f] hover:bg-[linear-gradient(180deg,#182128_0%,#121a20_100%)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7ff0b2]/60"
+      className="block w-full overflow-hidden rounded-xl border border-[#2a5c46] bg-[linear-gradient(180deg,#161d24_0%,#11181d_100%)] p-1 text-left shadow-[inset_0_0_0_1px_rgba(127,240,178,0.06)] transition hover:border-[#3a7c5f] hover:bg-[linear-gradient(180deg,#182128_0%,#121a20_100%)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7ff0b2]/60"
+      style={{ height: `${UEFA_CARD_HEIGHT}px` }}
     >
       <div className="mb-1 flex items-center justify-between gap-2 px-1">
-        <span className="text-[9px] font-black uppercase tracking-[0.12em] text-[#7ff0b2]">
-          {tie.aggregateLabel}
+        <span className="truncate text-[8px] font-black uppercase tracking-[0.08em] text-[#7ff0b2]">
+          {aggregateText}
         </span>
-        <span className="truncate text-[9px] font-bold text-[#8d98a7]">{tie.statusLabel}</span>
+        <span className="truncate text-[8px] font-black uppercase text-[#8d98a7]">
+          {compactStatus}
+        </span>
       </div>
-      <div className="space-y-1.5">
-        <TeamRow team={tie.teams[0]} score={scoreA} active={tie.winnerKey === tie.teams[0].key} />
-        <TeamRow team={tie.teams[1]} score={scoreB} active={tie.winnerKey === tie.teams[1].key} />
+      <div className="flex h-[calc(100%-16px)] flex-col justify-center gap-[2px]">
+        <TeamRow
+          team={tie.teams[0]}
+          score={scoreA}
+          active={tie.winnerKey === tie.teams[0].key}
+          seed={seedByTeamKey.get(tie.teams[0].key)}
+        />
+        <TeamRow
+          team={tie.teams[1]}
+          score={scoreB}
+          active={tie.winnerKey === tie.teams[1].key}
+          seed={seedByTeamKey.get(tie.teams[1].key)}
+        />
       </div>
     </button>
   )
@@ -652,47 +659,73 @@ function SeriesMatchRow({ match, label }: { match: LeagueFixtureSummary; label: 
   )
 }
 
+function getNavigatorPrimaryLabel(match: LeagueFixtureSummary) {
+  if (match.statusShort === 'NS') {
+    const parsedDate = new Date(match.date)
+
+    if (Number.isNaN(parsedDate.getTime())) return 'A conf.'
+
+    return new Intl.DateTimeFormat('es-AR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZone: 'America/Argentina/Buenos_Aires',
+    }).format(parsedDate)
+  }
+
+  return getCompactStatusLabel(match)
+}
+
+function getNavigatorSecondaryStatus(match: LeagueFixtureSummary) {
+  if (match.statusShort === 'NS') return 'Proximo'
+
+  return getStatusLabel(match)
+}
+
 function CompactMatchRow({ match }: { match: LeagueFixtureSummary }) {
   return (
     <Link
       href={`/partido/${match.id}`}
-      className="block border-b border-white/8 transition hover:bg-[#151b21] focus-visible:bg-[#151b21] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7ff0b2]/60 focus-visible:ring-inset last:border-b-0"
+      className="grid grid-cols-[62px_minmax(0,1fr)] items-center border-b border-white/8 text-xs transition hover:bg-[#151b21] focus-visible:bg-[#151b21] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7ff0b2]/60 focus-visible:ring-inset last:border-b-0 md:grid-cols-[68px_minmax(0,1fr)]"
     >
-      <div className="grid grid-cols-[82px_minmax(0,1fr)_40px_minmax(0,1fr)_58px] items-center gap-1 px-2 py-1.5 text-[11px] md:grid-cols-[94px_minmax(0,1fr)_44px_minmax(0,1fr)_64px] md:gap-1.5 md:text-xs">
-        <div className="truncate text-center font-semibold text-[#aeb9c4]">
-          {formatCompactDateTime(match.date)}
-        </div>
+      <div
+        className={`border-r border-white/8 px-2 py-1.5 text-center text-[10px] font-bold md:text-[11px] ${getCompactStatusTone(match)}`}
+      >
+        {getNavigatorPrimaryLabel(match)}
+      </div>
 
-        <div className="flex min-w-0 items-center justify-end gap-1.5 text-right">
-          <span className="truncate font-semibold text-[#dce5ef]">{match.home}</span>
-          <TeamLogo
-            src={match.homeLogo}
-            alt={match.home}
-            size={14}
-            className="h-3.5 w-3.5 object-contain md:h-4 md:w-4"
-            fallbackClassName="h-3.5 w-3"
-            unoptimized
-          />
-        </div>
+      <div className="px-2 py-1.5">
+        <div className="grid grid-cols-[minmax(0,1fr)_44px_minmax(0,1fr)] items-center gap-1.5 md:grid-cols-[minmax(0,1fr)_52px_minmax(0,1fr)]">
+          <div className="flex min-w-0 items-center justify-end gap-1.5 text-right">
+            <span className="truncate font-semibold text-[#dce5ef]">{match.home}</span>
+            <TeamLogo
+              src={match.homeLogo}
+              alt={match.home}
+              size={16}
+              className="h-4 w-4 object-contain"
+              fallbackClassName="h-3.5 w-3"
+              unoptimized
+            />
+          </div>
 
-        <div className="text-center text-[11px] font-black text-white md:text-xs">
-          {getMatchScoreLabel(match)}
-        </div>
+          <div className="text-center text-sm font-black text-white">
+            {getMatchScoreLabel(match)}
+          </div>
 
-        <div className="flex min-w-0 items-center gap-1.5">
-          <TeamLogo
-            src={match.awayLogo}
-            alt={match.away}
-            size={14}
-            className="h-3.5 w-3.5 object-contain md:h-4 md:w-4"
-            fallbackClassName="h-3.5 w-3"
-            unoptimized
-          />
-          <span className="truncate font-semibold text-[#dce5ef]">{match.away}</span>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <TeamLogo
+              src={match.awayLogo}
+              alt={match.away}
+              size={16}
+              className="h-4 w-4 object-contain"
+              fallbackClassName="h-3.5 w-3"
+              unoptimized
+            />
+            <span className="truncate font-semibold text-[#dce5ef]">{match.away}</span>
+          </div>
         </div>
-
-        <div className={`truncate text-center text-[10px] font-bold uppercase md:text-[11px] ${getCompactStatusTone(match)}`}>
-          {getCompactStatusLabel(match)}
+        <div className="mt-1 truncate text-center text-[10px] font-semibold text-[#8fa0b1]">
+          {getNavigatorSecondaryStatus(match)}
         </div>
       </div>
     </Link>
@@ -733,7 +766,7 @@ function SeriesModal({
               </h2>
               <p className="mt-1 text-xs font-semibold text-[#9eacb8]">
                 {tie.isFinal
-                  ? 'Partido unico'
+                  ? 'Partido único'
                   : `${tie.aggregateLabel} ${tie.aggregate[0] ?? '-'}-${tie.aggregate[1] ?? '-'} · ${tie.statusLabel}`}
               </p>
             </div>
@@ -767,9 +800,16 @@ function SeriesModal({
   )
 }
 
-export function UefaKnockoutBracket({ fixtures }: { fixtures: LeagueFixtureSummary[] }) {
+export function UefaKnockoutBracket({
+  fixtures,
+  standingsRows = [],
+}: {
+  fixtures: LeagueFixtureSummary[]
+  standingsRows?: LeagueStandingRow[]
+}) {
   const [selectedTie, setSelectedTie] = useState<UefaTie | null>(null)
   const columns = useMemo(() => buildBracketColumns(fixtures), [fixtures])
+  const seedByTeamKey = useMemo(() => buildLeagueSeedMap(standingsRows), [standingsRows])
 
   if (!columns.length) {
     return (
@@ -777,7 +817,7 @@ export function UefaKnockoutBracket({ fixtures }: { fixtures: LeagueFixtureSumma
         <div className="border-b border-white/6 bg-[#13181d] px-2 py-2 md:px-3">
           <h2 className="text-base font-bold text-white md:text-lg">Cuadro de llaves</h2>
           <p className="mt-0.5 text-xs text-[#8d98a7]">
-            El bracket empieza en playoffs y solo muestra fases eliminatorias.
+            El cuadro principal arranca en los knockout phase play-offs de los puestos 9 a 24.
           </p>
         </div>
         <div className="p-3 text-sm text-[#8d98a7]">
@@ -792,7 +832,7 @@ export function UefaKnockoutBracket({ fixtures }: { fixtures: LeagueFixtureSumma
       <div className="border-b border-white/6 bg-[#13181d] px-2 py-2 md:px-3">
         <h2 className="text-base font-bold text-white md:text-lg">Cuadro de llaves</h2>
         <p className="mt-0.5 text-xs text-[#8d98a7]">
-          El bracket arranca en playoffs; octavos, cuartos y semifinales usan global, y la final es a partido unico.
+          El cuadro principal arranca en los knockout phase play-offs de los puestos 9 a 24; desde ahí sigue a octavos, cuartos, semifinales y final.
         </p>
       </div>
 
@@ -808,7 +848,7 @@ export function UefaKnockoutBracket({ fixtures }: { fixtures: LeagueFixtureSumma
                   }`}
                 >
                   <div className={`mb-2 min-h-8 ${columnIndex === 0 ? 'pl-1 pr-1.5' : 'px-1'}`}>
-                    <h3 className="text-center text-[11px] font-black uppercase tracking-[0.08em] text-[#7ff0b2]">
+                    <h3 className="text-center text-[12px] font-black uppercase tracking-[0.04em] text-white">
                       {column.label}
                     </h3>
                   </div>
@@ -834,7 +874,11 @@ export function UefaKnockoutBracket({ fixtures }: { fixtures: LeagueFixtureSumma
                           <span className="pointer-events-none absolute right-[-10px] top-1/2 h-px w-[10px] bg-[#2a5c46]" />
                         ) : null}
 
-                        <TieCard tie={tie} onSelect={setSelectedTie} />
+                        <TieCard
+                          tie={tie}
+                          onSelect={setSelectedTie}
+                          seedByTeamKey={seedByTeamKey}
+                        />
                       </div>
                     ))}
                   </div>
@@ -851,7 +895,7 @@ export function UefaKnockoutBracket({ fixtures }: { fixtures: LeagueFixtureSumma
 }
 
 function getLeaguePhaseOptionLabel(round: string) {
-  const roundNumber = getRoundNumber(round)
+  const roundNumber = getUefaLeaguePhaseRoundNumber(round)
 
   if (roundNumber) return `Fase liga - Fecha ${roundNumber}`
 
@@ -862,15 +906,15 @@ function buildMatchOptions(fixtures: LeagueFixtureSummary[]) {
   const grouped = new Map<string, MatchOption>()
 
   for (const fixture of fixtures) {
-    const phaseKey = getUefaPhaseKey(fixture.round)
+    const phaseKey = normalizeUefaKnockoutRound(fixture.round)
     const isLeaguePhaseRound = isUefaLeaguePhaseRound(fixture.round)
 
     if (!phaseKey && !isLeaguePhaseRound) continue
 
-    const roundNumber = getRoundNumber(fixture.round)
+    const roundNumber = getUefaLeaguePhaseRoundNumber(fixture.round)
     const optionKey = phaseKey || `league-${roundNumber || normalizeText(fixture.round)}`
     const label = phaseKey
-      ? UEFA_PHASE_LABELS.get(phaseKey) || fixture.round
+      ? getUefaKnockoutRoundLabel(phaseKey)
       : getLeaguePhaseOptionLabel(fixture.round)
     const sortValue = phaseKey
       ? 1000 + (UEFA_PHASE_INDEX.get(phaseKey) || 0) * 100
@@ -902,6 +946,10 @@ export function UefaMatchPhaseNavigator({ fixtures }: { fixtures: LeagueFixtureS
   const options = useMemo(() => buildMatchOptions(fixtures), [fixtures])
   const [selectedKey, setSelectedKey] = useState(options[0]?.key || '')
   const selectedOption = options.find((option) => option.key === selectedKey) || options[0]
+  const dayGroups = useMemo(
+    () => groupMatchesByDay(selectedOption?.matches || []),
+    [selectedOption]
+  )
 
   if (!options.length || !selectedOption) {
     return (
@@ -938,16 +986,16 @@ export function UefaMatchPhaseNavigator({ fixtures }: { fixtures: LeagueFixtureS
 
       <div className="p-2 md:p-3">
         <div className="w-full overflow-hidden rounded-xl border border-white/8 bg-[#11161b]">
-          <div className="hidden grid-cols-[94px_minmax(0,1fr)_44px_minmax(0,1fr)_64px] items-center gap-1.5 border-b border-white/8 bg-[#141a20] px-2 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-[#8d98a7] md:grid">
-            <span className="text-center">Fecha</span>
-            <span className="text-right">Local</span>
-            <span className="text-center">Res.</span>
-            <span>Visitante</span>
-            <span className="text-center">Estado</span>
-          </div>
+          {dayGroups.map(([day, dayMatches]) => (
+            <div key={day} className="border-b border-white/10 last:border-b-0">
+              <div className="border-b border-white/8 bg-[#141a20] px-3 py-1.5 text-center text-xs font-bold text-white">
+                {day}
+              </div>
 
-          {selectedOption.matches.map((match) => (
-            <CompactMatchRow key={match.id} match={match} />
+              {dayMatches.map((match) => (
+                <CompactMatchRow key={match.id} match={match} />
+              ))}
+            </div>
           ))}
         </div>
       </div>
