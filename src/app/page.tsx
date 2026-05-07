@@ -146,6 +146,57 @@ function sortMatches(matches: ApiMatch[]) {
   })
 }
 
+function slugifyCompetitionKey(value: string) {
+  const slug = normalizeText(value)
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+
+  return slug || 'competencia'
+}
+
+function getFallbackSectionForMatch(match: ApiMatch) {
+  const country = countryText(match)
+
+  if (country.includes('argentina')) return { key: 'argentina', title: 'Argentina' }
+  if (country.includes('england')) return { key: 'inglaterra', title: 'Inglaterra' }
+  if (country.includes('spain')) return { key: 'espana', title: 'España' }
+  if (country.includes('italy')) return { key: 'italia', title: 'Italia' }
+  if (country.includes('germany')) return { key: 'alemania', title: 'Alemania' }
+  if (country.includes('portugal')) return { key: 'portugal', title: 'Portugal' }
+  if (country.includes('france')) return { key: 'francia', title: 'Francia' }
+  if (country.includes('brazil')) return { key: 'brasil', title: 'Brasil' }
+  if (country.includes('uruguay')) return { key: 'uruguay', title: 'Uruguay' }
+  if (country.includes('paraguay')) return { key: 'paraguay', title: 'Paraguay' }
+  if (country.includes('colombia')) return { key: 'colombia', title: 'Colombia' }
+  if (country.includes('chile')) return { key: 'chile', title: 'Chile' }
+  if (country.includes('mexico')) return { key: 'mexico', title: 'México' }
+  if (country.includes('usa') || country.includes('united states')) return { key: 'eeuu', title: 'EEUU' }
+
+  const league = leagueText(match)
+  if (
+    league.includes('world cup') ||
+    league.includes('copa america') ||
+    league.includes('uefa euro') ||
+    league.includes('nations league') ||
+    league.includes('qualification')
+  ) {
+    return { key: 'selecciones', title: 'Selecciones' }
+  }
+
+  if (
+    league.includes('libertadores') ||
+    league.includes('sudamericana') ||
+    league.includes('champions') ||
+    league.includes('europa') ||
+    league.includes('conference') ||
+    league.includes('concacaf')
+  ) {
+    return { key: 'internacional', title: 'Internacional' }
+  }
+
+  return { key: 'resto', title: 'Resto' }
+}
+
 function shouldFastRefreshMatch(match: ApiMatch, now: number) {
   if (isLiveStatus(match.statusShort)) return true
 
@@ -178,6 +229,7 @@ const SECTION_ORDER = [
   'mexico',
   'eeuu',
   'selecciones',
+  'resto',
 ]
 
 const SECTION_TITLES: Record<string, string> = {
@@ -197,6 +249,7 @@ const SECTION_TITLES: Record<string, string> = {
   mexico: 'México',
   eeuu: 'EEUU',
   selecciones: 'Selecciones',
+  resto: 'Resto',
 }
 
 const HOME_LEAGUE_ID_TO_TOURNAMENT_KEY = new Map<number, string>([
@@ -996,6 +1049,16 @@ function resolveHomeCompetitionHref(ruleKey: string, sampleMatch?: ApiMatch) {
   return null
 }
 
+function resolveFallbackHomeCompetitionHref(sampleMatch?: ApiMatch) {
+  const tournamentKey =
+    sampleMatch?.leagueId && Number.isFinite(sampleMatch.leagueId)
+      ? HOME_LEAGUE_ID_TO_TOURNAMENT_KEY.get(sampleMatch.leagueId)
+      : null
+  const tournament = tournamentKey ? getTournamentConfig(tournamentKey) : null
+
+  return tournament ? `/liga/${tournament.key}` : null
+}
+
 function resolveHomeCompetitionLogo(sampleMatch?: ApiMatch) {
   if (sampleMatch?.leagueLogo) return sampleMatch.leagueLogo
 
@@ -1057,6 +1120,40 @@ function groupMatchesWithPromiedosStructure(matches: ApiMatch[]): SectionBucket[
     })
 
     filtered.forEach((match) => assignedMatchIds.add(match.id))
+  }
+
+  const fallbackBuckets = new Map<string, CompetitionBucket>()
+
+  for (const match of cleanMatches) {
+    if (assignedMatchIds.has(match.id)) continue
+
+    const fallbackSection = getFallbackSectionForMatch(match)
+    const leagueKey =
+      match.leagueId && Number.isFinite(match.leagueId)
+        ? `league-${match.leagueId}`
+        : slugifyCompetitionKey(`${match.country || 'internacional'}-${match.league || 'otros'}`)
+    const bucketKey = `fallback-${leagueKey}`
+    const existingBucket = fallbackBuckets.get(bucketKey)
+
+    if (existingBucket) {
+      existingBucket.matches.push(match)
+      continue
+    }
+
+    fallbackBuckets.set(bucketKey, {
+      key: bucketKey,
+      title: getCompetitionVisibleNameEs(bucketKey, match.league || 'Otros partidos'),
+      logo: resolveHomeCompetitionLogo(match),
+      sectionKey: fallbackSection.key,
+      sectionTitle: fallbackSection.title,
+      href: resolveFallbackHomeCompetitionHref(match),
+      matches: [match],
+    })
+  }
+
+  for (const bucket of fallbackBuckets.values()) {
+    bucket.matches = sortMatches(bucket.matches)
+    competitionBuckets.push(bucket)
   }
 
   return SECTION_ORDER.map((sectionKey) => ({

@@ -52,6 +52,7 @@ const inflightApiRequests = new Map<string, Promise<ApiFootballResponse<unknown>
 const API_FOOTBALL_REQUEST_TIMEOUT_MS = 8000
 const HOME_SUPABASE_TIMEOUT_MS = 5000
 const HOME_API_FALLBACK_TIMEOUT_MS = 9000
+const HOME_STORED_MATCHES_SUPPLEMENT_THRESHOLD = 6
 
 export class ApiFootballError extends Error {
   code?: string
@@ -718,6 +719,45 @@ function getArgentinaDateKey(dateString: string) {
   return getArgentinaDateISO(dateString)
 }
 
+function getMatchMergeKey(match: MatchListItem) {
+  return String(match.externalId ?? match.id)
+}
+
+function mergeHomeMatches(
+  storedMatches: MatchListItem[],
+  apiMatches: MatchListItem[]
+) {
+  const mergedByExternalId = new Map<string, MatchListItem>()
+
+  for (const match of storedMatches) {
+    mergedByExternalId.set(getMatchMergeKey(match), match)
+  }
+
+  for (const apiMatch of apiMatches) {
+    const key = getMatchMergeKey(apiMatch)
+    const storedMatch = mergedByExternalId.get(key)
+
+    mergedByExternalId.set(
+      key,
+      storedMatch
+        ? {
+            ...storedMatch,
+            ...apiMatch,
+            leagueLogo: apiMatch.leagueLogo ?? storedMatch.leagueLogo,
+            homeLogo: apiMatch.homeLogo ?? storedMatch.homeLogo,
+            awayLogo: apiMatch.awayLogo ?? storedMatch.awayLogo,
+          }
+        : apiMatch
+    )
+  }
+
+  return [...mergedByExternalId.values()]
+}
+
+function shouldSupplementStoredHomeMatches(storedMatches: MatchListItem[]) {
+  return storedMatches.length < HOME_STORED_MATCHES_SUPPLEMENT_THRESHOLD
+}
+
 function pickBestSeason(seasons?: LeagueSearchSeason[]) {
   if (!seasons?.length) return undefined
 
@@ -847,22 +887,7 @@ async function apiFootball(
   }
 }
 
-export async function getMatchesByDate(date: string): Promise<MatchListItem[]> {
-  try {
-    const storedMatches = await withTimeout(
-      fetchStoredHomeMatches(date),
-      HOME_SUPABASE_TIMEOUT_MS,
-      'Supabase home matches timeout'
-    )
-
-    if (storedMatches.length) return storedMatches
-  } catch (error) {
-    console.warn('[home] No se pudieron leer partidos desde Supabase; se usa API fallback.', {
-      date,
-      message: error instanceof Error ? error.message : String(error),
-    })
-  }
-
+async function fetchApiFallbackHomeMatches(date: string): Promise<MatchListItem[]> {
   const requestedDates = [addDaysToISO(date, -1), date, addDaysToISO(date, 1)]
   const responses = await withTimeout(
     Promise.allSettled(
@@ -964,6 +989,60 @@ export async function getMatchesByDate(date: string): Promise<MatchListItem[]> {
   }
 
   return mappedFixtures
+}
+
+export async function getMatchesByDate(date: string): Promise<MatchListItem[]> {
+  let storedMatches: MatchListItem[] = []
+
+  try {
+    storedMatches = await withTimeout(
+      fetchStoredHomeMatches(date),
+      HOME_SUPABASE_TIMEOUT_MS,
+      'Supabase home matches timeout'
+    )
+  } catch (error) {
+    console.warn('[home] No se pudieron leer partidos desde Supabase; se usa API fallback.', {
+      date,
+      message: error instanceof Error ? error.message : String(error),
+    })
+  }
+
+  if (storedMatches.length && !shouldSupplementStoredHomeMatches(storedMatches)) {
+    return storedMatches
+  }
+
+  try {
+    const apiMatches = await fetchApiFallbackHomeMatches(date)
+
+    if (storedMatches.length) {
+      const mergedMatches = mergeHomeMatches(storedMatches, apiMatches)
+
+      if (apiMatches.length > storedMatches.length) {
+        console.warn('[home] Supabase devolvio una tanda parcial; se completo con API-Football.', {
+          date,
+          stored: storedMatches.length,
+          api: apiMatches.length,
+          merged: mergedMatches.length,
+        })
+      }
+
+      return mergedMatches
+    }
+
+    return apiMatches
+  } catch (error) {
+    if (storedMatches.length) {
+      console.warn('[home] No se pudo completar Supabase con API-Football; se usa la tanda persistida.', {
+        date,
+        stored: storedMatches.length,
+        message: error instanceof Error ? error.message : String(error),
+      })
+
+      return storedMatches
+    }
+
+    throw error
+  }
 }
 
 function getGoalKind(detail?: string | null): MatchGoalScorer['kind'] {

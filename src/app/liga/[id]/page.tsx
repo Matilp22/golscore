@@ -41,11 +41,13 @@ import {
 import {
   LEGEND_TONE_CLASSES,
   ROW_TONE_CLASSES,
+  getStandingDescriptionRule,
   getStandingRuleForRank,
   getTournamentDisplayOptions,
   type CompetitionRule,
   type GroupMode,
   type RuleTone,
+  type StandingLegendItem,
 } from '@/shared/config/competition-rules'
 
 type PageProps = {
@@ -854,24 +856,32 @@ function getRowAccent(
     return 'border-l-transparent'
   }
 
-  const description = (row.description || '').toLowerCase()
+  const apiDescriptionRule = getStandingDescriptionRule(row.description)
 
-  if (
-    description.includes('libertadores') ||
-    description.includes('champions') ||
-    description.includes('qualification') ||
-    description.includes('play-offs') ||
-    description.includes('playoffs')
-  ) {
-    return 'border-l-[#46d98e] bg-[#10261c]'
+  if (!allowLegacyFallback && apiDescriptionRule) {
+    return ROW_TONE_CLASSES[apiDescriptionRule.tone]
   }
 
-  if (description.includes('sudamericana') || description.includes('europa') || description.includes('conference')) {
-    return 'border-l-sky-400 bg-sky-950/25'
-  }
+  if (allowLegacyFallback) {
+    const description = (row.description || '').toLowerCase()
 
-  if (description.includes('relegation') || description.includes('descenso')) {
-    return 'border-l-[#ff7e7e] bg-[#2a1616]'
+    if (
+      description.includes('libertadores') ||
+      description.includes('champions') ||
+      description.includes('qualification') ||
+      description.includes('play-offs') ||
+      description.includes('playoffs')
+    ) {
+      return 'border-l-[#46d98e] bg-[#10261c]'
+    }
+
+    if (description.includes('sudamericana') || description.includes('europa') || description.includes('conference')) {
+      return 'border-l-sky-400 bg-sky-950/25'
+    }
+
+    if (description.includes('relegation') || description.includes('descenso')) {
+      return 'border-l-[#ff7e7e] bg-[#2a1616]'
+    }
   }
 
   const rank = row.rank || index + 1
@@ -910,6 +920,33 @@ function getConfiguredLegendItems(items: Array<{ label: string; tone: RuleTone }
     label: item.label,
     tone: LEGEND_TONE_CLASSES[item.tone],
   }))
+}
+
+function getTableLegendItems(
+  rows: LeagueStandingRow[],
+  rule: CompetitionRule | null,
+  protectedCompetition: boolean
+) {
+  if (protectedCompetition) return []
+
+  const seen = new Set<string>()
+  const items: StandingLegendItem[] = []
+
+  for (const [index, row] of rows.entries()) {
+    const apiDescriptionRule = getStandingDescriptionRule(row.description)
+    const rankRule = getStandingRuleForRank(rule, row.rank || index + 1)
+    const legendItem = apiDescriptionRule ?? rankRule
+
+    if (!legendItem) continue
+
+    const key = `${legendItem.label}:${legendItem.tone}`
+    if (seen.has(key)) continue
+
+    seen.add(key)
+    items.push({ label: legendItem.label, tone: legendItem.tone })
+  }
+
+  return getConfiguredLegendItems(items)
 }
 
 function getAnnualRelegatedTeamId(rows: LeagueStandingRow[]) {
@@ -1637,9 +1674,6 @@ export default async function LigaPage({ params }: PageProps) {
       includeFinalPhaseRounds: tournament.key === 'argentina-liga-profesional',
     })
   const compactGroups = primaryGroups.length === 2
-  const configuredLegendItems = displayOptions.protected
-    ? []
-    : getConfiguredLegendItems(displayOptions.legendItems)
   const annualRelegatedTeamId = getAnnualRelegatedTeamId(annualTable)
   const promedioRelegatedTeamId = getPromediosRelegatedTeamId(
     promedioTable,
@@ -1735,23 +1769,31 @@ export default async function LigaPage({ params }: PageProps) {
 
           {primaryGroups.length ? (
             <div className={compactGroups ? 'grid gap-4 lg:grid-cols-2' : 'space-y-4'}>
-              {primaryGroups.map((group) => (
-                <SectionCard
-                  key={group.name}
-                  title={getDisplayGroupName(group.name)}
-                  subtitle="Tabla de posiciones"
-                >
-                  <StandingsTable
-                    rows={group.rows}
-                    compact={compactGroups}
-                    rule={displayOptions.rule}
-                    allowLegacyFallback={displayOptions.protected}
-                  />
-                  {configuredLegendItems.length ? (
-                    <TableLegend items={configuredLegendItems} />
-                  ) : null}
-                </SectionCard>
-              ))}
+              {primaryGroups.map((group) => {
+                const tableLegendItems = getTableLegendItems(
+                  group.rows,
+                  displayOptions.rule,
+                  displayOptions.protected
+                )
+
+                return (
+                  <SectionCard
+                    key={group.name}
+                    title={getDisplayGroupName(group.name)}
+                    subtitle="Tabla de posiciones"
+                  >
+                    <StandingsTable
+                      rows={group.rows}
+                      compact={compactGroups}
+                      rule={displayOptions.rule}
+                      allowLegacyFallback={displayOptions.protected}
+                    />
+                    {tableLegendItems.length ? (
+                      <TableLegend items={tableLegendItems} />
+                    ) : null}
+                  </SectionCard>
+                )
+              })}
             </div>
           ) : displayOptions.hideEmptyStandings ? null : (
             <SectionCard
@@ -1766,22 +1808,30 @@ export default async function LigaPage({ params }: PageProps) {
 
           {visibleSecondaryGroups.length ? (
             <div className="space-y-4">
-              {visibleSecondaryGroups.map((group) => (
-                <SectionCard
-                  key={group.name}
-                  title={getDisplayGroupName(group.name)}
-                  subtitle="Tabla complementaria"
-                >
-                  <StandingsTable
-                    rows={group.rows}
-                    rule={displayOptions.rule}
-                    allowLegacyFallback={displayOptions.protected}
-                  />
-                  {configuredLegendItems.length ? (
-                    <TableLegend items={configuredLegendItems} />
-                  ) : null}
-                </SectionCard>
-              ))}
+              {visibleSecondaryGroups.map((group) => {
+                const tableLegendItems = getTableLegendItems(
+                  group.rows,
+                  displayOptions.rule,
+                  displayOptions.protected
+                )
+
+                return (
+                  <SectionCard
+                    key={group.name}
+                    title={getDisplayGroupName(group.name)}
+                    subtitle="Tabla complementaria"
+                  >
+                    <StandingsTable
+                      rows={group.rows}
+                      rule={displayOptions.rule}
+                      allowLegacyFallback={displayOptions.protected}
+                    />
+                    {tableLegendItems.length ? (
+                      <TableLegend items={tableLegendItems} />
+                    ) : null}
+                  </SectionCard>
+                )
+              })}
             </div>
           ) : null}
 

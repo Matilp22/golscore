@@ -54,6 +54,11 @@ export type StandingRangeRule = {
   note?: string
 }
 
+export type StandingLegendItem = {
+  label: string
+  tone: RuleTone
+}
+
 export type CompetitionRule = {
   key: string
   externalIds: number[]
@@ -76,7 +81,7 @@ export type CompetitionRule = {
   relegationRules: StandingRangeRule[]
   playoffRules?: string[]
   roundLabels?: string[]
-  legendItems?: Array<{ label: string; tone: RuleTone }>
+  legendItems?: StandingLegendItem[]
   sourceUsed: string[]
   warnings?: string[]
 }
@@ -118,7 +123,7 @@ export const ROW_TONE_CLASSES: Record<RuleTone, string> = {
   europa: 'border-l-sky-400 bg-sky-950/25',
   sudamericana: 'border-l-sky-400 bg-sky-950/25',
   conference: 'border-l-cyan-300 bg-cyan-950/20',
-  playoff: 'border-l-[#c084fc] bg-purple-950/20',
+  playoff: 'border-l-[#d6a84f] bg-[#2a2414]',
   relegationPlayoff: 'border-l-[#fb923c] bg-orange-950/20',
   relegation: 'border-l-[#ff7e7e] bg-[#2a1616]',
 }
@@ -130,7 +135,7 @@ export const LEGEND_TONE_CLASSES: Record<RuleTone, string> = {
   europa: 'bg-sky-400',
   sudamericana: 'bg-sky-400',
   conference: 'bg-cyan-300',
-  playoff: 'bg-[#c084fc]',
+  playoff: 'bg-[#d6a84f]',
   relegationPlayoff: 'bg-[#fb923c]',
   relegation: 'bg-[#ff7e7e]',
 }
@@ -770,12 +775,11 @@ export const COMPETITION_RULES: CompetitionRule[] = [
     ...noRelegation,
     groupMode: 'none',
     qualificationRules: [
-      { from: 1, to: 6, label: 'Liguilla', tone: 'playoff' },
-      { from: 7, to: 10, label: 'Play-in si aplica', tone: 'relegationPlayoff' },
+      { from: 1, to: 8, label: 'Liguilla', tone: 'playoff' },
     ],
-    playoffRules: ['Apertura/Clausura con liguilla; play-in depende del torneo vigente.'],
-    sourceUsed: [apiDescriptionSource, supabaseSource, 'Liga MX reglamento de competencia'],
-    warnings: ['No se marca descenso directo; el play-in puede variar por temporada.'],
+    playoffRules: ['Clausura 2026 sin play-in: los ocho primeros acceden a Liguilla.'],
+    sourceUsed: [apiDescriptionSource, supabaseSource, 'Liga MX / ESPN Clausura 2026 sin play-in'],
+    warnings: ['Sin descenso directo; revisar si Liga MX reintroduce play-in en torneos posteriores.'],
   }),
   leagueRule({
     key: 'eeuu-mls',
@@ -1156,7 +1160,7 @@ const RULES_BY_EXTERNAL_ID = new Map(
 
 function getDefaultLegendItems(rule: CompetitionRule) {
   const seen = new Set<string>()
-  const items: Array<{ label: string; tone: RuleTone }> = []
+  const items: StandingLegendItem[] = []
 
   for (const rangeRule of [...rule.qualificationRules, ...rule.relegationRules]) {
     const key = `${rangeRule.label}:${rangeRule.tone}`
@@ -1167,6 +1171,93 @@ function getDefaultLegendItems(rule: CompetitionRule) {
   }
 
   return items
+}
+
+function normalizeRuleText(value: string | null | undefined) {
+  return (value ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+}
+
+function hasAnyRuleText(value: string, patterns: string[]) {
+  return patterns.some((pattern) => value.includes(pattern))
+}
+
+export function getStandingDescriptionRule(
+  description: string | null | undefined
+): StandingLegendItem | null {
+  const normalized = normalizeRuleText(description)
+  if (!normalized) return null
+
+  const hasPlayoffText = hasAnyRuleText(normalized, [
+    'playoff',
+    'play-off',
+    'play offs',
+    'play-offs',
+    'repechaje',
+    'promocion',
+    'promocion',
+    'liguilla',
+    'reduced',
+    'reducido',
+  ])
+  const hasRelegationText = hasAnyRuleText(normalized, [
+    'relegation',
+    'descenso',
+  ])
+
+  if (hasRelegationText && hasPlayoffText) {
+    return { label: 'Playoff descenso', tone: 'relegationPlayoff' }
+  }
+
+  if (hasRelegationText) {
+    return { label: 'Descenso', tone: 'relegation' }
+  }
+
+  if (normalized.includes('champions league')) {
+    return { label: 'Champions League', tone: 'champions' }
+  }
+
+  if (normalized.includes('libertadores')) {
+    return { label: 'Libertadores', tone: 'libertadores' }
+  }
+
+  if (normalized.includes('europa league')) {
+    return { label: 'Europa League', tone: 'europa' }
+  }
+
+  if (normalized.includes('sudamericana')) {
+    return { label: 'Sudamericana', tone: 'sudamericana' }
+  }
+
+  if (normalized.includes('conference league')) {
+    return { label: 'Conference League', tone: 'conference' }
+  }
+
+  if (normalized.includes('world cup') || normalized.includes('mundial')) {
+    return { label: 'Mundial', tone: 'playoff' }
+  }
+
+  if (normalized.includes('euro') && !normalized.includes('europa league')) {
+    return { label: 'Eurocopa', tone: 'playoff' }
+  }
+
+  if (hasPlayoffText) {
+    return { label: 'Playoffs', tone: 'playoff' }
+  }
+
+  if (hasAnyRuleText(normalized, ['promotion', 'clasificacion', 'qualification'])) {
+    return { label: 'Clasificación', tone: 'playoff' }
+  }
+
+  return null
+}
+
+export function getCompetitionLegendItems(rule: CompetitionRule | null) {
+  if (!rule) return []
+
+  return rule.legendItems ?? getDefaultLegendItems(rule)
 }
 
 export function isProtectedCompetitionKey(key: string | null | undefined) {
@@ -1277,7 +1368,7 @@ export function getTournamentDisplayOptions(tournament: TournamentPageConfig) {
     showPromedios: Boolean(rule?.showPromedios ?? false),
     showBracket: rule?.showBracket ?? true,
     hideEmptyStandings: Boolean(rule?.hideEmptyStandings),
-    legendItems: rule?.legendItems ?? (rule ? getDefaultLegendItems(rule) : []),
+    legendItems: getCompetitionLegendItems(rule),
     hasAverages: Boolean(rule?.hasAverages),
     hasRelegation: Boolean(rule?.hasRelegation),
     relegationMode: rule?.relegationMode ?? 'api_description',
