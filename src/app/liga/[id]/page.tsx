@@ -1567,7 +1567,7 @@ function GroupFixtures({ fixtures }: { fixtures: LeagueFixtureSummary[] }) {
           <Link
             key={fixture.id}
             href={`/partido/${fixture.id}`}
-            className="block w-full min-w-0 overflow-hidden rounded-xl border border-white/8 bg-[#11161b] px-2.5 py-2 text-xs transition hover:border-[#2a5c46] hover:bg-[#151b21] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7ff0b2]/60"
+            className="block w-full min-w-0 overflow-hidden rounded-xl border border-white/8 bg-[#11161b] p-2 text-xs transition hover:border-[#2a5c46] hover:bg-[#151b21] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7ff0b2]/60 md:p-3 md:text-sm"
           >
             <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
               <div className="flex min-w-0 items-center justify-end gap-1.5 text-right">
@@ -1582,7 +1582,7 @@ function GroupFixtures({ fixtures }: { fixtures: LeagueFixtureSummary[] }) {
                 />
               </div>
 
-              <span className="shrink-0 rounded-lg border border-white/8 bg-[#0d1216] px-2 py-1 text-[11px] font-black text-white">
+              <span className="shrink-0 rounded-lg border border-white/8 bg-[#0d1216] px-2 py-1 text-[11px] font-black text-white md:text-xs">
                 {getGroupFixtureScoreLabel(fixture)}
               </span>
 
@@ -1599,11 +1599,11 @@ function GroupFixtures({ fixtures }: { fixtures: LeagueFixtureSummary[] }) {
               </div>
             </div>
 
-            <div className="mt-1.5 text-center text-[11px] font-semibold text-[#9eacb8]">
+            <div className="mt-1.5 text-center text-[11px] font-semibold text-[#9eacb8] md:text-xs">
               {formatGroupFixtureDateTime(fixture.date)}
             </div>
             {locationLabel ? (
-              <div className="mt-0.5 text-center text-[11px] text-[#7f8c98]">
+              <div className="mt-0.5 text-center text-[11px] text-[#7f8c98] md:text-xs">
                 {locationLabel}
               </div>
             ) : null}
