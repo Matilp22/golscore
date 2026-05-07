@@ -64,9 +64,21 @@ const UEFA_PHASES: UefaPhaseConfig[] = [
 const UEFA_PHASE_INDEX = new Map(UEFA_PHASES.map((phase, index) => [phase.key, index]))
 const UEFA_PHASE_LABELS = new Map(UEFA_PHASES.map((phase) => [phase.key, phase.label]))
 const UEFA_TOTAL_ROWS = 16
-const UEFA_GRID_UNIT = 48
+const UEFA_GRID_UNIT = 56
 const LIVE_STATUSES = new Set(['1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE'])
 const NOT_PLAYED_STATUSES = new Set(['NS', 'TBD', 'PST', 'CANC', 'ABD'])
+const UEFA_EXCLUDED_BRACKET_PATTERNS = [
+  'league stage',
+  'league phase',
+  'fase liga',
+  'group stage',
+  'fase de grupos',
+  'matchday',
+  'regular season',
+  'qualifying',
+  'qualification',
+  'preliminary',
+]
 
 function normalizeText(value?: string | null) {
   return (value || '')
@@ -108,20 +120,18 @@ function compareFixtures(a: LeagueFixtureSummary, b: LeagueFixtureSummary) {
 function getUefaPhaseKey(round: string): UefaPhaseKey | null {
   const normalized = normalizeText(round)
 
-  if (
-    normalized.includes('league stage') ||
-    normalized.includes('league phase') ||
-    normalized.includes('fase liga') ||
-    normalized.includes('matchday') ||
-    normalized.includes('regular season')
-  ) {
+  if (UEFA_EXCLUDED_BRACKET_PATTERNS.some((pattern) => normalized.includes(pattern))) {
     return null
   }
 
   if (
     normalized.includes('knockout round play off') ||
+    normalized.includes('knockout phase play off') ||
     normalized.includes('knockout round playoff') ||
-    normalized.includes('play off') ||
+    normalized.includes('knockout phase playoff') ||
+    normalized === 'play offs' ||
+    normalized === 'play off' ||
+    normalized === 'playoffs' ||
     normalized.includes('playoff')
   ) {
     return 'playoffs'
@@ -137,7 +147,7 @@ function getUefaPhaseKey(round: string): UefaPhaseKey | null {
 
   if (normalized.includes('quarter') || normalized.includes('cuarto')) return 'quarterFinals'
   if (normalized.includes('semi')) return 'semiFinals'
-  if (normalized.includes('final')) return 'final'
+  if (/\bfinal\b/.test(normalized)) return 'final'
 
   return null
 }
@@ -151,6 +161,22 @@ function getRoundNumber(round: string) {
     normalized.match(/^(\d+)$/)
 
   return match ? Number(match[1]) : null
+}
+
+function isUefaLeaguePhaseRound(round: string) {
+  const normalized = normalizeText(round)
+
+  if (UEFA_EXCLUDED_BRACKET_PATTERNS.some((pattern) => normalized.includes(pattern))) {
+    return (
+      normalized.includes('league stage') ||
+      normalized.includes('league phase') ||
+      normalized.includes('fase liga') ||
+      normalized.includes('matchday') ||
+      normalized.includes('regular season')
+    )
+  }
+
+  return /^\d+$/.test(normalized)
 }
 
 function isPlayed(match: LeagueFixtureSummary) {
@@ -560,7 +586,7 @@ function TieCard({
     <button
       type="button"
       onClick={() => onSelect(tie)}
-      className="block h-[94px] w-full overflow-hidden rounded-xl border border-[#2a5c46] bg-[linear-gradient(180deg,#161d24_0%,#11181d_100%)] p-1.5 text-left shadow-[inset_0_0_0_1px_rgba(127,240,178,0.06)] transition hover:border-[#3a7c5f] hover:bg-[linear-gradient(180deg,#182128_0%,#121a20_100%)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7ff0b2]/60"
+      className="block h-[96px] w-full overflow-hidden rounded-xl border border-[#2a5c46] bg-[linear-gradient(180deg,#161d24_0%,#11181d_100%)] p-1.5 text-left shadow-[inset_0_0_0_1px_rgba(127,240,178,0.06)] transition hover:border-[#3a7c5f] hover:bg-[linear-gradient(180deg,#182128_0%,#121a20_100%)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7ff0b2]/60"
     >
       <div className="mb-1 flex items-center justify-between gap-2 px-1">
         <span className="text-[9px] font-black uppercase tracking-[0.12em] text-[#7ff0b2]">
@@ -627,12 +653,9 @@ function SeriesMatchRow({ match, label }: { match: LeagueFixtureSummary; label: 
 }
 
 function CompactMatchRow({ match }: { match: LeagueFixtureSummary }) {
-  const location = getLocationLabel(match)
-
   return (
     <Link
       href={`/partido/${match.id}`}
-      title={location || undefined}
       className="block border-b border-white/8 transition hover:bg-[#151b21] focus-visible:bg-[#151b21] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7ff0b2]/60 focus-visible:ring-inset last:border-b-0"
     >
       <div className="grid grid-cols-[82px_minmax(0,1fr)_40px_minmax(0,1fr)_58px] items-center gap-1 px-2 py-1.5 text-[11px] md:grid-cols-[94px_minmax(0,1fr)_44px_minmax(0,1fr)_64px] md:gap-1.5 md:text-xs">
@@ -672,11 +695,6 @@ function CompactMatchRow({ match }: { match: LeagueFixtureSummary }) {
           {getCompactStatusLabel(match)}
         </div>
       </div>
-      {location ? (
-        <div className="hidden border-t border-white/6 px-2 py-1 text-[10px] text-[#7f8c98] xl:block">
-          {location}
-        </div>
-      ) : null}
     </Link>
   )
 }
@@ -845,6 +863,10 @@ function buildMatchOptions(fixtures: LeagueFixtureSummary[]) {
 
   for (const fixture of fixtures) {
     const phaseKey = getUefaPhaseKey(fixture.round)
+    const isLeaguePhaseRound = isUefaLeaguePhaseRound(fixture.round)
+
+    if (!phaseKey && !isLeaguePhaseRound) continue
+
     const roundNumber = getRoundNumber(fixture.round)
     const optionKey = phaseKey || `league-${roundNumber || normalizeText(fixture.round)}`
     const label = phaseKey
