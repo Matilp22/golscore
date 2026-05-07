@@ -1529,6 +1529,86 @@ function getGroupFixtureScoreLabel(fixture: LeagueFixtureSummary) {
   return 'vs'
 }
 
+function getGroupFixtureCompactScoreLabel(fixture: LeagueFixtureSummary) {
+  if (fixture.goalsHome !== null && fixture.goalsAway !== null) {
+    return `${fixture.goalsHome}-${fixture.goalsAway}`
+  }
+
+  return 'vs'
+}
+
+const TEAM_SHORT_CODE_OVERRIDES: Record<string, string> = {
+  'atletico mineiro': 'CAM',
+  'boca juniors': 'BOC',
+  flamengo: 'FLA',
+  palmeiras: 'PAL',
+  'racing club': 'RAC',
+  'river plate': 'RIV',
+  'sao paulo': 'SAO',
+}
+
+const TEAM_SHORT_CODE_IGNORED_WORDS = new Set([
+  'a',
+  'ac',
+  'ca',
+  'cd',
+  'cf',
+  'club',
+  'da',
+  'das',
+  'de',
+  'del',
+  'do',
+  'dos',
+  'el',
+  'fc',
+  'la',
+  'las',
+  'los',
+  'sc',
+  'the',
+])
+
+function normalizeTeamShortCodeText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/&/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function getTeamShortCode(teamName: string, existingCode?: string | null) {
+  const cleanExistingCode = normalizeTeamShortCodeText(existingCode || '').replace(/\s/g, '').toUpperCase()
+
+  if (cleanExistingCode.length >= 2) {
+    return cleanExistingCode.slice(0, 3)
+  }
+
+  const normalizedName = normalizeTeamShortCodeText(teamName)
+  const override = TEAM_SHORT_CODE_OVERRIDES[normalizedName]
+
+  if (override) {
+    return override
+  }
+
+  const words = normalizedName.split(' ').filter(Boolean)
+  const meaningfulWords = words.filter((word) => !TEAM_SHORT_CODE_IGNORED_WORDS.has(word))
+  const codeWords = meaningfulWords.length ? meaningfulWords : words
+  const firstWord = codeWords[0] || normalizedName
+
+  if (firstWord.length >= 3) {
+    return firstWord.slice(0, 3).toUpperCase()
+  }
+
+  const initials = codeWords.map((word) => word[0]).join('')
+  const compactName = `${firstWord}${codeWords.slice(1).join('')}` || normalizedName
+
+  return (initials.length >= 3 ? initials : compactName).slice(0, 3).toUpperCase()
+}
+
 function cleanLocationPart(value?: string | null) {
   const trimmed = value?.trim()
 
@@ -1547,6 +1627,41 @@ function getGroupFixtureLocationLabel(fixture: LeagueFixtureSummary) {
   return `Lugar: ${parts.join(', ')}`
 }
 
+function FixtureTeamLabel({
+  name,
+  logo,
+  side,
+}: {
+  name: string
+  logo?: string
+  side: 'home' | 'away'
+}) {
+  const shortCode = getTeamShortCode(name)
+  const logoElement = (
+    <TeamLogo
+      src={logo}
+      alt={name}
+      size={16}
+      className="h-4 w-4 shrink-0 object-contain"
+      fallbackClassName="h-3.5 w-3.5"
+      unoptimized
+    />
+  )
+
+  return (
+    <div
+      className={`flex min-w-0 items-center gap-1 ${
+        side === 'home' ? 'justify-end text-right' : 'justify-start text-left'
+      }`}
+    >
+      {side === 'home' ? logoElement : null}
+      <span className="shrink-0 font-black leading-none text-[#dce5ef] md:hidden">{shortCode}</span>
+      <span className="hidden min-w-0 truncate font-semibold text-[#dce5ef] md:inline">{name}</span>
+      {side === 'away' ? logoElement : null}
+    </div>
+  )
+}
+
 function GroupFixtures({ fixtures }: { fixtures: LeagueFixtureSummary[] }) {
   if (!fixtures.length) {
     return (
@@ -1559,7 +1674,7 @@ function GroupFixtures({ fixtures }: { fixtures: LeagueFixtureSummary[] }) {
   const sortedFixtures = [...fixtures].sort(compareFixturesByDateThenId)
 
   return (
-    <div className="grid min-w-0 grid-cols-1 gap-2 md:grid-cols-2">
+    <div className="grid min-w-0 grid-cols-2 gap-1.5 md:grid-cols-2 md:gap-2">
       {sortedFixtures.map((fixture) => {
         const locationLabel = getGroupFixtureLocationLabel(fixture)
 
@@ -1567,43 +1682,24 @@ function GroupFixtures({ fixtures }: { fixtures: LeagueFixtureSummary[] }) {
           <Link
             key={fixture.id}
             href={`/partido/${fixture.id}`}
-            className="block w-full min-w-0 overflow-hidden rounded-xl border border-white/8 bg-[#11161b] p-2 text-xs transition hover:border-[#2a5c46] hover:bg-[#151b21] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7ff0b2]/60 md:p-3 md:text-sm"
+            className="block w-full min-w-0 overflow-hidden rounded-xl border border-white/8 bg-[#11161b] p-1.5 text-[11px] transition hover:border-[#2a5c46] hover:bg-[#151b21] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7ff0b2]/60 sm:p-2 md:p-3 md:text-sm"
           >
-            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
-              <div className="flex min-w-0 items-center justify-end gap-1.5 text-right">
-                <span className="truncate font-semibold text-[#dce5ef]">{fixture.home}</span>
-                <TeamLogo
-                  src={fixture.homeLogo}
-                  alt={fixture.home}
-                  size={16}
-                  className="h-4 w-4 object-contain"
-                  fallbackClassName="h-3.5 w-3"
-                  unoptimized
-                />
-              </div>
+            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1 md:gap-2">
+              <FixtureTeamLabel name={fixture.home} logo={fixture.homeLogo} side="home" />
 
-              <span className="shrink-0 rounded-lg border border-white/8 bg-[#0d1216] px-2 py-1 text-[11px] font-black text-white md:text-xs">
-                {getGroupFixtureScoreLabel(fixture)}
+              <span className="min-w-[32px] shrink-0 rounded-md border border-white/8 bg-[#0d1216] px-1 py-0.5 text-center text-[10.5px] font-black leading-none text-white md:min-w-[52px] md:rounded-lg md:px-2 md:py-1 md:text-xs">
+                <span className="md:hidden">{getGroupFixtureCompactScoreLabel(fixture)}</span>
+                <span className="hidden md:inline">{getGroupFixtureScoreLabel(fixture)}</span>
               </span>
 
-              <div className="flex min-w-0 items-center gap-1.5">
-                <TeamLogo
-                  src={fixture.awayLogo}
-                  alt={fixture.away}
-                  size={16}
-                  className="h-4 w-4 object-contain"
-                  fallbackClassName="h-3.5 w-3"
-                  unoptimized
-                />
-                <span className="truncate font-semibold text-[#dce5ef]">{fixture.away}</span>
-              </div>
+              <FixtureTeamLabel name={fixture.away} logo={fixture.awayLogo} side="away" />
             </div>
 
-            <div className="mt-1.5 text-center text-[11px] font-semibold text-[#9eacb8] md:text-xs">
+            <div className="mt-1 text-center text-[10.5px] font-semibold text-[#9eacb8] md:mt-1.5 md:text-xs">
               {formatGroupFixtureDateTime(fixture.date)}
             </div>
             {locationLabel ? (
-              <div className="mt-0.5 text-center text-[11px] text-[#7f8c98] md:text-xs">
+              <div className="mt-0.5 hidden text-center text-xs text-[#7f8c98] md:block">
                 {locationLabel}
               </div>
             ) : null}
