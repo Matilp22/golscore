@@ -399,8 +399,12 @@ export const COMPETITION_RULES: CompetitionRule[] = [
     bracketMode: 'knockout_rounds',
     showBracket: true,
     qualificationRules: [
-      { from: 1, to: 8, label: 'Octavos', tone: 'champions' },
-      { from: 9, to: 24, label: 'Playoff eliminatorio', tone: 'playoff' },
+      { from: 1, to: 8, label: 'Octavos de final', tone: 'champions' },
+      { from: 9, to: 24, label: 'Playoffs', tone: 'playoff' },
+    ],
+    legendItems: [
+      { label: 'Octavos de final', tone: 'champions' },
+      { label: 'Playoffs', tone: 'playoff' },
     ],
     playoffRules: ['Top 8 a octavos; 9 a 24 a playoff; resto eliminado.'],
     sourceUsed: [apiDescriptionSource, supabaseSource, 'UEFA formato 2024/25 de fase liga'],
@@ -418,8 +422,12 @@ export const COMPETITION_RULES: CompetitionRule[] = [
     bracketMode: 'knockout_rounds',
     showBracket: true,
     qualificationRules: [
-      { from: 1, to: 8, label: 'Octavos', tone: 'europa' },
-      { from: 9, to: 24, label: 'Playoff eliminatorio', tone: 'playoff' },
+      { from: 1, to: 8, label: 'Octavos de final', tone: 'europa' },
+      { from: 9, to: 24, label: 'Playoffs', tone: 'playoff' },
+    ],
+    legendItems: [
+      { label: 'Octavos de final', tone: 'europa' },
+      { label: 'Playoffs', tone: 'playoff' },
     ],
     playoffRules: ['Top 8 a octavos; 9 a 24 a playoff; resto eliminado.'],
     sourceUsed: [apiDescriptionSource, supabaseSource, 'UEFA formato 2024/25 de fase liga'],
