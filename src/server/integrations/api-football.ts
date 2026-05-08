@@ -11,6 +11,7 @@ import { isFinishedStatus, isLiveStatus } from '@/shared/utils/match-status'
 import { formatEventMinute } from '@/shared/utils/event-minute'
 import {
   addDaysToISO,
+  getArgentinaDayUtcRange,
   getArgentinaDateISO,
   getArgentinaTodayISO,
 } from '@/shared/utils/argentina-time'
@@ -156,6 +157,7 @@ export type HomeMatchesSourceSnapshot = {
   apiMatches: MatchListItem[]
   mergedMatches: MatchListItem[]
   apiError: string | null
+  apiAuthoritative: boolean
   supplementRecommended: boolean
 }
 
@@ -647,17 +649,22 @@ function getMatchMergeKey(match: MatchListItem) {
 
 function mergeHomeMatches(
   storedMatches: MatchListItem[],
-  apiMatches: MatchListItem[]
+  apiMatches: MatchListItem[],
+  options: { apiAuthoritative?: boolean } = {}
 ) {
   const mergedByExternalId = new Map<string, MatchListItem>()
 
-  for (const match of storedMatches) {
-    mergedByExternalId.set(getMatchMergeKey(match), match)
+  if (!options.apiAuthoritative) {
+    for (const match of storedMatches) {
+      mergedByExternalId.set(getMatchMergeKey(match), match)
+    }
   }
 
   for (const apiMatch of apiMatches) {
     const key = getMatchMergeKey(apiMatch)
-    const storedMatch = mergedByExternalId.get(key)
+    const storedMatch =
+      mergedByExternalId.get(key) ||
+      storedMatches.find((match) => getMatchMergeKey(match) === key)
 
     mergedByExternalId.set(
       key,
@@ -990,13 +997,16 @@ export async function getHomeMatchesSourceSnapshot(
     apiError = error instanceof Error ? error.message : String(error)
   }
 
+  const apiAuthoritative = supplementRecommended && !apiError
+
   return {
     storedMatches,
     apiMatches,
     mergedMatches: storedMatches.length
-      ? mergeHomeMatches(storedMatches, apiMatches)
+      ? mergeHomeMatches(storedMatches, apiMatches, { apiAuthoritative })
       : apiMatches,
     apiError,
+    apiAuthoritative,
     supplementRecommended,
   }
 }
@@ -1237,8 +1247,7 @@ function applyStoredMatchTeamLogos(
 
 async function fetchStoredHomeMatches(date: string): Promise<MatchListItem[]> {
   const supabase = getSupabaseAdminClient()
-  const fromDate = addDaysToISO(date, -1)
-  const toDate = addDaysToISO(date, 1)
+  const { startUtc, endUtc } = getArgentinaDayUtcRange(date)
   const selectWithElapsed =
     'id, external_id, league_id, home_team_id, away_team_id, match_date, home_score, away_score, status, elapsed'
   const selectBase =
@@ -1247,8 +1256,8 @@ async function fetchStoredHomeMatches(date: string): Promise<MatchListItem[]> {
   const primaryResponse = await supabase
     .from('matches')
     .select(selectWithElapsed)
-    .gte('match_date', `${fromDate}T00:00:00`)
-    .lte('match_date', `${toDate}T23:59:59`)
+    .gte('match_date', startUtc)
+    .lt('match_date', endUtc)
     .order('match_date', { ascending: true })
   let responseData: unknown[] | null = primaryResponse.data
   let responseError = primaryResponse.error
@@ -1264,8 +1273,8 @@ async function fetchStoredHomeMatches(date: string): Promise<MatchListItem[]> {
     const fallbackResponse = await supabase
       .from('matches')
       .select(selectBase)
-      .gte('match_date', `${fromDate}T00:00:00`)
-      .lte('match_date', `${toDate}T23:59:59`)
+      .gte('match_date', startUtc)
+      .lt('match_date', endUtc)
       .order('match_date', { ascending: true })
 
     responseData = fallbackResponse.data

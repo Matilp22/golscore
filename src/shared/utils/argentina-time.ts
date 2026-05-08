@@ -68,6 +68,15 @@ export function addDaysToISO(isoDate: string, amount: number) {
   return `${y}-${m}-${d}`
 }
 
+export function getArgentinaDayUtcRange(isoDate: string) {
+  const nextDate = addDaysToISO(isoDate, 1)
+
+  return {
+    startUtc: new Date(`${isoDate}T00:00:00-03:00`).toISOString(),
+    endUtc: new Date(`${nextDate}T00:00:00-03:00`).toISOString(),
+  }
+}
+
 export function formatMatchTimeArgentina(date?: string | number | Date | null) {
   if (!date) return 'A confirmar'
 
@@ -77,6 +86,26 @@ export function formatMatchTimeArgentina(date?: string | number | Date | null) {
     minute: '2-digit',
     hour12: false,
   }).format(toArgentinaDate(date))
+}
+
+export function formatMatchDateLabelArgentina(date?: string | number | Date | null) {
+  if (!date) return 'A confirmar'
+
+  const parsedDate = toArgentinaDate(date)
+  const weekday = new Intl.DateTimeFormat('es-AR', {
+    timeZone: ARGENTINA_TIME_ZONE,
+    weekday: 'short',
+  })
+    .format(parsedDate)
+    .replace('.', '')
+    .toLocaleUpperCase('es-AR')
+  const dayMonth = new Intl.DateTimeFormat('es-AR', {
+    timeZone: ARGENTINA_TIME_ZONE,
+    day: '2-digit',
+    month: '2-digit',
+  }).format(parsedDate)
+
+  return `${weekday} ${dayMonth.replace('/', '-')}`
 }
 
 export function formatMatchDateTimeArgentina(date?: string | number | Date | null) {
