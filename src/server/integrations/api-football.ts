@@ -12,6 +12,7 @@ import { formatEventMinute } from '@/shared/utils/event-minute'
 import {
   addDaysToISO,
   getArgentinaDateISO,
+  getArgentinaTodayISO,
 } from '@/shared/utils/argentina-time'
 import {
   getGoalKindFromDetail,
@@ -19,7 +20,6 @@ import {
   isScoreboardGoalEvent,
   type ImportantLiveEventKind,
 } from '@/shared/utils/football-events'
-import { getExcludedCompetitionReason } from '@/shared/utils/competition-filter'
 import {
   enrichMatchDetailAssets,
   enrichPlayerDetailAssets,
@@ -27,6 +27,7 @@ import {
   enrichTopPlayerAssets,
   persistFixtureListAssets,
 } from '@/server/assets/image-assets'
+import { getHomeMatchVisibility } from '@/shared/utils/home-match-visibility'
 import {
   getApiSportsTeamLogoUrl,
   pickStableAssetUrl,
@@ -148,6 +149,14 @@ export type MatchListItem = {
   minute: number | null
   statusShort: string
   statusLong: string
+}
+
+export type HomeMatchesSourceSnapshot = {
+  storedMatches: MatchListItem[]
+  apiMatches: MatchListItem[]
+  mergedMatches: MatchListItem[]
+  apiError: string | null
+  supplementRecommended: boolean
 }
 
 export type MatchGoalScorer = {
@@ -617,105 +626,15 @@ function withTimeout<T>(
   ])
 }
 
-const HOME_FALLBACK_LEAGUE_IDS = new Set([
-  1,
-  2,
-  3,
-  11,
-  13,
-  39,
-  61,
-  71,
-  78,
-  94,
-  128,
-  129,
-  130,
-  135,
-  140,
-  848,
-])
-
 function isHomeApiFallbackFixture(item: FixtureListItem) {
-  const league = normalizeSearchValue(item.league.name || '')
-  const country = normalizeSearchValue(item.league.country || '')
-  const excluded = getExcludedCompetitionReason({
+  return getHomeMatchVisibility({
+    leagueId: item.league.id ?? null,
     league: item.league.name,
-    leagueName: item.league.name,
     country: item.league.country,
     home: item.teams.home.name,
     away: item.teams.away.name,
-  })
-
-  if (excluded) return false
-  if (item.league.id && HOME_FALLBACK_LEAGUE_IDS.has(item.league.id)) return true
-
-  if (country.includes('argentina')) {
-    return (
-      league.includes('liga profesional') ||
-      league.includes('primera division') ||
-      league.includes('primera nacional') ||
-      league.includes('copa argentina') ||
-      league.includes('copa de la liga') ||
-      league.includes('primera b') ||
-      league.includes('federal a') ||
-      league.includes('primera c')
-    )
-  }
-
-  if (
-    league.includes('libertadores') ||
-    league.includes('sudamericana') ||
-    league.includes('champions league') ||
-    league.includes('europa league') ||
-    league.includes('conference league') ||
-    league.includes('intercontinental') ||
-    league.includes('concacaf champions')
-  ) {
-    return true
-  }
-
-  if (country.includes('england')) {
-    return league === 'premier league' || league.includes('fa cup') || league.includes('league cup')
-  }
-
-  if (country.includes('spain')) {
-    return league === 'la liga' || league.includes('copa del rey') || league.includes('super cup')
-  }
-
-  if (country.includes('italy')) {
-    return league === 'serie a' || league.includes('coppa italia') || league.includes('super cup')
-  }
-
-  if (country.includes('germany')) {
-    return league === 'bundesliga' || league.includes('dfb pokal')
-  }
-
-  if (country.includes('portugal')) {
-    return league.includes('primeira liga') || league.includes('taca de portugal') || league.includes('portugal cup')
-  }
-
-  if (country.includes('france')) {
-    return league === 'ligue 1' || league.includes('coupe de france')
-  }
-
-  if (country.includes('brazil')) {
-    return league === 'serie a' || league.includes('brasileirao') || league.includes('copa do brasil')
-  }
-
-  if (country.includes('uruguay')) return league.includes('primera division') || league.includes('copa uruguay')
-  if (country.includes('paraguay')) return league.includes('division profesional') || league.includes('copa de primera')
-  if (country.includes('colombia')) return league.includes('primera a') || league.includes('liga betplay')
-  if (country.includes('chile')) return league.includes('primera division') || league.includes('copa chile')
-  if (country.includes('mexico')) return league.includes('liga mx')
-  if (league.includes('major league soccer')) return true
-
-  return (
-    league.includes('world cup') ||
-    league.includes('copa america') ||
-    league.includes('uefa euro') ||
-    league.includes('european championship')
-  )
+    round: item.league.round,
+  }).included
 }
 
 function getArgentinaDateKey(dateString: string) {
@@ -757,7 +676,15 @@ function mergeHomeMatches(
   return [...mergedByExternalId.values()]
 }
 
-function shouldSupplementStoredHomeMatches(storedMatches: MatchListItem[]) {
+function shouldSupplementStoredHomeMatches(date: string, storedMatches: MatchListItem[]) {
+  const today = getArgentinaTodayISO()
+  const yesterday = addDaysToISO(today, -1)
+  const tomorrow = addDaysToISO(today, 1)
+
+  if (date === yesterday || date === today || date === tomorrow) {
+    return true
+  }
+
   return storedMatches.length < HOME_STORED_MATCHES_SUPPLEMENT_THRESHOLD
 }
 
@@ -995,6 +922,47 @@ async function fetchApiFallbackHomeMatches(date: string): Promise<MatchListItem[
 }
 
 export async function getMatchesByDate(date: string): Promise<MatchListItem[]> {
+  const sources = await getHomeMatchesSourceSnapshot(date)
+
+  if (sources.storedMatches.length && !sources.supplementRecommended) {
+    return sources.storedMatches
+  }
+
+  if (sources.apiMatches.length) {
+    if (sources.storedMatches.length && sources.apiMatches.length > sources.storedMatches.length) {
+      console.warn('[home] Supabase devolvio una tanda parcial; se completo con API-Football.', {
+        date,
+        stored: sources.storedMatches.length,
+        api: sources.apiMatches.length,
+        merged: sources.mergedMatches.length,
+      })
+    }
+
+    return sources.mergedMatches
+  }
+
+  if (sources.storedMatches.length) {
+    if (sources.apiError) {
+      console.warn('[home] No se pudo completar Supabase con API-Football; se usa la tanda persistida.', {
+        date,
+        stored: sources.storedMatches.length,
+        message: sources.apiError,
+      })
+    }
+
+    return sources.storedMatches
+  }
+
+  if (sources.apiError) {
+    throw new Error(sources.apiError)
+  }
+
+  return sources.mergedMatches
+}
+
+export async function getHomeMatchesSourceSnapshot(
+  date: string
+): Promise<HomeMatchesSourceSnapshot> {
   let storedMatches: MatchListItem[] = []
 
   try {
@@ -1010,41 +978,26 @@ export async function getMatchesByDate(date: string): Promise<MatchListItem[]> {
     })
   }
 
-  if (storedMatches.length && !shouldSupplementStoredHomeMatches(storedMatches)) {
-    return storedMatches
-  }
+  const supplementRecommended = shouldSupplementStoredHomeMatches(date, storedMatches)
+  let apiMatches: MatchListItem[] = []
+  let apiError: string | null = null
 
   try {
-    const apiMatches = await fetchApiFallbackHomeMatches(date)
-
-    if (storedMatches.length) {
-      const mergedMatches = mergeHomeMatches(storedMatches, apiMatches)
-
-      if (apiMatches.length > storedMatches.length) {
-        console.warn('[home] Supabase devolvio una tanda parcial; se completo con API-Football.', {
-          date,
-          stored: storedMatches.length,
-          api: apiMatches.length,
-          merged: mergedMatches.length,
-        })
-      }
-
-      return mergedMatches
+    if (supplementRecommended || !storedMatches.length) {
+      apiMatches = await fetchApiFallbackHomeMatches(date)
     }
-
-    return apiMatches
   } catch (error) {
-    if (storedMatches.length) {
-      console.warn('[home] No se pudo completar Supabase con API-Football; se usa la tanda persistida.', {
-        date,
-        stored: storedMatches.length,
-        message: error instanceof Error ? error.message : String(error),
-      })
+    apiError = error instanceof Error ? error.message : String(error)
+  }
 
-      return storedMatches
-    }
-
-    throw error
+  return {
+    storedMatches,
+    apiMatches,
+    mergedMatches: storedMatches.length
+      ? mergeHomeMatches(storedMatches, apiMatches)
+      : apiMatches,
+    apiError,
+    supplementRecommended,
   }
 }
 
@@ -1406,13 +1359,13 @@ async function fetchStoredHomeMatches(date: string): Promise<MatchListItem[]> {
         return null
       }
 
-      const excludedReason = getExcludedCompetitionReason({
+      const excludedReason = getHomeMatchVisibility({
+        leagueId: toFiniteNumber(league.external_id) ?? toFiniteNumber(league.id) ?? null,
         league: league.name,
-        leagueName: league.name,
         country: league.country ?? undefined,
         home: homeTeam.name,
         away: awayTeam.name,
-      })
+      }).excludedReason
 
       if (excludedReason) return null
 

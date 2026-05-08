@@ -1,0 +1,8 @@
+
+> fulboapp@0.1.0 start
+> next start -p 3129
+
+▲ Next.js 16.2.1
+- Local:         http://localhost:3129
+- Network:       http://10.2.0.2:3129
+✓ Ready in 625ms
