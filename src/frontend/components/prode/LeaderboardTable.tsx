@@ -75,14 +75,14 @@ export default function LeaderboardTable({
   const activeRows = activeTab === 'total' ? rows : roundRows
   const emptyMessage =
     activeTab === 'total'
-      ? totalMessage || 'Todavia no hay puntos calculados.'
-      : roundMessage || 'Todavia no hay puntos para esta fecha.'
+      ? totalMessage || 'Todavía no hay puntos computados.'
+      : roundMessage || 'Todavía no hay puntos para esta fecha.'
 
   return (
     <aside className="h-fit w-full min-w-0 overflow-hidden rounded-2xl border border-white/8 bg-[#10151a]/95 shadow-[0_10px_24px_rgba(0,0,0,0.12)]">
       <div className="border-b border-white/7 px-3 py-3 sm:px-4">
         <div className="flex min-w-0 flex-col gap-3">
-          <h2 className="text-lg font-black text-white">Tabla de posiciones</h2>
+          <h2 className="text-lg font-black text-white">Ranking del Prode</h2>
           <div className="grid grid-cols-2 gap-1 rounded-xl border border-white/8 bg-[#0d1217] p-1">
             {[
               { key: 'total', label: 'Total' },

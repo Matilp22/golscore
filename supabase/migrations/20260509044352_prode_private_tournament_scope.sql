@@ -51,6 +51,9 @@ create table if not exists public.prode_private_tournament_join_requests (
 alter table public.prode_private_tournaments
   add column if not exists base_name text;
 
+alter table public.prode_private_tournaments
+  add column if not exists normalized_base_name text;
+
 do $$
 begin
   if exists (
@@ -121,24 +124,50 @@ update public.prode_private_tournaments
 set
   base_name = regexp_replace(btrim(base_name), '\s+', ' ', 'g'),
   league_name = regexp_replace(btrim(league_name), '\s+', ' ', 'g'),
+  normalized_base_name = public.normalize_prode_private_tournament_name(base_name),
   display_name = regexp_replace(btrim(base_name), '\s+', ' ', 'g')
     || ' - '
     || regexp_replace(btrim(league_name), '\s+', ' ', 'g')
 where
-  display_name is null
+  normalized_base_name is null
+  or normalized_base_name <> public.normalize_prode_private_tournament_name(base_name)
+  or display_name is null
   or display_name <> regexp_replace(btrim(base_name), '\s+', ' ', 'g')
     || ' - '
     || regexp_replace(btrim(league_name), '\s+', ' ', 'g');
 
+do $$
+declare
+  duplicate_names text;
+begin
+  select string_agg(normalized_base_name, ', ' order by normalized_base_name)
+  into duplicate_names
+  from (
+    select normalized_base_name
+    from public.prode_private_tournaments
+    where normalized_base_name is not null
+    group by normalized_base_name
+    having count(*) > 1
+  ) duplicates;
+
+  if duplicate_names is not null then
+    raise exception 'Hay nombres base duplicados en prode_private_tournaments: %. Renombrá esos torneos antes de aplicar la restricción unique.', duplicate_names;
+  end if;
+end;
+$$;
+
 update public.prode_private_tournaments
 set
-  name = display_name,
-  normalized_name = public.normalize_prode_private_tournament_name(display_name)
-where name <> display_name
-  or normalized_name <> public.normalize_prode_private_tournament_name(display_name);
+  name = base_name,
+  normalized_name = normalized_base_name
+where name <> base_name
+  or normalized_name <> normalized_base_name;
 
 alter table public.prode_private_tournaments
   alter column base_name set not null;
+
+alter table public.prode_private_tournaments
+  alter column normalized_base_name set not null;
 
 alter table public.prode_private_tournaments
   alter column league_external_id set not null;
@@ -154,8 +183,23 @@ alter table public.prode_private_tournaments
 
 alter table public.prode_private_tournaments
   add constraint prode_private_tournaments_name_not_blank check (
-    char_length(public.normalize_prode_private_tournament_name(display_name)) > 0
+    char_length(public.normalize_prode_private_tournament_name(base_name)) > 0
   );
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'prode_private_tournaments_normalized_base_name_key'
+      and conrelid = 'public.prode_private_tournaments'::regclass
+  ) then
+    alter table public.prode_private_tournaments
+      add constraint prode_private_tournaments_normalized_base_name_key
+      unique (normalized_base_name);
+  end if;
+end;
+$$;
 
 create or replace function public.set_prode_private_tournament_normalized_name()
 returns trigger
@@ -165,11 +209,12 @@ begin
   new.base_name = regexp_replace(btrim(coalesce(new.base_name, new.name)), '\s+', ' ', 'g');
   new.league_name = regexp_replace(btrim(coalesce(new.league_name, 'Liga Profesional Argentina')), '\s+', ' ', 'g');
   new.league_external_id = nullif(btrim(new.league_external_id), '');
+  new.normalized_base_name = public.normalize_prode_private_tournament_name(new.base_name);
   new.display_name = new.base_name || ' - ' || new.league_name;
-  new.name = new.display_name;
-  new.normalized_name = public.normalize_prode_private_tournament_name(new.display_name);
+  new.name = new.base_name;
+  new.normalized_name = new.normalized_base_name;
 
-  if new.normalized_name = '' then
+  if new.normalized_base_name = '' then
     raise exception 'El nombre del torneo no puede estar vacio';
   end if;
 

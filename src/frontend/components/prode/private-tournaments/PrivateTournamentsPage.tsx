@@ -218,7 +218,7 @@ export default function PrivateTournamentsPage() {
       <aside className="min-w-0 space-y-3">
         <section className="rounded-2xl border border-white/8 bg-[#10151a]/95 shadow-[0_12px_30px_rgba(0,0,0,0.16)]">
           <div className="border-b border-white/7 px-3 py-3 sm:px-4">
-            <h2 className="text-lg font-black text-white">Crear nuevo torneo</h2>
+            <h2 className="text-lg font-black text-white">Crear torneo</h2>
           </div>
           <form onSubmit={handleCreate} className="space-y-3 p-3 sm:p-4">
             <input
@@ -256,7 +256,7 @@ export default function PrivateTournamentsPage() {
             <input
               value={searchName}
               onChange={(event) => setSearchName(event.target.value)}
-              placeholder="Nombre exacto, ej: Primero - Liga Profesional Argentina"
+              placeholder="Nombre exacto del torneo"
               className="h-11 w-full rounded-xl border border-white/8 bg-[#0d1217] px-3 text-sm font-semibold text-white outline-none transition placeholder:text-[#657384] focus:border-[#7ff0b2]"
             />
             <button
@@ -278,7 +278,7 @@ export default function PrivateTournamentsPage() {
                   {searchResult.displayName}
                 </h3>
                 <p className="mt-1 text-sm text-[#9aa7b5]">
-                  {searchResult.memberCount} participantes
+                  {searchResult.leagueName} · {searchResult.memberCount} participantes
                 </p>
                 <p className="mt-2 text-sm font-semibold text-[#dce7f2]">
                   {searchResult.isMember

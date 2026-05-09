@@ -163,7 +163,7 @@ export default function MatchFilters({
       <FilterSelect
         label="Liga"
         value={selectedLeagueId}
-        placeholder="Elegi un torneo"
+        placeholder="Elegí un torneo"
         options={leagueOptions}
         onChange={onLeagueChange}
       />

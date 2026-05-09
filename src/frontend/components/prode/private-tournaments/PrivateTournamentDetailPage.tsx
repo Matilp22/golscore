@@ -114,6 +114,7 @@ export default function PrivateTournamentDetailPage({
   const [tournament, setTournament] = useState<PrivateTournamentDetail | null>(null)
   const [mode, setMode] = useState<RankingMode>('total')
   const [selectedRound, setSelectedRound] = useState('')
+  const [selectedHonorRound, setSelectedHonorRound] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [reviewingRequestId, setReviewingRequestId] = useState<string | null>(null)
   const [message, setMessage] = useState('')
@@ -127,12 +128,20 @@ export default function PrivateTournamentDetailPage({
     )
   }, [selectedRound, tournament])
 
+  const selectedHonorRoundRanking = useMemo(() => {
+    return (
+      tournament?.roundRankings.find((round) => round.value === selectedHonorRound) ??
+      tournament?.roundRankings[0] ??
+      null
+    )
+  }, [selectedHonorRound, tournament])
+
   const activeRows = mode === 'total'
     ? tournament?.ranking ?? []
     : selectedRoundRanking?.ranking ?? []
 
   const honorRows = useMemo(() => {
-    const rows = (selectedRoundRanking?.ranking ?? []).filter(
+    const rows = (selectedHonorRoundRanking?.ranking ?? []).filter(
       (row) => row.playedPredictions > 0
     )
 
@@ -141,7 +150,7 @@ export default function PrivateTournamentDetailPage({
       second: rows[1] ?? null,
       last: rows.length > 2 ? rows[rows.length - 1] : null,
     }
-  }, [selectedRoundRanking])
+  }, [selectedHonorRoundRanking])
 
   const loadTournament = useCallback(async () => {
     if (!user) {
@@ -156,6 +165,11 @@ export default function PrivateTournamentDetailPage({
       const data = await getPrivateTournamentDetail(tournamentId)
       setTournament(data)
       setSelectedRound((current) =>
+        current && data.roundRankings.some((round) => round.value === current)
+          ? current
+          : data.roundRankings[0]?.value ?? ''
+      )
+      setSelectedHonorRound((current) =>
         current && data.roundRankings.some((round) => round.value === current)
           ? current
           : data.roundRankings[0]?.value ?? ''
@@ -188,6 +202,11 @@ export default function PrivateTournamentDetailPage({
 
       setTournament(nextTournament)
       setSelectedRound((current) =>
+        current && nextTournament.roundRankings.some((round) => round.value === current)
+          ? current
+          : nextTournament.roundRankings[0]?.value ?? ''
+      )
+      setSelectedHonorRound((current) =>
         current && nextTournament.roundRankings.some((round) => round.value === current)
           ? current
           : nextTournament.roundRankings[0]?.value ?? ''
@@ -297,7 +316,10 @@ export default function PrivateTournamentDetailPage({
               {mode === 'round' ? (
                 <select
                   value={selectedRoundRanking?.value ?? ''}
-                  onChange={(event) => setSelectedRound(event.target.value)}
+                  onChange={(event) => {
+                    setSelectedRound(event.target.value)
+                    setSelectedHonorRound(event.target.value)
+                  }}
                   disabled={!tournament.roundRankings.length}
                   className="h-10 w-full rounded-xl border border-white/8 bg-[#0d1217] px-3 text-sm font-semibold text-white outline-none transition focus:border-[#7ff0b2] disabled:cursor-not-allowed disabled:text-[#8d98a7]"
                 >
@@ -319,7 +341,7 @@ export default function PrivateTournamentDetailPage({
             rows={activeRows}
             emptyMessage={
               mode === 'total'
-                ? 'Todavía no hay puntos calculados entre los miembros.'
+                ? 'Todavía no hay puntos computados.'
                 : 'Todavía no hay puntos para esta fecha.'
             }
           />
@@ -329,17 +351,33 @@ export default function PrivateTournamentDetailPage({
           <section className="overflow-hidden rounded-2xl border border-white/8 bg-[#10151a]/95 shadow-[0_12px_30px_rgba(0,0,0,0.16)]">
             <div className="border-b border-white/7 px-3 py-3 sm:px-4">
               <h2 className="text-lg font-black text-white">Menciones honoríficas</h2>
-              {selectedRoundRanking ? (
+              {selectedHonorRoundRanking ? (
                 <p className="mt-1 text-xs font-semibold text-[#8d98a7]">
-                  {selectedRoundRanking.label}
+                  {selectedHonorRoundRanking.label}
                 </p>
               ) : null}
             </div>
             <div className="space-y-2 p-3">
+              <select
+                value={selectedHonorRoundRanking?.value ?? ''}
+                onChange={(event) => setSelectedHonorRound(event.target.value)}
+                disabled={!tournament.roundRankings.length}
+                className="h-10 w-full rounded-xl border border-white/8 bg-[#0d1217] px-3 text-sm font-semibold text-white outline-none transition focus:border-[#7ff0b2] disabled:cursor-not-allowed disabled:text-[#8d98a7]"
+              >
+                {tournament.roundRankings.length ? (
+                  tournament.roundRankings.map((round) => (
+                    <option key={round.value} value={round.value}>
+                      {round.label}
+                    </option>
+                  ))
+                ) : (
+                  <option value="">Sin fecha disponible</option>
+                )}
+              </select>
               {honorRows.first ? (
                 <HonorBadge label="El Pichichi" row={honorRows.first} variant="gold" />
               ) : (
-                <EmptyState>Elegí una fecha con puntos para ver las menciones.</EmptyState>
+                <EmptyState>Todavía no hay puntos computados en esta fecha.</EmptyState>
               )}
               {honorRows.second ? (
                 <HonorBadge label="Casi casi" row={honorRows.second} variant="silver" />
