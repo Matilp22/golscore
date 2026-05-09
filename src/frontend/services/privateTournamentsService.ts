@@ -31,13 +31,16 @@ export async function getPrivateTournaments() {
   return data.tournaments ?? []
 }
 
-export async function createPrivateTournament(name: string) {
+export async function createPrivateTournament(input: {
+  baseName: string
+  leagueExternalId: string
+}) {
   const response = await fetch('/api/prode/private-tournaments', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify(input),
   })
   const data = await parseResponse<{ tournament?: PrivateTournamentSummary }>(
     response,

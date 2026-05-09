@@ -1,7 +1,28 @@
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
+import {
+  getProdeRoundLabel,
+  getProdeRoundSortValue,
+  isVisibleProdeRound,
+  normalizeProdeRound,
+} from '@/shared/config/prode-rounds'
+import { isFinalMatchStatus } from '@/shared/utils/match-status'
 
 export type PrivateTournamentRole = 'owner' | 'member'
 export type JoinRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled'
+export const PRIVATE_TOURNAMENT_LEAGUE_OPTIONS = [
+  {
+    externalId: '128',
+    name: 'Liga Profesional Argentina',
+  },
+  {
+    externalId: '129',
+    name: 'Primera Nacional',
+  },
+  {
+    externalId: '1',
+    name: 'Mundial',
+  },
+] as const
 
 type ApiErrorLike = {
   code?: string | null
@@ -12,6 +33,11 @@ type ApiErrorLike = {
 type TournamentRow = {
   id: string
   name: string
+  base_name: string | null
+  display_name: string | null
+  league_id: string | null
+  league_external_id: string | number | null
+  league_name: string | null
   normalized_name: string
   created_by: string
   created_at: string
@@ -45,9 +71,34 @@ type ProfileRow = {
 
 type PredictionScoreRow = {
   user_id: string
+  match_id: string | number | null
   points: number | null
   exact_hit: boolean | null
   partial_hit: boolean | null
+}
+
+type MatchRoundRow = {
+  id: string | number
+  round: string | number | null
+  league_id: string | null
+  match_date: string
+  status: string | null
+}
+
+type LeagueRow = {
+  id: string
+  external_id: string | number | null
+  name: string | null
+}
+
+type MatchRoundInfo = {
+  id: string
+  round: string | null
+  leagueExternalId: number | null
+  leagueExternalIdText: string | null
+  leagueName: string | null
+  matchDate: string
+  status: string | null
 }
 
 export type PrivateTournamentRankingRow = {
@@ -60,9 +111,20 @@ export type PrivateTournamentRankingRow = {
   playedPredictions: number
 }
 
+export type PrivateTournamentRoundRanking = {
+  value: string
+  label: string
+  matchCount: number
+  ranking: PrivateTournamentRankingRow[]
+}
+
 export type PrivateTournamentSummary = {
   id: string
   name: string
+  baseName: string
+  displayName: string
+  leagueExternalId: string
+  leagueName: string
   creatorName: string
   memberCount: number
   role: PrivateTournamentRole
@@ -74,6 +136,9 @@ export type PrivateTournamentSummary = {
 export type PrivateTournamentSearchResult = {
   id: string
   name: string
+  displayName: string
+  leagueExternalId: string
+  leagueName: string
   creatorName: string
   memberCount: number
   isMember: boolean
@@ -84,10 +149,15 @@ export type PrivateTournamentSearchResult = {
 export type PrivateTournamentDetail = {
   id: string
   name: string
+  baseName: string
+  displayName: string
+  leagueExternalId: string
+  leagueName: string
   creatorName: string
   currentUserRole: PrivateTournamentRole
   memberCount: number
   ranking: PrivateTournamentRankingRow[]
+  roundRankings: PrivateTournamentRoundRanking[]
   members: Array<{
     id: string
     userId: string
@@ -99,6 +169,7 @@ export type PrivateTournamentDetail = {
     id: string
     userId: string
     username: string
+    email: string | null
     requestedAt: string
   }>
 }
@@ -123,6 +194,26 @@ function cleanPrivateTournamentName(name: string) {
   return name.trim().replace(/\s+/g, ' ')
 }
 
+function getConfiguredLeague(externalId: string) {
+  return PRIVATE_TOURNAMENT_LEAGUE_OPTIONS.find((option) => option.externalId === externalId) ?? null
+}
+
+function getTournamentDisplayName(tournament: TournamentRow) {
+  return tournament.display_name ?? tournament.name
+}
+
+function getTournamentBaseName(tournament: TournamentRow) {
+  return tournament.base_name ?? tournament.name
+}
+
+function getTournamentLeagueExternalId(tournament: TournamentRow) {
+  return String(tournament.league_external_id ?? '128')
+}
+
+function getTournamentLeagueName(tournament: TournamentRow) {
+  return tournament.league_name ?? getConfiguredLeague(getTournamentLeagueExternalId(tournament))?.name ?? 'Liga Profesional Argentina'
+}
+
 function getErrorCode(error: unknown) {
   return (error as ApiErrorLike | null)?.code ?? null
 }
@@ -134,7 +225,18 @@ function getErrorMessage(error: unknown, fallback: string) {
 function throwIfDatabaseError(error: unknown, fallback: string): asserts error is null {
   if (!error) return
 
-  throw new PrivateTournamentError(getErrorMessage(error, fallback), 500, getErrorCode(error))
+  const code = getErrorCode(error)
+  const message = getErrorMessage(error, fallback)
+
+  if (code === 'PGRST205' && message.includes('prode_private_')) {
+    throw new PrivateTournamentError(
+      'La migración de torneos privados no está aplicada en Supabase.',
+      500,
+      code
+    )
+  }
+
+  throw new PrivateTournamentError(message, 500, code)
 }
 
 function getDisplayName(userId: string, profilesById: Map<string, ProfileRow>) {
@@ -165,6 +267,21 @@ function chunkArray<T>(items: T[], size: number) {
   }
 
   return chunks
+}
+
+function dedupeMembersByTournamentAndUser(members: MemberRow[]) {
+  const membersByKey = new Map<string, MemberRow>()
+
+  for (const member of members) {
+    const key = `${member.tournament_id}:${member.user_id}`
+    const current = membersByKey.get(key)
+
+    if (!current || current.role !== 'owner') {
+      membersByKey.set(key, member)
+    }
+  }
+
+  return [...membersByKey.values()]
 }
 
 async function fetchProfiles(userIds: string[]) {
@@ -221,7 +338,7 @@ async function fetchMembers(tournamentIds: string[]) {
 
   throwIfDatabaseError(error, 'No se pudieron leer los participantes.')
 
-  return (data ?? []) as MemberRow[]
+  return dedupeMembersByTournamentAndUser((data ?? []) as MemberRow[])
 }
 
 async function fetchScoresByUserIds(userIds: string[]) {
@@ -235,7 +352,7 @@ async function fetchScoresByUserIds(userIds: string[]) {
   for (const chunk of chunkArray(uniqueUserIds, 100)) {
     const { data, error } = await supabase
       .from('prediction_scores')
-      .select('user_id, points, exact_hit, partial_hit')
+      .select('user_id, match_id, points, exact_hit, partial_hit')
       .in('user_id', chunk)
 
     throwIfDatabaseError(error, 'No se pudo calcular el ranking privado.')
@@ -243,6 +360,127 @@ async function fetchScoresByUserIds(userIds: string[]) {
   }
 
   return scores
+}
+
+async function fetchMatchRoundInfo(matchIds: Array<string | number | null>) {
+  const supabase = getSupabaseAdminClient()
+  const uniqueMatchIds = [...new Set(matchIds.filter(Boolean).map((matchId) => String(matchId)))]
+  const matches: MatchRoundRow[] = []
+
+  if (!uniqueMatchIds.length) return new Map<string, MatchRoundInfo>()
+
+  for (const chunk of chunkArray(uniqueMatchIds, 100)) {
+    const { data, error } = await supabase
+      .from('matches')
+      .select('id, round, league_id, match_date, status')
+      .in('id', chunk)
+
+    throwIfDatabaseError(error, 'No se pudieron leer las fechas del Prode.')
+    matches.push(...((data ?? []) as MatchRoundRow[]))
+  }
+
+  const leagueIds = [
+    ...new Set(matches.map((match) => match.league_id).filter(Boolean).map((id) => String(id))),
+  ]
+  const leaguesById = new Map<string, LeagueRow>()
+
+  if (leagueIds.length) {
+    for (const chunk of chunkArray(leagueIds, 100)) {
+      const { data, error } = await supabase
+        .from('leagues')
+        .select('id, external_id, name')
+        .in('id', chunk)
+
+      throwIfDatabaseError(error, 'No se pudieron leer las ligas del Prode.')
+
+      for (const league of (data ?? []) as LeagueRow[]) {
+        leaguesById.set(String(league.id), league)
+      }
+    }
+  }
+
+  return new Map(
+    matches.map((match) => {
+      const league = match.league_id ? leaguesById.get(String(match.league_id)) : null
+
+      return [
+        String(match.id),
+        {
+          id: String(match.id),
+          round: match.round === null || match.round === undefined ? null : String(match.round),
+          leagueExternalId:
+            league?.external_id === null || league?.external_id === undefined
+              ? null
+              : Number(league.external_id),
+          leagueExternalIdText:
+            league?.external_id === null || league?.external_id === undefined
+              ? null
+              : String(league.external_id),
+          leagueName: league?.name ?? null,
+          matchDate: match.match_date,
+          status: match.status,
+        },
+      ] as const
+    })
+  )
+}
+
+async function resolvePrivateTournamentLeague(leagueExternalId: string) {
+  const configuredLeague = getConfiguredLeague(leagueExternalId)
+
+  if (!configuredLeague) {
+    throw new PrivateTournamentError('Elegí un torneo válido para jugar el Prode privado.', 400)
+  }
+
+  const supabase = getSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from('leagues')
+    .select('id, external_id, name')
+    .eq('external_id', Number(configuredLeague.externalId))
+    .order('season', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    console.info('[private-tournaments] No se pudo resolver league_id; se guarda external_id estable', {
+      code: error.code ?? null,
+      message: error.message,
+      leagueExternalId,
+    })
+  }
+
+  const league = data as LeagueRow | null
+
+  return {
+    id: league?.id ? String(league.id) : null,
+    externalId: configuredLeague.externalId,
+    name: configuredLeague.name,
+  }
+}
+
+function filterScoresForTournament(
+  tournament: TournamentRow,
+  members: MemberRow[],
+  scores: PredictionScoreRow[],
+  matchesById: Map<string, MatchRoundInfo>
+) {
+  const memberByUserId = new Map(members.map((member) => [member.user_id, member]))
+  const leagueExternalId = getTournamentLeagueExternalId(tournament)
+
+  return scores.filter((score) => {
+    const member = memberByUserId.get(score.user_id)
+    const matchId = score.match_id === null || score.match_id === undefined
+      ? null
+      : String(score.match_id)
+    const match = matchId ? matchesById.get(matchId) : null
+
+    if (!member || !match) return false
+    if (match.leagueExternalIdText !== leagueExternalId) return false
+    if (!isFinalMatchStatus(match.status)) return false
+
+    return new Date(match.matchDate).getTime() >= new Date(member.joined_at).getTime()
+  })
 }
 
 function buildRankings(
@@ -307,11 +545,86 @@ function buildRankings(
   return rankingsByTournamentId
 }
 
+function buildRankingForMembers(
+  members: MemberRow[],
+  profilesById: Map<string, ProfileRow>,
+  scores: PredictionScoreRow[]
+) {
+  return buildRankings(members, profilesById, scores).get(members[0]?.tournament_id ?? '') ?? []
+}
+
+function buildRoundRankings(
+  members: MemberRow[],
+  profilesById: Map<string, ProfileRow>,
+  scores: PredictionScoreRow[],
+  matchesById: Map<string, MatchRoundInfo>
+) {
+  const roundBuckets = new Map<
+    string,
+    {
+      value: string
+      label: string
+      sortValue: number
+      leagueName: string
+      matchIds: Set<string>
+      scores: PredictionScoreRow[]
+    }
+  >()
+
+  for (const score of scores) {
+    const matchId = score.match_id === null || score.match_id === undefined
+      ? null
+      : String(score.match_id)
+    const match = matchId ? matchesById.get(matchId) : null
+
+    if (!match?.round) continue
+    if (!isVisibleProdeRound(match.round, match.leagueExternalId)) continue
+
+    const normalizedRound = normalizeProdeRound(match.round, match.leagueExternalId)
+
+    if (!normalizedRound) continue
+
+    const leagueKey = match.leagueExternalId ?? 'sin-liga'
+    const value = `${leagueKey}:${normalizedRound}`
+    const leagueName = match.leagueName ?? 'Prode'
+    const roundLabel = getProdeRoundLabel(normalizedRound, match.leagueExternalId) ?? normalizedRound
+    const current = roundBuckets.get(value) ?? {
+      value,
+      label: `${leagueName} · ${roundLabel}`,
+      sortValue: getProdeRoundSortValue(normalizedRound, match.leagueExternalId),
+      leagueName,
+      matchIds: new Set<string>(),
+      scores: [],
+    }
+
+    current.matchIds.add(match.id)
+    current.scores.push(score)
+    roundBuckets.set(value, current)
+  }
+
+  return [...roundBuckets.values()]
+    .sort((a, b) => {
+      const leagueSort = a.leagueName.localeCompare(b.leagueName, 'es-AR', {
+        sensitivity: 'base',
+      })
+
+      if (leagueSort !== 0) return leagueSort
+      if (a.sortValue !== b.sortValue) return a.sortValue - b.sortValue
+      return a.label.localeCompare(b.label, 'es-AR', { numeric: true })
+    })
+    .map((bucket) => ({
+      value: bucket.value,
+      label: bucket.label,
+      matchCount: bucket.matchIds.size,
+      ranking: buildRankingForMembers(members, profilesById, bucket.scores),
+    }))
+}
+
 async function fetchTournamentById(id: string) {
   const supabase = getSupabaseAdminClient()
   const { data, error } = await supabase
     .from('prode_private_tournaments')
-    .select('id, name, normalized_name, created_by, created_at, updated_at')
+    .select('id, name, base_name, display_name, league_id, league_external_id, league_name, normalized_name, created_by, created_at, updated_at')
     .eq('id', id)
     .maybeSingle()
 
@@ -366,7 +679,7 @@ export async function listPrivateTournaments(userId: string) {
 
   const { data: tournamentsData, error: tournamentsError } = await supabase
     .from('prode_private_tournaments')
-    .select('id, name, normalized_name, created_by, created_at, updated_at')
+    .select('id, name, base_name, display_name, league_id, league_external_id, league_name, normalized_name, created_by, created_at, updated_at')
     .in('id', tournamentIds)
     .order('created_at', { ascending: false })
 
@@ -379,7 +692,23 @@ export async function listPrivateTournaments(userId: string) {
     ...members.map((member) => member.user_id),
   ])
   const scores = await fetchScoresByUserIds(members.map((member) => member.user_id))
-  const rankingsByTournamentId = buildRankings(members, profilesById, scores)
+  const matchesById = await fetchMatchRoundInfo(scores.map((score) => score.match_id))
+  const rankingsByTournamentId = new Map(
+    tournaments.map((tournament) => {
+      const tournamentMembers = members.filter((member) => member.tournament_id === tournament.id)
+      const tournamentScores = filterScoresForTournament(
+        tournament,
+        tournamentMembers,
+        scores,
+        matchesById
+      )
+
+      return [
+        tournament.id,
+        buildRankings(tournamentMembers, profilesById, tournamentScores).get(tournament.id) ?? [],
+      ] as const
+    })
+  )
   const membershipsByTournamentId = new Map(
     memberships.map((membership) => [membership.tournament_id, membership])
   )
@@ -390,7 +719,11 @@ export async function listPrivateTournaments(userId: string) {
 
     return {
       id: tournament.id,
-      name: tournament.name,
+      name: getTournamentDisplayName(tournament),
+      baseName: getTournamentBaseName(tournament),
+      displayName: getTournamentDisplayName(tournament),
+      leagueExternalId: getTournamentLeagueExternalId(tournament),
+      leagueName: getTournamentLeagueName(tournament),
       creatorName: getDisplayName(tournament.created_by, profilesById),
       memberCount: members.filter((member) => member.tournament_id === tournament.id).length,
       role: membershipsByTournamentId.get(tournament.id)?.role ?? 'member',
@@ -401,17 +734,28 @@ export async function listPrivateTournaments(userId: string) {
   })
 }
 
-export async function createPrivateTournament(userId: string, name: string) {
-  const { cleanName, normalizedName } = ensureValidTournamentName(name)
+export async function createPrivateTournament(
+  userId: string,
+  input: { baseName: string; leagueExternalId: string }
+) {
+  const { cleanName } = ensureValidTournamentName(input.baseName)
+  const league = await resolvePrivateTournamentLeague(input.leagueExternalId)
+  const displayName = `${cleanName} - ${league.name}`
+  const normalizedName = normalizePrivateTournamentName(displayName)
   const supabase = getSupabaseAdminClient()
   const { data: tournamentData, error: tournamentError } = await supabase
     .from('prode_private_tournaments')
     .insert({
-      name: cleanName,
+      name: displayName,
+      base_name: cleanName,
+      display_name: displayName,
+      league_id: league.id,
+      league_external_id: league.externalId,
+      league_name: league.name,
       normalized_name: normalizedName,
       created_by: userId,
     })
-    .select('id, name, normalized_name, created_by, created_at, updated_at')
+    .select('id, name, base_name, display_name, league_id, league_external_id, league_name, normalized_name, created_by, created_at, updated_at')
     .single()
 
   if (tournamentError) {
@@ -457,7 +801,7 @@ export async function searchPrivateTournament(userId: string, name: string) {
   const supabase = getSupabaseAdminClient()
   const { data: tournamentData, error: tournamentError } = await supabase
     .from('prode_private_tournaments')
-    .select('id, name, normalized_name, created_by, created_at, updated_at')
+    .select('id, name, base_name, display_name, league_id, league_external_id, league_name, normalized_name, created_by, created_at, updated_at')
     .eq('normalized_name', normalizedName)
     .maybeSingle()
 
@@ -486,7 +830,10 @@ export async function searchPrivateTournament(userId: string, name: string) {
 
   return {
     id: tournament.id,
-    name: tournament.name,
+    name: getTournamentDisplayName(tournament),
+    displayName: getTournamentDisplayName(tournament),
+    leagueExternalId: getTournamentLeagueExternalId(tournament),
+    leagueName: getTournamentLeagueName(tournament),
     creatorName: getDisplayName(tournament.created_by, profilesById),
     memberCount: members.length,
     isMember: Boolean(membership),
@@ -590,15 +937,23 @@ export async function getPrivateTournamentDetail(userId: string, tournamentId: s
     ...pendingRequests.map((request) => request.user_id),
   ])
   const scores = await fetchScoresByUserIds(members.map((member) => member.user_id))
-  const ranking = buildRankings(members, profilesById, scores).get(tournamentId) ?? []
+  const matchesById = await fetchMatchRoundInfo(scores.map((score) => score.match_id))
+  const tournamentScores = filterScoresForTournament(tournament, members, scores, matchesById)
+  const ranking = buildRankings(members, profilesById, tournamentScores).get(tournamentId) ?? []
+  const roundRankings = buildRoundRankings(members, profilesById, tournamentScores, matchesById)
 
   return {
     id: tournament.id,
-    name: tournament.name,
+    name: getTournamentDisplayName(tournament),
+    baseName: getTournamentBaseName(tournament),
+    displayName: getTournamentDisplayName(tournament),
+    leagueExternalId: getTournamentLeagueExternalId(tournament),
+    leagueName: getTournamentLeagueName(tournament),
     creatorName: getDisplayName(tournament.created_by, profilesById),
     currentUserRole: membership.role,
     memberCount: members.length,
     ranking,
+    roundRankings,
     members: members.map((member) => ({
       id: member.id,
       userId: member.user_id,
@@ -610,6 +965,7 @@ export async function getPrivateTournamentDetail(userId: string, tournamentId: s
       id: request.id,
       userId: request.user_id,
       username: getDisplayName(request.user_id, profilesById),
+      email: profilesById.get(request.user_id)?.email ?? null,
       requestedAt: request.requested_at,
     })),
   } satisfies PrivateTournamentDetail

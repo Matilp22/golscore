@@ -31,10 +31,19 @@ function EmptyState({ children }: { children: string }) {
   )
 }
 
+const PRODE_TOURNAMENT_OPTIONS = [
+  { externalId: '128', name: 'Liga Profesional Argentina' },
+  { externalId: '129', name: 'Primera Nacional' },
+  { externalId: '1', name: 'Mundial' },
+]
+
 export default function PrivateTournamentsPage() {
   const { user, isLoading: isAuthLoading } = useAuth()
   const [tournaments, setTournaments] = useState<PrivateTournamentSummary[]>([])
   const [createName, setCreateName] = useState('')
+  const [createLeagueExternalId, setCreateLeagueExternalId] = useState(
+    PRODE_TOURNAMENT_OPTIONS[0].externalId
+  )
   const [searchName, setSearchName] = useState('')
   const [searchResult, setSearchResult] = useState<PrivateTournamentSearchResult | null>(null)
   const [searchDone, setSearchDone] = useState(false)
@@ -81,9 +90,12 @@ export default function PrivateTournamentsPage() {
     setIsCreating(true)
 
     try {
-      await createPrivateTournament(createName)
+      await createPrivateTournament({
+        baseName: createName,
+        leagueExternalId: createLeagueExternalId,
+      })
       setCreateName('')
-      setMessage('Torneo creado. Ya sos owner.')
+      setMessage('Torneo creado. Ya participás automáticamente.')
       await loadTournaments()
     } catch (caughtError) {
       setError(
@@ -129,7 +141,7 @@ export default function PrivateTournamentsPage() {
         requestStatus: 'pending',
         canRequest: false,
       })
-      setMessage('Solicitud enviada. El owner debe aprobar tu ingreso.')
+      setMessage('Solicitud enviada. El administrador debe aprobar tu ingreso.')
     } catch (caughtError) {
       setError(
         caughtError instanceof Error
@@ -171,23 +183,18 @@ export default function PrivateTournamentsPage() {
             <EmptyState>Cargando torneos...</EmptyState>
           ) : tournaments.length ? (
             tournaments.map((tournament) => (
-              <article
+              <Link
                 key={tournament.id}
-                className="rounded-2xl border border-white/8 bg-white/[0.025] p-3"
+                href={`/prode/torneos/${tournament.id}`}
+                className="block rounded-2xl border border-white/8 bg-white/[0.025] p-3 transition hover:border-[#7ff0b2]/30 hover:bg-white/[0.04]"
               >
                 <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
-                    <div className="flex min-w-0 flex-wrap items-center gap-2">
-                      <h3 className="break-words text-base font-black text-white">
-                        {tournament.name}
-                      </h3>
-                      <span className="rounded-full border border-[#7ff0b2]/20 bg-[#163828] px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.02em] text-[#7ff0b2]">
-                        {tournament.role === 'owner' ? 'Owner' : 'Miembro'}
-                      </span>
-                    </div>
+                    <h3 className="break-words text-base font-black text-white">
+                      {tournament.displayName}
+                    </h3>
                     <p className="mt-1 text-sm text-[#9aa7b5]">
-                      Creador: {tournament.creatorName} · {tournament.memberCount}{' '}
-                      participantes
+                      {tournament.memberCount} participantes
                     </p>
                     <p className="mt-2 text-sm font-semibold text-[#dce7f2]">
                       {tournament.myPosition
@@ -196,14 +203,11 @@ export default function PrivateTournamentsPage() {
                       · {tournament.myPoints} pts
                     </p>
                   </div>
-                  <Link
-                    href={`/prode/torneos/${tournament.id}`}
-                    className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-[#163828] px-4 text-sm font-black text-[#7ff0b2] transition hover:bg-[#1d4733]"
-                  >
+                  <span className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-[#163828] px-4 text-sm font-black text-[#7ff0b2] transition">
                     Ver torneo
-                  </Link>
+                  </span>
                 </div>
-              </article>
+              </Link>
             ))
           ) : (
             <EmptyState>Todavía no participás en ningún torneo privado.</EmptyState>
@@ -223,6 +227,17 @@ export default function PrivateTournamentsPage() {
               placeholder="Nombre del torneo"
               className="h-11 w-full rounded-xl border border-white/8 bg-[#0d1217] px-3 text-sm font-semibold text-white outline-none transition placeholder:text-[#657384] focus:border-[#7ff0b2]"
             />
+            <select
+              value={createLeagueExternalId}
+              onChange={(event) => setCreateLeagueExternalId(event.target.value)}
+              className="h-11 w-full rounded-xl border border-white/8 bg-[#0d1217] px-3 text-sm font-semibold text-white outline-none transition focus:border-[#7ff0b2]"
+            >
+              {PRODE_TOURNAMENT_OPTIONS.map((option) => (
+                <option key={option.externalId} value={option.externalId}>
+                  {option.name}
+                </option>
+              ))}
+            </select>
             <button
               type="submit"
               disabled={isCreating}
@@ -241,7 +256,7 @@ export default function PrivateTournamentsPage() {
             <input
               value={searchName}
               onChange={(event) => setSearchName(event.target.value)}
-              placeholder="Nombre exacto"
+              placeholder="Nombre exacto, ej: Primero - Liga Profesional Argentina"
               className="h-11 w-full rounded-xl border border-white/8 bg-[#0d1217] px-3 text-sm font-semibold text-white outline-none transition placeholder:text-[#657384] focus:border-[#7ff0b2]"
             />
             <button
@@ -260,11 +275,10 @@ export default function PrivateTournamentsPage() {
             {searchResult ? (
               <div className="rounded-2xl border border-white/8 bg-white/[0.025] p-3">
                 <h3 className="break-words text-base font-black text-white">
-                  {searchResult.name}
+                  {searchResult.displayName}
                 </h3>
                 <p className="mt-1 text-sm text-[#9aa7b5]">
-                  Creador: {searchResult.creatorName} · {searchResult.memberCount}{' '}
-                  participantes
+                  {searchResult.memberCount} participantes
                 </p>
                 <p className="mt-2 text-sm font-semibold text-[#dce7f2]">
                   {searchResult.isMember

@@ -8,9 +8,9 @@ export default function ProdeTournamentsPage() {
         <div className="mb-3 w-full rounded-2xl border border-white/8 bg-[#10151a]/95 px-3 py-3 shadow-[0_12px_30px_rgba(0,0,0,0.16)] sm:px-4 md:mb-4 md:px-5 md:py-4">
           <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
-              <h1 className="text-2xl font-black sm:text-3xl">Torneos privados</h1>
+              <h1 className="text-2xl font-black sm:text-3xl">Torneos</h1>
               <p className="mt-1 text-sm text-[#9aa7b5]">
-                Competí con amigos usando tus predicciones del Prode general.
+                Jugá con tus amigos, compañeros de trabajo, conocidos y ganá!
               </p>
             </div>
             <Link

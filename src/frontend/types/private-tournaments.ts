@@ -4,6 +4,10 @@ export type JoinRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled
 export type PrivateTournamentSummary = {
   id: string
   name: string
+  baseName: string
+  displayName: string
+  leagueExternalId: string
+  leagueName: string
   creatorName: string
   memberCount: number
   role: PrivateTournamentRole
@@ -15,6 +19,9 @@ export type PrivateTournamentSummary = {
 export type PrivateTournamentSearchResult = {
   id: string
   name: string
+  displayName: string
+  leagueExternalId: string
+  leagueName: string
   creatorName: string
   memberCount: number
   isMember: boolean
@@ -32,13 +39,25 @@ export type PrivateTournamentRankingRow = {
   playedPredictions: number
 }
 
+export type PrivateTournamentRoundRanking = {
+  value: string
+  label: string
+  matchCount: number
+  ranking: PrivateTournamentRankingRow[]
+}
+
 export type PrivateTournamentDetail = {
   id: string
   name: string
+  baseName: string
+  displayName: string
+  leagueExternalId: string
+  leagueName: string
   creatorName: string
   currentUserRole: PrivateTournamentRole
   memberCount: number
   ranking: PrivateTournamentRankingRow[]
+  roundRankings: PrivateTournamentRoundRanking[]
   members: Array<{
     id: string
     userId: string
@@ -50,6 +69,7 @@ export type PrivateTournamentDetail = {
     id: string
     userId: string
     username: string
+    email: string | null
     requestedAt: string
   }>
 }

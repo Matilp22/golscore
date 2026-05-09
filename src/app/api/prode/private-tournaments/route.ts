@@ -34,10 +34,20 @@ export async function POST(request: Request) {
   if (error || !user) return error
 
   const body = await request.json().catch(() => null)
-  const name = typeof body?.name === 'string' ? body.name : ''
+  const baseName =
+    typeof body?.baseName === 'string'
+      ? body.baseName
+      : typeof body?.name === 'string'
+        ? body.name
+        : ''
+  const leagueExternalId =
+    typeof body?.leagueExternalId === 'string' ? body.leagueExternalId : ''
 
   try {
-    const tournament = await createPrivateTournament(user.id, name)
+    const tournament = await createPrivateTournament(user.id, {
+      baseName,
+      leagueExternalId,
+    })
 
     return jsonNoStore({ ok: true, tournament }, { status: 201 })
   } catch (caughtError) {

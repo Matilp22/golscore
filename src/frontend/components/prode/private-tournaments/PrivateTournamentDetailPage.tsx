@@ -1,18 +1,23 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/frontend/hooks/useAuth'
 import {
   approvePrivateTournamentRequest,
   getPrivateTournamentDetail,
   rejectPrivateTournamentRequest,
 } from '@/frontend/services/privateTournamentsService'
-import type { PrivateTournamentDetail } from '@/frontend/types/private-tournaments'
+import type {
+  PrivateTournamentDetail,
+  PrivateTournamentRankingRow,
+} from '@/frontend/types/private-tournaments'
 
 type PrivateTournamentDetailPageProps = {
   tournamentId: string
 }
+
+type RankingMode = 'total' | 'round'
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat('es-AR', {
@@ -29,15 +34,114 @@ function EmptyState({ children }: { children: string }) {
   return <p className="p-4 text-sm text-[#9aa7b5]">{children}</p>
 }
 
+function RankingTable({
+  rows,
+  emptyMessage,
+}: {
+  rows: PrivateTournamentRankingRow[]
+  emptyMessage: string
+}) {
+  if (!rows.length) {
+    return <EmptyState>{emptyMessage}</EmptyState>
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[560px] border-separate border-spacing-0 text-left text-sm">
+        <thead className="text-xs uppercase text-[#8d98a7]">
+          <tr>
+            <th className="px-3 py-2 font-black">Pos.</th>
+            <th className="px-3 py-2 font-black">Usuario</th>
+            <th className="px-3 py-2 text-right font-black">Pts</th>
+            <th className="px-3 py-2 text-right font-black">Exactos</th>
+            <th className="px-3 py-2 text-right font-black">Parciales</th>
+            <th className="px-3 py-2 text-right font-black">PJ</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-white/6">
+          {rows.map((row) => (
+            <tr key={row.userId} className="transition hover:bg-white/[0.025]">
+              <td className="px-3 py-2 font-black text-[#7ff0b2]">#{row.position}</td>
+              <td className="min-w-0 px-3 py-2 font-bold text-white">{row.username}</td>
+              <td className="px-3 py-2 text-right font-black text-[#7ff0b2]">
+                {row.points}
+              </td>
+              <td className="px-3 py-2 text-right text-[#dce7f2]">{row.exactHits}</td>
+              <td className="px-3 py-2 text-right text-[#dce7f2]">
+                {row.partialHits}
+              </td>
+              <td className="px-3 py-2 text-right text-[#9aa7b5]">
+                {row.playedPredictions}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function HonorBadge({
+  label,
+  row,
+  variant,
+}: {
+  label: string
+  row: PrivateTournamentRankingRow
+  variant: 'gold' | 'silver' | 'fun'
+}) {
+  const styles = {
+    gold: 'border-amber-300/30 bg-amber-300/12 text-amber-200',
+    silver: 'border-sky-200/25 bg-sky-300/10 text-sky-100',
+    fun: 'border-fuchsia-300/25 bg-fuchsia-300/10 text-fuchsia-100',
+  }
+
+  return (
+    <div className={`rounded-2xl border p-3 ${styles[variant]}`}>
+      <p className="text-[11px] font-black uppercase tracking-[0.04em]">{label}</p>
+      <p className="mt-1 break-words text-sm font-black text-white">{row.username}</p>
+      <p className="mt-0.5 text-xs opacity-85">
+        {row.points} pts · {row.exactHits} exactos · {row.partialHits} parciales
+      </p>
+    </div>
+  )
+}
+
 export default function PrivateTournamentDetailPage({
   tournamentId,
 }: PrivateTournamentDetailPageProps) {
   const { user, isLoading: isAuthLoading } = useAuth()
   const [tournament, setTournament] = useState<PrivateTournamentDetail | null>(null)
+  const [mode, setMode] = useState<RankingMode>('total')
+  const [selectedRound, setSelectedRound] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [reviewingRequestId, setReviewingRequestId] = useState<string | null>(null)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+
+  const selectedRoundRanking = useMemo(() => {
+    return (
+      tournament?.roundRankings.find((round) => round.value === selectedRound) ??
+      tournament?.roundRankings[0] ??
+      null
+    )
+  }, [selectedRound, tournament])
+
+  const activeRows = mode === 'total'
+    ? tournament?.ranking ?? []
+    : selectedRoundRanking?.ranking ?? []
+
+  const honorRows = useMemo(() => {
+    const rows = (selectedRoundRanking?.ranking ?? []).filter(
+      (row) => row.playedPredictions > 0
+    )
+
+    return {
+      first: rows[0] ?? null,
+      second: rows[1] ?? null,
+      last: rows.length > 2 ? rows[rows.length - 1] : null,
+    }
+  }, [selectedRoundRanking])
 
   const loadTournament = useCallback(async () => {
     if (!user) {
@@ -51,6 +155,11 @@ export default function PrivateTournamentDetailPage({
     try {
       const data = await getPrivateTournamentDetail(tournamentId)
       setTournament(data)
+      setSelectedRound((current) =>
+        current && data.roundRankings.some((round) => round.value === current)
+          ? current
+          : data.roundRankings[0]?.value ?? ''
+      )
     } catch (caughtError) {
       setError(
         caughtError instanceof Error ? caughtError.message : 'No se pudo cargar el torneo.'
@@ -78,6 +187,11 @@ export default function PrivateTournamentDetailPage({
           : await rejectPrivateTournamentRequest(tournamentId, requestId)
 
       setTournament(nextTournament)
+      setSelectedRound((current) =>
+        current && nextTournament.roundRankings.some((round) => round.value === current)
+          ? current
+          : nextTournament.roundRankings[0]?.value ?? ''
+      )
       setMessage(action === 'approve' ? 'Solicitud aprobada.' : 'Solicitud rechazada.')
     } catch (caughtError) {
       setError(
@@ -133,16 +247,11 @@ export default function PrivateTournamentDetailPage({
       <section className="rounded-2xl border border-white/8 bg-[#10151a]/95 p-3 shadow-[0_12px_30px_rgba(0,0,0,0.16)] sm:p-4">
         <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="break-words text-2xl font-black text-white sm:text-3xl">
-                {tournament.name}
-              </h1>
-              <span className="rounded-full border border-[#7ff0b2]/20 bg-[#163828] px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.02em] text-[#7ff0b2]">
-                {isOwner ? 'Owner' : 'Miembro'}
-              </span>
-            </div>
+            <h1 className="break-words text-2xl font-black text-white sm:text-3xl">
+              {tournament.displayName}
+            </h1>
             <p className="mt-2 text-sm text-[#9aa7b5]">
-              Creador: {tournament.creatorName} · {tournament.memberCount} participantes
+              {tournament.memberCount} participantes
             </p>
           </div>
           <Link
@@ -154,66 +263,108 @@ export default function PrivateTournamentDetailPage({
         </div>
       </section>
 
-      <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-4">
+      <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_330px] lg:gap-4">
         <section className="min-w-0 overflow-hidden rounded-2xl border border-white/8 bg-[#10151a]/95 shadow-[0_12px_30px_rgba(0,0,0,0.16)]">
           <div className="border-b border-white/7 px-3 py-3 sm:px-4">
-            <h2 className="text-lg font-black text-white">Ranking privado</h2>
-          </div>
-          {tournament.ranking.length ? (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[560px] border-separate border-spacing-0 text-left text-sm">
-                <thead className="text-xs uppercase text-[#8d98a7]">
-                  <tr>
-                    <th className="px-3 py-2 font-black">Pos.</th>
-                    <th className="px-3 py-2 font-black">Usuario</th>
-                    <th className="px-3 py-2 text-right font-black">Pts</th>
-                    <th className="px-3 py-2 text-right font-black">Exactos</th>
-                    <th className="px-3 py-2 text-right font-black">Parciales</th>
-                    <th className="px-3 py-2 text-right font-black">PJ</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/6">
-                  {tournament.ranking.map((row) => (
-                    <tr key={row.userId} className="transition hover:bg-white/[0.025]">
-                      <td className="px-3 py-2 font-black text-[#7ff0b2]">
-                        #{row.position}
-                      </td>
-                      <td className="min-w-0 px-3 py-2 font-bold text-white">
-                        {row.username}
-                      </td>
-                      <td className="px-3 py-2 text-right font-black text-[#7ff0b2]">
-                        {row.points}
-                      </td>
-                      <td className="px-3 py-2 text-right text-[#dce7f2]">
-                        {row.exactHits}
-                      </td>
-                      <td className="px-3 py-2 text-right text-[#dce7f2]">
-                        {row.partialHits}
-                      </td>
-                      <td className="px-3 py-2 text-right text-[#9aa7b5]">
-                        {row.playedPredictions}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="flex min-w-0 flex-col gap-3">
+              <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <h2 className="text-lg font-black text-white">Tabla del torneo</h2>
+                <div className="grid w-full grid-cols-2 gap-1 rounded-xl border border-white/8 bg-[#0d1217] p-1 sm:w-56">
+                  {[
+                    { key: 'total', label: 'Total' },
+                    { key: 'round', label: 'Por fecha' },
+                  ].map((tab) => {
+                    const isActive = mode === tab.key
+
+                    return (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        onClick={() => setMode(tab.key as RankingMode)}
+                        className={`h-9 rounded-lg text-sm font-bold transition ${
+                          isActive
+                            ? 'bg-[#163828] text-[#7ff0b2]'
+                            : 'text-[#9aa7b5] hover:bg-white/[0.04] hover:text-white'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {mode === 'round' ? (
+                <select
+                  value={selectedRoundRanking?.value ?? ''}
+                  onChange={(event) => setSelectedRound(event.target.value)}
+                  disabled={!tournament.roundRankings.length}
+                  className="h-10 w-full rounded-xl border border-white/8 bg-[#0d1217] px-3 text-sm font-semibold text-white outline-none transition focus:border-[#7ff0b2] disabled:cursor-not-allowed disabled:text-[#8d98a7]"
+                >
+                  {tournament.roundRankings.length ? (
+                    tournament.roundRankings.map((round) => (
+                      <option key={round.value} value={round.value}>
+                        {round.label}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="">Sin fecha disponible</option>
+                  )}
+                </select>
+              ) : null}
             </div>
-          ) : (
-            <EmptyState>Todavía no hay puntos calculados entre los miembros.</EmptyState>
-          )}
+          </div>
+
+          <RankingTable
+            rows={activeRows}
+            emptyMessage={
+              mode === 'total'
+                ? 'Todavía no hay puntos calculados entre los miembros.'
+                : 'Todavía no hay puntos para esta fecha.'
+            }
+          />
         </section>
 
         <aside className="min-w-0 space-y-3">
+          <section className="overflow-hidden rounded-2xl border border-white/8 bg-[#10151a]/95 shadow-[0_12px_30px_rgba(0,0,0,0.16)]">
+            <div className="border-b border-white/7 px-3 py-3 sm:px-4">
+              <h2 className="text-lg font-black text-white">Menciones honoríficas</h2>
+              {selectedRoundRanking ? (
+                <p className="mt-1 text-xs font-semibold text-[#8d98a7]">
+                  {selectedRoundRanking.label}
+                </p>
+              ) : null}
+            </div>
+            <div className="space-y-2 p-3">
+              {honorRows.first ? (
+                <HonorBadge label="El Pichichi" row={honorRows.first} variant="gold" />
+              ) : (
+                <EmptyState>Elegí una fecha con puntos para ver las menciones.</EmptyState>
+              )}
+              {honorRows.second ? (
+                <HonorBadge label="Casi casi" row={honorRows.second} variant="silver" />
+              ) : null}
+              {honorRows.last ? (
+                <HonorBadge label="Troncazo" row={honorRows.last} variant="fun" />
+              ) : null}
+            </div>
+          </section>
+
           {isOwner ? (
             <section className="overflow-hidden rounded-2xl border border-white/8 bg-[#10151a]/95 shadow-[0_12px_30px_rgba(0,0,0,0.16)]">
               <div className="border-b border-white/7 px-3 py-3 sm:px-4">
-                <h2 className="text-lg font-black text-white">Solicitudes pendientes</h2>
+                <h2 className="text-lg font-black text-white">Solicitudes de ingreso</h2>
               </div>
               {tournament.pendingRequests.length ? (
                 <div className="divide-y divide-white/6">
                   {tournament.pendingRequests.map((request) => (
                     <div key={request.id} className="p-3">
                       <p className="font-bold text-white">{request.username}</p>
+                      {request.email ? (
+                        <p className="mt-0.5 break-words text-xs text-[#9aa7b5]">
+                          {request.email}
+                        </p>
+                      ) : null}
                       <p className="mt-1 text-xs text-[#8d98a7]">
                         Solicitó acceso: {formatDate(request.requestedAt)}
                       </p>
