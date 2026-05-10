@@ -31,6 +31,7 @@ import {
   getApiSportsTeamLogoUrl,
   pickStableAssetUrl,
 } from '@/shared/utils/asset-urls'
+import { getFixtureStatusElapsedMinute } from '@/shared/utils/match-minute'
 
 type ApiFixture = {
   fixture: {
@@ -38,6 +39,7 @@ type ApiFixture = {
     date: string
     status: {
       elapsed?: number | null
+      extra?: number | null
       long?: string
       short: string
     }
@@ -2155,9 +2157,7 @@ async function updateElapsedIfSupported(
   fixture: ApiFixture,
   debug?: boolean
 ) {
-  const elapsed = isFinishedStatus(fixture.fixture.status.short)
-    ? null
-    : fixture.fixture.status.elapsed ?? null
+  const elapsed = getFixtureStatusElapsedMinute(fixture.fixture.status)
 
   const { error } = await withTimeout(
     supabase
@@ -2381,7 +2381,7 @@ export async function syncFixtureById(
     api: {
       status: fixture.fixture.status.short,
       statusLong: fixture.fixture.status.long ?? null,
-      elapsed: fixture.fixture.status.elapsed ?? null,
+      elapsed: getFixtureStatusElapsedMinute(fixture.fixture.status),
       date: fixture.fixture.date,
       goalsHome: fixture.goals.home,
       goalsAway: fixture.goals.away,
@@ -2403,7 +2403,7 @@ export async function syncFixtureById(
         status: {
           short: fixture.fixture.status.short,
           long: fixture.fixture.status.long ?? null,
-          elapsed: fixture.fixture.status.elapsed ?? null,
+          elapsed: getFixtureStatusElapsedMinute(fixture.fixture.status),
         },
       },
       goals: {
@@ -2496,7 +2496,7 @@ export async function syncProdeFixtureById(
     api: {
       status: fixture.fixture.status.short,
       statusLong: fixture.fixture.status.long ?? null,
-      elapsed: fixture.fixture.status.elapsed ?? null,
+      elapsed: getFixtureStatusElapsedMinute(fixture.fixture.status),
       date: fixture.fixture.date,
       goalsHome: fixture.goals.home,
       goalsAway: fixture.goals.away,
@@ -2517,7 +2517,7 @@ export async function syncProdeFixtureById(
         status: {
           short: fixture.fixture.status.short,
           long: fixture.fixture.status.long ?? null,
-          elapsed: fixture.fixture.status.elapsed ?? null,
+          elapsed: getFixtureStatusElapsedMinute(fixture.fixture.status),
         },
       },
       goals: {

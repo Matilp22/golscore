@@ -14,6 +14,7 @@ type ApiFixture = {
     date: string
     status: {
       elapsed?: number | null
+      extra?: number | null
       short: string
     }
   }
@@ -74,7 +75,17 @@ type ApiFixtureEvent = {
   detail?: string | null
 }
 
-const FINISHED_STATUSES = new Set(['FT', 'AET', 'PEN'])
+function getFixtureStatusElapsedMinute(status: ApiFixture['fixture']['status']) {
+  const elapsed = status.elapsed
+  const extra = status.extra
+
+  if (elapsed === null || elapsed === undefined || !Number.isFinite(elapsed)) return null
+  if (extra !== null && extra !== undefined && Number.isFinite(extra) && extra > 0) {
+    return elapsed + extra
+  }
+
+  return elapsed
+}
 
 const TOURNAMENTS: Tournament[] = [
   {
@@ -549,9 +560,7 @@ Deno.serve(async (req) => {
             match_date: item.fixture.date,
             round: getFixtureRoundValue(item.league.round),
             status: item.fixture.status.short,
-            elapsed: FINISHED_STATUSES.has(item.fixture.status.short)
-              ? null
-              : item.fixture.status.elapsed ?? null,
+            elapsed: getFixtureStatusElapsedMinute(item.fixture.status),
             home_score: item.goals.home,
             away_score: item.goals.away,
           }

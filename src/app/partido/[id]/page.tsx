@@ -15,6 +15,8 @@ import FormationTeamPanel from '@/frontend/components/FormationTeamPanel'
 import SafeImage from '@/frontend/components/SafeImage'
 import { formatMatchTimeArgentina } from '@/shared/utils/argentina-time'
 import { formatEventMinute } from '@/shared/utils/event-minute'
+import { translateMatchEventDetail } from '@/shared/utils/football-events'
+import { getEventElapsedMinute, getFixtureStatusElapsedMinute } from '@/shared/utils/match-minute'
 import Link from 'next/link'
 
 type PageProps = {
@@ -57,15 +59,41 @@ function formatHeaderStatusLabel(
   elapsed: number | null | undefined,
   dateString: string
 ) {
+  if (['FT', 'AET', 'PEN'].includes(statusShort) || statusLong.toLowerCase().includes('finished')) {
+    return elapsed ? `FINAL ${elapsed}'` : 'FINAL'
+  }
   if (elapsed) return `${elapsed}'`
   if (statusShort === 'HT') return 'ET'
   if (statusShort === 'NS') return formatMatchTime(dateString)
   if (statusShort === 'TBD') return 'A confirmar'
-  if (['FT', 'AET', 'PEN'].includes(statusShort) || statusLong.toLowerCase().includes('finished')) {
-    return 'FINAL'
-  }
 
   return translateStatus(statusLong).toUpperCase()
+}
+
+function getMaxEventElapsedMinute(events: MatchEvent[]) {
+  return events.reduce<number | null>((maxMinute, event) => {
+    const eventMinute = getEventElapsedMinute(event.time?.elapsed, event.time?.extra)
+
+    if (eventMinute === null) return maxMinute
+    if (maxMinute === null) return eventMinute
+
+    return Math.max(maxMinute, eventMinute)
+  }, null)
+}
+
+function getMatchDisplayElapsed(status: MatchFixture['fixture']['status'], events: MatchEvent[]) {
+  const statusMinute = getFixtureStatusElapsedMinute(status)
+
+  if (['FT', 'AET', 'PEN'].includes(status.short) || status.long.toLowerCase().includes('finished')) {
+    const maxEventMinute = getMaxEventElapsedMinute(events)
+
+    if (statusMinute === null) return maxEventMinute
+    if (maxEventMinute === null) return statusMinute
+
+    return Math.max(statusMinute, maxEventMinute)
+  }
+
+  return statusMinute
 }
 
 function translateCountry(country: string) {
@@ -239,28 +267,30 @@ function translateEventDetail(event: MatchEvent) {
   const detail = event.detail || ''
   const type = event.type || ''
   const comments = event.comments || ''
+  const translatedVarDetail = translateMatchEventDetail(type, detail, comments)
   const normalizedDetail = normalizeEventText(detail)
   const normalizedType = normalizeEventText(type)
   const normalizedComments = normalizeEventText(comments)
 
+  if (translatedVarDetail) return translatedVarDetail
+  if (normalizedDetail.includes('second yellow')) return 'Segunda amarilla'
   if (normalizedDetail.includes('yellow')) return 'Tarjeta amarilla'
   if (normalizedDetail.includes('red')) return 'Tarjeta roja'
-  if (normalizedDetail.includes('second yellow')) return 'Segunda amarilla'
   if (normalizedDetail.includes('normal goal')) return 'Gol'
   if (normalizedDetail.includes('own goal')) return 'Gol en contra'
-  if (normalizedDetail.includes('penalty')) return 'Penal'
   if (normalizedDetail.includes('missed penalty') || normalizedDetail.includes('penalty missed')) {
     return 'Penal errado'
   }
+  if (normalizedDetail.includes('penalty')) return 'Penal'
   if (normalizedType.includes('subst')) return 'Sustitución'
   if (normalizedType.includes('var') || normalizedComments.includes('var')) {
-    return detail || comments || 'Revisión VAR'
+    return 'Revisión VAR'
   }
 
   const map: Record<string, string> = {
     Foul: 'Falta',
     Injury: 'Lesión',
-    Offside: 'Offside',
+    Offside: 'Fuera de juego',
     Handball: 'Mano',
     'Penalty Shootout': 'Penales',
   }
@@ -1306,10 +1336,11 @@ export default async function PartidoDetallePage({ params }: PageProps) {
 
   const homeColors = getTeamStyle(homeTeam.name, true, homeLineup, 'player')
   const awayColors = getTeamStyle(awayTeam.name, false, awayLineup, 'player')
+  const statusDisplayElapsed = getMatchDisplayElapsed(status, events)
   const headerStatusLabel = formatHeaderStatusLabel(
     status.short,
     status.long,
-    status.elapsed,
+    statusDisplayElapsed,
     fixture.fixture.date
   )
   const headerStatusIsLive = isHeaderLiveStatus(status.short)

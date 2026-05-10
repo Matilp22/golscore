@@ -89,6 +89,26 @@ export function isLeagueFinalPhaseRound(
   return Boolean(getLeagueFinalPhaseKey(round))
 }
 
+export function isLigaProfesionalKnockoutRound(round: string | null | undefined) {
+  return Boolean(getLeagueFinalPhaseKey(round))
+}
+
+export function isLigaProfesionalRegularSeasonRound(round: string | null | undefined) {
+  const normalizedRound = normalizeRoundText(round)
+
+  if (!normalizedRound) return false
+  if (isLigaProfesionalKnockoutRound(normalizedRound)) return false
+
+  return (
+    /\bregular season\s*-?\s*\d+\b/.test(normalizedRound) ||
+    /\bfecha\s*-?\s*\d+\b/.test(normalizedRound) ||
+    /\b(?:apertura|clausura)\s*-?\s*\d+\b/.test(normalizedRound) ||
+    /\b(?:apertura|clausura)\s+fecha\s*-?\s*\d+\b/.test(normalizedRound) ||
+    /\bround\s*-?\s*\d+\b/.test(normalizedRound) ||
+    /^\d+$/.test(normalizedRound)
+  )
+}
+
 export function normalizeLeagueRound(
   round: string | number | null | undefined,
   leagueExternalId?: number | string | null

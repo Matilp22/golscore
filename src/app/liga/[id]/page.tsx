@@ -436,6 +436,21 @@ function getDerivedWinnerParticipant(slot?: BracketSlot): BracketParticipant {
   }
 }
 
+function getDerivedWinnerParticipantFromMatch(match?: BracketMatchCard): BracketParticipant {
+  if (!match) return getPlaceholderParticipant()
+
+  const winner = getMatchWinner(match)
+
+  if (!winner) return getPlaceholderParticipant()
+
+  return {
+    team: winner.team,
+    teamId: winner.teamId,
+    logo: winner.logo,
+    goals: null,
+  }
+}
+
 function getDerivedPlaceholderParticipants(
   slotIndex: number,
   childSlots?: BracketSlot[]
@@ -543,7 +558,10 @@ function buildBracketColumns(fixtures: LeagueFixtureSummary[]): BracketColumn[] 
   return buildCopaArgentinaBracket(fixtures).columns
 }
 
-function buildGenericBracketColumns(fixtures: LeagueFixtureSummary[]): BracketColumn[] {
+function buildGenericBracketColumns(
+  fixtures: LeagueFixtureSummary[],
+  options: { advanceWinners?: boolean } = {}
+): BracketColumn[] {
   const groupedByStage = groupBracketMatchesByStage(fixtures)
   const actualStageKeys = BRACKET_STAGE_ORDER.filter((stageKey) => groupedByStage.has(stageKey))
   if (!actualStageKeys.length) return []
@@ -551,6 +569,7 @@ function buildGenericBracketColumns(fixtures: LeagueFixtureSummary[]): BracketCo
   const firstStageIndex = BRACKET_STAGE_ORDER.findIndex((stageKey) => stageKey === actualStageKeys[0])
   const stageKeys = BRACKET_STAGE_ORDER.slice(firstStageIndex)
   const firstStageMatchesCount = groupedByStage.get(stageKeys[0])?.length || 0
+  let previousStageMatches: BracketMatchCard[] | undefined
 
   return stageKeys.map((stageKey, stageIndex) => {
     const actualMatches = sortBracketMatchesByDate(groupedByStage.get(stageKey) || [])
@@ -563,13 +582,25 @@ function buildGenericBracketColumns(fixtures: LeagueFixtureSummary[]): BracketCo
       ...Array.from(
         { length: Math.max(0, expectedMatchesCount - actualMatches.length) },
         (_, placeholderIndex) => ({
-          ...createPlaceholderMatch(`${stageKey}-${placeholderIndex}`),
+          ...createPlaceholderMatch(
+            `${stageKey}-${placeholderIndex}`,
+            options.advanceWinners && previousStageMatches
+              ? [
+                  getDerivedWinnerParticipantFromMatch(
+                    previousStageMatches[(actualMatches.length + placeholderIndex) * 2]
+                  ),
+                  getDerivedWinnerParticipantFromMatch(
+                    previousStageMatches[(actualMatches.length + placeholderIndex) * 2 + 1]
+                  ),
+                ]
+              : undefined
+          ),
           bracketPosition: actualMatches.length + placeholderIndex,
         })
       ),
     ]
 
-    return {
+    const column = {
       key: stageKey,
       label: getBracketStageLabel(stageKey),
       matches: columnMatches.map((match, matchIndex) => ({
@@ -577,6 +608,10 @@ function buildGenericBracketColumns(fixtures: LeagueFixtureSummary[]): BracketCo
         rowStart: 2 ** stageIndex + matchIndex * 2 ** (stageIndex + 1),
       })),
     }
+
+    previousStageMatches = column.matches
+
+    return column
   })
 }
 
@@ -1850,9 +1885,11 @@ function StandingsTable({
 function BracketView({
   rounds,
   useCopaArgentinaTree = false,
+  advanceGenericWinners = false,
 }: {
   rounds: ReturnType<typeof buildKnockoutRounds>
   useCopaArgentinaTree?: boolean
+  advanceGenericWinners?: boolean
 }) {
   const bracketFixtures = rounds.flatMap((round) =>
     round.matches.map((match) => ({
@@ -1862,7 +1899,7 @@ function BracketView({
   )
   const columns = useCopaArgentinaTree
     ? buildBracketColumns(bracketFixtures)
-    : buildGenericBracketColumns(bracketFixtures)
+    : buildGenericBracketColumns(bracketFixtures, { advanceWinners: advanceGenericWinners })
 
   if (!columns.length) return null
 
@@ -2262,6 +2299,7 @@ export default async function LigaPage({ params }: PageProps) {
             <BracketView
               rounds={knockoutRounds}
               useCopaArgentinaTree={tournament.key === 'argentina-copa-argentina'}
+              advanceGenericWinners={tournament.key === 'argentina-liga-profesional'}
             />
           ) : null}
 

@@ -21,6 +21,8 @@ import {
   isScoreboardGoalEvent,
   type ImportantLiveEventKind,
 } from '@/shared/utils/football-events'
+import { isLigaProfesionalRegularSeasonRound } from '@/shared/utils/league-rounds'
+import { getFixtureStatusElapsedMinute } from '@/shared/utils/match-minute'
 import {
   enrichMatchDetailAssets,
   enrichPlayerDetailAssets,
@@ -68,6 +70,7 @@ export class ApiFootballError extends Error {
 
 type FixtureStatus = {
   elapsed: number | null
+  extra?: number | null
   short: string
   long: string
 }
@@ -869,7 +872,7 @@ async function fetchApiFallbackHomeMatches(date: string): Promise<MatchListItem[
     awayLogo: item.teams.away.logo,
     goalsHome: item.goals.home,
     goalsAway: item.goals.away,
-    minute: item.fixture.status.elapsed,
+    minute: getFixtureStatusElapsedMinute(item.fixture.status),
     statusShort: item.fixture.status.short,
     statusLong: item.fixture.status.long,
   }))
@@ -2437,6 +2440,12 @@ async function getCalculatedLeagueStandings(
     seenFixtureIds.add(fixtureId)
 
     if (!isFinishedStatus(statusShort)) continue
+    if (
+      leagueId === 128 &&
+      !isLigaProfesionalRegularSeasonRound(item.league.round)
+    ) {
+      continue
+    }
 
     const homeGoals = item.goals.home ?? item.score?.fulltime?.home ?? null
     const awayGoals = item.goals.away ?? item.score?.fulltime?.away ?? null
@@ -2711,7 +2720,7 @@ export async function getLeagueFixtures(leagueId: number, season: number) {
       round: item.league.round || 'Fecha',
       date: item.fixture.date,
       statusShort: item.fixture.status.short,
-      minute: item.fixture.status.elapsed,
+      minute: getFixtureStatusElapsedMinute(item.fixture.status),
       home: item.teams.home.name,
       homeId: item.teams.home.id,
       away: item.teams.away.name,
@@ -2746,7 +2755,7 @@ export async function getLeagueFixtures(leagueId: number, season: number) {
           dateUtc: item.fixture.date,
           statusShort: item.fixture.status.short,
           statusLong: item.fixture.status.long,
-          minute: item.fixture.status.elapsed,
+          minute: getFixtureStatusElapsedMinute(item.fixture.status),
           homeTeamId: item.teams.home.id,
           homeTeamName: item.teams.home.name,
           homeTeamLogo: item.teams.home.logo,
