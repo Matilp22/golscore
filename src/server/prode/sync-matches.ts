@@ -1144,6 +1144,31 @@ function getApiRoundOrder(round: string | null | undefined) {
   return 999
 }
 
+function buildLigaProfesionalOfficialBracketSlots(fixtures: ApiFixture[]) {
+  const groupedByPhase = new Map<string, ApiFixture[]>()
+
+  for (const fixture of fixtures) {
+    if (fixture.league.id !== LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID) continue
+
+    const phase = getLeagueFinalPhaseKey(fixture.league.round)
+    if (!phase) continue
+
+    const current = groupedByPhase.get(phase) ?? []
+    current.push(fixture)
+    groupedByPhase.set(phase, current)
+  }
+
+  const slotsByFixtureId = new Map<number, number>()
+
+  for (const matches of groupedByPhase.values()) {
+    [...matches].sort(compareFixturesByApiOrder).forEach((fixture, index) => {
+      slotsByFixtureId.set(fixture.fixture.id, index + 1)
+    })
+  }
+
+  return slotsByFixtureId
+}
+
 async function fetchTournamentFixtures(tournament: AllowedTournament) {
   const { payload } = await requestFootballApi<ApiFixture[]>(
     '/fixtures',
@@ -1686,7 +1711,8 @@ async function upsertMatch(
   leagueId: string | number,
   homeTeamId: string | number,
   awayTeamId: string | number,
-  debug?: boolean
+  debug?: boolean,
+  officialBracketSlot?: number | null
 ) {
   const homeScore = getFixtureHomeScore(fixture)
   const awayScore = getFixtureAwayScore(fixture)
@@ -1777,6 +1803,7 @@ async function upsertMatch(
       round: fixture.league.round,
       homeTeamId,
       awayTeamId,
+      bracketSlot: officialBracketSlot ?? null,
     })
 
     if (derivedMatch) {
@@ -3145,6 +3172,10 @@ export async function syncProdeMatches(
       result.fetched = fixtures.length
       result.roundSummary = summarizeFixtureRounds(fixtures)
       const orderedFixtures = [...fixtures].sort(compareFixturesByApiOrder)
+      const ligaProfesionalOfficialBracketSlots =
+        tournament.externalLeagueId === LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID
+          ? buildLigaProfesionalOfficialBracketSlots(orderedFixtures)
+          : new Map<number, number>()
       const dateFilteredFixtures = options.date
         ? orderedFixtures.filter((fixture) => getArgentinaDateKey(fixture.fixture.date) === options.date)
         : orderedFixtures
@@ -3252,7 +3283,8 @@ export async function syncProdeMatches(
             league.id,
             homeTeam.id,
             awayTeam.id,
-            options.debug
+            options.debug,
+            ligaProfesionalOfficialBracketSlots.get(fixture.fixture.id) ?? null
           )
 
           const eventSync = await syncMatchEventsIfSupported(

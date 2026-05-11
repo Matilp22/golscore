@@ -592,6 +592,7 @@ export async function findDerivedLigaProfesionalMatchForOfficialFixture(
     round?: string | null
     homeTeamId: DbId
     awayTeamId: DbId
+    bracketSlot?: number | null
   }
 ) {
   const phase = getLeagueFinalPhaseKey(input.round)
@@ -615,19 +616,37 @@ export async function findDerivedLigaProfesionalMatchForOfficialFixture(
 
     if (fallback.error) throw fallback.error
 
-    return ((fallback.data ?? []) as LigaProfesionalPlayoffMatchRow[]).find((match) => {
+    const fallbackMatches = (fallback.data ?? []) as LigaProfesionalPlayoffMatchRow[]
+    const fallbackTeamMatch = fallbackMatches.find((match) => {
       if (getMatchPhase(match) !== phase) return false
 
       return matchHasTeams(match, input.homeTeamId, input.awayTeamId)
-    }) ?? null
+    })
+
+    if (fallbackTeamMatch) return fallbackTeamMatch
+
+    return null
   }
 
-  return ((data ?? []) as LigaProfesionalPlayoffMatchRow[]).find((match) => {
+  const derivedMatches = ((data ?? []) as LigaProfesionalPlayoffMatchRow[]).filter((match) => {
     if (getMatchPhase(match) !== phase) return false
     if (!match.is_derived) return false
 
     return matchHasTeams(match, input.homeTeamId, input.awayTeamId)
-  }) ?? null
+  })
+
+  if (derivedMatches[0]) return derivedMatches[0]
+
+  if (input.bracketSlot !== null && input.bracketSlot !== undefined) {
+    return ((data ?? []) as LigaProfesionalPlayoffMatchRow[]).find((match) => {
+      if (getMatchPhase(match) !== phase) return false
+      if (!match.is_derived) return false
+
+      return Number(match.bracket_slot) === input.bracketSlot
+    }) ?? null
+  }
+
+  return null
 }
 
 export async function markLigaProfesionalDerivedMatchAsOfficial(

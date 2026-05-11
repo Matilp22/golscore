@@ -123,11 +123,15 @@ export function normalizeLeagueRound(
   const normalizedRound = normalizeRoundText(trimmedRound)
   const finalPhaseKey = getLeagueFinalPhaseKey(trimmedRound)
 
-  if (finalPhaseKey) return finalPhaseKey
-
   const roundNumber = getRoundNumberFromNormalizedText(normalizedRound)
 
   if (leagueId === LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID) {
+    if (finalPhaseKey) {
+      const tournamentSegment = normalizedRound.includes('clausura') ? 'clausura' : 'apertura'
+
+      return `${finalPhaseKey}-${tournamentSegment}`
+    }
+
     if (roundNumber !== null) {
       if (normalizedRound.includes('clausura')) return `clausura-fecha-${roundNumber}`
 
@@ -136,6 +140,8 @@ export function normalizeLeagueRound(
 
     return trimmedRound
   }
+
+  if (finalPhaseKey) return finalPhaseKey
 
   if (/^\d+$/.test(trimmedRound)) {
     if (leagueId === WORLD_CUP_EXTERNAL_ID) {

@@ -1,5 +1,6 @@
 import {
   LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID,
+  getLeagueFinalPhaseKey,
   getLeagueRoundLabel,
   getLeagueRoundSortValue,
   normalizeLeagueRound,
@@ -64,17 +65,28 @@ export function getCurrentProdeRound(matches: ProdeRoundMatch[], now = new Date(
     string,
     { earliestDateMs: number; hasOpenMatch: boolean; distanceToNow: number }
   >()
+  const unscheduledLigaProfesionalFinalPhases = new Set<string>()
 
   for (const match of matches) {
-    const normalizedRound = normalizeProdeRound(match.round, match.league?.externalId)
+    const leagueExternalId = match.league?.externalId
+    const normalizedRound = normalizeProdeRound(match.round, leagueExternalId)
 
-    if (!normalizedRound || !isVisibleProdeRound(normalizedRound, match.league?.externalId)) {
+    if (!normalizedRound || !isVisibleProdeRound(normalizedRound, leagueExternalId)) {
       continue
     }
 
     const matchDateMs = parseMatchDate(match.matchDate).getTime()
 
-    if (Number.isNaN(matchDateMs)) continue
+    if (Number.isNaN(matchDateMs)) {
+      if (
+        leagueExternalId === LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID &&
+        getLeagueFinalPhaseKey(normalizedRound)
+      ) {
+        unscheduledLigaProfesionalFinalPhases.add(normalizedRound)
+      }
+
+      continue
+    }
 
     const existingSummary = roundSummaries.get(normalizedRound)
     const isOpenMatch = matchDateMs - FIFTEEN_MINUTES_IN_MS > nowMs
@@ -95,6 +107,14 @@ export function getCurrentProdeRound(matches: ProdeRoundMatch[], now = new Date(
   }
 
   const entries = [...roundSummaries.entries()]
+
+  if (unscheduledLigaProfesionalFinalPhases.size) {
+    return [...unscheduledLigaProfesionalFinalPhases].sort(
+      (a, b) =>
+        getProdeRoundSortValue(a, LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID) -
+        getProdeRoundSortValue(b, LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID)
+    )[0] ?? null
+  }
 
   if (!entries.length) return null
 
