@@ -7,9 +7,13 @@ function hasExplicitTimezone(value: string) {
   return /(?:z|[+-]\d{2}:?\d{2})$/i.test(value.trim())
 }
 
-export function parseMatchDate(value: string | Date) {
+export function parseMatchDate(value: string | Date | null | undefined) {
   if (value instanceof Date) {
     return new Date(value.getTime())
+  }
+
+  if (typeof value !== 'string' || !value.trim()) {
+    return new Date(Number.NaN)
   }
 
   if (hasExplicitTimezone(value)) {
@@ -43,7 +47,7 @@ export function parseMatchDate(value: string | Date) {
 }
 
 export function getPredictionLockState(
-  matchDate: string | Date,
+  matchDate: string | Date | null | undefined,
   status = 'scheduled',
   now = new Date()
 ) {
@@ -67,7 +71,7 @@ export function getPredictionLockState(
 }
 
 export function isPredictionLocked(
-  matchDate: string | Date,
+  matchDate: string | Date | null | undefined,
   status = 'scheduled',
   now = new Date()
 ) {
@@ -75,7 +79,7 @@ export function isPredictionLocked(
 }
 
 export function hasMatchStarted(
-  matchDate: string | Date,
+  matchDate: string | Date | null | undefined,
   status = 'scheduled',
   now = new Date()
 ) {

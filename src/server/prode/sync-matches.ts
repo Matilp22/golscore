@@ -1,5 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { requestFootballApi } from '@/server/integrations/football-api-client'
+import {
+  findDerivedLigaProfesionalMatchForOfficialFixture,
+  generateLigaProfesionalPlayoffs,
+  markLigaProfesionalDerivedMatchAsOfficial,
+} from '@/server/liga-profesional/playoffs'
 import { recalculateProdePoints } from '@/server/prode/points'
 import {
   ALLOWED_TOURNAMENTS,
@@ -32,6 +37,10 @@ import {
   pickStableAssetUrl,
 } from '@/shared/utils/asset-urls'
 import { getFixtureStatusElapsedMinute } from '@/shared/utils/match-minute'
+import {
+  LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID,
+  getLeagueFinalPhaseKey,
+} from '@/shared/utils/league-rounds'
 
 type ApiFixture = {
   fixture: {
@@ -1700,6 +1709,7 @@ async function upsertMatch(
   const externalIdCandidates = [String(fixture.fixture.id), fixture.fixture.id]
   let existingByExternalId: StoredMatchLookupRow | null = null
   let existingExternalIdError: { message: string } | null = null
+  let reconciledDerivedMatchId: DbId | null = null
 
   for (const externalId of externalIdCandidates) {
     const { data, error } = await withTimeout(
@@ -1757,6 +1767,32 @@ async function upsertMatch(
     }
   }
 
+  if (
+    !existingByExternalId &&
+    fixture.league.id === LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID &&
+    getLeagueFinalPhaseKey(fixture.league.round)
+  ) {
+    const derivedMatch = await findDerivedLigaProfesionalMatchForOfficialFixture(supabase, {
+      leagueId,
+      round: fixture.league.round,
+      homeTeamId,
+      awayTeamId,
+    })
+
+    if (derivedMatch) {
+      existingByExternalId = {
+        id: derivedMatch.id,
+        external_id: derivedMatch.external_id,
+      }
+      reconciledDerivedMatchId = derivedMatch.id
+      logDebug(debug, 'derived Liga Profesional match matched official fixture', {
+        fixtureId: fixture.fixture.id,
+        matchId: derivedMatch.id,
+        round: fixture.league.round,
+      })
+    }
+  }
+
   const existing = existingByExternalId
 
   if (existing) {
@@ -1782,6 +1818,9 @@ async function upsertMatch(
 
     if (error) throw new Error(`No se pudo actualizar el partido ${fixture.fixture.id}: ${error.message}`)
 
+    if (reconciledDerivedMatchId) {
+      await markLigaProfesionalDerivedMatchAsOfficial(supabase, reconciledDerivedMatchId)
+    }
     await updateElapsedIfSupported(supabase, existing.id, fixture, debug)
     await updatePenaltyScoresIfSupported(supabase, existing.id, fixture, debug)
     await updateVenueFieldsIfSupported(supabase, existing.id, fixture, debug)
@@ -3270,6 +3309,29 @@ export async function syncProdeMatches(
             fixtureId: fixture.fixture.id,
             error: error instanceof Error ? error.message : 'Error desconocido',
           })
+        }
+      }
+
+      if (
+        tournament.externalLeagueId === LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID &&
+        !options.onlyEvents
+      ) {
+        try {
+          const playoffGeneration = await generateLigaProfesionalPlayoffs(supabase, {
+            leagueExternalId: tournament.externalLeagueId,
+            season: tournament.season,
+            dryRun: false,
+          })
+
+          logDebug(options.debug, 'liga profesional playoff generation finished', {
+            generatedQuarterFinals: playoffGeneration.generatedQuarterFinals.length,
+            generatedSemiFinals: playoffGeneration.generatedSemiFinals.length,
+            generatedFinal: playoffGeneration.generatedFinal.length,
+            missingWinners: playoffGeneration.missingWinners.length,
+            skippedBecauseAlreadyExists: playoffGeneration.skippedBecauseAlreadyExists.length,
+          })
+        } catch (error) {
+          addFixtureError(result, null, 'liga-profesional-playoff-generation', error)
         }
       }
 

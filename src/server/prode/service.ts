@@ -10,6 +10,12 @@ type SavePredictionInput = {
   predictedAwayScore: number
 }
 
+function safeDateIso(value: Date) {
+  const time = value.getTime()
+
+  return Number.isFinite(time) ? value.toISOString() : null
+}
+
 export async function savePrediction(input: SavePredictionInput) {
   const supabase = await getSupabaseServerClient()
 
@@ -35,15 +41,23 @@ export async function savePrediction(input: SavePredictionInput) {
     }
   }
 
+  if (!match.match_date) {
+    return {
+      ok: false,
+      status: 403,
+      error: 'El partido todavia no tiene fecha y hora oficial para pronosticar.',
+    }
+  }
+
   const lockState = getPredictionLockState(match.match_date, match.status)
 
   console.info('[prode/save-prediction] lock check', {
     matchId: input.matchId,
     match_date: match.match_date,
     status: match.status,
-    now: lockState.now.toISOString(),
-    matchStart: lockState.matchStart.toISOString(),
-    lockAt: lockState.lockAt.toISOString(),
+    now: safeDateIso(lockState.now),
+    matchStart: safeDateIso(lockState.matchStart),
+    lockAt: safeDateIso(lockState.lockAt),
     minutesUntilMatch: Math.round(lockState.minutesUntilMatch * 10) / 10,
     locked: lockState.locked,
   })

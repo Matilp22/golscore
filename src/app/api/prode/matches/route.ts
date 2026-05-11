@@ -19,7 +19,7 @@ type MatchRow = {
   id: string
   league_id: string | null
   round: string | number | null
-  match_date: string
+  match_date: string | null
   home_team_id: string | null
   away_team_id: string | null
   status: string
@@ -164,7 +164,7 @@ export async function GET(request: Request) {
     .select(
       'id, league_id, round, match_date, home_team_id, away_team_id, status, home_score, away_score'
     )
-    .order('match_date', { ascending: true })
+    .order('match_date', { ascending: true, nullsFirst: false })
     .limit(1000)
 
   if (leagueId) {
@@ -272,7 +272,9 @@ export async function GET(request: Request) {
             externalId: league.external_id === null ? null : Number(league.external_id),
             name: getAllowedProdeLeagueLabel(league.name),
             country: league.country,
-            season: parseMatchDate(match.match_date).getFullYear(),
+            season: match.match_date
+              ? parseMatchDate(match.match_date).getFullYear()
+              : new Date().getFullYear(),
             logoUrl: league.logo_url ?? null,
           }
         : null,

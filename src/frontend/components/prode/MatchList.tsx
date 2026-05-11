@@ -29,7 +29,9 @@ type MatchGroup = {
   matches: Match[]
 }
 
-function formatGroupDate(value: string) {
+function formatGroupDate(value: string | null) {
+  if (!value) return 'A programar'
+
   return new Intl.DateTimeFormat('es-AR', {
     timeZone: 'America/Argentina/Buenos_Aires',
     weekday: 'long',
@@ -46,6 +48,12 @@ function getGroupLabel(match: Match) {
   return formatGroupDate(match.matchDate)
 }
 
+function getMatchSortTime(match: Match) {
+  const timestamp = parseMatchDate(match.matchDate).getTime()
+
+  return Number.isFinite(timestamp) ? timestamp : Number.MAX_SAFE_INTEGER
+}
+
 function groupMatches(matches: Match[]): MatchGroup[] {
   const groups = new Map<string, MatchGroup>()
 
@@ -54,7 +62,7 @@ function groupMatches(matches: Match[]): MatchGroup[] {
     const normalizedRound = normalizeProdeRound(match.round, match.league?.externalId)
     const key = normalizedRound
       ? `round-${normalizedRound}`
-      : `date-${match.matchDate.slice(0, 10)}`
+      : `date-${match.matchDate?.slice(0, 10) ?? 'a-programar'}`
     const group = groups.get(key)
 
     if (group) {
@@ -70,9 +78,13 @@ function groupMatches(matches: Match[]): MatchGroup[] {
 
   return [...groups.values()].map((group) => ({
     ...group,
-    matches: group.matches.sort(
-      (a, b) => parseMatchDate(a.matchDate).getTime() - parseMatchDate(b.matchDate).getTime()
-    ),
+    matches: group.matches.sort((a, b) => {
+      const dateCompare = getMatchSortTime(a) - getMatchSortTime(b)
+
+      if (dateCompare !== 0) return dateCompare
+
+      return a.id.localeCompare(b.id, 'es-AR', { numeric: true })
+    }),
   }))
 }
 

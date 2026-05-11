@@ -109,14 +109,27 @@ function buildLeagueSeedMap(rows: LeagueStandingRow[]) {
   )
 }
 
+function getFixtureTimestamp(date: string | null | undefined) {
+  if (!date) return Number.MAX_SAFE_INTEGER
+
+  const timestamp = new Date(date).getTime()
+
+  return Number.isFinite(timestamp) ? timestamp : Number.MAX_SAFE_INTEGER
+}
+
+function compareFixtureIds(a: number | string, b: number | string) {
+  if (typeof a === 'number' && typeof b === 'number') return a - b
+
+  return String(a).localeCompare(String(b), 'es-AR', { numeric: true })
+}
+
 function compareFixtures(a: LeagueFixtureSummary, b: LeagueFixtureSummary) {
-  const dateA = new Date(a.date).getTime()
-  const dateB = new Date(b.date).getTime()
+  const dateA = getFixtureTimestamp(a.date)
+  const dateB = getFixtureTimestamp(b.date)
 
-  if (Number.isFinite(dateA) && Number.isFinite(dateB) && dateA !== dateB) return dateA - dateB
-  if (Number.isFinite(dateA) !== Number.isFinite(dateB)) return Number.isFinite(dateA) ? -1 : 1
+  if (dateA !== dateB) return dateA - dateB
 
-  return a.id - b.id
+  return compareFixtureIds(a.id, b.id)
 }
 
 function isPlayed(match: LeagueFixtureSummary) {
@@ -165,7 +178,11 @@ function getCompactStatusTone(match: LeagueFixtureSummary) {
   return 'text-[#dce5ef]'
 }
 
-function formatDateTime(date: string) {
+function formatDateTime(date: string | null) {
+  if (!date) {
+    return { day: 'Fecha a confirmar', time: 'Hora a confirmar' }
+  }
+
   const parsedDate = new Date(date)
 
   if (Number.isNaN(parsedDate.getTime())) {
@@ -191,7 +208,9 @@ function formatDateTime(date: string) {
   return { day, time }
 }
 
-function formatMatchDayLabel(date: string) {
+function formatMatchDayLabel(date: string | null) {
+  if (!date) return 'Fecha a confirmar'
+
   const parsedDate = new Date(date)
 
   if (Number.isNaN(parsedDate.getTime())) return 'Fecha a confirmar'
@@ -661,6 +680,8 @@ function SeriesMatchRow({ match, label }: { match: LeagueFixtureSummary; label: 
 
 function getNavigatorPrimaryLabel(match: LeagueFixtureSummary) {
   if (match.statusShort === 'NS') {
+    if (!match.date) return 'A conf.'
+
     const parsedDate = new Date(match.date)
 
     if (Number.isNaN(parsedDate.getTime())) return 'A conf.'

@@ -22,7 +22,9 @@ type MatchCardProps = {
   }) => Promise<void>
 }
 
-function formatDate(value: string) {
+function formatDate(value: string | null) {
+  if (!value) return 'A programar'
+
   const date = parseMatchDate(value)
   const weekday = new Intl.DateTimeFormat('es-AR', {
     timeZone: 'America/Argentina/Buenos_Aires',

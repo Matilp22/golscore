@@ -1,6 +1,6 @@
 export type ProdeMatch = {
   id: number
-  matchDate: string
+  matchDate: string | null
   status: string
   homeScore: number | null
   awayScore: number | null

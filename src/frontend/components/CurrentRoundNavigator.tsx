@@ -18,7 +18,9 @@ type CurrentRoundNavigatorProps = {
   initialIndex: number
 }
 
-function formatFixtureTime(date: string) {
+function formatFixtureTime(date: string | null) {
+  if (!date) return 'A programar'
+
   return new Intl.DateTimeFormat('es-AR', {
     hour: '2-digit',
     minute: '2-digit',
@@ -28,6 +30,7 @@ function formatFixtureTime(date: string) {
 }
 
 function getMatchStatusLabel(match: LeagueFixtureSummary) {
+  if (!match.date || ['TBD', 'TBA'].includes(match.statusShort)) return 'A programar'
   if (match.statusShort === 'NS') return formatFixtureTime(match.date)
   if (match.statusShort === 'FT') return 'Final'
   if (match.statusShort === 'HT') return 'ET'
@@ -194,47 +197,64 @@ export default function CurrentRoundNavigator({
                 {day}
               </div>
 
-              {matches.map((match) => (
-                <Link
-                  key={match.id}
-                  href={`/partido/${match.id}`}
-                  className="grid grid-cols-[58px_minmax(0,1fr)] items-center border-b border-white/8 text-xs transition hover:bg-[#151b21] focus-visible:bg-[#151b21] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7ff0b2]/60 focus-visible:ring-inset last:border-b-0 md:grid-cols-[64px_minmax(0,1fr)]"
-                >
-                  <div className="border-r border-white/8 px-2 py-1.5 text-center font-bold text-[#7ff0b2]">
-                    {getMatchStatusLabel(match)}
-                  </div>
+              {matches.map((match) => {
+                const rowClassName =
+                  'grid grid-cols-[58px_minmax(0,1fr)] items-center border-b border-white/8 text-xs transition last:border-b-0 md:grid-cols-[64px_minmax(0,1fr)]'
+                const rowContent = (
+                  <>
+                    <div className="border-r border-white/8 px-2 py-1.5 text-center font-bold text-[#7ff0b2]">
+                      {getMatchStatusLabel(match)}
+                    </div>
 
-                  <div className="px-2 py-1.5">
-                    <div className="grid grid-cols-[minmax(0,1fr)_44px_minmax(0,1fr)] items-center gap-1.5">
-                      <div className="flex items-center justify-end gap-1.5 text-right">
-                        <span className="truncate font-semibold text-[#dce5ef]">{match.home}</span>
-                        <TeamLogo
-                          src={match.homeLogo}
-                          alt={match.home}
-                          size={16}
-                          className="h-4 w-4 object-contain"
-                          fallbackClassName="h-3.5 w-3"
-                        />
-                      </div>
+                    <div className="px-2 py-1.5">
+                      <div className="grid grid-cols-[minmax(0,1fr)_44px_minmax(0,1fr)] items-center gap-1.5">
+                        <div className="flex items-center justify-end gap-1.5 text-right">
+                          <span className="truncate font-semibold text-[#dce5ef]">{match.home}</span>
+                          <TeamLogo
+                            src={match.homeLogo}
+                            alt={match.home}
+                            size={16}
+                            className="h-4 w-4 object-contain"
+                            fallbackClassName="h-3.5 w-3"
+                          />
+                        </div>
 
-                      <div className="text-center text-sm font-black text-white">
-                        {getMatchScoreLabel(match)}
-                      </div>
+                        <div className="text-center text-sm font-black text-white">
+                          {getMatchScoreLabel(match)}
+                        </div>
 
-                      <div className="flex items-center gap-1.5">
-                        <TeamLogo
-                          src={match.awayLogo}
-                          alt={match.away}
-                          size={16}
-                          className="h-4 w-4 object-contain"
-                          fallbackClassName="h-3.5 w-3"
-                        />
-                        <span className="truncate font-semibold text-[#dce5ef]">{match.away}</span>
+                        <div className="flex items-center gap-1.5">
+                          <TeamLogo
+                            src={match.awayLogo}
+                            alt={match.away}
+                            size={16}
+                            className="h-4 w-4 object-contain"
+                            fallbackClassName="h-3.5 w-3"
+                          />
+                          <span className="truncate font-semibold text-[#dce5ef]">{match.away}</span>
+                        </div>
                       </div>
                     </div>
+                  </>
+                )
+
+                return typeof match.id === 'number' ? (
+                  <Link
+                    key={match.id}
+                    href={`/partido/${match.id}`}
+                    className={`${rowClassName} hover:bg-[#151b21] focus-visible:bg-[#151b21] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7ff0b2]/60 focus-visible:ring-inset`}
+                  >
+                    {rowContent}
+                  </Link>
+                ) : (
+                  <div
+                    key={match.id}
+                    className={`${rowClassName} cursor-default bg-[#11161b]`}
+                  >
+                    {rowContent}
                   </div>
-                </Link>
-              ))}
+                )
+              })}
             </div>
           ))}
         </div>

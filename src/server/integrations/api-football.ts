@@ -21,7 +21,12 @@ import {
   isScoreboardGoalEvent,
   type ImportantLiveEventKind,
 } from '@/shared/utils/football-events'
-import { isLigaProfesionalRegularSeasonRound } from '@/shared/utils/league-rounds'
+import {
+  LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID,
+  getLeagueFinalPhaseKey,
+  getLeagueRoundLabel,
+  isLigaProfesionalRegularSeasonRound,
+} from '@/shared/utils/league-rounds'
 import { getFixtureStatusElapsedMinute } from '@/shared/utils/match-minute'
 import {
   enrichMatchDetailAssets,
@@ -222,9 +227,9 @@ export type LeagueFixtureEventSummary = {
 }
 
 export type LeagueFixtureSummary = {
-  id: number
+  id: number | string
   round: string
-  date: string
+  date: string | null
   statusShort: string
   minute: number | null
   home: string
@@ -243,6 +248,20 @@ export type LeagueFixtureSummary = {
   events?: LeagueFixtureEventSummary[]
 }
 
+function getLeagueFixtureTimestamp(date: string | null | undefined) {
+  if (!date) return Number.MAX_SAFE_INTEGER
+
+  const timestamp = new Date(date).getTime()
+
+  return Number.isFinite(timestamp) ? timestamp : Number.MAX_SAFE_INTEGER
+}
+
+function compareLeagueFixtureIds(a: number | string, b: number | string) {
+  if (typeof a === 'number' && typeof b === 'number') return a - b
+
+  return String(a).localeCompare(String(b), 'es-AR', { numeric: true })
+}
+
 function compareLeagueFixturesByApiOrder(
   a: Pick<LeagueFixtureSummary, 'round' | 'date' | 'id'>,
   b: Pick<LeagueFixtureSummary, 'round' | 'date' | 'id'>
@@ -250,10 +269,10 @@ function compareLeagueFixturesByApiOrder(
   const roundCompare = getApiRoundOrder(a.round) - getApiRoundOrder(b.round)
   if (roundCompare !== 0) return roundCompare
 
-  const dateCompare = new Date(a.date).getTime() - new Date(b.date).getTime()
+  const dateCompare = getLeagueFixtureTimestamp(a.date) - getLeagueFixtureTimestamp(b.date)
   if (dateCompare !== 0) return dateCompare
 
-  return a.id - b.id
+  return compareLeagueFixtureIds(a.id, b.id)
 }
 
 function getApiRoundOrder(round: string) {
@@ -2703,6 +2722,265 @@ async function enrichLeagueFixturesWithStoredEvents(
   }
 }
 
+type StoredDerivedLigaFixtureRow = {
+  id: string | number
+  external_id: string | number | null
+  round: string | null
+  match_date: string | null
+  status: string | null
+  home_team_id: string | number | null
+  away_team_id: string | number | null
+  home_score: number | null
+  away_score: number | null
+  home_penalty_score?: number | null
+  away_penalty_score?: number | null
+  source?: string | null
+  is_derived?: boolean | null
+  bracket_phase?: string | null
+  bracket_slot?: number | null
+}
+
+type StoredDerivedTeamRow = {
+  id: string | number
+  name: string | null
+  external_id: string | number | null
+  logo_url?: string | null
+}
+
+function isMissingDerivedFixtureColumns(error: { code?: string; message?: string } | unknown) {
+  const errorObject =
+    typeof error === 'object' && error !== null
+      ? (error as { code?: string; message?: string })
+      : {}
+  const message = (errorObject.message ?? String(error)).toLowerCase()
+
+  return (
+    errorObject.code === '42703' ||
+    errorObject.code === 'PGRST204' ||
+    message.includes('schema cache') ||
+    message.includes('is_derived') ||
+    message.includes('bracket_phase') ||
+    message.includes('bracket_slot')
+  )
+}
+
+function toOptionalNumericId(value: string | number | null | undefined) {
+  if (value === null || value === undefined || value === '') return undefined
+
+  const numericValue = Number(value)
+
+  return Number.isFinite(numericValue) ? numericValue : undefined
+}
+
+function getLigaProfesionalPhaseRound(row: StoredDerivedLigaFixtureRow) {
+  const phaseKey = getLeagueFinalPhaseKey(row.round) ?? getLeagueFinalPhaseKey(row.bracket_phase)
+
+  if (!phaseKey) return row.round?.trim() || 'A confirmar'
+
+  return row.round?.trim() || getLeagueRoundLabel(phaseKey, LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID) || 'A confirmar'
+}
+
+function getFixtureTeamIdentity(teamId: number | undefined, name: string) {
+  const normalizedName = name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  return teamId !== undefined ? `id:${teamId}` : `name:${normalizedName}`
+}
+
+function sameFixtureTeam(
+  aId: number | undefined,
+  aName: string,
+  bId: number | undefined,
+  bName: string
+) {
+  const aKey = getFixtureTeamIdentity(aId, aName)
+  const bKey = getFixtureTeamIdentity(bId, bName)
+
+  return aKey === bKey
+}
+
+function sameFixturePair(a: LeagueFixtureSummary, b: LeagueFixtureSummary) {
+  return (
+    (
+      sameFixtureTeam(a.homeId, a.home, b.homeId, b.home) &&
+      sameFixtureTeam(a.awayId, a.away, b.awayId, b.away)
+    ) ||
+    (
+      sameFixtureTeam(a.homeId, a.home, b.awayId, b.away) &&
+      sameFixtureTeam(a.awayId, a.away, b.homeId, b.home)
+    )
+  )
+}
+
+function shouldKeepDerivedLigaFixture(
+  derivedFixture: LeagueFixtureSummary,
+  officialFixtures: LeagueFixtureSummary[]
+) {
+  const derivedPhase = getLeagueFinalPhaseKey(derivedFixture.round)
+  if (!derivedPhase) return false
+
+  return !officialFixtures.some((fixture) => {
+    const fixturePhase = getLeagueFinalPhaseKey(fixture.round)
+
+    return fixturePhase === derivedPhase && sameFixturePair(fixture, derivedFixture)
+  })
+}
+
+async function fetchDerivedLigaProfesionalFixtures(
+  leagueId: number,
+  season: number
+): Promise<LeagueFixtureSummary[]> {
+  if (leagueId !== LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID) return []
+
+  try {
+    const supabase = getSupabaseAdminClient()
+    let leagueQuery = supabase
+      .from('leagues')
+      .select('id')
+      .eq('external_id', leagueId)
+      .order('season', { ascending: false })
+
+    if (season) leagueQuery = leagueQuery.eq('season', season)
+
+    const leagueResponse = await leagueQuery.limit(1)
+
+    if (leagueResponse.error) throw leagueResponse.error
+
+    const leagueRow = (leagueResponse.data ?? [])[0] as { id: string | number } | undefined
+    if (!leagueRow) return []
+
+    const matchResponse = await supabase
+      .from('matches')
+      .select(
+        'id, external_id, round, match_date, status, home_team_id, away_team_id, home_score, away_score, home_penalty_score, away_penalty_score, source, is_derived, bracket_phase, bracket_slot'
+      )
+      .eq('league_id', leagueRow.id)
+      .or('is_derived.eq.true,source.eq.derived,external_id.is.null')
+      .order('match_date', { ascending: true, nullsFirst: false })
+
+    let rawRows: StoredDerivedLigaFixtureRow[]
+
+    if (matchResponse.error) {
+      if (!isMissingDerivedFixtureColumns(matchResponse.error)) throw matchResponse.error
+
+      const fallbackResponse = await supabase
+        .from('matches')
+        .select(
+          'id, external_id, round, match_date, status, home_team_id, away_team_id, home_score, away_score, home_penalty_score, away_penalty_score'
+        )
+        .eq('league_id', leagueRow.id)
+        .is('external_id', null)
+        .order('match_date', { ascending: true, nullsFirst: false })
+
+      if (fallbackResponse.error) throw fallbackResponse.error
+
+      rawRows = (fallbackResponse.data ?? []) as StoredDerivedLigaFixtureRow[]
+    } else {
+      rawRows = (matchResponse.data ?? []) as StoredDerivedLigaFixtureRow[]
+    }
+
+    const rows = rawRows.filter((row) =>
+      Boolean(getLeagueFinalPhaseKey(row.round) ?? getLeagueFinalPhaseKey(row.bracket_phase))
+    )
+
+    if (!rows.length) return []
+
+    const teamIds = [
+      ...new Set(
+        rows
+          .flatMap((row) => [row.home_team_id, row.away_team_id])
+          .filter((id): id is string | number => id !== null && id !== undefined)
+          .map(String)
+      ),
+    ]
+    const teams: StoredDerivedTeamRow[] = []
+
+    for (let index = 0; index < teamIds.length; index += 100) {
+      const chunk = teamIds.slice(index, index + 100)
+      const teamResponse = await supabase
+        .from('teams')
+        .select('id, name, external_id, logo_url')
+        .in('id', chunk)
+
+      if (teamResponse.error) throw teamResponse.error
+      teams.push(...((teamResponse.data ?? []) as StoredDerivedTeamRow[]))
+    }
+
+    const teamsById = new Map(teams.map((team) => [String(team.id), team]))
+
+    return rows.map((row) => {
+      const homeTeam =
+        row.home_team_id !== null && row.home_team_id !== undefined
+          ? teamsById.get(String(row.home_team_id))
+          : undefined
+      const awayTeam =
+        row.away_team_id !== null && row.away_team_id !== undefined
+          ? teamsById.get(String(row.away_team_id))
+          : undefined
+      const homeId = toOptionalNumericId(homeTeam?.external_id)
+      const awayId = toOptionalNumericId(awayTeam?.external_id)
+
+      return {
+        id: String(row.id),
+        round: getLigaProfesionalPhaseRound(row),
+        date: row.match_date,
+        statusShort: row.status || 'TBD',
+        minute: null,
+        home: homeTeam?.name || 'A confirmar',
+        homeId,
+        away: awayTeam?.name || 'A confirmar',
+        awayId,
+        homeLogo: pickStableAssetUrl(
+          homeTeam?.logo_url,
+          null,
+          getApiSportsTeamLogoUrl(homeTeam?.external_id)
+        ) ?? undefined,
+        awayLogo: pickStableAssetUrl(
+          awayTeam?.logo_url,
+          null,
+          getApiSportsTeamLogoUrl(awayTeam?.external_id)
+        ) ?? undefined,
+        goalsHome: row.home_score,
+        goalsAway: row.away_score,
+        homePenaltyScore: row.home_penalty_score ?? null,
+        awayPenaltyScore: row.away_penalty_score ?? null,
+        venueName: null,
+        venueCity: null,
+        venueCountry: 'Argentina',
+      }
+    })
+  } catch (error) {
+    console.warn('[liga-profesional:derived-fixtures] No se pudieron leer cruces derivados.', {
+      leagueId,
+      season,
+      message: error instanceof Error ? error.message : String(error),
+    })
+
+    return []
+  }
+}
+
+async function mergeLigaProfesionalDerivedFixtures(
+  leagueId: number,
+  season: number,
+  officialFixtures: LeagueFixtureSummary[]
+) {
+  const derivedFixtures = await fetchDerivedLigaProfesionalFixtures(leagueId, season)
+
+  if (!derivedFixtures.length) return officialFixtures
+
+  const missingDerivedFixtures = derivedFixtures.filter((fixture) =>
+    shouldKeepDerivedLigaFixture(fixture, officialFixtures)
+  )
+
+  return [...officialFixtures, ...missingDerivedFixtures].sort(compareLeagueFixturesByApiOrder)
+}
+
 export async function getLeagueFixtures(leagueId: number, season: number) {
   const storedFixtures = readStoredFixturesByLeagueSeason(leagueId, season)
 
@@ -2739,7 +3017,12 @@ export async function getLeagueFixtures(leagueId: number, season: number) {
       leagueId,
       mappedFixtures
     )
-    logCopaArgentinaFixtureDebug(leagueId, season, enrichedMappedFixtures, 'api')
+    const mergedMappedFixtures = await mergeLigaProfesionalDerivedFixtures(
+      leagueId,
+      season,
+      enrichedMappedFixtures
+    )
+    logCopaArgentinaFixtureDebug(leagueId, season, mergedMappedFixtures, 'api')
 
     if (mappedFixtures.length) {
       await persistFixtureListAssets(data.response || [])
@@ -2799,11 +3082,16 @@ export async function getLeagueFixtures(leagueId: number, season: number) {
         leagueId,
         refreshedFixtures
       )
-      logCopaArgentinaFixtureDebug(leagueId, season, enrichedRefreshedFixtures, 'cache')
-      return enrichedRefreshedFixtures
+      const mergedRefreshedFixtures = await mergeLigaProfesionalDerivedFixtures(
+        leagueId,
+        season,
+        enrichedRefreshedFixtures
+      )
+      logCopaArgentinaFixtureDebug(leagueId, season, mergedRefreshedFixtures, 'cache')
+      return mergedRefreshedFixtures
     }
 
-    return enrichedMappedFixtures
+    return mergedMappedFixtures
   } catch (error) {
     if (storedFixtures.length) {
       const fallbackFixtures = storedFixtures.map((item): LeagueFixtureSummary => ({
@@ -2830,8 +3118,13 @@ export async function getLeagueFixtures(leagueId: number, season: number) {
         leagueId,
         fallbackFixtures
       )
-      logCopaArgentinaFixtureDebug(leagueId, season, enrichedFallbackFixtures, 'cache')
-      return enrichedFallbackFixtures
+      const mergedFallbackFixtures = await mergeLigaProfesionalDerivedFixtures(
+        leagueId,
+        season,
+        enrichedFallbackFixtures
+      )
+      logCopaArgentinaFixtureDebug(leagueId, season, mergedFallbackFixtures, 'cache')
+      return mergedFallbackFixtures
     }
 
     throw error
@@ -3035,7 +3328,8 @@ export async function getPlayerEventMatches(
   }
 
   const fixtures = (await getLeagueFixtures(leagueId, season))
-    .filter((fixture) => {
+    .filter((fixture): fixture is LeagueFixtureSummary & { id: number; date: string } => {
+      if (typeof fixture.id !== 'number' || !fixture.date) return false
       if (!isPlayedFixture(fixture.statusShort)) return false
 
       const belongsToTeam = !teamId || fixture.homeId === teamId || fixture.awayId === teamId
@@ -3050,7 +3344,7 @@ export async function getPlayerEventMatches(
 
       return true
     })
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .sort((a, b) => getLeagueFixtureTimestamp(b.date) - getLeagueFixtureTimestamp(a.date))
 
   const matches: PlayerEventMatch[] = []
   let totalMatchedEvents = 0
@@ -3086,7 +3380,7 @@ export async function getPlayerEventMatches(
     }
   }
 
-  matches.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  matches.sort((a, b) => getLeagueFixtureTimestamp(b.date) - getLeagueFixtureTimestamp(a.date))
 
   playerEventCache.set(cacheKey, {
     expiresAt: Date.now() + 5 * 60 * 1000,

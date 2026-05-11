@@ -51,7 +51,7 @@ export function getProdeRoundSortValue(
 }
 
 type ProdeRoundMatch = {
-  matchDate: string
+  matchDate: string | null
   round: string | null
   league?: {
     externalId?: number | null

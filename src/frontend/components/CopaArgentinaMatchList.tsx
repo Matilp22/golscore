@@ -25,7 +25,9 @@ const ROUND_ORDER = [
   'FINAL',
 ]
 
-function formatDate(date: string) {
+function formatDate(date: string | null) {
+  if (!date) return 'Fecha a confirmar'
+
   return new Intl.DateTimeFormat('es-AR', {
     day: '2-digit',
     month: '2-digit',

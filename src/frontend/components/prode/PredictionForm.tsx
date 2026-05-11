@@ -121,12 +121,13 @@ export default function PredictionForm({
   const [isPending, startTransition] = useTransition()
   const [isEditing, setIsEditing] = useState(!hasExistingPrediction)
   const lockState = useMemo(() => getMatchPredictionLockState(match), [match])
+  const isUnscheduled = !match.matchDate
   const locked = lockState.locked
   const shouldUseDraftValue = isEditing || Boolean(draft)
   const homeValue = shouldUseDraftValue ? home : persistedHome
   const awayValue = shouldUseDraftValue ? away : persistedAway
   const actionLabel =
-    locked ? 'Bloqueado' : hasExistingPrediction && !isEditing ? 'Editar' : 'Guardar'
+    isUnscheduled ? 'A programar' : locked ? 'Bloqueado' : hasExistingPrediction && !isEditing ? 'Editar' : 'Guardar'
   const predictedHomeScore = homeValue.trim() === '' ? NaN : Number(homeValue)
   const predictedAwayScore = awayValue.trim() === '' ? NaN : Number(awayValue)
   const hasValidScores = useMemo(
@@ -173,7 +174,11 @@ export default function PredictionForm({
     }
 
     if (locked) {
-      setMessage('La predicción está bloqueada para este partido.')
+      setMessage(
+        isUnscheduled
+          ? 'El partido todavía no tiene fecha y hora oficial para pronosticar.'
+          : 'La predicción está bloqueada para este partido.'
+      )
       return
     }
 

@@ -156,7 +156,7 @@ type BracketMatchCard = {
   id: string | number
   rowStart: number
   bracketPosition: number
-  date?: string
+  date?: string | null
   participants: [BracketParticipant, BracketParticipant]
   homePenaltyScore?: number | null
   awayPenaltyScore?: number | null
@@ -305,8 +305,8 @@ function toBracketMatch(fixture: LeagueFixtureSummary): BracketMatchCard {
 
 function sortBracketMatchesByDate(matches: BracketMatchCard[]) {
   return [...matches].sort((a, b) => {
-    const dateA = a.date ? new Date(a.date).getTime() : 0
-    const dateB = b.date ? new Date(b.date).getTime() : 0
+    const dateA = getFixtureTimestamp(a.date)
+    const dateB = getFixtureTimestamp(b.date)
     if (dateA !== dateB) return dateA - dateB
 
     if (typeof a.id === 'number' && typeof b.id === 'number') return a.id - b.id
@@ -854,18 +854,16 @@ function isGroupStageFixtureRound(round: string) {
 }
 
 function compareFixturesByDateThenId(a: LeagueFixtureSummary, b: LeagueFixtureSummary) {
-  const dateA = new Date(a.date).getTime()
-  const dateB = new Date(b.date).getTime()
+  const dateA = getFixtureTimestamp(a.date)
+  const dateB = getFixtureTimestamp(b.date)
 
-  if (Number.isFinite(dateA) && Number.isFinite(dateB) && dateA !== dateB) {
+  if (dateA !== dateB) {
     return dateA - dateB
   }
 
-  if (Number.isFinite(dateA) !== Number.isFinite(dateB)) {
-    return Number.isFinite(dateA) ? -1 : 1
-  }
+  if (typeof a.id === 'number' && typeof b.id === 'number') return a.id - b.id
 
-  return a.id - b.id
+  return String(a.id).localeCompare(String(b.id), 'es-AR', { numeric: true })
 }
 
 function buildFixturesByGroup(
@@ -1356,11 +1354,7 @@ function buildKnockoutRounds(fixtures: LeagueFixtureSummary[], leagueExternalId?
   return [...grouped.entries()]
     .map(([round, matches]) => ({
       round,
-      matches: [...matches].sort((a, b) => {
-        const dateCompare = new Date(a.date).getTime() - new Date(b.date).getTime()
-        if (dateCompare !== 0) return dateCompare
-        return a.id - b.id
-      }),
+      matches: [...matches].sort(compareFixturesByDateThenId),
     }))
     .sort((a, b) => getRoundPriority(a.round, leagueExternalId) - getRoundPriority(b.round, leagueExternalId))
 }
@@ -1419,6 +1413,29 @@ function getRoundNumber(round: string) {
   return match ? Number(match[1]) : null
 }
 
+function getFixtureTimestamp(date: string | null | undefined) {
+  if (!date) return Number.MAX_SAFE_INTEGER
+
+  const timestamp = new Date(date).getTime()
+
+  return Number.isFinite(timestamp) ? timestamp : Number.MAX_SAFE_INTEGER
+}
+
+function getFixtureDayLabel(date: string | null | undefined) {
+  if (!date) return 'A programar'
+
+  const parsedDate = new Date(date)
+
+  if (Number.isNaN(parsedDate.getTime())) return 'A programar'
+
+  return new Intl.DateTimeFormat('es-AR', {
+    weekday: 'short',
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: 'America/Argentina/Buenos_Aires',
+  }).format(parsedDate)
+}
+
 function getRoundBlocks(
   fixtures: LeagueFixtureSummary[],
   leagueExternalId?: number | null,
@@ -1466,19 +1483,23 @@ function getRoundBlocks(
 
   const now = Date.now()
   const rounds = [...grouped.entries()].map(([round, matches]) => {
-    const sortedMatches = [...matches].sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-    )
+    const sortedMatches = [...matches].sort(compareFixturesByDateThenId)
 
     const liveMatches = sortedMatches.filter((match) =>
       ['1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE'].includes(match.statusShort)
     )
     const upcomingMatches = sortedMatches.filter(
-      (match) => new Date(match.date).getTime() >= now && match.statusShort === 'NS'
+      (match) => getFixtureTimestamp(match.date) >= now && match.statusShort === 'NS'
     )
-    const latestTimestamp = Math.max(...sortedMatches.map((match) => new Date(match.date).getTime()))
+    const latestTimestamp = Math.max(
+      ...sortedMatches.map((match) => {
+        const timestamp = getFixtureTimestamp(match.date)
+
+        return timestamp === Number.MAX_SAFE_INTEGER ? 0 : timestamp
+      })
+    )
     const nextTimestamp = upcomingMatches.length
-      ? new Date(upcomingMatches[0].date).getTime()
+      ? getFixtureTimestamp(upcomingMatches[0].date)
       : Number.POSITIVE_INFINITY
 
     return {
@@ -1502,7 +1523,7 @@ function getRoundBlocks(
   const orderedRounds = [...grouped.entries()]
     .map(([round, matches]) => ({
       round,
-      matches: [...matches].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+      matches: [...matches].sort(compareFixturesByDateThenId),
     }))
     .sort((a, b) => {
       const aSortValue = getLeagueRoundSortValue(a.round, leagueExternalId)
@@ -1510,19 +1531,14 @@ function getRoundBlocks(
 
       if (aSortValue !== bSortValue) return aSortValue - bSortValue
 
-      return a.matches[0]?.date.localeCompare(b.matches[0]?.date || '') || 0
+      return getFixtureTimestamp(a.matches[0]?.date) - getFixtureTimestamp(b.matches[0]?.date)
     })
 
   const blocks = orderedRounds.map((entry) => {
     const days = new Map<string, LeagueFixtureSummary[]>()
 
     for (const match of entry.matches) {
-      const key = new Intl.DateTimeFormat('es-AR', {
-        weekday: 'short',
-        day: '2-digit',
-        month: '2-digit',
-        timeZone: 'America/Argentina/Buenos_Aires',
-      }).format(new Date(match.date))
+      const key = getFixtureDayLabel(match.date)
 
       const current = days.get(key) || []
       current.push(match)
@@ -1567,7 +1583,9 @@ function SectionCard({
   )
 }
 
-function formatGroupFixtureDateTime(date: string) {
+function formatGroupFixtureDateTime(date: string | null) {
+  if (!date) return 'A programar'
+
   const parsedDate = toArgentinaDate(date)
 
   if (Number.isNaN(parsedDate.getTime())) return 'Fecha a confirmar'

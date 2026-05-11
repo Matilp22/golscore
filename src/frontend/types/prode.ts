@@ -38,7 +38,7 @@ export type Match = {
   leagueId: EntityId | null
   homeTeamId: EntityId | null
   awayTeamId: EntityId | null
-  matchDate: string
+  matchDate: string | null
   status: string
   round: string | null
   homeScore: number | null
@@ -105,7 +105,7 @@ export type LeaderboardRow = {
   partialHits: number
 }
 
-export function isPredictionLocked(matchDate: string, now = new Date()) {
+export function isPredictionLocked(matchDate: string | null, now = new Date()) {
   return isPredictionLockedByDate(matchDate, 'scheduled', now)
 }
 
