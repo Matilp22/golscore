@@ -64,6 +64,11 @@ export default function LeaderListInteractive({
                       <p className="truncate text-xs text-[#8d98a7]">
                         {row.teamName || 'Sin equipo'}
                       </p>
+                      {row.details ? (
+                        <p className="truncate text-[11px] font-semibold text-[#b9c4cf]">
+                          {row.details}
+                        </p>
+                      ) : null}
                     </div>
                   </div>
                   <span className={`text-lg font-black ${accentClass}`}>{row.value}</span>

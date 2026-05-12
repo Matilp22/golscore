@@ -26,6 +26,7 @@ export type EventStatsTopPlayerRow = {
   teamName?: string
   teamLogo?: string
   value: number
+  details?: string
 }
 
 export type EventStatsLeaders = {
@@ -77,12 +78,26 @@ type TeamRow = {
   logo_url?: string | null
 }
 
+type PlayerRow = {
+  external_id: DbId | null
+  name: string | null
+  team_id: DbId | null
+  team_external_id: DbId | null
+  photo_url: string | null
+}
+
 type EventLeaderAccumulator = {
   name: string
+  normalizedName: string
+  teamInternalId?: string
   teamExternalId?: number
+  teamExternalKey?: string
   teamName?: string
   teamLogo?: string
   value: number
+  penalties: number
+  secondYellowReds: number
+  kind: 'scorers' | 'assists' | 'yellowCards' | 'redCards'
 }
 
 type EventStatsDataset = {
@@ -90,6 +105,7 @@ type EventStatsDataset = {
   matches: MatchRow[]
   events: MatchEventStatsRow[]
   teamsById: Map<string, TeamRow>
+  players: PlayerRow[]
 }
 
 const PAGE_SIZE = 1000
@@ -226,6 +242,15 @@ async function fetchTeamsByIds(supabase: SupabaseClient, teamIds: string[]) {
   return new Map(teams.map((team) => [String(team.id), team]))
 }
 
+async function fetchPlayers(supabase: SupabaseClient) {
+  return fetchAllByRange<PlayerRow>((from, to) =>
+    supabase
+      .from('players')
+      .select('external_id, name, team_id, team_external_id, photo_url')
+      .range(from, to)
+  )
+}
+
 async function fetchLeagueEventStatsDataset(
   supabase: SupabaseClient,
   leagueExternalId: number | string,
@@ -240,6 +265,7 @@ async function fetchLeagueEventStatsDataset(
       matches: [],
       events: [],
       teamsById: new Map(),
+      players: [],
     }
   }
 
@@ -256,12 +282,14 @@ async function fetchLeagueEventStatsDataset(
     ),
   ]
   const teamsById = teamIds.length ? await fetchTeamsByIds(supabase, teamIds) : new Map()
+  const players = await fetchPlayers(supabase)
 
   return {
     leagues,
     matches,
     events,
     teamsById,
+    players,
   }
 }
 
@@ -286,18 +314,25 @@ function getEventTeam(
 function addLeader(
   leaders: Map<string, EventLeaderAccumulator>,
   playerName: string | null | undefined,
-  team: TeamRow | null
+  team: TeamRow | null,
+  kind: EventLeaderAccumulator['kind'],
+  options: { penalty?: boolean; secondYellowRed?: boolean } = {}
 ) {
   const name = playerName?.trim()
   if (!name) return
 
+  const normalizedName = normalizeLeaderName(name)
   const teamKey = team?.external_id ?? team?.id ?? team?.name ?? 'sin-equipo'
-  const key = `${normalizeLeaderName(name)}:${String(teamKey)}`
+  const key = `${normalizedName}:${String(teamKey)}`
   const current = leaders.get(key)
 
   if (current) {
     current.value += 1
+    if (options.penalty) current.penalties += 1
+    if (options.secondYellowRed) current.secondYellowReds += 1
+    if (!current.teamInternalId && team?.id) current.teamInternalId = String(team.id)
     if (!current.teamExternalId) current.teamExternalId = toNumericExternalId(team?.external_id)
+    if (!current.teamExternalKey && team?.external_id) current.teamExternalKey = String(team.external_id)
     if (!current.teamName && team?.name) current.teamName = team.name
     if (!current.teamLogo && team?.logo_url) current.teamLogo = team.logo_url
     return
@@ -305,52 +340,190 @@ function addLeader(
 
   leaders.set(key, {
     name,
+    normalizedName,
+    teamInternalId: team?.id ? String(team.id) : undefined,
     teamExternalId: toNumericExternalId(team?.external_id),
+    teamExternalKey: team?.external_id ? String(team.external_id) : undefined,
     teamName: team?.name ?? undefined,
     teamLogo: team?.logo_url ?? undefined,
     value: 1,
+    penalties: options.penalty ? 1 : 0,
+    secondYellowReds: options.secondYellowRed ? 1 : 0,
+    kind,
   })
 }
 
-function toRows(leaders: Map<string, EventLeaderAccumulator>): EventStatsTopPlayerRow[] {
+function buildPlayerLookups(players: PlayerRow[]) {
+  const byNameTeamId = new Map<string, PlayerRow>()
+  const byNameTeamExternalId = new Map<string, PlayerRow>()
+  const byName = new Map<string, PlayerRow[]>()
+
+  for (const player of players) {
+    const normalizedName = normalizeLeaderName(player.name)
+    if (!normalizedName) continue
+
+    if (player.team_id) {
+      byNameTeamId.set(`${normalizedName}:${String(player.team_id)}`, player)
+    }
+
+    if (player.team_external_id) {
+      byNameTeamExternalId.set(`${normalizedName}:${String(player.team_external_id)}`, player)
+    }
+
+    const current = byName.get(normalizedName) ?? []
+    current.push(player)
+    byName.set(normalizedName, current)
+  }
+
+  return {
+    byNameTeamId,
+    byNameTeamExternalId,
+    byName,
+    all: players,
+  }
+}
+
+function nameMatchesLeader(candidateName: string | null | undefined, leaderName: string) {
+  const candidate = normalizeLeaderName(candidateName)
+  const leader = normalizeLeaderName(leaderName)
+
+  if (!candidate || !leader) return false
+  if (candidate === leader) return true
+  if (candidate.includes(leader) || leader.includes(candidate)) return true
+
+  const candidateTokens = candidate.split(' ').filter(Boolean)
+  const leaderTokens = leader.split(' ').filter(Boolean)
+  const candidateLast = candidateTokens[candidateTokens.length - 1]
+  const leaderLast = leaderTokens[leaderTokens.length - 1]
+
+  if (!candidateLast || candidateLast !== leaderLast) return false
+
+  const leaderFirst = leaderTokens[0]
+  const candidateFirst = candidateTokens[0]
+
+  if (!leaderFirst || !candidateFirst) return false
+  if (leaderFirst.length === 1) return candidateFirst.startsWith(leaderFirst)
+  if (candidateFirst.length === 1) return leaderFirst.startsWith(candidateFirst)
+
+  return candidateFirst[0] === leaderFirst[0]
+}
+
+function getLeaderPlayer(
+  leader: EventLeaderAccumulator,
+  players: ReturnType<typeof buildPlayerLookups>
+) {
+  if (leader.teamInternalId) {
+    const player = players.byNameTeamId.get(`${leader.normalizedName}:${leader.teamInternalId}`)
+    if (player) return player
+  }
+
+  if (leader.teamExternalKey) {
+    const player = players.byNameTeamExternalId.get(`${leader.normalizedName}:${leader.teamExternalKey}`)
+    if (player) return player
+  }
+
+  const candidates = players.byName.get(leader.normalizedName) ?? []
+
+  if (candidates.length === 1) return candidates[0]
+
+  const teamScopedCandidates = players.all.filter((player) => {
+    const sameTeamId = leader.teamInternalId && String(player.team_id) === leader.teamInternalId
+    const sameTeamExternalId =
+      leader.teamExternalKey && String(player.team_external_id) === leader.teamExternalKey
+
+    return (sameTeamId || sameTeamExternalId) && nameMatchesLeader(player.name, leader.name)
+  })
+
+  if (teamScopedCandidates.length) {
+    return teamScopedCandidates.find((player) => player.photo_url) ?? teamScopedCandidates[0]
+  }
+
+  const fuzzyCandidates = players.all.filter((player) =>
+    nameMatchesLeader(player.name, leader.name)
+  )
+
+  return fuzzyCandidates.find((player) => player.photo_url) ?? candidates.find((player) => player.photo_url) ?? null
+}
+
+function pluralize(count: number, singular: string, plural: string) {
+  return `${count} ${count === 1 ? singular : plural}`
+}
+
+function getLeaderDetails(leader: EventLeaderAccumulator) {
+  if (leader.kind === 'scorers') {
+    const base = pluralize(leader.value, 'gol', 'goles')
+    return leader.penalties > 0
+      ? `${base} · ${pluralize(leader.penalties, 'penal', 'penales')}`
+      : base
+  }
+
+  if (leader.kind === 'assists') {
+    return pluralize(leader.value, 'asistencia', 'asistencias')
+  }
+
+  if (leader.kind === 'yellowCards') {
+    return pluralize(leader.value, 'amarilla', 'amarillas')
+  }
+
+  const base = pluralize(leader.value, 'roja', 'rojas')
+  return leader.secondYellowReds > 0
+    ? `${base} · ${pluralize(leader.secondYellowReds, 'doble amarilla', 'dobles amarillas')}`
+    : base
+}
+
+function toRows(
+  leaders: Map<string, EventLeaderAccumulator>,
+  players: ReturnType<typeof buildPlayerLookups>
+): EventStatsTopPlayerRow[] {
   return [...leaders.values()]
     .sort((a, b) => {
       if (b.value !== a.value) return b.value - a.value
       return a.name.localeCompare(b.name, 'es-AR')
     })
-    .map((leader) => ({
-      name: leader.name,
-      teamId: leader.teamExternalId,
-      teamName: leader.teamName,
-      teamLogo: leader.teamLogo,
-      value: leader.value,
-    }))
+    .map((leader) => {
+      const player = getLeaderPlayer(leader, players)
+
+      return {
+        playerId: toNumericExternalId(player?.external_id),
+        name: leader.name,
+        photo: player?.photo_url ?? undefined,
+        teamId: leader.teamExternalId,
+        teamName: leader.teamName,
+        teamLogo: leader.teamLogo,
+        value: leader.value,
+        details: getLeaderDetails(leader),
+      }
+    })
 }
 
 export function buildEventStatsLeaders(
   events: MatchEventStatsRow[],
   matchesById: Map<string, MatchRow>,
-  teamsById: Map<string, TeamRow>
+  teamsById: Map<string, TeamRow>,
+  players: PlayerRow[] = []
 ) {
   const scorers = new Map<string, EventLeaderAccumulator>()
   const assists = new Map<string, EventLeaderAccumulator>()
   const yellowCards = new Map<string, EventLeaderAccumulator>()
   const redCards = new Map<string, EventLeaderAccumulator>()
   const countedRedCards = new Set<string>()
+  const playerLookups = buildPlayerLookups(players)
 
   for (const event of events) {
     const team = getEventTeam(event, matchesById, teamsById)
 
     if (isValidGoalForScorerTable(event)) {
-      addLeader(scorers, getEventPlayerName(event), team)
+      addLeader(scorers, getEventPlayerName(event), team, 'scorers', {
+        penalty: getGoalKindFromDetail(event.detail) === 'penalty',
+      })
     }
 
     if (isValidAssistEvent(event)) {
-      addLeader(assists, getEventAssistName(event), team)
+      addLeader(assists, getEventAssistName(event), team, 'assists')
     }
 
     if (isYellowCardEvent(event)) {
-      addLeader(yellowCards, getEventPlayerName(event), team)
+      addLeader(yellowCards, getEventPlayerName(event), team, 'yellowCards')
     }
 
     if (isRedCardEvent(event)) {
@@ -362,16 +535,18 @@ export function buildEventStatsLeaders(
 
       if (!countedRedCards.has(redKey)) {
         countedRedCards.add(redKey)
-        addLeader(redCards, getEventPlayerName(event), team)
+        addLeader(redCards, getEventPlayerName(event), team, 'redCards', {
+          secondYellowRed: normalizeFootballEventText(event.detail).includes('second yellow'),
+        })
       }
     }
   }
 
   return {
-    scorers: toRows(scorers),
-    assists: toRows(assists),
-    yellowCards: toRows(yellowCards),
-    redCards: toRows(redCards),
+    scorers: toRows(scorers, playerLookups),
+    assists: toRows(assists, playerLookups),
+    yellowCards: toRows(yellowCards, playerLookups),
+    redCards: toRows(redCards, playerLookups),
   }
 }
 
@@ -398,7 +573,7 @@ export async function getLeagueEventStatsLeaders(
   const matchesById = new Map(dataset.matches.map((match) => [String(match.id), match]))
 
   return {
-    ...buildEventStatsLeaders(dataset.events, matchesById, dataset.teamsById),
+    ...buildEventStatsLeaders(dataset.events, matchesById, dataset.teamsById, dataset.players),
     hasEvents: dataset.events.length > 0,
     warnings,
   }
@@ -437,7 +612,7 @@ export async function getLeagueEventStatsAudit(
   const supabase = getSupabaseAdminClient()
   const dataset = await fetchLeagueEventStatsDataset(supabase, leagueExternalId, season)
   const matchesById = new Map(dataset.matches.map((match) => [String(match.id), match]))
-  const leaders = buildEventStatsLeaders(dataset.events, matchesById, dataset.teamsById)
+  const leaders = buildEventStatsLeaders(dataset.events, matchesById, dataset.teamsById, dataset.players)
   const duplicateCounts = dataset.events.reduce<Map<string, MatchEventStatsRow[]>>((accumulator, event) => {
     const key = getDuplicateEventKey(event)
     const current = accumulator.get(key) ?? []

@@ -6,10 +6,12 @@ import type {
 import {
   getEventAssistName,
   getEventPlayerName,
+  getGoalKindFromDetail,
   isRedCardEvent,
   isValidAssistEvent,
   isValidGoalForScorerTable,
   isYellowCardEvent,
+  normalizeFootballEventText,
 } from '@/shared/utils/football-events'
 
 type CopaArgentinaEventLeaders = {
@@ -25,6 +27,9 @@ type EventLeaderAccumulator = {
   teamName?: string
   teamLogo?: string
   value: number
+  penalties: number
+  secondYellowReds: number
+  kind: 'scorers' | 'assists' | 'yellowCards' | 'redCards'
 }
 
 function normalizeLeaderName(value?: string | null) {
@@ -68,7 +73,9 @@ function getEventTeam(match: LeagueFixtureSummary, event: LeagueFixtureEventSumm
 function addLeader(
   leaders: Map<string, EventLeaderAccumulator>,
   playerName: string | null | undefined,
-  team: Pick<EventLeaderAccumulator, 'teamId' | 'teamName' | 'teamLogo'>
+  team: Pick<EventLeaderAccumulator, 'teamId' | 'teamName' | 'teamLogo'>,
+  kind: EventLeaderAccumulator['kind'],
+  options: { penalty?: boolean; secondYellowRed?: boolean } = {}
 ) {
   const name = playerName?.trim()
   if (!name) return
@@ -78,6 +85,8 @@ function addLeader(
 
   if (current) {
     current.value += 1
+    if (options.penalty) current.penalties += 1
+    if (options.secondYellowRed) current.secondYellowReds += 1
     if (!current.teamId && team.teamId) current.teamId = team.teamId
     if (!current.teamName && team.teamName) current.teamName = team.teamName
     if (!current.teamLogo && team.teamLogo) current.teamLogo = team.teamLogo
@@ -90,7 +99,31 @@ function addLeader(
     teamName: team.teamName,
     teamLogo: team.teamLogo,
     value: 1,
+    penalties: options.penalty ? 1 : 0,
+    secondYellowReds: options.secondYellowRed ? 1 : 0,
+    kind,
   })
+}
+
+function pluralize(count: number, singular: string, plural: string) {
+  return `${count} ${count === 1 ? singular : plural}`
+}
+
+function getLeaderDetails(leader: EventLeaderAccumulator) {
+  if (leader.kind === 'scorers') {
+    const base = pluralize(leader.value, 'gol', 'goles')
+    return leader.penalties > 0
+      ? `${base} · ${pluralize(leader.penalties, 'penal', 'penales')}`
+      : base
+  }
+
+  if (leader.kind === 'assists') return pluralize(leader.value, 'asistencia', 'asistencias')
+  if (leader.kind === 'yellowCards') return pluralize(leader.value, 'amarilla', 'amarillas')
+
+  const base = pluralize(leader.value, 'roja', 'rojas')
+  return leader.secondYellowReds > 0
+    ? `${base} · ${pluralize(leader.secondYellowReds, 'doble amarilla', 'dobles amarillas')}`
+    : base
 }
 
 function toRows(leaders: Map<string, EventLeaderAccumulator>): TopPlayerRow[] {
@@ -105,6 +138,7 @@ function toRows(leaders: Map<string, EventLeaderAccumulator>): TopPlayerRow[] {
       teamName: leader.teamName,
       teamLogo: leader.teamLogo,
       value: leader.value,
+      details: getLeaderDetails(leader),
     }))
 }
 
@@ -122,15 +156,17 @@ export function buildCopaArgentinaEventLeaders(
       const team = getEventTeam(match, event)
 
       if (isValidGoalForScorerTable(event)) {
-        addLeader(scorers, getEventPlayerName(event), team)
+        addLeader(scorers, getEventPlayerName(event), team, 'scorers', {
+          penalty: getGoalKindFromDetail(event.detail) === 'penalty',
+        })
       }
 
       if (isValidAssistEvent(event)) {
-        addLeader(assists, getEventAssistName(event), team)
+        addLeader(assists, getEventAssistName(event), team, 'assists')
       }
 
       if (isYellowCardEvent(event)) {
-        addLeader(yellowCards, getEventPlayerName(event), team)
+        addLeader(yellowCards, getEventPlayerName(event), team, 'yellowCards')
         continue
       }
 
@@ -143,7 +179,9 @@ export function buildCopaArgentinaEventLeaders(
 
         if (!countedRedCards.has(redKey)) {
           countedRedCards.add(redKey)
-          addLeader(redCards, getEventPlayerName(event), team)
+          addLeader(redCards, getEventPlayerName(event), team, 'redCards', {
+            secondYellowRed: normalizeFootballEventText(event.detail).includes('second yellow'),
+          })
         }
       }
     }

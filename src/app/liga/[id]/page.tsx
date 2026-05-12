@@ -1235,18 +1235,31 @@ function PromediosTable({
   relegatedTeamIds?: Set<string>
 }) {
   const seasons = rows[0]?.seasonValues.map((entry) => entry.season) || []
-  const cellPadding = compact ? 'px-2 py-1.5' : 'px-2.5 py-2'
+  const cellPadding = compact
+    ? 'px-0.5 py-1.5 sm:px-1'
+    : 'px-0.5 py-1.5 sm:px-1.5 sm:py-2'
+  const seasonWidth = seasons.length ? `${Math.max(8, 34 / seasons.length)}%` : '0%'
 
   return (
-    <div className="overflow-x-auto">
-      <table className={`min-w-full ${compact ? 'text-[12px]' : 'text-[13px]'}`}>
+    <div className="w-full overflow-hidden">
+      <table className={`w-full table-fixed ${compact ? 'text-[10.5px] sm:text-[12px]' : 'text-[10.5px] sm:text-[13px]'}`}>
+        <colgroup>
+          <col style={{ width: '7%' }} />
+          <col style={{ width: '32%' }} />
+          <col style={{ width: '9%' }} />
+          <col style={{ width: '9%' }} />
+          <col style={{ width: '9%' }} />
+          {seasons.map((season) => (
+            <col key={season} style={{ width: seasonWidth }} />
+          ))}
+        </colgroup>
         <thead className="text-left text-[#8d98a7]">
           <tr className="border-b border-white/6">
             <th className={`${cellPadding} font-semibold`}>#</th>
-            <th className={`${cellPadding} font-semibold`}>Equipos</th>
-            <th className={`${cellPadding} text-center font-semibold`}>Prom</th>
-            <th className={`${cellPadding} text-center font-semibold`}>Pts</th>
+            <th className={`${cellPadding} font-semibold`}>Equipo</th>
+            <th className={`${cellPadding} text-center font-semibold`}>PTS</th>
             <th className={`${cellPadding} text-center font-semibold`}>PJ</th>
+            <th className={`${cellPadding} text-center font-semibold`}>PROM</th>
             {seasons.map((season) => (
               <th
                 key={season}
@@ -1284,26 +1297,28 @@ function PromediosTable({
             >
               <td className={`${cellPadding} font-semibold`}>{row.rank}</td>
               <td className={cellPadding}>
-                <div className={`flex items-center ${compact ? 'gap-1.5' : 'gap-2'}`}>
+                <div className={`flex min-w-0 items-center ${compact ? 'gap-1' : 'gap-1.5'}`}>
                   <TeamLogo
                     src={row.teamLogo}
                     alt={row.teamName}
-                    size={compact ? 18 : 24}
-                    className={`${compact ? 'h-[18px] w-[18px]' : 'h-6 w-6'} object-contain`}
-                    fallbackClassName={compact ? 'h-4 w-3' : 'h-5 w-4'}
+                    size={compact ? 16 : 18}
+                    className={`${compact ? 'h-4 w-4' : 'h-[18px] w-[18px]'} object-contain`}
+                    fallbackClassName={compact ? 'h-3.5 w-3' : 'h-4 w-3'}
                     unoptimized
                   />
-                  <span className={`font-medium ${compact ? 'text-[12px]' : ''}`}>{row.teamName}</span>
+                  <span className={`min-w-0 truncate font-medium ${compact ? 'text-[10.5px] sm:text-[12px]' : 'text-[10.5px] sm:text-[13px]'}`}>
+                    {row.teamName}
+                  </span>
                 </div>
               </td>
-              <td className={`${cellPadding} text-center font-bold`}>
-                {row.average.toFixed(3)}
-              </td>
-              <td className={`${cellPadding} text-center font-semibold`}>
+              <td className={`${cellPadding} text-center font-black text-white`}>
                 {row.totalPoints}
               </td>
               <td className={`${cellPadding} text-center`}>
                 {row.totalPlayed}
+              </td>
+              <td className={`${cellPadding} text-center font-semibold`}>
+                {row.average.toFixed(3)}
               </td>
               {row.seasonValues.map((seasonValue) => (
                 <td
@@ -1818,34 +1833,34 @@ function StandingsTable({
 }) {
   const cellPadding = compact
     ? fitNarrow
-      ? 'px-1.5 py-1.5'
-      : 'px-2 py-1.5'
-    : 'px-2.5 py-2'
-  const teamColumnWidth = showAverage ? '30%' : '34%'
-  const metricColumnWidth = showAverage ? '6.2%' : '7.25%'
+      ? 'px-0.5 py-1.5 sm:px-1'
+      : 'px-0.5 py-1.5 sm:px-1.5'
+    : 'px-0.5 py-1.5 sm:px-1.5 sm:py-2'
+  const teamColumnWidth = showAverage ? '28%' : '35%'
+  const rankColumnWidth = showAverage ? '6%' : '7%'
+  const metricColumnWidth = showAverage ? '7.3%' : '7.25%'
 
   return (
-    <div className={fitNarrow ? 'overflow-hidden' : 'overflow-x-auto'}>
-      <table className={`${fitNarrow ? 'w-full table-fixed' : 'min-w-full'} ${compact ? 'text-[12px]' : 'text-[13px]'}`}>
-        {fitNarrow ? (
-          <colgroup>
-            <col style={{ width: '8%' }} />
-            <col style={{ width: teamColumnWidth }} />
-            <col style={{ width: metricColumnWidth }} />
-            <col style={{ width: metricColumnWidth }} />
-            <col style={{ width: metricColumnWidth }} />
-            <col style={{ width: metricColumnWidth }} />
-            <col style={{ width: metricColumnWidth }} />
-            <col style={{ width: metricColumnWidth }} />
-            <col style={{ width: metricColumnWidth }} />
-            <col style={{ width: metricColumnWidth }} />
-            {showAverage ? <col style={{ width: metricColumnWidth }} /> : null}
-          </colgroup>
-        ) : null}
+    <div className="w-full overflow-hidden">
+      <table className={`w-full table-fixed ${compact ? 'text-[10.5px] sm:text-[12px]' : 'text-[10.5px] sm:text-[13px]'}`}>
+        <colgroup>
+          <col style={{ width: rankColumnWidth }} />
+          <col style={{ width: teamColumnWidth }} />
+          <col style={{ width: metricColumnWidth }} />
+          <col style={{ width: metricColumnWidth }} />
+          <col style={{ width: metricColumnWidth }} />
+          <col style={{ width: metricColumnWidth }} />
+          <col style={{ width: metricColumnWidth }} />
+          <col style={{ width: metricColumnWidth }} />
+          <col style={{ width: metricColumnWidth }} />
+          <col style={{ width: metricColumnWidth }} />
+          {showAverage ? <col style={{ width: metricColumnWidth }} /> : null}
+        </colgroup>
         <thead className="text-left text-[#8d98a7]">
           <tr className="border-b border-white/6">
-            <th className={`${cellPadding} font-semibold`}>Pos</th>
+            <th className={`${cellPadding} font-semibold`}>#</th>
             <th className={`${cellPadding} font-semibold`}>Equipo</th>
+            <th className={`${cellPadding} font-semibold text-center`}>PTS</th>
             <th className={`${cellPadding} font-semibold text-center`}>PJ</th>
             <th className={`${cellPadding} font-semibold text-center`}>PG</th>
             <th className={`${cellPadding} font-semibold text-center`}>PE</th>
@@ -1853,9 +1868,8 @@ function StandingsTable({
             <th className={`${cellPadding} font-semibold text-center`}>GF</th>
             <th className={`${cellPadding} font-semibold text-center`}>GC</th>
             <th className={`${cellPadding} font-semibold text-center`}>DG</th>
-            <th className={`${cellPadding} font-semibold text-center`}>PTS</th>
             {showAverage ? (
-              <th className={`${cellPadding} font-semibold text-center`}>Prom.</th>
+              <th className={`${cellPadding} font-semibold text-center`}>PROM</th>
             ) : null}
           </tr>
         </thead>
@@ -1867,18 +1881,21 @@ function StandingsTable({
             >
               <td className={`${cellPadding} font-semibold`}>{row.rank || index + 1}</td>
               <td className={cellPadding}>
-                <div className={`flex min-w-0 items-center ${compact ? 'gap-1.5' : 'gap-2'}`}>
+                <div className={`flex min-w-0 items-center ${compact ? 'gap-1' : 'gap-1.5'}`}>
                   <TeamLogo
                     src={row.teamLogo}
                     alt={row.teamName}
-                    size={compact ? 18 : 24}
-                    className={`${compact ? 'h-[18px] w-[18px]' : 'h-6 w-6'} object-contain`}
-                    fallbackClassName={compact ? 'h-4 w-3' : 'h-5 w-4'}
+                    size={compact ? 16 : 18}
+                    className={`${compact ? 'h-4 w-4' : 'h-[18px] w-[18px]'} object-contain`}
+                    fallbackClassName={compact ? 'h-3.5 w-3' : 'h-4 w-3'}
                     unoptimized
                   />
-                  <span className={`min-w-0 truncate font-medium ${compact ? 'text-[12px]' : ''}`}>{row.teamName}</span>
+                  <span className={`min-w-0 truncate font-medium ${compact ? 'text-[10.5px] sm:text-[12px]' : 'text-[10.5px] sm:text-[13px]'}`}>
+                    {row.teamName}
+                  </span>
                 </div>
               </td>
+              <td className={`${cellPadding} text-center font-black text-white`}>{row.points}</td>
               <td className={`${cellPadding} text-center`}>{row.played}</td>
               <td className={`${cellPadding} text-center`}>{row.won}</td>
               <td className={`${cellPadding} text-center`}>{row.drawn}</td>
@@ -1886,7 +1903,6 @@ function StandingsTable({
               <td className={`${cellPadding} text-center`}>{row.goalsFor}</td>
               <td className={`${cellPadding} text-center`}>{row.goalsAgainst}</td>
               <td className={`${cellPadding} text-center`}>{row.goalDifference}</td>
-              <td className={`${cellPadding} text-center font-bold`}>{row.points}</td>
               {showAverage ? (
                 <td className={`${cellPadding} text-center font-semibold`}>
                   {formatAverage(row.average || 0)}
@@ -2097,7 +2113,13 @@ export default async function LigaPage({ params }: PageProps) {
         fixtures = fixturesResult.value
       }
 
-      if (tournament.key === 'argentina-copa-argentina') {
+      if (
+        tournament.key === 'argentina-copa-argentina' &&
+        !scorers.length &&
+        !assists.length &&
+        !yellowCards.length &&
+        !redCards.length
+      ) {
         const copaArgentinaEventLeaders = buildCopaArgentinaEventLeaders(fixtures)
 
         scorers = copaArgentinaEventLeaders.scorers

@@ -567,6 +567,7 @@ export type TopPlayerRow = {
   teamName?: string
   teamLogo?: string
   value: number
+  details?: string
 }
 
 export type LeaderStatType = 'scorers' | 'assists' | 'yellowCards' | 'redCards'
