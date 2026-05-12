@@ -7,6 +7,7 @@ import {
 } from '@/server/cache/cache-db'
 import { getFootballApiConfig } from '@/server/config/env'
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
+import { getLeagueEventStatsLeaders } from '@/server/match-event-stats'
 import { isFinishedStatus, isLiveStatus } from '@/shared/utils/match-status'
 import { formatEventMinute } from '@/shared/utils/event-minute'
 import {
@@ -18,7 +19,11 @@ import {
 import {
   getGoalKindFromDetail,
   getImportantLiveEventKind,
+  isRedCardEvent,
   isScoreboardGoalEvent,
+  isValidAssistEvent,
+  isValidGoalForScorerTable,
+  isYellowCardEvent,
   type ImportantLiveEventKind,
 } from '@/shared/utils/football-events'
 import {
@@ -3245,30 +3250,28 @@ function eventMatchesPlayer(
 
   if (statType === 'scorers') {
     return (
-      event.type === 'Goal' &&
+      isValidGoalForScorerTable(event) &&
       (event.player?.id === playerId || matchesByName(event.player))
     )
   }
 
   if (statType === 'assists') {
     return (
-      event.type === 'Goal' &&
+      isValidAssistEvent(event) &&
       (event.assist?.id === playerId || matchesByName(event.assist))
     )
   }
 
   if (statType === 'yellowCards') {
     return (
-      event.type === 'Card' &&
-      (event.player?.id === playerId || matchesByName(event.player)) &&
-      (event.detail || '').toLowerCase().includes('yellow')
+      isYellowCardEvent(event) &&
+      (event.player?.id === playerId || matchesByName(event.player))
     )
   }
 
   return (
-    event.type === 'Card' &&
-    (event.player?.id === playerId || matchesByName(event.player)) &&
-    (event.detail || '').toLowerCase().includes('red')
+    isRedCardEvent(event) &&
+    (event.player?.id === playerId || matchesByName(event.player))
   )
 }
 
@@ -3391,6 +3394,25 @@ export async function getPlayerEventMatches(
 }
 
 export async function getLeagueLeaders(leagueId: number, season: number) {
+  try {
+    const eventLeaders = await getLeagueEventStatsLeaders(leagueId, season)
+
+    if (eventLeaders.hasEvents) {
+      return {
+        scorers: eventLeaders.scorers,
+        assists: eventLeaders.assists,
+        yellowCards: eventLeaders.yellowCards,
+        redCards: eventLeaders.redCards,
+      }
+    }
+  } catch (error) {
+    console.warn('[league-leaders] No se pudieron armar rankings desde match_events.', {
+      leagueId,
+      season,
+      message: error instanceof Error ? error.message : String(error),
+    })
+  }
+
   const [scorers, assists, yellowCards, redCards] = await Promise.all([
     getTopPlayersByType(
       '/players/topscorers',

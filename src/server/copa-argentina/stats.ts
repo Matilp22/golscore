@@ -4,8 +4,12 @@ import type {
   TopPlayerRow,
 } from '@/lib/api-football'
 import {
-  isScoreboardGoalEvent,
-  normalizeFootballEventText,
+  getEventAssistName,
+  getEventPlayerName,
+  isRedCardEvent,
+  isValidAssistEvent,
+  isValidGoalForScorerTable,
+  isYellowCardEvent,
 } from '@/shared/utils/football-events'
 
 type CopaArgentinaEventLeaders = {
@@ -21,32 +25,6 @@ type EventLeaderAccumulator = {
   teamName?: string
   teamLogo?: string
   value: number
-}
-
-function isYellowCardEvent(event: LeagueFixtureEventSummary) {
-  const type = normalizeFootballEventText(event.type)
-  const detail = normalizeFootballEventText(event.detail)
-
-  return (
-    type.includes('card') &&
-    detail.includes('yellow') &&
-    !detail.includes('second yellow') &&
-    !detail.includes('red')
-  )
-}
-
-function isRedCardEvent(event: LeagueFixtureEventSummary) {
-  const type = normalizeFootballEventText(event.type)
-  const detail = normalizeFootballEventText(event.detail)
-
-  return (
-    type.includes('card') &&
-    (
-      detail.includes('red') ||
-      detail.includes('second yellow') ||
-      detail.includes('roja')
-    )
-  )
 }
 
 function normalizeLeaderName(value?: string | null) {
@@ -137,24 +115,36 @@ export function buildCopaArgentinaEventLeaders(
   const assists = new Map<string, EventLeaderAccumulator>()
   const yellowCards = new Map<string, EventLeaderAccumulator>()
   const redCards = new Map<string, EventLeaderAccumulator>()
+  const countedRedCards = new Set<string>()
 
   for (const match of fixtures) {
     for (const event of match.events ?? []) {
       const team = getEventTeam(match, event)
 
-      if (isScoreboardGoalEvent(event.type, event.detail)) {
-        addLeader(scorers, event.playerName, team)
-        addLeader(assists, event.assistName, team)
-        continue
+      if (isValidGoalForScorerTable(event)) {
+        addLeader(scorers, getEventPlayerName(event), team)
+      }
+
+      if (isValidAssistEvent(event)) {
+        addLeader(assists, getEventAssistName(event), team)
       }
 
       if (isYellowCardEvent(event)) {
-        addLeader(yellowCards, event.playerName, team)
+        addLeader(yellowCards, getEventPlayerName(event), team)
         continue
       }
 
       if (isRedCardEvent(event)) {
-        addLeader(redCards, event.playerName, team)
+        const redKey = [
+          match.id,
+          team.teamId,
+          normalizeLeaderName(getEventPlayerName(event)),
+        ].join(':')
+
+        if (!countedRedCards.has(redKey)) {
+          countedRedCards.add(redKey)
+          addLeader(redCards, getEventPlayerName(event), team)
+        }
       }
     }
   }

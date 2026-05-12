@@ -21,6 +21,7 @@ import {
 } from '@/shared/config/tournament-pages'
 import { getExcludedCompetitionReason } from '@/shared/utils/competition-filter'
 import {
+  isCancelledEvent,
   isImportantLiveEvent,
   isScoreboardGoalEvent,
   normalizeFootballEventText,
@@ -1992,12 +1993,16 @@ function isImportantMatchEventForHome(event: ApiFixtureEvent) {
       normalizedDetail.includes('red') ||
       normalizedDetail.includes('roja')
     )
+  const isReviewEvent =
+    normalizedType.includes('var') ||
+    isCancelledEvent(event)
 
   return (
     (
       isScoreboardGoalEvent(event.type, event.detail) ||
       isCardEvent ||
-      isImportantLiveEvent(event.type, event.detail)
+      isImportantLiveEvent(event.type, event.detail) ||
+      isReviewEvent
     ) &&
     event.time?.elapsed !== null &&
     event.time?.elapsed !== undefined
@@ -2061,25 +2066,12 @@ async function syncMatchEventsIfSupported(
   const emptyResult = { eventsFound: 0, goalsInserted: 0 }
   const statusShort = fixture.fixture.status.short
   const hasFixtureGoals = hasAnyFixtureGoals(fixture)
-  const shouldFetchEvents = hasFixtureGoals || isLiveEventSyncStatus(statusShort)
+  const shouldFetchEvents =
+    hasFixtureGoals ||
+    isLiveEventSyncStatus(statusShort) ||
+    isFinishedStatus(statusShort)
 
-  if (!shouldFetchEvents) {
-    if (isFinishedStatus(statusShort) && !hasFixtureGoals) {
-      try {
-        await deleteStoredMatchEvents(supabase, matchId, fixture.fixture.id)
-      } catch (error) {
-        if (!isMissingOptionalMatchEvents(error)) {
-          console.warn('[sync-match-events] No se pudieron limpiar eventos sin goles.', {
-            fixtureId: fixture.fixture.id,
-            matchId,
-            message: error instanceof Error ? error.message : String(error),
-          })
-        }
-      }
-    }
-
-    return emptyResult
-  }
+  if (!shouldFetchEvents) return emptyResult
 
   try {
     logDebug(debug, 'syncing match events from API-Football', {

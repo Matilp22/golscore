@@ -8,6 +8,81 @@ export function normalizeFootballEventText(value?: string | null) {
     .trim()
 }
 
+export type FootballEventLike = {
+  type?: string | null
+  detail?: string | null
+  comments?: string | null
+  playerName?: string | null
+  player_name?: string | null
+  assistName?: string | null
+  assist_name?: string | null
+  player?: {
+    name?: string | null
+  } | null
+  assist?: {
+    name?: string | null
+  } | null
+}
+
+function getEventType(event: FootballEventLike) {
+  return event.type ?? null
+}
+
+function getEventDetail(event: FootballEventLike) {
+  return event.detail ?? null
+}
+
+function getEventComments(event: FootballEventLike) {
+  return event.comments ?? null
+}
+
+export function getEventPlayerName(event: FootballEventLike) {
+  return (
+    event.playerName ??
+    event.player_name ??
+    event.player?.name ??
+    null
+  )
+}
+
+export function getEventAssistName(event: FootballEventLike) {
+  return (
+    event.assistName ??
+    event.assist_name ??
+    event.assist?.name ??
+    null
+  )
+}
+
+function isCancelledEventText(
+  type?: string | null,
+  detail?: string | null,
+  comments?: string | null
+) {
+  const normalizedDetail = normalizeFootballEventText(detail)
+  const normalizedComments = normalizeFootballEventText(comments)
+  const combined = [normalizeFootballEventText(type), normalizedDetail, normalizedComments]
+    .filter(Boolean)
+    .join(' ')
+
+  return (
+    combined.includes('cancelled') ||
+    combined.includes('canceled') ||
+    combined.includes('disallowed') ||
+    combined.includes('anulado') ||
+    combined.includes('anulada') ||
+    combined.includes('annulled')
+  )
+}
+
+export function isCancelledEvent(event: FootballEventLike) {
+  return isCancelledEventText(
+    getEventType(event),
+    getEventDetail(event),
+    getEventComments(event)
+  )
+}
+
 export function isScoreboardGoalEvent(
   type?: string | null,
   detail?: string | null
@@ -21,8 +96,7 @@ export function isScoreboardGoalEvent(
     normalizedDetail.includes('missed') ||
     normalizedDetail.includes('shootout') ||
     normalizedDetail.includes('penalty shoot') ||
-    normalizedDetail.includes('cancelled') ||
-    normalizedDetail.includes('canceled') ||
+    isCancelledEventText(type, detail) ||
     normalizedDetail.includes('var')
   ) {
     return false
@@ -56,6 +130,56 @@ export function getGoalKindFromDetail(detail?: string | null) {
   return 'regular' as const
 }
 
+export function isValidGoalForScorerTable(event: FootballEventLike) {
+  return (
+    isScoreboardGoalEvent(getEventType(event), getEventDetail(event)) &&
+    getGoalKindFromDetail(getEventDetail(event)) !== 'own-goal'
+  )
+}
+
+export function isValidAssistEvent(event: FootballEventLike) {
+  const assistName = getEventAssistName(event)?.trim()
+  const normalizedDetail = normalizeFootballEventText(getEventDetail(event))
+
+  if (!assistName) return false
+  if (!isValidGoalForScorerTable(event)) return false
+  if (normalizedDetail.includes('penalty')) return false
+
+  return (
+    normalizedDetail === 'goal' ||
+    normalizedDetail.includes('normal goal') ||
+    !normalizedDetail
+  )
+}
+
+export function isYellowCardEvent(event: FootballEventLike) {
+  const normalizedType = normalizeFootballEventText(getEventType(event))
+  const normalizedDetail = normalizeFootballEventText(getEventDetail(event))
+
+  return (
+    normalizedType.includes('card') &&
+    normalizedDetail.includes('yellow') &&
+    !normalizedDetail.includes('second yellow') &&
+    !normalizedDetail.includes('red') &&
+    !isCancelledEvent(event)
+  )
+}
+
+export function isRedCardEvent(event: FootballEventLike) {
+  const normalizedType = normalizeFootballEventText(getEventType(event))
+  const normalizedDetail = normalizeFootballEventText(getEventDetail(event))
+
+  return (
+    normalizedType.includes('card') &&
+    (
+      normalizedDetail.includes('red') ||
+      normalizedDetail.includes('second yellow') ||
+      normalizedDetail.includes('roja')
+    ) &&
+    !isCancelledEvent(event)
+  )
+}
+
 export type ImportantLiveEventKind = 'goal' | 'penalty' | 'red-card'
 
 export function getImportantLiveEventKind(
@@ -67,14 +191,7 @@ export function getImportantLiveEventKind(
 
   if (isScoreboardGoalEvent(type, detail)) return 'goal'
 
-  if (
-    normalizedType.includes('card') &&
-    (
-      normalizedDetail.includes('red card') ||
-      normalizedDetail === 'red' ||
-      normalizedDetail.includes('roja')
-    )
-  ) {
+  if (isRedCardEvent({ type, detail })) {
     return 'red-card'
   }
 
