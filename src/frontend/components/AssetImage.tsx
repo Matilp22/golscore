@@ -35,7 +35,7 @@ export function TeamLogo({
         className={className ?? 'h-full w-full object-contain'}
         fallbackClassName={fallbackClassName ?? 'h-[80%] w-[68%]'}
         priority={priority}
-        unoptimized={unoptimized}
+        unoptimized={unoptimized ?? true}
       />
     </span>
   )
@@ -64,7 +64,7 @@ export function LeagueLogo({
         className={className ?? 'h-full w-full object-contain'}
         fallbackClassName={fallbackClassName ?? 'h-[80%] w-[68%]'}
         priority={priority}
-        unoptimized={unoptimized}
+        unoptimized={unoptimized ?? true}
       />
     </span>
   )

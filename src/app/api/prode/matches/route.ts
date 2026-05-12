@@ -4,7 +4,7 @@ import { getAllowedProdeLeagueIds } from '@/server/prode/scope'
 import { getAllowedProdeLeagueLabel } from '@/shared/config/prode-leagues'
 import { normalizeLeagueRound } from '@/shared/utils/league-rounds'
 import { parseMatchDate } from '@/shared/utils/prediction-lock'
-import { getApiSportsTeamLogoUrl } from '@/shared/utils/asset-urls'
+import { pickLeagueLogoUrl, pickTeamLogoUrl } from '@/shared/utils/asset-urls'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -275,7 +275,7 @@ export async function GET(request: Request) {
             season: match.match_date
               ? parseMatchDate(match.match_date).getFullYear()
               : new Date().getFullYear(),
-            logoUrl: league.logo_url ?? null,
+            logoUrl: pickLeagueLogoUrl(league.logo_url, league.external_id),
           }
         : null,
       homeTeam: homeTeam
@@ -283,7 +283,7 @@ export async function GET(request: Request) {
             id: String(homeTeam.id),
             name: homeTeam.name ?? 'Local',
             logo_url: homeTeam.logo_url,
-            logoUrl: homeTeam.logo_url ?? getApiSportsTeamLogoUrl(homeTeam.external_id),
+            logoUrl: pickTeamLogoUrl(homeTeam.logo_url, homeTeam.external_id),
           }
         : null,
       awayTeam: awayTeam
@@ -291,7 +291,7 @@ export async function GET(request: Request) {
             id: String(awayTeam.id),
             name: awayTeam.name ?? 'Visitante',
             logo_url: awayTeam.logo_url,
-            logoUrl: awayTeam.logo_url ?? getApiSportsTeamLogoUrl(awayTeam.external_id),
+            logoUrl: pickTeamLogoUrl(awayTeam.logo_url, awayTeam.external_id),
           }
         : null,
     }

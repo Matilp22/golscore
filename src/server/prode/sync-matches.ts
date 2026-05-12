@@ -33,9 +33,9 @@ import {
   getArgentinaTodayISO,
 } from '@/shared/utils/argentina-time'
 import {
-  getApiSportsLeagueLogoUrl,
-  getApiSportsTeamLogoUrl,
-  pickStableAssetUrl,
+  getLeagueLogoOverrideUrl,
+  pickLeagueLogoUrl,
+  pickTeamLogoUrl,
 } from '@/shared/utils/asset-urls'
 import { getFixtureStatusElapsedMinute } from '@/shared/utils/match-minute'
 import {
@@ -517,11 +517,11 @@ function getUpdatedFields(
 }
 
 function getTeamLogoUrl(team: { id: number; logo?: string | null }) {
-  return pickStableAssetUrl(null, team.logo, getApiSportsTeamLogoUrl(team.id))
+  return pickTeamLogoUrl(null, team.id, team.logo)
 }
 
 function getLeagueLogoUrl(league: { id?: number; logo?: string | null }) {
-  return pickStableAssetUrl(null, league.logo, getApiSportsLeagueLogoUrl(league.id))
+  return pickLeagueLogoUrl(null, league.id, league.logo)
 }
 
 const BROADCAST_SOURCE_KEYS = [
@@ -1280,7 +1280,9 @@ async function upsertLeague(
       id: tournament.externalLeagueId,
       logo: fixture?.league.logo,
     }),
-    logo_source: 'api-football',
+    logo_source: getLeagueLogoOverrideUrl(tournament.externalLeagueId)
+      ? 'manual-override-2026'
+      : 'api-football',
     logo_last_synced_at: new Date().toISOString(),
   }
 

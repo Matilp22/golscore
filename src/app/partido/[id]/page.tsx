@@ -177,20 +177,6 @@ function formatStatValue(value: string | number | null | undefined) {
   return String(value)
 }
 
-function formatVenueLocation(city?: string | null) {
-  if (!city) return 'Ubicación no disponible'
-
-  const parts = city
-    .split(',')
-    .map((part) => part.trim())
-    .filter(Boolean)
-
-  if (parts.length === 0) return 'Ubicación no disponible'
-  if (parts.length === 1) return parts[0]
-
-  return `${parts[0]} (${parts.slice(1).join(', ')})`
-}
-
 function formatReferee(referee?: string | null) {
   if (!referee) return 'No disponible'
 
@@ -815,21 +801,6 @@ function MatchTeamCard({
   )
 }
 
-function InfoRow({
-  label,
-  value,
-}: {
-  label: string
-  value: string
-}) {
-  return (
-    <div className="flex items-center justify-between gap-2 border-b border-white/6 py-2 last:border-b-0">
-      <span className="text-xs text-[#8d98a7]">{label}</span>
-      <span className="text-right text-xs font-semibold text-[#f3f6fa]">{value}</span>
-    </div>
-  )
-}
-
 function getPanelStyle(style: TeamStyle) {
   const secondary = style.secondary || style.shirt
 
@@ -838,6 +809,92 @@ function getPanelStyle(style: TeamStyle) {
     borderColor: `${style.border}66`,
     boxShadow: `inset 0 1px 0 ${style.border}1a`,
   }
+}
+
+function getYouTubeVideoId(value?: string | null) {
+  if (!value) return null
+
+  try {
+    const url = new URL(value)
+    const hostname = url.hostname.replace(/^www\./, '')
+    const pathSegments = url.pathname.split('/').filter(Boolean)
+
+    if (hostname === 'youtu.be') return pathSegments[0] ?? null
+
+    if (hostname === 'youtube.com' || hostname.endsWith('.youtube.com')) {
+      if (url.pathname === '/watch') return url.searchParams.get('v')
+      if (['embed', 'shorts', 'live'].includes(pathSegments[0])) {
+        return pathSegments[1] ?? null
+      }
+    }
+  } catch {
+    return null
+  }
+
+  return null
+}
+
+function getYouTubeThumbnailUrl(value?: string | null) {
+  const videoId = getYouTubeVideoId(value)
+  return videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : null
+}
+
+function MatchSummaryCard({
+  title,
+  url,
+}: {
+  title?: string | null
+  url?: string | null
+}) {
+  const thumbnailUrl = getYouTubeThumbnailUrl(url)
+
+  if (!url || !thumbnailUrl) {
+    return (
+      <div className="flex aspect-video flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/10 bg-[#13181d] px-4 text-center">
+        <div className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-[#8d98a7]">
+          <span className="ml-0.5 text-lg">▶</span>
+        </div>
+        <p className="text-sm font-bold text-white">Resumen no disponible</p>
+        <p className="text-xs leading-relaxed text-[#8d98a7]">
+          Cuando se cargue un video, va a aparecer acá.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      className="group block overflow-hidden rounded-xl border border-white/10 bg-[#13181d] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7ff0b2]"
+      aria-label={title ? `Ver resumen: ${title}` : 'Ver resumen del partido'}
+    >
+      <div className="relative aspect-video overflow-hidden">
+        <SafeImage
+          src={thumbnailUrl}
+          alt={title || 'Resumen del partido'}
+          imageType="video"
+          fill
+          sizes="(min-width: 1280px) 320px, 100vw"
+          className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.03]"
+          fallbackClassName="h-full w-full"
+          unoptimized
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-transparent" />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-[#7ff0b2]/90 text-[#07110c] shadow-[0_10px_25px_rgba(0,0,0,0.35)] transition group-hover:scale-105">
+            <span className="ml-1 text-2xl">▶</span>
+          </span>
+        </div>
+        {title ? (
+          <p className="absolute bottom-3 left-3 right-3 line-clamp-2 text-sm font-black leading-tight text-white">
+            {title}
+          </p>
+        ) : null}
+      </div>
+    </a>
+  )
 }
 
 function Shirt({ number, style }: { number?: number | string; style: TeamStyle }) {
@@ -1320,8 +1377,10 @@ export default async function PartidoDetallePage({ params }: PageProps) {
       ? [{ name: broadcastChannel, logoUrl: broadcastLogoUrl, country: null }]
       : []
   const broadcastLabel = broadcasters.map((broadcaster) => broadcaster.name).join(' / ')
-  const headerBroadcastLogo =
+  const primaryBroadcastLogo =
     broadcasters.find((broadcaster) => broadcaster.logoUrl)?.logoUrl ?? broadcastLogoUrl
+  const highlightsUrl = typeof data.highlightsUrl === 'string' ? data.highlightsUrl : null
+  const highlightsTitle = typeof data.highlightsTitle === 'string' ? data.highlightsTitle : null
   const stats: MatchStatisticsTeam[] = Array.isArray(data.statistics) ? data.statistics : []
   const events: MatchEvent[] = Array.isArray(data.events) ? data.events : []
   const lineups: MatchLineup[] = Array.isArray(data.lineups) ? data.lineups : []
@@ -1401,21 +1460,6 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                   {translateLeagueName(fixture.league.name)}
                 </h1>
               </div>
-
-              {broadcastLabel ? (
-                <div className="flex max-w-full items-center gap-1.5 text-[10px] font-semibold text-[#dce5ef] md:text-xs">
-                  <SafeImage
-                    src={headerBroadcastLogo}
-                    alt={broadcastLabel}
-                    imageType="broadcast"
-                    width={18}
-                    height={18}
-                    className="h-[18px] w-[18px] shrink-0 object-contain"
-                    fallbackClassName="h-3 w-3 shrink-0"
-                  />
-                  <span className="truncate">TV: {broadcastLabel}</span>
-                </div>
-              ) : null}
             </div>
           </div>
 
@@ -1460,9 +1504,21 @@ export default async function PartidoDetallePage({ params }: PageProps) {
               </p>
             </div>
             <div>
-              <span className="text-[#8d98a7]">Ubicación</span>
-              <p className="mt-1 font-medium text-white">
-                {formatVenueLocation(fixture.fixture.venue?.city)}
+              <span className="text-[#8d98a7]">TV</span>
+              <p className="mt-1 flex min-w-0 items-center gap-2 font-medium text-white">
+                {primaryBroadcastLogo ? (
+                  <SafeImage
+                    src={primaryBroadcastLogo}
+                    alt={broadcastLabel || 'TV'}
+                    imageType="broadcast"
+                    width={20}
+                    height={20}
+                    className="h-5 w-5 shrink-0 object-contain"
+                    fallbackClassName="h-3.5 w-3.5 shrink-0"
+                    unoptimized
+                  />
+                ) : null}
+                <span className="min-w-0 truncate">{broadcastLabel || 'No disponible'}</span>
               </p>
             </div>
             <div>
@@ -1626,15 +1682,12 @@ export default async function PartidoDetallePage({ params }: PageProps) {
             <div className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
               <div className="border-b border-white/6 bg-[#13181d] px-2 py-3 md:px-4">
                 <div className="flex items-center justify-center">
-                  <h2 className="text-base font-bold text-white">Datos del partido</h2>
+                  <h2 className="text-base font-bold text-white">Resumen del partido</h2>
                 </div>
               </div>
 
-              <div className="px-2 py-1 md:px-4">
-                <InfoRow label="Estado" value={translateStatus(status.long)} />
-                <InfoRow label="Liga" value={translateLeagueName(fixture.league.name)} />
-                <InfoRow label="País" value={translateCountry(fixture.league.country)} />
-                <InfoRow label="Árbitro" value={formatReferee(fixture.fixture.referee)} />
+              <div className="p-2 md:p-3">
+                <MatchSummaryCard title={highlightsTitle} url={highlightsUrl} />
               </div>
             </div>
 

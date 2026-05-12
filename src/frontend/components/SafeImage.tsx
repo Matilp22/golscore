@@ -7,7 +7,7 @@ import {
   isAllowedRemoteAssetHost,
 } from '@/shared/utils/asset-urls'
 
-type SafeImageType = 'team' | 'league' | 'player' | 'venue' | 'broadcast'
+type SafeImageType = 'team' | 'league' | 'player' | 'venue' | 'broadcast' | 'video'
 
 type SafeImageProps = Omit<ImageProps, 'src' | 'alt'> & {
   src?: string | null
@@ -51,7 +51,9 @@ function Fallback({
   className?: string
 }) {
   if (imageType === 'player') return <PlayerFallback className={className} />
-  if (imageType === 'venue') return <VenueFallback className={className} />
+  if (imageType === 'venue' || imageType === 'video') {
+    return <VenueFallback className={className} />
+  }
 
   return <TeamFallback className={className} />
 }

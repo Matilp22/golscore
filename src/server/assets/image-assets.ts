@@ -2,12 +2,14 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import {
-  getApiSportsLeagueLogoUrl,
   getApiSportsPlayerPhotoUrl,
-  getApiSportsTeamLogoUrl,
   getAssetHostname,
+  getLeagueLogoOverrideUrl,
   isAllowedRemoteAssetHost,
+  isLegacyApiFootballAssetUrl,
+  pickLeagueLogoUrl,
   pickStableAssetUrl,
+  pickTeamLogoUrl,
 } from '@/shared/utils/asset-urls'
 
 type DbClient = SupabaseClient
@@ -151,6 +153,27 @@ function chunkArray<T>(items: T[], size: number) {
   return chunks
 }
 
+async function fetchAllRows<T>(supabase: DbClient, table: string, columns: string) {
+  const rows: T[] = []
+  const pageSize = 1000
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from(table)
+      .select(columns)
+      .range(from, from + pageSize - 1)
+
+    if (error) throw error
+
+    const page = (data ?? []) as T[]
+    rows.push(...page)
+
+    if (page.length < pageSize) break
+  }
+
+  return rows
+}
+
 async function fetchTeamIdsByExternalId(supabase: DbClient, externalIds: string[]) {
   const map = new Map<string, string>()
   if (!externalIds.length) return map
@@ -190,7 +213,7 @@ export async function getPersistedTeamLogoMap(
 
     for (const row of (data ?? []) as TeamAssetRow[]) {
       const externalId = toExternalId(row.external_id)
-      const logoUrl = pickStableAssetUrl(row.logo_url, null, getApiSportsTeamLogoUrl(externalId))
+      const logoUrl = pickTeamLogoUrl(row.logo_url, externalId)
       if (externalId && logoUrl) map.set(externalId, logoUrl)
     }
   }
@@ -216,7 +239,7 @@ export async function getPersistedLeagueLogoMap(
 
     for (const row of (data ?? []) as LeagueAssetRow[]) {
       const externalId = toExternalId(row.external_id)
-      const logoUrl = pickStableAssetUrl(row.logo_url, null, getApiSportsLeagueLogoUrl(externalId))
+      const logoUrl = pickLeagueLogoUrl(row.logo_url, externalId)
       if (externalId && logoUrl) map.set(externalId, logoUrl)
     }
   }
@@ -263,11 +286,7 @@ export async function upsertTeamAssets(
 
   for (const item of items) {
     const externalId = toExternalId(item.externalId)
-    const logoUrl = pickStableAssetUrl(
-      null,
-      item.logoUrl,
-      getApiSportsTeamLogoUrl(externalId)
-    )
+    const logoUrl = pickTeamLogoUrl(null, externalId, item.logoUrl)
 
     if (!externalId) {
       skipped += 1
@@ -308,11 +327,8 @@ export async function upsertLeagueAssets(
 
   for (const item of items) {
     const externalId = toExternalId(item.externalId)
-    const logoUrl = pickStableAssetUrl(
-      null,
-      item.logoUrl,
-      getApiSportsLeagueLogoUrl(externalId)
-    )
+    const overrideLogoUrl = getLeagueLogoOverrideUrl(externalId)
+    const logoUrl = pickLeagueLogoUrl(null, externalId, item.logoUrl)
 
     if (!externalId) {
       skipped += 1
@@ -325,7 +341,7 @@ export async function upsertLeagueAssets(
       country: item.country ?? null,
       season: item.season ?? new Date().getFullYear(),
       logo_url: logoUrl,
-      logo_source: SOURCE,
+      logo_source: overrideLogoUrl ? 'manual-override-2026' : SOURCE,
       logo_last_synced_at: syncedAt,
     }
 
@@ -504,10 +520,10 @@ export async function enrichMatchDetailAssets<
       league: fixture.league
         ? {
             ...fixture.league,
-            logo: pickStableAssetUrl(
+            logo: pickLeagueLogoUrl(
               leagueExternalId ? leagueLogoMap.get(leagueExternalId) : null,
-              fixture.league.logo,
-              getApiSportsLeagueLogoUrl(leagueExternalId)
+              leagueExternalId,
+              fixture.league.logo
             ) ?? undefined,
           }
         : fixture.league,
@@ -517,20 +533,20 @@ export async function enrichMatchDetailAssets<
             home: fixture.teams.home
               ? {
                   ...fixture.teams.home,
-                  logo: pickStableAssetUrl(
+                  logo: pickTeamLogoUrl(
                     homeExternalId ? teamLogoMap.get(homeExternalId) : null,
-                    fixture.teams.home.logo,
-                    getApiSportsTeamLogoUrl(homeExternalId)
+                    homeExternalId,
+                    fixture.teams.home.logo
                   ) ?? undefined,
                 }
               : fixture.teams.home,
             away: fixture.teams.away
               ? {
                   ...fixture.teams.away,
-                  logo: pickStableAssetUrl(
+                  logo: pickTeamLogoUrl(
                     awayExternalId ? teamLogoMap.get(awayExternalId) : null,
-                    fixture.teams.away.logo,
-                    getApiSportsTeamLogoUrl(awayExternalId)
+                    awayExternalId,
+                    fixture.teams.away.logo
                   ) ?? undefined,
                 }
               : fixture.teams.away,
@@ -545,10 +561,10 @@ export async function enrichMatchDetailAssets<
         team: lineup.team
           ? {
               ...lineup.team,
-              logo: pickStableAssetUrl(
+              logo: pickTeamLogoUrl(
                 teamExternalId ? teamLogoMap.get(teamExternalId) : null,
-                lineup.team.logo,
-                getApiSportsTeamLogoUrl(teamExternalId)
+                teamExternalId,
+                lineup.team.logo
               ) ?? undefined,
             }
           : lineup.team,
@@ -644,10 +660,10 @@ export async function enrichTeamDetailAssets<
       getPersistedTeamLogoMap(supabase, [teamExternalId]),
       getPersistedPlayerPhotoMap(supabase, players.map((player) => player.externalId)),
     ])
-    const teamLogo = pickStableAssetUrl(
+    const teamLogo = pickTeamLogoUrl(
       teamExternalId ? teamLogoMap.get(teamExternalId) : null,
-      team?.logo,
-      getApiSportsTeamLogoUrl(teamExternalId)
+      teamExternalId,
+      team?.logo
     )
     const enrichedTeamProfile = teamProfile?.team
       ? {
@@ -746,10 +762,10 @@ export async function enrichTopPlayerAssets<
             getApiSportsPlayerPhotoUrl(playerExternalId)
           ) ?? undefined,
         teamLogo:
-          pickStableAssetUrl(
+          pickTeamLogoUrl(
             teamExternalId ? teamLogoMap.get(teamExternalId) : null,
-            player.teamLogo,
-            getApiSportsTeamLogoUrl(teamExternalId)
+            teamExternalId,
+            player.teamLogo
           ) ?? undefined,
       }
     })
@@ -825,10 +841,10 @@ export async function enrichPlayerDetailAssets<
         ? {
             ...detail.team,
             logo:
-              pickStableAssetUrl(
+              pickTeamLogoUrl(
                 teamExternalId ? teamLogoMap.get(teamExternalId) : null,
-                detail.team.logo,
-                getApiSportsTeamLogoUrl(teamExternalId)
+                teamExternalId,
+                detail.team.logo
               ) ?? undefined,
           }
         : detail.team,
@@ -836,10 +852,10 @@ export async function enrichPlayerDetailAssets<
         ? {
             ...detail.league,
             logo:
-              pickStableAssetUrl(
+              pickLeagueLogoUrl(
                 leagueExternalId ? leagueLogoMap.get(leagueExternalId) : null,
-                detail.league.logo,
-                getApiSportsLeagueLogoUrl(leagueExternalId)
+                leagueExternalId,
+                detail.league.logo
               ) ?? undefined,
           }
         : detail.league,
@@ -892,7 +908,7 @@ export async function fillMissingAssetUrlsFromStaticSource(
     let updated = 0
 
     for (const row of rows) {
-      const logoUrl = pickStableAssetUrl(row.logo_url, null, getApiSportsTeamLogoUrl(row.external_id))
+      const logoUrl = pickTeamLogoUrl(row.logo_url, row.external_id)
       if (!logoUrl || logoUrl === row.logo_url) continue
 
       const { error: updateError } = await supabase
@@ -927,14 +943,15 @@ export async function fillMissingAssetUrlsFromStaticSource(
     let updated = 0
 
     for (const row of rows) {
-      const logoUrl = pickStableAssetUrl(row.logo_url, null, getApiSportsLeagueLogoUrl(row.external_id))
+      const overrideLogoUrl = getLeagueLogoOverrideUrl(row.external_id)
+      const logoUrl = pickLeagueLogoUrl(row.logo_url, row.external_id)
       if (!logoUrl || logoUrl === row.logo_url) continue
 
       const { error: updateError } = await supabase
         .from('leagues')
         .update({
           logo_url: logoUrl,
-          logo_source: SOURCE,
+          logo_source: overrideLogoUrl ? 'manual-override-2026' : SOURCE,
           logo_last_synced_at: syncedAt,
         })
         .eq('id', row.id)
@@ -985,15 +1002,6 @@ export async function fillMissingAssetUrlsFromStaticSource(
 export async function getAssetsAudit() {
   const supabase = getSupabaseAdminClient()
 
-  const domainRows = await Promise.all([
-    supabase.from('teams').select('id, external_id, name, logo_url').limit(10000),
-    supabase.from('players').select('id, external_id, name, team_external_id, photo_url').limit(10000),
-    supabase.from('leagues').select('id, external_id, name, logo_url').limit(10000),
-  ])
-  for (const response of domainRows) {
-    if (response.error) throw response.error
-  }
-
   type AuditTeamRow = {
     id: string
     external_id: string | number | null
@@ -1014,9 +1022,15 @@ export async function getAssetsAudit() {
     logo_url: string | null
   }
 
-  const teamRows = (domainRows[0].data ?? []) as AuditTeamRow[]
-  const playerRows = (domainRows[1].data ?? []) as AuditPlayerRow[]
-  const leagueRows = (domainRows[2].data ?? []) as AuditLeagueRow[]
+  const [teamRows, playerRows, leagueRows] = await Promise.all([
+    fetchAllRows<AuditTeamRow>(supabase, 'teams', 'id, external_id, name, logo_url'),
+    fetchAllRows<AuditPlayerRow>(
+      supabase,
+      'players',
+      'id, external_id, name, team_external_id, photo_url'
+    ),
+    fetchAllRows<AuditLeagueRow>(supabase, 'leagues', 'id, external_id, name, logo_url'),
+  ])
   const domains = new Map<string, number>()
   const brokenRemoteDomains = new Set<string>()
   const hasAssetUrl = (value: string | null | undefined) => Boolean(value?.trim())
@@ -1040,6 +1054,8 @@ export async function getAssetsAudit() {
   const teamsWithLogo = teamRows.filter((row) => Boolean(row.logo_url?.trim())).length
   const playersWithPhoto = playerRows.filter((row) => Boolean(row.photo_url?.trim())).length
   const leaguesWithLogo = leagueRows.filter((row) => Boolean(row.logo_url?.trim())).length
+  const legacyTeamLogoRows = teamRows.filter((row) => isLegacyApiFootballAssetUrl(row.logo_url))
+  const legacyLeagueLogoRows = leagueRows.filter((row) => isLegacyApiFootballAssetUrl(row.logo_url))
   const teamAssetStatus = (
     externalId: string,
     names: string[]
@@ -1088,6 +1104,13 @@ export async function getAssetsAudit() {
       total: teamRows.length,
       with_logo_url: teamsWithLogo,
       missing_logo_url: teamRows.length - teamsWithLogo,
+      legacy_api_football_host: legacyTeamLogoRows.length,
+      legacy_examples: legacyTeamLogoRows.slice(0, 10).map((row) => ({
+        id: row.id,
+        external_id: row.external_id ? String(row.external_id) : null,
+        name: row.name,
+        logo_url: row.logo_url,
+      })),
       missing_examples: teamRows
         .filter((row) => !hasAssetUrl(row.logo_url))
         .slice(0, 10)
@@ -1115,6 +1138,13 @@ export async function getAssetsAudit() {
       total: leagueRows.length,
       with_logo_url: leaguesWithLogo,
       missing_logo_url: leagueRows.length - leaguesWithLogo,
+      legacy_api_football_host: legacyLeagueLogoRows.length,
+      legacy_examples: legacyLeagueLogoRows.slice(0, 10).map((row) => ({
+        id: row.id,
+        external_id: row.external_id ? String(row.external_id) : null,
+        name: row.name,
+        logo_url: row.logo_url,
+      })),
       missing_examples: leagueRows
         .filter((row) => !hasAssetUrl(row.logo_url))
         .slice(0, 10)
@@ -1125,6 +1155,7 @@ export async function getAssetsAudit() {
         })),
     },
     known_assets: {
+      liga_profesional_argentina: leagueAssetStatus('128', ['Liga Profesional Argentina']),
       always_ready: teamAssetStatus('3700', ['Always Ready']),
       lanus: teamAssetStatus('446', ['Lanus', 'Lanús']),
       conmebol_libertadores: leagueAssetStatus('13', ['CONMEBOL Libertadores', 'Libertadores']),

@@ -1,9 +1,20 @@
 export const API_SPORTS_MEDIA_HOST = 'media.api-sports.io'
 export const API_FOOTBALL_MEDIA_HOST = 'media.api-football.com'
+export const WIKIMEDIA_UPLOAD_HOST = 'upload.wikimedia.org'
+export const YOUTUBE_IMAGE_HOST = 'img.youtube.com'
+
+export const LIGA_PROFESIONAL_ARGENTINA_LOGO_URL =
+  `https://${WIKIMEDIA_UPLOAD_HOST}/wikipedia/commons/thumb/0/06/Logo_LPF_AFA_2026.svg/960px-Logo_LPF_AFA_2026.svg.png`
+
+const LEAGUE_LOGO_OVERRIDES: Record<string, string> = {
+  '128': LIGA_PROFESIONAL_ARGENTINA_LOGO_URL,
+}
 
 export const ALLOWED_REMOTE_ASSET_HOSTS = [
   API_SPORTS_MEDIA_HOST,
   API_FOOTBALL_MEDIA_HOST,
+  WIKIMEDIA_UPLOAD_HOST,
+  YOUTUBE_IMAGE_HOST,
   'gzqapeavjpzgmdhrizqy.supabase.co',
 ]
 
@@ -63,6 +74,52 @@ export function getApiSportsPlayerPhotoUrl(externalId: string | number | null | 
 export function getApiSportsLeagueLogoUrl(externalId: string | number | null | undefined) {
   const id = normalizeExternalId(externalId)
   return id ? `https://${API_SPORTS_MEDIA_HOST}/football/leagues/${id}.png` : null
+}
+
+export function getLeagueLogoOverrideUrl(externalId: string | number | null | undefined) {
+  const id = normalizeExternalId(externalId)
+  if (!id) return null
+
+  return normalizeAssetUrl(LEAGUE_LOGO_OVERRIDES[id])
+}
+
+export function isLegacyApiFootballAssetUrl(value: string | null | undefined) {
+  return getAssetHostname(value) === API_FOOTBALL_MEDIA_HOST
+}
+
+function pickFreshAssetUrl(
+  persistedUrl: string | null | undefined,
+  apiUrl: string | null | undefined,
+  generatedUrl: string | null | undefined
+) {
+  const persisted = normalizeAssetUrl(persistedUrl)
+  const api = normalizeAssetUrl(apiUrl)
+  const generated = normalizeAssetUrl(generatedUrl)
+
+  if (persisted && !isLegacyApiFootballAssetUrl(persisted)) return persisted
+  if (api && !isLegacyApiFootballAssetUrl(api)) return api
+  if (generated) return generated
+
+  return persisted || api || null
+}
+
+export function pickTeamLogoUrl(
+  persistedUrl: string | null | undefined,
+  externalId: string | number | null | undefined,
+  apiUrl?: string | null
+) {
+  return pickFreshAssetUrl(persistedUrl, apiUrl, getApiSportsTeamLogoUrl(externalId))
+}
+
+export function pickLeagueLogoUrl(
+  persistedUrl: string | null | undefined,
+  externalId: string | number | null | undefined,
+  apiUrl?: string | null
+) {
+  return (
+    getLeagueLogoOverrideUrl(externalId) ||
+    pickFreshAssetUrl(persistedUrl, apiUrl, getApiSportsLeagueLogoUrl(externalId))
+  )
 }
 
 export function pickStableAssetUrl(

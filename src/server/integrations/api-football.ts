@@ -42,8 +42,8 @@ import {
 } from '@/server/assets/image-assets'
 import { getHomeMatchVisibility } from '@/shared/utils/home-match-visibility'
 import {
-  getApiSportsTeamLogoUrl,
-  pickStableAssetUrl,
+  pickLeagueLogoUrl,
+  pickTeamLogoUrl,
 } from '@/shared/utils/asset-urls'
 
 type ApiFootballResponse<T> = {
@@ -886,15 +886,15 @@ async function fetchApiFallbackHomeMatches(date: string): Promise<MatchListItem[
     externalId: item.fixture.id,
     leagueId: item.league.id,
     league: item.league.name,
-    leagueLogo: item.league.logo,
+    leagueLogo: pickLeagueLogoUrl(null, item.league.id, item.league.logo) ?? undefined,
     country: item.league.country,
     date: item.fixture.date,
     homeId: item.teams.home.id,
     home: item.teams.home.name,
     awayId: item.teams.away.id,
     away: item.teams.away.name,
-    homeLogo: item.teams.home.logo,
-    awayLogo: item.teams.away.logo,
+    homeLogo: pickTeamLogoUrl(null, item.teams.home.id, item.teams.home.logo) ?? undefined,
+    awayLogo: pickTeamLogoUrl(null, item.teams.away.id, item.teams.away.logo) ?? undefined,
     goalsHome: item.goals.home,
     goalsAway: item.goals.away,
     minute: getFixtureStatusElapsedMinute(item.fixture.status),
@@ -931,15 +931,15 @@ async function fetchApiFallbackHomeMatches(date: string): Promise<MatchListItem[
       externalId: item.fixtureId,
       leagueId: item.leagueId,
       league: item.leagueName,
-      leagueLogo: item.leagueLogo,
+      leagueLogo: pickLeagueLogoUrl(item.leagueLogo, item.leagueId) ?? undefined,
       country: item.country,
       date: item.date,
       homeId: item.homeTeamId,
       home: item.homeTeamName,
       awayId: item.awayTeamId,
       away: item.awayTeamName,
-      homeLogo: item.homeTeamLogo,
-      awayLogo: item.awayTeamLogo,
+      homeLogo: pickTeamLogoUrl(item.homeTeamLogo, item.homeTeamId) ?? undefined,
+      awayLogo: pickTeamLogoUrl(item.awayTeamLogo, item.awayTeamId) ?? undefined,
       goalsHome: item.goalsHome,
       goalsAway: item.goalsAway,
       minute: item.minute,
@@ -1215,18 +1215,8 @@ async function fetchStoredMatchTeamLogosByExternalId(
     const awayExternalId = toFiniteNumber(awayTeam?.external_id)
 
     return {
-      homeLogo:
-        pickStableAssetUrl(
-          homeTeam?.logo_url,
-          null,
-          getApiSportsTeamLogoUrl(homeExternalId)
-        ) ?? undefined,
-      awayLogo:
-        pickStableAssetUrl(
-          awayTeam?.logo_url,
-          null,
-          getApiSportsTeamLogoUrl(awayExternalId)
-        ) ?? undefined,
+      homeLogo: pickTeamLogoUrl(homeTeam?.logo_url, homeExternalId) ?? undefined,
+      awayLogo: pickTeamLogoUrl(awayTeam?.logo_url, awayExternalId) ?? undefined,
     }
   } catch (error) {
     console.warn('[match-detail] No se pudieron leer escudos persistidos del partido.', {
@@ -1253,21 +1243,19 @@ function applyStoredMatchTeamLogos(
       ...fixture.teams,
       home: {
         ...fixture.teams.home,
-        logo:
-          pickStableAssetUrl(
-            storedLogos.homeLogo,
-            fixture.teams.home.logo,
-            getApiSportsTeamLogoUrl(homeExternalId)
-          ) ?? undefined,
+        logo: pickTeamLogoUrl(
+          storedLogos.homeLogo,
+          homeExternalId,
+          fixture.teams.home.logo
+        ) ?? undefined,
       },
       away: {
         ...fixture.teams.away,
-        logo:
-          pickStableAssetUrl(
-            storedLogos.awayLogo,
-            fixture.teams.away.logo,
-            getApiSportsTeamLogoUrl(awayExternalId)
-          ) ?? undefined,
+        logo: pickTeamLogoUrl(
+          storedLogos.awayLogo,
+          awayExternalId,
+          fixture.teams.away.logo
+        ) ?? undefined,
       },
     },
   }
@@ -1411,15 +1399,21 @@ async function fetchStoredHomeMatches(date: string): Promise<MatchListItem[]> {
         externalId,
         leagueId: toFiniteNumber(league.external_id) ?? toFiniteNumber(league.id) ?? undefined,
         league: league.name,
-        leagueLogo: league.logo_url ?? undefined,
+        leagueLogo:
+          pickLeagueLogoUrl(
+            league.logo_url,
+            league.external_id ?? league.id
+          ) ?? undefined,
         country: league.country ?? undefined,
         date: match.match_date,
         homeId: toFiniteNumber(homeTeam.external_id) ?? undefined,
         home: homeTeam.name,
         awayId: toFiniteNumber(awayTeam.external_id) ?? undefined,
         away: awayTeam.name,
-        homeLogo: homeTeam.logo_url ?? undefined,
-        awayLogo: awayTeam.logo_url ?? undefined,
+        homeLogo:
+          pickTeamLogoUrl(homeTeam.logo_url, homeTeam.external_id ?? homeTeam.id) ?? undefined,
+        awayLogo:
+          pickTeamLogoUrl(awayTeam.logo_url, awayTeam.external_id ?? awayTeam.id) ?? undefined,
         goalsHome: match.home_score,
         goalsAway: match.away_score,
         minute: match.elapsed ?? null,
@@ -2198,13 +2192,50 @@ async function getMatchBroadcastByExternalId(externalId: number) {
   }
 }
 
+async function getMatchHighlightsByExternalId(externalId: number) {
+  try {
+    const supabase = getSupabaseAdminClient()
+    const response = await supabase
+      .from('matches')
+      .select('highlights_url, highlights_title')
+      .eq('external_id', externalId)
+      .maybeSingle()
+
+    if (response.error) {
+      const message = response.error.message.toLowerCase()
+      const isMissingHighlightsColumn =
+        response.error.code === '42703' ||
+        response.error.code === 'PGRST204' ||
+        message.includes('highlights_url') ||
+        message.includes('highlights_title') ||
+        message.includes('schema cache')
+
+      if (isMissingHighlightsColumn) return { url: null, title: null }
+      throw response.error
+    }
+
+    return {
+      url: response.data?.highlights_url ?? null,
+      title: response.data?.highlights_title ?? null,
+    }
+  } catch (error) {
+    console.warn('[match-highlights] No se pudo leer el resumen del partido.', {
+      externalId,
+      message: error instanceof Error ? error.message : String(error),
+    })
+
+    return { url: null, title: null }
+  }
+}
+
 export async function getMatchDetail(id: number) {
-  const [fixture, events, statistics, lineups, broadcast] = await Promise.all([
+  const [fixture, events, statistics, lineups, broadcast, highlights] = await Promise.all([
     apiFootball('/fixtures', { id }, { revalidate: 30 }),
     apiFootball('/fixtures/events', { fixture: id }, { revalidate: 30 }),
     apiFootball('/fixtures/statistics', { fixture: id }, { revalidate: 30 }),
     apiFootball('/fixtures/lineups', { fixture: id }, { revalidate: 30 }),
     getMatchBroadcastByExternalId(id),
+    getMatchHighlightsByExternalId(id),
   ])
   const rawFixture = (fixture as ApiFootballResponse<MatchFixture>).response?.[0] || null
   const rawLineups = (lineups as ApiFootballResponse<MatchLineup>).response || []
@@ -2222,6 +2253,8 @@ export async function getMatchDetail(id: number) {
     broadcastChannel: broadcast.channel,
     broadcastLogoUrl: broadcast.logoUrl,
     broadcasters: broadcast.broadcasters,
+    highlightsUrl: highlights.url,
+    highlightsTitle: highlights.title,
   }
 }
 
@@ -2941,16 +2974,8 @@ async function fetchDerivedLigaProfesionalFixtures(
         homeId,
         away: awayTeam?.name || 'A confirmar',
         awayId,
-        homeLogo: pickStableAssetUrl(
-          homeTeam?.logo_url,
-          null,
-          getApiSportsTeamLogoUrl(homeTeam?.external_id)
-        ) ?? undefined,
-        awayLogo: pickStableAssetUrl(
-          awayTeam?.logo_url,
-          null,
-          getApiSportsTeamLogoUrl(awayTeam?.external_id)
-        ) ?? undefined,
+        homeLogo: pickTeamLogoUrl(homeTeam?.logo_url, homeTeam?.external_id) ?? undefined,
+        awayLogo: pickTeamLogoUrl(awayTeam?.logo_url, awayTeam?.external_id) ?? undefined,
         goalsHome: row.home_score,
         goalsAway: row.away_score,
         homePenaltyScore: row.home_penalty_score ?? null,
@@ -3009,8 +3034,8 @@ export async function getLeagueFixtures(leagueId: number, season: number) {
       homeId: item.teams.home.id,
       away: item.teams.away.name,
       awayId: item.teams.away.id,
-      homeLogo: item.teams.home.logo,
-      awayLogo: item.teams.away.logo,
+      homeLogo: pickTeamLogoUrl(null, item.teams.home.id, item.teams.home.logo) ?? undefined,
+      awayLogo: pickTeamLogoUrl(null, item.teams.away.id, item.teams.away.logo) ?? undefined,
       goalsHome: item.goals.home,
       goalsAway: item.goals.away,
       homePenaltyScore: item.score?.penalty?.home ?? null,
@@ -3038,7 +3063,7 @@ export async function getLeagueFixtures(leagueId: number, season: number) {
           leagueId: item.league.id,
           season,
           leagueName: item.league.name,
-          leagueLogo: item.league.logo,
+          leagueLogo: pickLeagueLogoUrl(null, item.league.id, item.league.logo) ?? undefined,
           country: item.league.country,
           round: item.league.round,
           dateUtc: item.fixture.date,
@@ -3047,10 +3072,12 @@ export async function getLeagueFixtures(leagueId: number, season: number) {
           minute: getFixtureStatusElapsedMinute(item.fixture.status),
           homeTeamId: item.teams.home.id,
           homeTeamName: item.teams.home.name,
-          homeTeamLogo: item.teams.home.logo,
+          homeTeamLogo:
+            pickTeamLogoUrl(null, item.teams.home.id, item.teams.home.logo) ?? undefined,
           awayTeamId: item.teams.away.id,
           awayTeamName: item.teams.away.name,
-          awayTeamLogo: item.teams.away.logo,
+          awayTeamLogo:
+            pickTeamLogoUrl(null, item.teams.away.id, item.teams.away.logo) ?? undefined,
           goalsHome: item.goals.home,
           goalsAway: item.goals.away,
           homePenaltyScore: item.score?.penalty?.home ?? null,
@@ -3074,8 +3101,8 @@ export async function getLeagueFixtures(leagueId: number, season: number) {
         homeId: item.homeTeamId,
         away: item.awayTeamName,
         awayId: item.awayTeamId,
-        homeLogo: item.homeTeamLogo,
-        awayLogo: item.awayTeamLogo,
+        homeLogo: pickTeamLogoUrl(item.homeTeamLogo, item.homeTeamId) ?? undefined,
+        awayLogo: pickTeamLogoUrl(item.awayTeamLogo, item.awayTeamId) ?? undefined,
         goalsHome: item.goalsHome,
         goalsAway: item.goalsAway,
         homePenaltyScore: item.homePenaltyScore,
@@ -3110,8 +3137,8 @@ export async function getLeagueFixtures(leagueId: number, season: number) {
         homeId: item.homeTeamId,
         away: item.awayTeamName,
         awayId: item.awayTeamId,
-        homeLogo: item.homeTeamLogo,
-        awayLogo: item.awayTeamLogo,
+        homeLogo: pickTeamLogoUrl(item.homeTeamLogo, item.homeTeamId) ?? undefined,
+        awayLogo: pickTeamLogoUrl(item.awayTeamLogo, item.awayTeamId) ?? undefined,
         goalsHome: item.goalsHome,
         goalsAway: item.goalsAway,
         homePenaltyScore: item.homePenaltyScore,

@@ -133,6 +133,10 @@ function getApiSportsTeamLogoUrl(teamId: number) {
 }
 
 function getApiSportsLeagueLogoUrl(leagueId: number) {
+  if (leagueId === 128) {
+    return 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/06/Logo_LPF_AFA_2026.svg/960px-Logo_LPF_AFA_2026.svg.png'
+  }
+
   return `https://media.api-sports.io/football/leagues/${leagueId}.png`
 }
 
@@ -488,7 +492,8 @@ Deno.serve(async (req) => {
             country: tournament.country,
             season: tournament.season,
             logo_url: getApiSportsLeagueLogoUrl(tournament.externalLeagueId),
-            logo_source: 'api-football',
+            logo_source:
+              tournament.externalLeagueId === 128 ? 'manual-override-2026' : 'api-football',
             logo_last_synced_at: new Date().toISOString(),
           },
           { onConflict: 'external_id' },
