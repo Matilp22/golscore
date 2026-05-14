@@ -983,6 +983,29 @@ function getBaseRowsFromStandings(groups: Array<{ name: string; rows: LeagueStan
   return primaryGroups.flatMap((group) => group.rows)
 }
 
+function getStandingRowTeamKeys(row: Pick<LeagueStandingRow, 'teamId' | 'teamName'>) {
+  return getTeamLookupKeys(row.teamId, row.teamName)
+}
+
+function getCurrentSeasonTeamKeySet(
+  groups: Array<{ name: string; rows: LeagueStandingRow[] }>
+) {
+  return new Set(
+    getBaseRowsFromStandings(groups).flatMap((row) => getStandingRowTeamKeys(row))
+  )
+}
+
+function filterPromediosToCurrentSeasonTeams(
+  rows: PromedioRow[],
+  currentSeasonTeamKeys: Set<string>
+) {
+  if (!currentSeasonTeamKeys.size) return rows
+
+  return rows.filter((row) =>
+    getStandingRowTeamKeys(row).some((teamKey) => currentSeasonTeamKeys.has(teamKey))
+  )
+}
+
 function buildHistoricalPromediosTable(
   standingsBySeason: Array<{
     season: number
@@ -2149,6 +2172,13 @@ export default async function LigaPage({ params }: PageProps) {
 
         if (successfulHistoricalStandings.length) {
           promedioTable = buildHistoricalPromediosTable(successfulHistoricalStandings)
+
+          if (tournament.key === 'argentina-liga-profesional') {
+            promedioTable = filterPromediosToCurrentSeasonTeams(
+              promedioTable,
+              getCurrentSeasonTeamKeySet(standings)
+            )
+          }
         }
       }
 

@@ -26,7 +26,7 @@ import {
   isScoreboardGoalEvent,
   normalizeFootballEventText,
 } from '@/shared/utils/football-events'
-import { isFinishedStatus } from '@/shared/utils/match-status'
+import { getCanonicalMatchStatusFromApi, isFinishedStatus } from '@/shared/utils/match-status'
 import {
   addDaysToISO,
   getArgentinaDateISO,
@@ -1719,6 +1719,7 @@ async function upsertMatch(
 ) {
   const homeScore = getFixtureHomeScore(fixture)
   const awayScore = getFixtureAwayScore(fixture)
+  const status = getCanonicalMatchStatusFromApi(fixture.fixture.status)
   const payload = {
     external_id: fixture.fixture.id,
     league_id: leagueId,
@@ -1726,7 +1727,7 @@ async function upsertMatch(
     away_team_id: awayTeamId,
     match_date: fixture.fixture.date,
     round: getFixtureRoundValue(fixture.league.round),
-    status: fixture.fixture.status.short,
+    status,
     home_score: homeScore,
     away_score: awayScore,
   }
@@ -2066,7 +2067,7 @@ async function syncMatchEventsIfSupported(
   debug?: boolean
 ): Promise<SyncMatchEventsResult> {
   const emptyResult = { eventsFound: 0, goalsInserted: 0 }
-  const statusShort = fixture.fixture.status.short
+  const statusShort = getCanonicalMatchStatusFromApi(fixture.fixture.status)
   const hasFixtureGoals = hasAnyFixtureGoals(fixture)
   const shouldFetchEvents =
     hasFixtureGoals ||
@@ -2187,6 +2188,10 @@ async function syncMatchEventsIfSupported(
       insertedGoals,
     })
 
+    if (isFinishedStatus(statusShort) || isFinishedStatus(fixture.fixture.status.long)) {
+      await updateFinalElapsedFromEventsIfSupported(supabase, matchId, fixture, events, debug)
+    }
+
     return {
       eventsFound: events.length,
       goalsInserted: insertedGoals,
@@ -2218,16 +2223,41 @@ async function updateElapsedIfSupported(
   debug?: boolean
 ) {
   const elapsed = getFixtureStatusElapsedMinute(fixture.fixture.status)
+  const isFinished =
+    isFinishedStatus(fixture.fixture.status.short) || isFinishedStatus(fixture.fixture.status.long)
+  const payload = isFinished ? { elapsed, final_elapsed: elapsed } : { elapsed }
 
-  const { error } = await withTimeout(
+  const response = await withTimeout(
     supabase
       .from('matches')
-      .update({ elapsed })
+      .update(payload)
       .eq('id', matchId),
     `matches elapsed update ${fixture.fixture.id}`
   )
+  let error = response.error
 
   if (!error) return
+
+  if (
+    isFinished &&
+    (
+      error.code === '42703' ||
+      error.code === 'PGRST204' ||
+      error.message.toLowerCase().includes('final_elapsed') ||
+      error.message.toLowerCase().includes('schema cache')
+    )
+  ) {
+    const fallbackResponse = await withTimeout(
+      supabase
+        .from('matches')
+        .update({ elapsed })
+        .eq('id', matchId),
+      `matches elapsed fallback update ${fixture.fixture.id}`
+    )
+
+    error = fallbackResponse.error
+    if (!error) return
+  }
 
   const message = error.message.toLowerCase()
   const isMissingElapsedColumn =
@@ -2247,6 +2277,79 @@ async function updateElapsedIfSupported(
   }
 
   throw new Error(`No se pudo guardar elapsed del partido ${fixture.fixture.id}: ${error.message}`)
+}
+
+function getApiEventElapsedMinute(event: ApiFixtureEvent) {
+  const elapsed = event.time?.elapsed
+  const extra = event.time?.extra
+
+  if (elapsed === null || elapsed === undefined || !Number.isFinite(elapsed)) return null
+  if (extra !== null && extra !== undefined && Number.isFinite(extra) && extra > 0) {
+    return elapsed + extra
+  }
+
+  return elapsed
+}
+
+function getFinalElapsedFromFixtureEvents(fixture: ApiFixture, events: ApiFixtureEvent[]) {
+  const statusElapsed = getFixtureStatusElapsedMinute(fixture.fixture.status)
+  const maxEventElapsed = events.reduce<number | null>((max, event) => {
+    const eventElapsed = getApiEventElapsedMinute(event)
+
+    if (eventElapsed === null) return max
+    if (max === null) return eventElapsed
+
+    return Math.max(max, eventElapsed)
+  }, null)
+
+  if (statusElapsed === null) return maxEventElapsed
+  if (maxEventElapsed === null) return statusElapsed
+
+  return Math.max(statusElapsed, maxEventElapsed)
+}
+
+async function updateFinalElapsedFromEventsIfSupported(
+  supabase: SupabaseClient,
+  matchId: DbId,
+  fixture: ApiFixture,
+  events: ApiFixtureEvent[],
+  debug?: boolean
+) {
+  const finalElapsed = getFinalElapsedFromFixtureEvents(fixture, events)
+
+  if (finalElapsed === null) return
+
+  const { error } = await withTimeout(
+    supabase
+      .from('matches')
+      .update({
+        elapsed: finalElapsed,
+        final_elapsed: finalElapsed,
+      })
+      .eq('id', matchId),
+    `matches final elapsed update ${fixture.fixture.id}`
+  )
+
+  if (!error) return
+
+  const message = error.message.toLowerCase()
+  const isMissingFinalElapsedColumn =
+    message.includes('final_elapsed') ||
+    message.includes('schema cache') ||
+    error.code === '42703' ||
+    error.code === 'PGRST204'
+
+  if (isMissingFinalElapsedColumn) {
+    logDebug(debug, 'final_elapsed column missing; elapsed already preserved', {
+      fixtureId: fixture.fixture.id,
+      matchId,
+      finalElapsed,
+      error: error.message,
+    })
+    return
+  }
+
+  throw new Error(`No se pudo guardar final_elapsed del partido ${fixture.fixture.id}: ${error.message}`)
 }
 
 async function updatePenaltyScoresIfSupported(
@@ -2439,7 +2542,7 @@ export async function syncFixtureById(
         new Date(fixture.fixture.date).getFullYear(),
     },
     api: {
-      status: fixture.fixture.status.short,
+      status: getCanonicalMatchStatusFromApi(fixture.fixture.status),
       statusLong: fixture.fixture.status.long ?? null,
       elapsed: getFixtureStatusElapsedMinute(fixture.fixture.status),
       date: fixture.fixture.date,
@@ -2461,7 +2564,7 @@ export async function syncFixtureById(
         id: fixture.fixture.id,
         date: fixture.fixture.date,
         status: {
-          short: fixture.fixture.status.short,
+          short: getCanonicalMatchStatusFromApi(fixture.fixture.status),
           long: fixture.fixture.status.long ?? null,
           elapsed: getFixtureStatusElapsedMinute(fixture.fixture.status),
         },
@@ -2554,7 +2657,7 @@ export async function syncProdeFixtureById(
       season: tournament.season,
     },
     api: {
-      status: fixture.fixture.status.short,
+      status: getCanonicalMatchStatusFromApi(fixture.fixture.status),
       statusLong: fixture.fixture.status.long ?? null,
       elapsed: getFixtureStatusElapsedMinute(fixture.fixture.status),
       date: fixture.fixture.date,
@@ -2575,7 +2678,7 @@ export async function syncProdeFixtureById(
         id: fixture.fixture.id,
         date: fixture.fixture.date,
         status: {
-          short: fixture.fixture.status.short,
+          short: getCanonicalMatchStatusFromApi(fixture.fixture.status),
           long: fixture.fixture.status.long ?? null,
           elapsed: getFixtureStatusElapsedMinute(fixture.fixture.status),
         },
@@ -2648,8 +2751,8 @@ export async function syncHomeScoreboardMatches(
   const selectedFixtures = [...fixturesById.values()]
     .filter((fixture) =>
       !liveOnly ||
-      isLiveEventSyncStatus(fixture.fixture.status.short) ||
-      isFinishedStatus(fixture.fixture.status.short)
+      isLiveEventSyncStatus(getCanonicalMatchStatusFromApi(fixture.fixture.status)) ||
+      isFinishedStatus(getCanonicalMatchStatusFromApi(fixture.fixture.status))
     )
     .sort(compareFixturesByApiOrder)
   const fixturesToProcess = limit
@@ -3252,7 +3355,7 @@ export async function syncProdeMatches(
             match_date: fixture.fixture.date,
             api_round: fixture.league.round ?? null,
             stored_round: getFixtureRoundValue(fixture.league.round),
-            status: fixture.fixture.status.short,
+            status: getCanonicalMatchStatusFromApi(fixture.fixture.status),
             goals_home: fixture.goals.home,
             goals_away: fixture.goals.away,
             fulltime_home: fixture.score?.fulltime?.home ?? null,

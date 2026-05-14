@@ -8,7 +8,11 @@ import {
 import { getFootballApiConfig } from '@/server/config/env'
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getLeagueEventStatsLeaders } from '@/server/match-event-stats'
-import { isFinishedStatus, isLiveStatus } from '@/shared/utils/match-status'
+import {
+  getCanonicalMatchStatusFromApi,
+  isFinishedStatus,
+  isLiveStatus,
+} from '@/shared/utils/match-status'
 import { formatEventMinute } from '@/shared/utils/event-minute'
 import {
   addDaysToISO,
@@ -898,7 +902,7 @@ async function fetchApiFallbackHomeMatches(date: string): Promise<MatchListItem[
     goalsHome: item.goals.home,
     goalsAway: item.goals.away,
     minute: getFixtureStatusElapsedMinute(item.fixture.status),
-    statusShort: item.fixture.status.short,
+    statusShort: getCanonicalMatchStatusFromApi(item.fixture.status),
     statusLong: item.fixture.status.long,
   }))
 
@@ -3028,7 +3032,7 @@ export async function getLeagueFixtures(leagueId: number, season: number) {
       id: item.fixture.id,
       round: item.league.round || 'Fecha',
       date: item.fixture.date,
-      statusShort: item.fixture.status.short,
+      statusShort: getCanonicalMatchStatusFromApi(item.fixture.status),
       minute: getFixtureStatusElapsedMinute(item.fixture.status),
       home: item.teams.home.name,
       homeId: item.teams.home.id,
@@ -3067,7 +3071,7 @@ export async function getLeagueFixtures(leagueId: number, season: number) {
           country: item.league.country,
           round: item.league.round,
           dateUtc: item.fixture.date,
-          statusShort: item.fixture.status.short,
+          statusShort: getCanonicalMatchStatusFromApi(item.fixture.status),
           statusLong: item.fixture.status.long,
           minute: getFixtureStatusElapsedMinute(item.fixture.status),
           homeTeamId: item.teams.home.id,

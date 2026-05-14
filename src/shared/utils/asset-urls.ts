@@ -2,6 +2,7 @@ export const API_SPORTS_MEDIA_HOST = 'media.api-sports.io'
 export const API_FOOTBALL_MEDIA_HOST = 'media.api-football.com'
 export const WIKIMEDIA_UPLOAD_HOST = 'upload.wikimedia.org'
 export const YOUTUBE_IMAGE_HOST = 'img.youtube.com'
+export const YOUTUBE_IMAGE_ALT_HOST = 'i.ytimg.com'
 
 export const LIGA_PROFESIONAL_ARGENTINA_LOGO_URL =
   `https://${WIKIMEDIA_UPLOAD_HOST}/wikipedia/commons/thumb/0/06/Logo_LPF_AFA_2026.svg/960px-Logo_LPF_AFA_2026.svg.png`
@@ -15,6 +16,7 @@ export const ALLOWED_REMOTE_ASSET_HOSTS = [
   API_FOOTBALL_MEDIA_HOST,
   WIKIMEDIA_UPLOAD_HOST,
   YOUTUBE_IMAGE_HOST,
+  YOUTUBE_IMAGE_ALT_HOST,
   'gzqapeavjpzgmdhrizqy.supabase.co',
 ]
 

@@ -17,6 +17,8 @@ import { formatMatchTimeArgentina } from '@/shared/utils/argentina-time'
 import { formatEventMinute } from '@/shared/utils/event-minute'
 import { translateMatchEventDetail } from '@/shared/utils/football-events'
 import { getEventElapsedMinute, getFixtureStatusElapsedMinute } from '@/shared/utils/match-minute'
+import { isFinishedStatus } from '@/shared/utils/match-status'
+import { getYouTubeThumbnailUrl } from '@/shared/utils/youtube'
 import Link from 'next/link'
 
 type PageProps = {
@@ -59,7 +61,7 @@ function formatHeaderStatusLabel(
   elapsed: number | null | undefined,
   dateString: string
 ) {
-  if (['FT', 'AET', 'PEN'].includes(statusShort) || statusLong.toLowerCase().includes('finished')) {
+  if (isFinishedStatus(statusShort) || isFinishedStatus(statusLong)) {
     return elapsed ? `FINAL ${elapsed}'` : 'FINAL'
   }
   if (elapsed) return `${elapsed}'`
@@ -84,7 +86,7 @@ function getMaxEventElapsedMinute(events: MatchEvent[]) {
 function getMatchDisplayElapsed(status: MatchFixture['fixture']['status'], events: MatchEvent[]) {
   const statusMinute = getFixtureStatusElapsedMinute(status)
 
-  if (['FT', 'AET', 'PEN'].includes(status.short) || status.long.toLowerCase().includes('finished')) {
+  if (isFinishedStatus(status.short) || isFinishedStatus(status.long)) {
     const maxEventMinute = getMaxEventElapsedMinute(events)
 
     if (statusMinute === null) return maxEventMinute
@@ -809,34 +811,6 @@ function getPanelStyle(style: TeamStyle) {
     borderColor: `${style.border}66`,
     boxShadow: `inset 0 1px 0 ${style.border}1a`,
   }
-}
-
-function getYouTubeVideoId(value?: string | null) {
-  if (!value) return null
-
-  try {
-    const url = new URL(value)
-    const hostname = url.hostname.replace(/^www\./, '')
-    const pathSegments = url.pathname.split('/').filter(Boolean)
-
-    if (hostname === 'youtu.be') return pathSegments[0] ?? null
-
-    if (hostname === 'youtube.com' || hostname.endsWith('.youtube.com')) {
-      if (url.pathname === '/watch') return url.searchParams.get('v')
-      if (['embed', 'shorts', 'live'].includes(pathSegments[0])) {
-        return pathSegments[1] ?? null
-      }
-    }
-  } catch {
-    return null
-  }
-
-  return null
-}
-
-function getYouTubeThumbnailUrl(value?: string | null) {
-  const videoId = getYouTubeVideoId(value)
-  return videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : null
 }
 
 function MatchSummaryCard({

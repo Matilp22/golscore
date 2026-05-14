@@ -3,6 +3,8 @@ const FINISHED_STATUSES = new Set([
   'aet',
   'pen',
   'final',
+  'finalizado',
+  'finalizada',
   'finished',
   'match finished',
   'cerrado',
@@ -16,11 +18,17 @@ const LIVE_STATUSES = new Set([
   'et',
   'bt',
   'p',
+  'first half',
+  'second half',
+  'extra time',
+  'penalty in progress',
 ])
 
 const UPCOMING_STATUSES = new Set([
   'ns',
   'tbd',
+  'not started',
+  'time to be defined',
 ])
 
 const POSTPONED_STATUSES = new Set([
@@ -35,7 +43,9 @@ export function normalizeMatchStatus(status: string | null | undefined) {
 }
 
 export function isFinishedStatus(status: string | null | undefined) {
-  return FINISHED_STATUSES.has(normalizeMatchStatus(status))
+  const normalized = normalizeMatchStatus(status)
+
+  return FINISHED_STATUSES.has(normalized) || normalized.includes('match finished')
 }
 
 export const isFinalMatchStatus = isFinishedStatus
@@ -60,4 +70,21 @@ export function hasStartedStatus(status: string | null | undefined) {
   const normalized = normalizeMatchStatus(status)
 
   return isFinishedStatus(normalized) || isLiveStatus(normalized)
+}
+
+export function getCanonicalMatchStatusFromApi(status?: {
+  short?: string | null
+  long?: string | null
+} | null) {
+  const rawShort = status?.short?.trim()
+  const normalizedShort = normalizeMatchStatus(rawShort)
+  const normalizedLong = normalizeMatchStatus(status?.long)
+
+  if (isFinishedStatus(normalizedShort) || isFinishedStatus(normalizedLong)) {
+    if (normalizedShort === 'aet') return 'AET'
+    if (normalizedShort === 'pen') return 'PEN'
+    return 'FT'
+  }
+
+  return rawShort || status?.long?.trim() || 'NS'
 }
