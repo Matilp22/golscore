@@ -33,10 +33,10 @@ function RankingRows({ rows, emptyMessage }: RankingRowsProps) {
       {rows.map((row, index) => (
         <div
           key={row.userId}
-          className="flex min-w-0 items-center justify-between gap-2 px-3 py-2 text-xs transition hover:bg-white/[0.025] sm:px-4"
+          className="flex min-w-0 items-center justify-between gap-2 px-3 py-2 text-xs transition hover:bg-[rgba(112,255,157,0.045)] sm:px-4"
         >
           <div className="flex min-w-0 items-center gap-2">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/8 bg-white/[0.04] text-[11px] font-black text-[#9adfb8]">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[#70ff9d]/20 bg-[#70ff9d]/10 text-[11px] font-black text-[#9adfb8]">
               {index + 1}
             </span>
             <div className="min-w-0">
@@ -47,7 +47,7 @@ function RankingRows({ rows, emptyMessage }: RankingRowsProps) {
               </p>
             </div>
           </div>
-          <span className="shrink-0 rounded-lg bg-[#13251d] px-2 py-0.5 text-base font-black text-[#7ff0b2]">
+          <span className="hf-badge shrink-0 rounded-lg px-2 py-0.5 text-base font-black">
             {row.points} pts
           </span>
         </div>
@@ -79,11 +79,11 @@ export default function LeaderboardTable({
       : roundMessage || 'Todavía no hay puntos para esta fecha.'
 
   return (
-    <aside className="h-fit w-full min-w-0 overflow-hidden rounded-2xl border border-white/8 bg-[#10151a]/95 shadow-[0_10px_24px_rgba(0,0,0,0.12)]">
-      <div className="border-b border-white/7 px-3 py-3 sm:px-4">
+    <aside className="hf-card h-fit w-full min-w-0 overflow-hidden rounded-2xl">
+      <div className="hf-section-head px-3 py-3 sm:px-4">
         <div className="flex min-w-0 flex-col gap-3">
           <h2 className="text-lg font-black text-white">Ranking del Prode</h2>
-          <div className="grid grid-cols-2 gap-1 rounded-xl border border-white/8 bg-[#0d1217] p-1">
+          <div className="grid grid-cols-2 gap-1 rounded-xl border border-white/8 bg-black/25 p-1">
             {[
               { key: 'total', label: 'Total' },
               { key: 'round', label: 'Por fecha' },
@@ -97,7 +97,7 @@ export default function LeaderboardTable({
                   onClick={() => setActiveTab(tab.key as 'total' | 'round')}
                   className={`h-9 rounded-lg text-sm font-bold transition ${
                     isActive
-                      ? 'bg-[#163828] text-[#7ff0b2]'
+                      ? 'bg-[#70ff9d]/15 text-[#70ff9d]'
                       : 'text-[#9aa7b5] hover:bg-white/[0.04] hover:text-white'
                   }`}
                 >
@@ -112,7 +112,7 @@ export default function LeaderboardTable({
               value={selectedRoundOption?.value ?? ''}
               onChange={(event) => onRoundChange(event.target.value)}
               disabled={!rounds.length}
-              className="h-10 w-full rounded-xl border border-white/8 bg-[#0d1217] px-3 text-sm font-semibold text-white outline-none transition focus:border-[#7ff0b2] disabled:cursor-not-allowed disabled:text-[#8d98a7]"
+              className="hf-input h-10 w-full rounded-xl px-3 text-sm font-semibold outline-none transition disabled:cursor-not-allowed disabled:text-[#8d98a7]"
             >
               {rounds.length ? (
                 rounds.map((round) => (

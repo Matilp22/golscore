@@ -114,8 +114,8 @@ export default function CurrentRoundNavigator({
   if (!selectedRound) return null
 
   return (
-    <section className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
-      <div className="border-b border-white/6 bg-[#13181d] px-2.5 py-2 md:px-3">
+    <section className="hf-card w-full overflow-hidden rounded-2xl">
+      <div className="hf-section-head px-2.5 py-2 md:px-3">
         <div className="flex items-center justify-between gap-2">
           <button
             type="button"
@@ -131,7 +131,7 @@ export default function CurrentRoundNavigator({
             <button
               type="button"
               onClick={() => setIsOpen((current) => !current)}
-            className="mx-auto flex min-w-[160px] max-w-full items-center justify-center gap-1.5 rounded-xl border border-white/8 bg-[#10151a] px-3 py-1.5 text-white transition hover:border-white/12 hover:bg-[#151b21]"
+            className="hf-button-secondary mx-auto flex min-w-[160px] max-w-full items-center justify-center gap-1.5 rounded-xl px-3 py-1.5 text-white"
               aria-expanded={isOpen}
               aria-haspopup="listbox"
             >
@@ -144,7 +144,7 @@ export default function CurrentRoundNavigator({
             </button>
 
             {isOpen ? (
-              <div className="absolute left-1/2 top-[calc(100%+10px)] z-20 w-[240px] max-w-[90vw] -translate-x-1/2 overflow-hidden rounded-2xl border border-white/8 bg-[#11161b] shadow-[0_16px_40px_rgba(0,0,0,0.35)]">
+              <div className="absolute left-1/2 top-[calc(100%+10px)] z-20 w-[240px] max-w-[90vw] -translate-x-1/2 overflow-hidden rounded-2xl border border-[#70ff9d]/15 bg-[#0b1412] shadow-[0_16px_40px_rgba(0,0,0,0.35)]">
                 <div className="max-h-72 overflow-y-auto py-2">
                   {selectOptions.map((option) => {
                     const isActive = option.index === selectedIndex

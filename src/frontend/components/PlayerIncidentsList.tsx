@@ -131,8 +131,8 @@ export default function PlayerIncidentsList({
   }, [leagueId, season, playerId, playerName, teamId, expectedCount, statType])
 
   return (
-    <div className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
-      <div className="border-b border-white/6 bg-[#13181d] px-2 py-2 md:px-3">
+    <div className="hf-card w-full overflow-hidden rounded-2xl">
+      <div className="hf-section-head px-2 py-2 md:px-3">
         <div className="flex items-center justify-between gap-2">
           <div>
             <h2 className="text-base font-bold text-white">Partidos con incidencias</h2>
@@ -156,7 +156,7 @@ export default function PlayerIncidentsList({
             <Link
               key={match.fixtureId}
               href={`/partido/${match.fixtureId}`}
-              className="block rounded-2xl border border-white/6 bg-[#151b22] px-2 py-2.5 transition duration-300 ease-out hover:-translate-y-0.5 hover:border-white/12 hover:bg-[#19212a] md:px-3"
+              className="hf-card-hover block rounded-2xl border border-white/6 bg-black/20 px-2 py-2.5 transition duration-300 ease-out hover:-translate-y-0.5 hover:border-[#70ff9d]/25 md:px-3"
             >
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>

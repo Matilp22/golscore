@@ -253,7 +253,7 @@ export default function PredictionForm({
             if (message) setMessage('')
           }}
           aria-label="Pronóstico local"
-          className="h-11 w-full min-w-0 rounded-xl border border-white/10 bg-[#e8eef4] text-center text-base font-black text-[#0b1115] outline-none transition focus:border-[#7ff0b2] focus:ring-2 focus:ring-[#7ff0b2]/20 disabled:bg-[#26303a] disabled:text-[#9aa7b5] disabled:opacity-80"
+          className="h-11 w-full min-w-0 rounded-xl border border-[#70ff9d]/20 bg-[#eef5ef] text-center text-base font-black text-[#07110b] outline-none transition focus:border-[#70ff9d] focus:ring-2 focus:ring-[#70ff9d]/20 disabled:bg-[#26303a] disabled:text-[#9aa7b5] disabled:opacity-80"
         />
         <span className="hidden text-center text-xs font-black uppercase text-[#8d98a7] md:block">vs</span>
         <input
@@ -272,7 +272,7 @@ export default function PredictionForm({
             if (message) setMessage('')
           }}
           aria-label="Pronóstico visitante"
-          className="h-11 w-full min-w-0 rounded-xl border border-white/10 bg-[#e8eef4] text-center text-base font-black text-[#0b1115] outline-none transition focus:border-[#7ff0b2] focus:ring-2 focus:ring-[#7ff0b2]/20 disabled:bg-[#26303a] disabled:text-[#9aa7b5] disabled:opacity-80"
+          className="h-11 w-full min-w-0 rounded-xl border border-[#70ff9d]/20 bg-[#eef5ef] text-center text-base font-black text-[#07110b] outline-none transition focus:border-[#70ff9d] focus:ring-2 focus:ring-[#70ff9d]/20 disabled:bg-[#26303a] disabled:text-[#9aa7b5] disabled:opacity-80"
         />
         <TeamLabel
           align="right"
@@ -284,7 +284,7 @@ export default function PredictionForm({
           type="button"
           disabled={buttonDisabled}
           onClick={handleSave}
-          className="col-span-4 h-11 rounded-xl border border-[#25553d] bg-[#163828] px-4 text-sm font-bold text-[#7ff0b2] transition hover:bg-[#1b4330] disabled:cursor-not-allowed disabled:opacity-45 md:col-span-1"
+          className="hf-button col-span-4 h-11 rounded-xl px-4 text-sm font-black disabled:cursor-not-allowed disabled:opacity-45 md:col-span-1"
         >
           {isPending ? 'Guardando' : actionLabel}
         </button>

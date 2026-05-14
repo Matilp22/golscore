@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 260" role="img" aria-labelledby="title">
+  <title>HAY FULBO</title>
+  <defs>
+    <linearGradient id="markBg" x1="26" y1="26" x2="234" y2="234" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#17472d"/>
+      <stop offset="0.48" stop-color="#07110d"/>
+      <stop offset="1" stop-color="#030706"/>
+    </linearGradient>
+    <linearGradient id="green" x1="72" y1="72" x2="212" y2="212" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#b6ffd0"/>
+      <stop offset="0.44" stop-color="#70ff9d"/>
+      <stop offset="1" stop-color="#21d46f"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-40%" width="160%" height="180%">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.24 0 0 0 0 1 0 0 0 0 0.52 0 0 0 .52 0"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect x="18" y="18" width="224" height="224" rx="52" fill="url(#markBg)"/>
+  <path d="M42 196 220 48" fill="none" stroke="#70ff9d" stroke-width="10" stroke-linecap="round" opacity=".25"/>
+  <path d="M67 74h34v44h62V74h34v112h-34v-43h-62v43H67V74Z" fill="url(#green)" filter="url(#glow)"/>
+  <path d="M118 74h79v27h-45v21h38v27h-38v37h-34V74Z" fill="#f3f6ef"/>
+  <path d="M270 183V74h37v39h43V74h37v109h-37v-41h-43v41h-37Zm132 0 44-109h42l44 109h-39l-6-17h-42l-6 17h-37Zm50-43h28l-14-39-14 39Zm102 43v-39L512 74h42l19 38 19-38h42l-43 70v39h-37Zm143 0V74h88v30h-51v15h44v29h-44v35h-37Zm105 0V74h37v78h49v31h-86Zm98-109h37v63c0 12 6 18 18 18 12 0 18-6 18-18V74h37v65c0 31-21 47-55 47s-55-16-55-47V74Z" fill="#f3f6ef"/>
+  <path d="M270 206h568" stroke="#70ff9d" stroke-width="8" stroke-linecap="round" opacity=".68"/>
+  <path d="M876 84h72M856 121h72M832 158h72" stroke="#70ff9d" stroke-width="12" stroke-linecap="round" opacity=".74"/>
+</svg>

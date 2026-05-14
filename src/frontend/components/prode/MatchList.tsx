@@ -102,7 +102,7 @@ export default function MatchList({
 
   if (!matches.length) {
     return (
-      <div className="w-full rounded-2xl border border-white/8 bg-[#10151a]/95 p-4">
+      <div className="hf-card w-full rounded-2xl p-4">
         <h2 className="text-lg font-black text-white">Partidos</h2>
         <p className="mt-2 text-sm text-[#8d98a7]">
           No hay partidos cargados para los filtros seleccionados.
@@ -114,8 +114,8 @@ export default function MatchList({
   return (
     <section className="w-full min-w-0 space-y-3">
       {groups.map((group) => (
-        <div key={group.key} className="w-full min-w-0 overflow-hidden rounded-2xl border border-white/8 bg-[#10151a]/95 shadow-[0_10px_24px_rgba(0,0,0,0.12)]">
-          <div className="border-b border-white/7 bg-[#121820] px-3 py-2 sm:px-4">
+        <div key={group.key} className="hf-card w-full min-w-0 overflow-hidden rounded-2xl">
+          <div className="hf-section-head px-3 py-2 sm:px-4">
             <h3 className="text-sm font-black text-white">
               {group.label}
             </h3>

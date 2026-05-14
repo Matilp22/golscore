@@ -52,7 +52,7 @@ function TeamInfoRow({
 
 function PlayerCard({ player }: { player: TeamSquadPlayer }) {
   return (
-    <div className="flex items-center gap-2.5 rounded-xl border border-white/6 bg-[#161a20] px-2.5 py-2">
+    <div className="flex items-center gap-2.5 rounded-xl border border-white/6 bg-black/20 px-2.5 py-2 transition hover:bg-[#70ff9d]/10">
       <div className="flex h-12 w-12 items-center justify-center overflow-hidden">
         <PlayerPhoto
           src={player.photo}
@@ -114,7 +114,7 @@ export default async function EquipoPage({ params }: PageProps) {
     return (
       <div className="min-h-screen text-white">
         <div className="mx-0 w-full max-w-none px-0 py-3 md:mx-auto md:max-w-6xl md:px-4 md:py-10">
-          <div className="w-full rounded-2xl border border-white/8 bg-[#111418] p-4 md:p-6">
+          <div className="hf-card w-full rounded-2xl p-4 md:p-6">
             <h1 className="text-2xl font-black">Equipo no encontrado</h1>
             <p className="mt-2 text-[#8d98a7]">No existe información para este equipo.</p>
           </div>
@@ -126,7 +126,7 @@ export default async function EquipoPage({ params }: PageProps) {
   return (
     <div className="min-h-screen text-white">
       <div className="w-full max-w-none px-0 py-3 lg:mx-auto lg:max-w-7xl lg:px-5 lg:py-6">
-        <header className="mb-4 w-full overflow-hidden rounded-2xl border border-white/8 bg-[#111418]/95 shadow-[0_10px_30px_rgba(0,0,0,0.2)]">
+        <header className="hf-hero mb-4 w-full overflow-hidden rounded-3xl">
           <div className="flex flex-col gap-3 px-2 py-3 md:flex-row md:items-center md:justify-between md:gap-4 md:px-4 md:py-5">
             <div className="flex items-center gap-4">
               <div className="flex h-20 w-20 items-center justify-center overflow-hidden">
@@ -154,15 +154,15 @@ export default async function EquipoPage({ params }: PageProps) {
             </div>
 
             <div className="grid gap-2 text-sm md:grid-cols-3">
-              <div className="rounded-xl border border-white/6 bg-[#161a20] px-2 py-2.5 md:px-3">
+              <div className="rounded-xl border border-white/6 bg-black/20 px-2 py-2.5 md:px-3">
                 <p className="text-[11px] uppercase tracking-[0.14em] text-[#8d98a7]">Fundado</p>
                 <p className="mt-1 font-semibold text-white">{team.founded || 'No disponible'}</p>
               </div>
-              <div className="rounded-xl border border-white/6 bg-[#161a20] px-2 py-2.5 md:px-3">
+              <div className="rounded-xl border border-white/6 bg-black/20 px-2 py-2.5 md:px-3">
                 <p className="text-[11px] uppercase tracking-[0.14em] text-[#8d98a7]">Código</p>
                 <p className="mt-1 font-semibold text-white">{team.code || 'No disponible'}</p>
               </div>
-              <div className="rounded-xl border border-white/6 bg-[#161a20] px-2 py-2.5 md:px-3">
+              <div className="rounded-xl border border-white/6 bg-black/20 px-2 py-2.5 md:px-3">
                 <p className="text-[11px] uppercase tracking-[0.14em] text-[#8d98a7]">Estadio</p>
                 <p className="mt-1 font-semibold text-white">{venue?.name || 'No disponible'}</p>
               </div>
@@ -172,8 +172,8 @@ export default async function EquipoPage({ params }: PageProps) {
 
         <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
           <aside className="space-y-4">
-            <div className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
-              <div className="border-b border-white/6 bg-[#13181d] px-2 py-2 md:px-3">
+            <div className="hf-card w-full overflow-hidden rounded-2xl">
+              <div className="hf-section-head px-2 py-2 md:px-3">
                 <h2 className="text-base font-bold text-white">Ficha</h2>
               </div>
 
@@ -188,8 +188,8 @@ export default async function EquipoPage({ params }: PageProps) {
             </div>
 
             {venue?.image ? (
-              <div className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
-                <div className="border-b border-white/6 bg-[#13181d] px-2 py-2 md:px-3">
+              <div className="hf-card w-full overflow-hidden rounded-2xl">
+                <div className="hf-section-head px-2 py-2 md:px-3">
                   <h2 className="text-base font-bold text-white">Estadio</h2>
                 </div>
 
@@ -210,8 +210,8 @@ export default async function EquipoPage({ params }: PageProps) {
           </aside>
 
           <main className="space-y-4">
-            <div className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
-              <div className="border-b border-white/6 bg-[#13181d] px-2 py-2 md:px-3">
+            <div className="hf-card w-full overflow-hidden rounded-2xl">
+              <div className="hf-section-head px-2 py-2 md:px-3">
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="text-base font-bold text-white">Plantel</h2>
                   <span className="text-[10px] uppercase tracking-[0.14em] text-[#8d98a7]">

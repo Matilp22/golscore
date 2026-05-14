@@ -45,7 +45,7 @@ export default function MatchCard({
   return (
     <Link
       href={`/partido/${id}`}
-      className="block rounded-2xl border border-white/10 bg-zinc-900/85 p-3 shadow-lg shadow-black/20 transition hover:border-emerald-500/30"
+      className="hf-card hf-card-hover block rounded-2xl p-3"
     >
       <div className="mb-2 flex items-center justify-between gap-2">
         <div>

@@ -1,9 +1,10 @@
-const STATIC_CACHE = 'fulboapp-static-v5'
-const PAGE_CACHE = 'fulboapp-pages-v5'
+const STATIC_CACHE = 'hayfulbo-static-v1'
+const PAGE_CACHE = 'hayfulbo-pages-v1'
 const STATIC_ASSETS = [
   '/manifest.json',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
+  '/favicon.svg',
+  '/icons/hay-fulbo-icon.svg',
+  '/brand/hay-fulbo-mark.svg',
 ]
 
 function isDynamicRequest(url) {
@@ -27,6 +28,8 @@ function isStaticAsset(request, url) {
     request.destination === 'font' ||
     url.pathname.startsWith('/_next/static/') ||
     url.pathname.startsWith('/icons/') ||
+    url.pathname.startsWith('/brand/') ||
+    url.pathname === '/favicon.svg' ||
     url.pathname === '/manifest.json'
   )
 }

@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 
 import CurrentRoundNavigator from '@/frontend/components/CurrentRoundNavigator'
 import CopaArgentinaChampions from '@/frontend/components/CopaArgentinaChampions'
@@ -31,6 +31,7 @@ import {
   type TopPlayerRow,
 } from '@/lib/api-football'
 import { getTournamentConfig } from '@/lib/tournament-pages'
+import { getTournamentTheme } from '@/lib/tournament-themes'
 import {
   getLeagueFinalPhaseKey,
   getLeagueRoundLabel,
@@ -1609,8 +1610,8 @@ function SectionCard({
   children: ReactNode
 }) {
   return (
-    <section className="w-full overflow-hidden rounded-3xl border border-white/8 bg-[#0f1317]/92">
-      <div className="border-b border-white/6 bg-[#13181d] px-2 py-2 md:px-3">
+    <section className="hf-card w-full overflow-hidden rounded-3xl">
+      <div className="hf-section-head px-2 py-2 md:px-3">
         <h2 className="text-base font-bold text-white md:text-lg">{title}</h2>
         {subtitle ? (
           <p className="mt-0.5 text-xs text-[#8d98a7]">{subtitle}</p>
@@ -2269,12 +2270,22 @@ export default async function LigaPage({ params }: PageProps) {
   const compactSummaryTables = annualTable.length > 0 && promedioTable.length > 0
   const visibleTournamentTitle = displayOptions.visibleNameEs
   const visibleTournamentCountry = displayOptions.countryNameEs
+  const tournamentTheme = getTournamentTheme(tournament.key)
+  const tournamentThemeStyle = {
+    background: tournamentTheme.background,
+    boxShadow: tournamentTheme.glow,
+    '--tournament-accent': tournamentTheme.accent,
+  } as CSSProperties
 
   return (
     <div className="min-h-screen bg-transparent text-white">
       <div className="w-full max-w-none px-0 py-3 lg:mx-auto lg:max-w-7xl lg:px-5 lg:py-6">
         <main className="w-full min-w-0 space-y-4">
-          <header className="w-full overflow-hidden rounded-3xl border border-white/8 bg-[#111418]/95 shadow-[0_10px_30px_rgba(0,0,0,0.2)]">
+          <header
+            className="relative w-full overflow-hidden rounded-3xl border border-white/8"
+            style={tournamentThemeStyle}
+          >
+            <div className="pointer-events-none absolute inset-0 bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.035)_0_1px,transparent_1px_54px)] opacity-45" />
             <div className="flex flex-col gap-3 px-2 py-3 md:flex-row md:items-center md:justify-between md:gap-4 md:px-4 md:py-5">
               <div className="flex items-center gap-4">
                 {resolvedTournament?.logo ? (
@@ -2291,7 +2302,7 @@ export default async function LigaPage({ params }: PageProps) {
                 ) : null}
 
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#7ff0b2]">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--tournament-accent)]">
                     {visibleTournamentCountry}
                   </p>
                   <h1 className="mt-1 text-2xl font-bold text-white md:text-3xl">

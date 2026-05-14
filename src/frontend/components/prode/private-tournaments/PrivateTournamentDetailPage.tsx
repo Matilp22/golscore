@@ -46,8 +46,8 @@ function RankingTable({
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[560px] border-separate border-spacing-0 text-left text-sm">
+    <div className="overflow-hidden">
+      <table className="hf-table w-full table-fixed border-separate border-spacing-0 text-left text-[11px] sm:text-sm">
         <thead className="text-xs uppercase text-[#8d98a7]">
           <tr>
             <th className="px-3 py-2 font-black">Pos.</th>
@@ -91,13 +91,13 @@ function HonorBadge({
   variant: 'gold' | 'silver' | 'fun'
 }) {
   const styles = {
-    gold: 'border-amber-300/30 bg-amber-300/12 text-amber-200',
+    gold: 'border-amber-300/30 bg-amber-300/10 text-amber-200',
     silver: 'border-sky-200/25 bg-sky-300/10 text-sky-100',
     fun: 'border-fuchsia-300/25 bg-fuchsia-300/10 text-fuchsia-100',
   }
 
   return (
-    <div className={`rounded-2xl border p-3 ${styles[variant]}`}>
+    <div className={`rounded-2xl border p-3 shadow-[0_10px_26px_rgba(0,0,0,0.14)] ${styles[variant]}`}>
       <p className="text-[11px] font-black uppercase tracking-[0.04em]">{label}</p>
       <p className="mt-1 break-words text-sm font-black text-white">{row.username}</p>
       <p className="mt-0.5 text-xs opacity-85">
@@ -225,7 +225,7 @@ export default function PrivateTournamentDetailPage({
 
   if (isAuthLoading || isLoading) {
     return (
-      <section className="rounded-2xl border border-white/8 bg-[#10151a]/95 p-4 text-sm text-[#9aa7b5]">
+      <section className="hf-card rounded-2xl p-4 text-sm text-[#9aa7b5]">
         Cargando torneo...
       </section>
     )
@@ -233,7 +233,7 @@ export default function PrivateTournamentDetailPage({
 
   if (!user) {
     return (
-      <section className="rounded-2xl border border-white/8 bg-[#10151a]/95 p-4">
+      <section className="hf-card rounded-2xl p-4">
         <h2 className="text-lg font-black text-white">Torneo privado</h2>
         <p className="mt-2 text-sm text-[#9aa7b5]">
           Iniciá sesión para ver este torneo privado.
@@ -244,12 +244,12 @@ export default function PrivateTournamentDetailPage({
 
   if (error && !tournament) {
     return (
-      <section className="rounded-2xl border border-white/8 bg-[#10151a]/95 p-4">
+      <section className="hf-card rounded-2xl p-4">
         <h2 className="text-lg font-black text-white">Torneo privado</h2>
         <p className="mt-2 text-sm text-red-200">{error}</p>
         <Link
           href="/prode/torneos"
-          className="mt-4 inline-flex h-10 items-center justify-center rounded-xl bg-[#163828] px-4 text-sm font-black text-[#7ff0b2]"
+          className="hf-button-secondary mt-4 inline-flex h-10 items-center justify-center rounded-xl px-4 text-sm font-black"
         >
           Volver a torneos
         </Link>
@@ -263,7 +263,7 @@ export default function PrivateTournamentDetailPage({
 
   return (
     <div className="space-y-3 md:space-y-4">
-      <section className="rounded-2xl border border-white/8 bg-[#10151a]/95 p-3 shadow-[0_12px_30px_rgba(0,0,0,0.16)] sm:p-4">
+      <section className="hf-hero overflow-hidden rounded-3xl p-3 sm:p-4">
         <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <h1 className="break-words text-2xl font-black text-white sm:text-3xl">
@@ -275,7 +275,7 @@ export default function PrivateTournamentDetailPage({
           </div>
           <Link
             href="/prode/torneos"
-            className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl border border-white/8 bg-white/[0.03] px-4 text-sm font-black text-[#dce7f2] transition hover:bg-white/[0.06]"
+            className="hf-button-secondary inline-flex h-10 shrink-0 items-center justify-center rounded-xl px-4 text-sm font-black"
           >
             Volver
           </Link>
@@ -283,12 +283,12 @@ export default function PrivateTournamentDetailPage({
       </section>
 
       <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_330px] lg:gap-4">
-        <section className="min-w-0 overflow-hidden rounded-2xl border border-white/8 bg-[#10151a]/95 shadow-[0_12px_30px_rgba(0,0,0,0.16)]">
-          <div className="border-b border-white/7 px-3 py-3 sm:px-4">
+        <section className="hf-card min-w-0 overflow-hidden rounded-2xl">
+          <div className="hf-section-head px-3 py-3 sm:px-4">
             <div className="flex min-w-0 flex-col gap-3">
               <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <h2 className="text-lg font-black text-white">Tabla del torneo</h2>
-                <div className="grid w-full grid-cols-2 gap-1 rounded-xl border border-white/8 bg-[#0d1217] p-1 sm:w-56">
+                <div className="grid w-full grid-cols-2 gap-1 rounded-xl border border-white/8 bg-black/25 p-1 sm:w-56">
                   {[
                     { key: 'total', label: 'Total' },
                     { key: 'round', label: 'Por fecha' },
@@ -302,7 +302,7 @@ export default function PrivateTournamentDetailPage({
                         onClick={() => setMode(tab.key as RankingMode)}
                         className={`h-9 rounded-lg text-sm font-bold transition ${
                           isActive
-                            ? 'bg-[#163828] text-[#7ff0b2]'
+                            ? 'bg-[#70ff9d]/15 text-[#70ff9d]'
                             : 'text-[#9aa7b5] hover:bg-white/[0.04] hover:text-white'
                         }`}
                       >
@@ -321,7 +321,7 @@ export default function PrivateTournamentDetailPage({
                     setSelectedHonorRound(event.target.value)
                   }}
                   disabled={!tournament.roundRankings.length}
-                  className="h-10 w-full rounded-xl border border-white/8 bg-[#0d1217] px-3 text-sm font-semibold text-white outline-none transition focus:border-[#7ff0b2] disabled:cursor-not-allowed disabled:text-[#8d98a7]"
+                  className="hf-input h-10 w-full rounded-xl px-3 text-sm font-semibold outline-none transition disabled:cursor-not-allowed disabled:text-[#8d98a7]"
                 >
                   {tournament.roundRankings.length ? (
                     tournament.roundRankings.map((round) => (
@@ -348,8 +348,8 @@ export default function PrivateTournamentDetailPage({
         </section>
 
         <aside className="min-w-0 space-y-3">
-          <section className="overflow-hidden rounded-2xl border border-white/8 bg-[#10151a]/95 shadow-[0_12px_30px_rgba(0,0,0,0.16)]">
-            <div className="border-b border-white/7 px-3 py-3 sm:px-4">
+          <section className="hf-card overflow-hidden rounded-2xl">
+            <div className="hf-section-head px-3 py-3 sm:px-4">
               <h2 className="text-lg font-black text-white">Menciones honoríficas</h2>
               {selectedHonorRoundRanking ? (
                 <p className="mt-1 text-xs font-semibold text-[#8d98a7]">
@@ -362,7 +362,7 @@ export default function PrivateTournamentDetailPage({
                 value={selectedHonorRoundRanking?.value ?? ''}
                 onChange={(event) => setSelectedHonorRound(event.target.value)}
                 disabled={!tournament.roundRankings.length}
-                className="h-10 w-full rounded-xl border border-white/8 bg-[#0d1217] px-3 text-sm font-semibold text-white outline-none transition focus:border-[#7ff0b2] disabled:cursor-not-allowed disabled:text-[#8d98a7]"
+                className="hf-input h-10 w-full rounded-xl px-3 text-sm font-semibold outline-none transition disabled:cursor-not-allowed disabled:text-[#8d98a7]"
               >
                 {tournament.roundRankings.length ? (
                   tournament.roundRankings.map((round) => (
@@ -389,8 +389,8 @@ export default function PrivateTournamentDetailPage({
           </section>
 
           {isOwner ? (
-            <section className="overflow-hidden rounded-2xl border border-white/8 bg-[#10151a]/95 shadow-[0_12px_30px_rgba(0,0,0,0.16)]">
-              <div className="border-b border-white/7 px-3 py-3 sm:px-4">
+            <section className="hf-card overflow-hidden rounded-2xl">
+              <div className="hf-section-head px-3 py-3 sm:px-4">
                 <h2 className="text-lg font-black text-white">Solicitudes de ingreso</h2>
               </div>
               {tournament.pendingRequests.length ? (
@@ -411,7 +411,7 @@ export default function PrivateTournamentDetailPage({
                           type="button"
                           onClick={() => reviewRequest(request.id, 'approve')}
                           disabled={reviewingRequestId === request.id}
-                          className="h-9 rounded-xl bg-[#1fa463] px-3 text-xs font-black text-[#07110b] transition hover:bg-[#32c97c] disabled:cursor-not-allowed disabled:opacity-60"
+                          className="hf-button h-9 rounded-xl px-3 text-xs font-black disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           Aceptar
                         </button>
@@ -419,7 +419,7 @@ export default function PrivateTournamentDetailPage({
                           type="button"
                           onClick={() => reviewRequest(request.id, 'reject')}
                           disabled={reviewingRequestId === request.id}
-                          className="h-9 rounded-xl border border-white/8 bg-white/[0.03] px-3 text-xs font-black text-[#dce7f2] transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-60"
+                          className="hf-button-secondary h-9 rounded-xl px-3 text-xs font-black disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           Rechazar
                         </button>
@@ -433,8 +433,8 @@ export default function PrivateTournamentDetailPage({
             </section>
           ) : null}
 
-          <section className="overflow-hidden rounded-2xl border border-white/8 bg-[#10151a]/95 shadow-[0_12px_30px_rgba(0,0,0,0.16)]">
-            <div className="border-b border-white/7 px-3 py-3 sm:px-4">
+          <section className="hf-card overflow-hidden rounded-2xl">
+            <div className="hf-section-head px-3 py-3 sm:px-4">
               <h2 className="text-lg font-black text-white">Miembros</h2>
             </div>
             <div className="divide-y divide-white/6">

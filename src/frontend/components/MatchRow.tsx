@@ -187,7 +187,7 @@ export default function MatchRow({
   return (
     <Link
       href={`/partido/${id}`}
-      className="block border-b border-white/6 bg-[#111418] px-2.5 py-1.5 transition hover:bg-[#161a20] sm:px-3"
+      className="block border-b border-white/6 bg-[#0b1210]/75 px-2.5 py-1.5 transition hover:bg-[rgba(112,255,157,0.055)] sm:px-3"
     >
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_62px_minmax(0,1fr)] items-center gap-1.5 md:grid-cols-[minmax(0,1fr)_72px_minmax(0,1fr)] md:gap-2">
         <div className="flex min-w-0 items-center gap-2">
@@ -196,7 +196,7 @@ export default function MatchRow({
         </div>
 
         <div className="text-center">
-          <div className={`rounded-md border border-white/8 bg-[#0f1317] px-1.5 py-0.5 text-[11px] font-black leading-tight text-white sm:text-xs ${isLive ? 'text-[#7ff0b2]' : ''}`}>
+          <div className={`rounded-lg border border-white/8 bg-black/25 px-1.5 py-0.5 text-[11px] font-black leading-tight text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:text-xs ${isLive ? 'border-[#70ff9d]/35 text-[#70ff9d] shadow-[0_0_20px_rgba(112,255,157,0.12)]' : ''}`}>
             {centerLabel}
           </div>
           {centerStatus ? (

@@ -69,13 +69,13 @@ export default function PwaInstallPrompt() {
   }
 
   return (
-    <div className="fixed inset-x-3 bottom-3 z-50 mx-auto max-w-md rounded-xl border border-white/10 bg-[#111418]/95 p-3 text-white shadow-[0_18px_48px_rgba(0,0,0,0.45)] backdrop-blur">
+    <div className="hf-card fixed inset-x-3 bottom-3 z-50 mx-auto max-w-md rounded-xl p-3 text-white backdrop-blur">
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm font-bold">Instalar FulboApp</p>
+          <p className="text-sm font-bold">Instalar HAY FULBO</p>
           <p className="mt-1 text-xs leading-5 text-[#8d98a7]">
             {installPrompt
-              ? 'Agregá FulboApp a tu pantalla de inicio.'
+              ? 'Agrega HAY FULBO a tu pantalla de inicio.'
               : 'iPhone: Compartir -> Agregar a pantalla de inicio.'}
           </p>
         </div>
@@ -84,9 +84,9 @@ export default function PwaInstallPrompt() {
           type="button"
           onClick={() => setDismissed(true)}
           className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/8 bg-white/[0.03] text-sm font-bold text-[#c7d0da] transition hover:bg-white/[0.08]"
-          aria-label="Cerrar aviso de instalación"
+          aria-label="Cerrar aviso de instalacion"
         >
-          ×
+          x
         </button>
       </div>
 
@@ -94,9 +94,9 @@ export default function PwaInstallPrompt() {
         <button
           type="button"
           onClick={installApp}
-          className="mt-3 inline-flex min-h-10 w-full items-center justify-center rounded-lg border border-[#25553d] bg-[#163828] px-3 py-2 text-sm font-semibold text-[#7ff0b2] transition hover:bg-[#1b4330]"
+          className="hf-button mt-3 inline-flex min-h-10 w-full items-center justify-center rounded-lg px-3 py-2 text-sm font-black"
         >
-          Instalar FulboApp
+          Instalar HAY FULBO
         </button>
       ) : null}
     </div>

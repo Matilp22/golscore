@@ -25,7 +25,7 @@ function getRequestLabel(status: JoinRequestStatus | null) {
 
 function EmptyState({ children }: { children: string }) {
   return (
-    <div className="rounded-2xl border border-white/8 bg-white/[0.025] px-4 py-5 text-sm text-[#9aa7b5]">
+    <div className="rounded-2xl border border-white/8 bg-black/20 px-4 py-5 text-sm text-[#9aa7b5]">
       {children}
     </div>
   )
@@ -155,7 +155,7 @@ export default function PrivateTournamentsPage() {
 
   if (isAuthLoading) {
     return (
-      <section className="rounded-2xl border border-white/8 bg-[#10151a]/95 p-4 text-sm text-[#9aa7b5]">
+      <section className="hf-card rounded-2xl p-4 text-sm text-[#9aa7b5]">
         Cargando sesión...
       </section>
     )
@@ -163,7 +163,7 @@ export default function PrivateTournamentsPage() {
 
   if (!user) {
     return (
-      <section className="rounded-2xl border border-white/8 bg-[#10151a]/95 p-4">
+      <section className="hf-card rounded-2xl p-4">
         <h2 className="text-lg font-black text-white">Torneos privados</h2>
         <p className="mt-2 text-sm text-[#9aa7b5]">
           Iniciá sesión para crear torneos, solicitar acceso y ver rankings privados.
@@ -174,8 +174,8 @@ export default function PrivateTournamentsPage() {
 
   return (
     <div className="grid w-full min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-4">
-      <section className="min-w-0 rounded-2xl border border-white/8 bg-[#10151a]/95 shadow-[0_12px_30px_rgba(0,0,0,0.16)]">
-        <div className="border-b border-white/7 px-3 py-3 sm:px-4">
+      <section className="hf-card min-w-0 rounded-2xl">
+        <div className="hf-section-head px-3 py-3 sm:px-4">
           <h2 className="text-lg font-black text-white">Torneos en los que participo</h2>
         </div>
         <div className="space-y-3 p-3 sm:p-4">
@@ -186,7 +186,7 @@ export default function PrivateTournamentsPage() {
               <Link
                 key={tournament.id}
                 href={`/prode/torneos/${tournament.id}`}
-                className="block rounded-2xl border border-white/8 bg-white/[0.025] p-3 transition hover:border-[#7ff0b2]/30 hover:bg-white/[0.04]"
+                className="hf-card-hover block rounded-2xl border border-white/8 bg-black/20 p-3 transition hover:border-[#70ff9d]/30"
               >
                 <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
@@ -203,7 +203,7 @@ export default function PrivateTournamentsPage() {
                       · {tournament.myPoints} pts
                     </p>
                   </div>
-                  <span className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-[#163828] px-4 text-sm font-black text-[#7ff0b2] transition">
+                  <span className="hf-button inline-flex h-10 shrink-0 items-center justify-center rounded-xl px-4 text-sm font-black transition">
                     Ver torneo
                   </span>
                 </div>
@@ -216,8 +216,8 @@ export default function PrivateTournamentsPage() {
       </section>
 
       <aside className="min-w-0 space-y-3">
-        <section className="rounded-2xl border border-white/8 bg-[#10151a]/95 shadow-[0_12px_30px_rgba(0,0,0,0.16)]">
-          <div className="border-b border-white/7 px-3 py-3 sm:px-4">
+        <section className="hf-card rounded-2xl">
+          <div className="hf-section-head px-3 py-3 sm:px-4">
             <h2 className="text-lg font-black text-white">Crear torneo</h2>
           </div>
           <form onSubmit={handleCreate} className="space-y-3 p-3 sm:p-4">
@@ -225,12 +225,12 @@ export default function PrivateTournamentsPage() {
               value={createName}
               onChange={(event) => setCreateName(event.target.value)}
               placeholder="Nombre del torneo"
-              className="h-11 w-full rounded-xl border border-white/8 bg-[#0d1217] px-3 text-sm font-semibold text-white outline-none transition placeholder:text-[#657384] focus:border-[#7ff0b2]"
+              className="hf-input h-11 w-full rounded-xl px-3 text-sm font-semibold outline-none transition placeholder:text-[#657384]"
             />
             <select
               value={createLeagueExternalId}
               onChange={(event) => setCreateLeagueExternalId(event.target.value)}
-              className="h-11 w-full rounded-xl border border-white/8 bg-[#0d1217] px-3 text-sm font-semibold text-white outline-none transition focus:border-[#7ff0b2]"
+              className="hf-input h-11 w-full rounded-xl px-3 text-sm font-semibold outline-none transition"
             >
               {PRODE_TOURNAMENT_OPTIONS.map((option) => (
                 <option key={option.externalId} value={option.externalId}>
@@ -241,15 +241,15 @@ export default function PrivateTournamentsPage() {
             <button
               type="submit"
               disabled={isCreating}
-              className="h-11 w-full rounded-xl bg-[#1fa463] px-4 text-sm font-black text-[#07110b] transition hover:bg-[#32c97c] disabled:cursor-not-allowed disabled:opacity-60"
+              className="hf-button h-11 w-full rounded-xl px-4 text-sm font-black disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isCreating ? 'Creando...' : 'Crear torneo'}
             </button>
           </form>
         </section>
 
-        <section className="rounded-2xl border border-white/8 bg-[#10151a]/95 shadow-[0_12px_30px_rgba(0,0,0,0.16)]">
-          <div className="border-b border-white/7 px-3 py-3 sm:px-4">
+        <section className="hf-card rounded-2xl">
+          <div className="hf-section-head px-3 py-3 sm:px-4">
             <h2 className="text-lg font-black text-white">Buscar torneo</h2>
           </div>
           <form onSubmit={handleSearch} className="space-y-3 p-3 sm:p-4">
@@ -257,12 +257,12 @@ export default function PrivateTournamentsPage() {
               value={searchName}
               onChange={(event) => setSearchName(event.target.value)}
               placeholder="Nombre exacto del torneo"
-              className="h-11 w-full rounded-xl border border-white/8 bg-[#0d1217] px-3 text-sm font-semibold text-white outline-none transition placeholder:text-[#657384] focus:border-[#7ff0b2]"
+              className="hf-input h-11 w-full rounded-xl px-3 text-sm font-semibold outline-none transition placeholder:text-[#657384]"
             />
             <button
               type="submit"
               disabled={isSearching}
-              className="h-11 w-full rounded-xl bg-[#163828] px-4 text-sm font-black text-[#7ff0b2] transition hover:bg-[#1d4733] disabled:cursor-not-allowed disabled:opacity-60"
+              className="hf-button-secondary h-11 w-full rounded-xl px-4 text-sm font-black disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSearching ? 'Buscando...' : 'Buscar'}
             </button>
@@ -273,7 +273,7 @@ export default function PrivateTournamentsPage() {
             ) : null}
 
             {searchResult ? (
-              <div className="rounded-2xl border border-white/8 bg-white/[0.025] p-3">
+              <div className="rounded-2xl border border-white/8 bg-black/20 p-3">
                 <h3 className="break-words text-base font-black text-white">
                   {searchResult.displayName}
                 </h3>
@@ -291,7 +291,7 @@ export default function PrivateTournamentsPage() {
                     type="button"
                     onClick={handleRequestAccess}
                     disabled={isRequesting}
-                    className="mt-3 h-10 w-full rounded-xl bg-[#1fa463] px-4 text-sm font-black text-[#07110b] transition hover:bg-[#32c97c] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="hf-button mt-3 h-10 w-full rounded-xl px-4 text-sm font-black disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {isRequesting
                       ? 'Enviando...'

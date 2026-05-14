@@ -188,7 +188,7 @@ export default function SidebarNav({
     const isHighlighted = highlighted.has(tournament.key)
 
     return (
-      <div key={tournament.key} className={`group flex min-w-0 items-center gap-1 rounded-lg transition ${isHighlighted ? 'bg-[#152a20] text-[#dfffe9] shadow-[inset_0_0_0_1px_rgba(127,240,178,0.13)]' : 'text-[#bcc6d2] hover:bg-white/5 hover:text-white'}`}>
+      <div key={tournament.key} className={`group flex min-w-0 items-center gap-1 rounded-xl transition ${isHighlighted ? 'bg-[#70ff9d]/10 text-[#eaffef] shadow-[inset_0_0_0_1px_rgba(112,255,157,0.16)]' : 'text-[#bcc6d2] hover:bg-[#70ff9d]/10 hover:text-white'}`}>
         <Link href={`/liga/${tournament.key}`} onClick={onNavigate} className="min-w-0 flex-1 truncate px-2.5 py-2 text-sm">
           {tournament.title}
         </Link>
@@ -225,8 +225,8 @@ export default function SidebarNav({
         const isOpen = openSections[section.key] ?? false
 
         return (
-          <div key={section.key} className={`overflow-hidden border border-white/7 bg-[#111418] shadow-[0_8px_24px_rgba(0,0,0,0.10)] ${compact ? 'rounded-xl' : 'rounded-2xl'}`}>
-            <button type="button" onClick={() => toggleSection(section.key)} className={`flex w-full min-w-0 items-center justify-between gap-2 text-left transition hover:bg-white/[0.04] ${compact ? 'px-3 py-2' : 'px-3.5 py-2.5'}`} aria-expanded={isOpen}>
+          <div key={section.key} className={`overflow-hidden border border-[#70ff9d]/10 bg-[#0b1412]/90 shadow-[0_8px_24px_rgba(0,0,0,0.14)] ${compact ? 'rounded-xl' : 'rounded-2xl'}`}>
+            <button type="button" onClick={() => toggleSection(section.key)} className={`flex w-full min-w-0 items-center justify-between gap-2 text-left transition hover:bg-[#70ff9d]/10 ${compact ? 'px-3 py-2' : 'px-3.5 py-2.5'}`} aria-expanded={isOpen}>
               <span className="min-w-0 truncate text-sm font-semibold text-[#e4ebf3]">
                 {section.title}
               </span>

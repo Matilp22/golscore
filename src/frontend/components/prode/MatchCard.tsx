@@ -66,7 +66,7 @@ export default function MatchCard({
     predictionPoints === 1 ? '1 pt' : `${Number.isFinite(predictionPoints) ? predictionPoints : 0} pts`
 
   return (
-    <article className="w-full min-w-0 px-3 py-3.5 sm:px-4">
+    <article className="w-full min-w-0 bg-[#07100d]/35 px-3 py-3.5 transition hover:bg-[rgba(112,255,157,0.045)] sm:px-4">
       <div className="mb-3 flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="text-xs font-semibold uppercase tracking-[0.08em] text-white">
@@ -75,7 +75,7 @@ export default function MatchCard({
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           {prediction && hasPredictionScore ? (
-            <span className="rounded-full border border-[#25553d]/70 bg-[#13251d]/80 px-2 py-0.5 text-[11px] font-bold text-[#7ff0b2]">
+            <span className="hf-badge rounded-full px-2 py-0.5 text-[11px] font-black">
               {pointsLabel}
               {prediction.exactHit ? ' exacto' : prediction.partialHit ? ' parcial' : ''}
             </span>

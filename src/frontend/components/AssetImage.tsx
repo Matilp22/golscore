@@ -23,7 +23,7 @@ export function TeamLogo({
 }: AssetImageProps) {
   return (
     <span
-      className="inline-flex shrink-0 items-center justify-center overflow-hidden"
+      className="inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/[0.035]"
       style={{ width: size, height: size }}
     >
       <SafeImage
@@ -52,7 +52,7 @@ export function LeagueLogo({
 }: AssetImageProps) {
   return (
     <span
-      className="inline-flex shrink-0 items-center justify-center overflow-hidden"
+      className="inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/[0.035]"
       style={{ width: size, height: size }}
     >
       <SafeImage
@@ -81,7 +81,7 @@ export function PlayerPhoto({
 }: AssetImageProps) {
   return (
     <span
-      className="inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#20262e]"
+      className="inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/8 bg-[#121d1a]"
       style={{ width: size, height: size }}
     >
       <SafeImage

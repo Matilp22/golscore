@@ -28,8 +28,8 @@ export default function LeaderListInteractive({
   const hasMoreRows = rows.length > 10
 
   return (
-    <section className="w-full overflow-hidden rounded-3xl border border-white/8 bg-[#0f1317]/92">
-      <div className="border-b border-white/6 bg-[#13181d] px-4 py-3">
+    <section className="hf-card w-full overflow-hidden rounded-3xl">
+      <div className="hf-section-head px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-base font-bold text-white md:text-lg">{title}</h2>
           <span className="text-[11px] uppercase tracking-[0.14em] text-[#8d98a7]">
@@ -79,7 +79,7 @@ export default function LeaderListInteractive({
                 return (
                   <div
                     key={`${row.playerId || row.name}-${index}`}
-                    className="flex items-center justify-between gap-3 rounded-2xl border border-white/6 bg-[#151a20] px-3 py-3 opacity-80"
+                    className="flex items-center justify-between gap-3 rounded-2xl border border-white/6 bg-black/20 px-3 py-3 opacity-80"
                   >
                     {content}
                   </div>
@@ -90,7 +90,7 @@ export default function LeaderListInteractive({
                 <Link
                   key={`${row.playerId || row.name}-${index}`}
                   href={href}
-                  className="flex items-center justify-between gap-3 rounded-2xl border border-white/6 bg-[#151a20] px-3 py-3 transition duration-300 ease-out hover:-translate-y-0.5 hover:scale-[1.015] hover:border-white/12 hover:bg-[#192028]"
+                  className="hf-card-hover flex items-center justify-between gap-3 rounded-2xl border border-white/6 bg-black/20 px-3 py-3 transition duration-300 ease-out hover:-translate-y-0.5 hover:scale-[1.015] hover:border-[#70ff9d]/25"
                 >
                   {content}
                 </Link>
@@ -102,7 +102,7 @@ export default function LeaderListInteractive({
                 <button
                   type="button"
                   onClick={() => setShowAll((current) => !current)}
-                  className="flex w-full items-center justify-between rounded-2xl border border-white/8 bg-[#13181d] px-4 py-3 text-sm font-semibold text-[#dce5ef] transition hover:border-white/12 hover:bg-[#171d24]"
+                  className="hf-button-secondary flex w-full items-center justify-between rounded-2xl px-4 py-3 text-sm font-semibold"
                   aria-expanded={showAll}
                 >
                   <span>{showAll ? 'Mostrar solo 10 jugadores' : 'Ver todos los jugadores'}</span>

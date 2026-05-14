@@ -3,7 +3,7 @@ import ProfileForm from '@/frontend/components/profile/ProfileForm'
 export default function ProfilePage() {
   return (
     <main className="min-w-0 space-y-4">
-      <header className="rounded-3xl border border-white/8 bg-[#111418]/95 px-4 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.18)] sm:px-6">
+      <header className="hf-hero overflow-hidden rounded-3xl px-4 py-5 sm:px-6">
         <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#7ff0b2]">
           Cuenta
         </p>

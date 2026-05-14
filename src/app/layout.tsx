@@ -6,39 +6,39 @@ import './globals.css'
 
 export const metadata: Metadata = {
   title: {
-    default: 'FulboApp',
-    template: '%s | FulboApp',
+    default: 'HAY FULBO',
+    template: '%s | HAY FULBO',
   },
-  description: 'app de resultados y prode',
+  description: 'Resultados, fixtures y Prode con identidad futbolera.',
   manifest: '/manifest.json',
-  applicationName: 'FulboApp',
+  applicationName: 'HAY FULBO',
   appleWebApp: {
     capable: true,
-    title: 'FulboApp',
+    title: 'HAY FULBO',
     statusBarStyle: 'black-translucent',
   },
   icons: {
     icon: [
-      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
-      { url: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/icons/hay-fulbo-icon.svg', sizes: 'any', type: 'image/svg+xml' },
     ],
-    apple: [{ url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
+    apple: [{ url: '/icons/hay-fulbo-icon.svg', sizes: 'any', type: 'image/svg+xml' }],
   },
   openGraph: {
-    title: 'FulboApp',
-    description: 'app de resultados y prode',
-    siteName: 'FulboApp',
+    title: 'HAY FULBO',
+    description: 'Resultados, fixtures y Prode con identidad futbolera.',
+    siteName: 'HAY FULBO',
     type: 'website',
   },
   twitter: {
     card: 'summary',
-    title: 'FulboApp',
-    description: 'app de resultados y prode',
+    title: 'HAY FULBO',
+    description: 'Resultados, fixtures y Prode con identidad futbolera.',
   },
 }
 
 export const viewport: Viewport = {
-  themeColor: '#0d1014',
+  themeColor: '#06100d',
 }
 
 export default function RootLayout({
@@ -48,7 +48,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" className="h-full antialiased">
-      <body className="flex min-h-full flex-col bg-[#0a0d0b] text-white">
+      <body className="flex min-h-full flex-col bg-[#06100d] text-white">
         <AppShell auth={<AuthStatus />}>
           {children}
         </AppShell>

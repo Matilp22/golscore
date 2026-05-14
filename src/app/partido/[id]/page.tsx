@@ -1417,14 +1417,14 @@ export default async function PartidoDetallePage({ params }: PageProps) {
   return (
     <div className="min-h-screen text-white">
       <div className="w-full max-w-none px-0 py-3 lg:mx-auto lg:max-w-7xl lg:px-5 lg:py-6">
-        <header className="relative mb-4 w-full overflow-hidden rounded-2xl border border-white/8 bg-[#111418]/95 shadow-[0_10px_30px_rgba(0,0,0,0.2)]">
+        <header className="hf-hero relative mb-4 w-full overflow-hidden rounded-3xl">
           <AutoRefresh
             intervalMs={60000}
             showButton
             className="absolute right-4 top-4 z-10"
           />
 
-          <div className="border-b border-white/6 px-2 py-3 md:px-4">
+          <div className="relative z-10 border-b border-white/6 px-2 py-3 md:px-4">
             <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#7ff0b2] md:text-[11px]">
@@ -1437,7 +1437,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
             </div>
           </div>
 
-          <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-2 py-2.5 md:gap-4 md:px-4 md:py-5">
+          <div className="relative z-10 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-2 py-2.5 md:gap-4 md:px-4 md:py-5">
             <MatchTeamCard
               id={homeTeam.id}
               logo={homeTeam.logo}
@@ -1470,7 +1470,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
             />
           </div>
 
-          <div className="grid gap-3 border-t border-white/6 bg-[#13181d] px-2 py-3 text-sm text-[#c8d0da] md:grid-cols-3 md:px-4">
+          <div className="relative z-10 grid gap-3 border-t border-white/6 bg-black/20 px-2 py-3 text-sm text-[#c8d0da] md:grid-cols-3 md:px-4">
             <div>
               <span className="text-[#8d98a7]">Estadio</span>
               <p className="mt-1 font-medium text-white">
@@ -1506,8 +1506,8 @@ export default async function PartidoDetallePage({ params }: PageProps) {
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_320px]">
           <section className="space-y-4">
-            <div className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
-              <div className="border-b border-white/6 bg-[#13181d] px-2 py-3 md:px-4">
+            <div className="hf-card w-full overflow-hidden rounded-2xl">
+              <div className="hf-section-head px-2 py-3 md:px-4">
                 <h2 className="text-base font-bold text-white">Minuto a minuto</h2>
               </div>
 
@@ -1585,8 +1585,8 @@ export default async function PartidoDetallePage({ params }: PageProps) {
               )}
             </div>
 
-            <div className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
-              <div className="border-b border-white/6 bg-[#13181d] px-2 py-3 md:px-4">
+            <div className="hf-card w-full overflow-hidden rounded-2xl">
+              <div className="hf-section-head px-2 py-3 md:px-4">
                 <h2 className="text-base font-bold text-white">Formación</h2>
               </div>
 
@@ -1653,8 +1653,8 @@ export default async function PartidoDetallePage({ params }: PageProps) {
           </section>
 
           <aside className="space-y-4">
-            <div className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
-              <div className="border-b border-white/6 bg-[#13181d] px-2 py-3 md:px-4">
+            <div className="hf-card w-full overflow-hidden rounded-2xl">
+              <div className="hf-section-head px-2 py-3 md:px-4">
                 <div className="flex items-center justify-center">
                   <h2 className="text-base font-bold text-white">Resumen del partido</h2>
                 </div>

@@ -16,7 +16,7 @@ export default function BackButton({ label = 'Volver atrás' }: { label?: string
 
         router.push('/')
       }}
-      className="inline-flex min-h-10 items-center rounded-lg border border-white/8 bg-[#111418] px-3 py-2 text-sm font-semibold text-[#c8d0da] transition hover:bg-[#161a20] hover:text-white"
+      className="hf-button-secondary inline-flex min-h-10 items-center rounded-lg px-3 py-2 text-sm font-semibold"
     >
       {label}
     </button>

@@ -27,7 +27,7 @@ function profilesQuery() {
 function AuthPlaceholder() {
   return (
     <div
-      className="h-10 w-[172px] rounded-xl border border-white/8 bg-[#111418]"
+      className="hf-skeleton h-10 w-[172px] rounded-xl border border-white/8"
       aria-hidden="true"
     />
   )
@@ -131,13 +131,13 @@ export default function AuthStatus() {
       <div className="flex items-center gap-2">
         <Link
           href="/register"
-          className="rounded-xl border border-white/8 bg-[#111418] px-3 py-2 text-sm font-semibold text-[#c8d0da] transition hover:bg-white/5 hover:text-white"
+          className="hf-button-secondary rounded-xl px-3 py-2 text-sm font-semibold"
         >
           Registrarse
         </Link>
         <Link
           href="/login"
-          className="rounded-xl border border-[#25553d] bg-[#163828] px-3 py-2 text-sm font-semibold text-[#7ff0b2] transition hover:bg-[#1b4330]"
+          className="hf-button rounded-xl px-3 py-2 text-sm font-black"
         >
           Iniciar sesión
         </Link>
@@ -150,7 +150,7 @@ export default function AuthStatus() {
       <div className="flex flex-wrap items-center justify-end gap-2">
         <Link
           href="/perfil"
-          className="rounded-xl border border-white/8 bg-[#111418] px-3 py-2 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(0,0,0,0.12)] transition hover:border-[#7ff0b2]/40 hover:bg-white/[0.04]"
+          className="hf-button-secondary rounded-xl px-3 py-2 text-sm font-semibold"
         >
           {currentUserLabel}
         </Link>
@@ -158,7 +158,7 @@ export default function AuthStatus() {
           type="button"
           onClick={handleLogout}
           disabled={isPending}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/8 bg-[#111418] text-[#c8d0da] transition hover:bg-white/5 hover:text-white disabled:cursor-wait disabled:opacity-70"
+          className="hf-button-secondary inline-flex h-10 w-10 items-center justify-center rounded-xl text-[#c8d0da] disabled:cursor-wait disabled:opacity-70"
           aria-label="Cerrar sesión"
           title="Cerrar sesión"
         >

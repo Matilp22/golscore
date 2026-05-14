@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 
 import AutoRefresh from '@/frontend/components/AutoRefresh'
+import BrandMark from '@/frontend/components/BrandMark'
 import { LeagueLogo } from '@/frontend/components/AssetImage'
 import LiveEventToasts from '@/frontend/components/LiveEventToasts'
 import MatchRow from '@/frontend/components/MatchRow'
@@ -1255,14 +1256,14 @@ export default async function HomePage({
   return (
     <div className="min-h-screen overflow-x-hidden bg-transparent text-white">
       <div className="w-full px-0 py-1 lg:mx-auto lg:max-w-7xl lg:px-5 lg:py-4">
-        <header className="relative mb-4 w-full px-2 pt-1 sm:px-3 md:px-0 md:pt-0">
-          <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h1 className="max-w-full break-words text-[2.65rem] font-black leading-none tracking-normal text-white sm:text-5xl md:text-7xl">
-                FulboApp
+        <header className="hf-hero relative mb-4 w-full overflow-hidden rounded-3xl px-3 py-4 sm:px-4 md:px-5 md:py-5">
+          <div className="relative z-10 mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h1>
+                <BrandMark hero />
               </h1>
-              <p className="mt-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#7ff0b2] md:text-sm">
-                Partidos del día
+              <p className="mt-3 max-w-2xl text-xs font-semibold uppercase tracking-[0.22em] text-[#70ff9d] md:text-sm">
+                Partidos del dia, marcadores en vivo y agenda fulbo total
               </p>
             </div>
 
@@ -1278,15 +1279,15 @@ export default async function HomePage({
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:justify-center">
+          <div className="relative z-10 grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:justify-center">
             {dayOptions.map((day) => (
               <a
                 key={day.value}
                 href={`/?date=${day.value}`}
-                className={`flex min-h-11 items-center justify-center rounded-lg border px-2 py-2 text-center text-sm font-semibold transition sm:px-3 ${
+                className={`flex min-h-11 items-center justify-center rounded-xl border px-2 py-2 text-center text-sm font-black transition sm:px-4 ${
                   selectedDate === day.value
-                    ? 'border-[#2d6d4d] bg-[#163828] text-[#7ff0b2]'
-                    : 'border-white/8 bg-[#15191e] text-[#c7d0da] hover:border-white/14 hover:bg-[#181d23]'
+                    ? 'border-[#70ff9d]/35 bg-[rgba(112,255,157,0.16)] text-[#dfffe9] shadow-[0_0_26px_rgba(112,255,157,0.12)]'
+                    : 'border-white/10 bg-black/20 text-[#c7d0da] hover:border-[#70ff9d]/30 hover:bg-[#70ff9d]/10 hover:text-white'
                 }`}
               >
                 {day.label}
@@ -1311,9 +1312,9 @@ export default async function HomePage({
                     <div
                       id={competition.key}
                       key={competition.key}
-                      className="scroll-mt-4 overflow-hidden rounded-xl border border-white/8 bg-[#0f1317]/92"
+                      className="hf-card hf-card-hover scroll-mt-4 overflow-hidden rounded-2xl"
                     >
-                      <div className="border-y border-[#25553d]/45 bg-[#132019] px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(127,240,178,0.08)] sm:px-3">
+                      <div className="hf-section-head px-2.5 py-1.5 sm:px-3">
                         <div className="flex min-w-0 items-center justify-between gap-2">
                           {competition.href ? (
                             <Link
@@ -1350,7 +1351,7 @@ export default async function HomePage({
                             </h2>
                           )}
 
-                          <div className="shrink-0 rounded border border-[#25553d]/45 bg-[#0f1714] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.06em] text-[#9ed6b8]">
+                          <div className="hf-badge shrink-0 rounded-lg px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.06em]">
                             {competition.matches.length} partido{competition.matches.length !== 1 ? 's' : ''}
                           </div>
                         </div>
