@@ -1295,65 +1295,69 @@ function PromediosTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, index) => (
-            <tr
-              key={`${row.teamId || row.teamName}-${index}`}
-              className={`border-b border-l-2 border-white/6 text-[#dce5ef] last:border-b-0 ${getRowAccent(
-                {
-                  rank: row.rank,
-                  teamId: row.teamId,
-                  teamName: row.teamName,
-                  teamLogo: row.teamLogo,
-                  points: row.totalPoints,
-                  played: row.totalPlayed,
-                  won: 0,
-                  drawn: 0,
-                  lost: 0,
-                  goalsFor: 0,
-                  goalsAgainst: 0,
-                  goalDifference: 0,
-                },
-                index,
-                rows.length,
-                'promedios',
-                relegatedTeamIds
-              )}`}
-            >
-              <td className={`${cellPadding} font-semibold`}>{row.rank}</td>
-              <td className={cellPadding}>
-                <div className={`flex min-w-0 items-center ${compact ? 'gap-1' : 'gap-1.5'}`}>
-                  <TeamLogo
-                    src={row.teamLogo}
-                    alt={row.teamName}
-                    size={compact ? 16 : 18}
-                    className={`${compact ? 'h-4 w-4' : 'h-[18px] w-[18px]'} object-contain`}
-                    fallbackClassName={compact ? 'h-3.5 w-3' : 'h-4 w-3'}
-                    unoptimized
-                  />
-                  <span className={`min-w-0 truncate font-medium ${compact ? 'text-[10.5px] sm:text-[12px]' : 'text-[10.5px] sm:text-[13px]'}`}>
-                    {row.teamName}
-                  </span>
-                </div>
-              </td>
-              <td className={`${cellPadding} text-center font-black text-white`}>
-                {row.totalPoints}
-              </td>
-              <td className={`${cellPadding} text-center`}>
-                {row.totalPlayed}
-              </td>
-              <td className={`${cellPadding} text-center font-semibold`}>
-                {row.average.toFixed(3)}
-              </td>
-              {row.seasonValues.map((seasonValue) => (
-                <td
-                  key={`${row.teamId || row.teamName}-${seasonValue.season}`}
-                  className={`${cellPadding} text-center`}
-                >
-                  {seasonValue.points}
+          {rows.map((row, index) => {
+            const visibleRank = index + 1
+
+            return (
+              <tr
+                key={`${row.teamId || row.teamName}-${index}`}
+                className={`border-b border-l-2 border-white/6 text-[#dce5ef] last:border-b-0 ${getRowAccent(
+                  {
+                    rank: visibleRank,
+                    teamId: row.teamId,
+                    teamName: row.teamName,
+                    teamLogo: row.teamLogo,
+                    points: row.totalPoints,
+                    played: row.totalPlayed,
+                    won: 0,
+                    drawn: 0,
+                    lost: 0,
+                    goalsFor: 0,
+                    goalsAgainst: 0,
+                    goalDifference: 0,
+                  },
+                  index,
+                  rows.length,
+                  'promedios',
+                  relegatedTeamIds
+                )}`}
+              >
+                <td className={`${cellPadding} font-semibold`}>{visibleRank}</td>
+                <td className={cellPadding}>
+                  <div className={`flex min-w-0 items-center ${compact ? 'gap-1' : 'gap-1.5'}`}>
+                    <TeamLogo
+                      src={row.teamLogo}
+                      alt={row.teamName}
+                      size={compact ? 16 : 18}
+                      className={`${compact ? 'h-4 w-4' : 'h-[18px] w-[18px]'} object-contain`}
+                      fallbackClassName={compact ? 'h-3.5 w-3' : 'h-4 w-3'}
+                      unoptimized
+                    />
+                    <span className={`min-w-0 truncate font-medium ${compact ? 'text-[10.5px] sm:text-[12px]' : 'text-[10.5px] sm:text-[13px]'}`}>
+                      {row.teamName}
+                    </span>
+                  </div>
                 </td>
-              ))}
-            </tr>
-          ))}
+                <td className={`${cellPadding} text-center font-black text-white`}>
+                  {row.totalPoints}
+                </td>
+                <td className={`${cellPadding} text-center`}>
+                  {row.totalPlayed}
+                </td>
+                <td className={`${cellPadding} text-center font-semibold`}>
+                  {row.average.toFixed(3)}
+                </td>
+                {row.seasonValues.map((seasonValue) => (
+                  <td
+                    key={`${row.teamId || row.teamName}-${seasonValue.season}`}
+                    className={`${cellPadding} text-center`}
+                  >
+                    {seasonValue.points}
+                  </td>
+                ))}
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>

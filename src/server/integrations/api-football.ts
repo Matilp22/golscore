@@ -1124,6 +1124,10 @@ type HomeBroadcastRuleRow = {
   active: boolean | null
 }
 
+type CachedHomeFixtureRow = {
+  normalized_payload: unknown
+}
+
 type HomeMatchExtras = {
   persistedInSupabase: boolean
   broadcasters: MatchBroadcaster[]
@@ -1151,6 +1155,104 @@ function createEmptyHomeMatchExtras(): HomeMatchExtras {
     goalScorers: createEmptyGoalScorers(),
     liveEvents: [],
   }
+}
+
+function getNumberFromCachedValue(value: unknown) {
+  if (value === null || value === undefined || value === '') return null
+
+  const numberValue = Number(value)
+
+  return Number.isFinite(numberValue) ? numberValue : null
+}
+
+function getStringFromCachedValue(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value : null
+}
+
+function getNullableStringFromCachedValue(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value : undefined
+}
+
+function mapCachedHomeFixturePayload(payload: unknown): MatchListItem | null {
+  if (!payload || typeof payload !== 'object') return null
+
+  const row = payload as Record<string, unknown>
+  const id = getNumberFromCachedValue(row.id ?? row.externalId)
+  const externalId = getNumberFromCachedValue(row.externalId ?? row.id)
+  const leagueId = getNumberFromCachedValue(row.leagueId)
+  const homeId = getNumberFromCachedValue(row.homeId)
+  const awayId = getNumberFromCachedValue(row.awayId)
+  const league = getStringFromCachedValue(row.league)
+  const home = getStringFromCachedValue(row.home)
+  const away = getStringFromCachedValue(row.away)
+  const date = getStringFromCachedValue(row.date)
+
+  if (!id || !externalId || !league || !home || !away || !date) return null
+
+  const excludedReason = getHomeMatchVisibility({
+    leagueId,
+    league,
+    country: getNullableStringFromCachedValue(row.country),
+    home,
+    away,
+  }).excludedReason
+
+  if (excludedReason) return null
+
+  return {
+    id,
+    externalId,
+    leagueId: leagueId ?? undefined,
+    league,
+    leagueLogo: getNullableStringFromCachedValue(row.leagueLogo),
+    country: getNullableStringFromCachedValue(row.country),
+    date,
+    homeId: homeId ?? undefined,
+    home,
+    awayId: awayId ?? undefined,
+    away,
+    homeLogo: getNullableStringFromCachedValue(row.homeLogo),
+    awayLogo: getNullableStringFromCachedValue(row.awayLogo),
+    goalsHome: getNumberFromCachedValue(row.goalsHome),
+    goalsAway: getNumberFromCachedValue(row.goalsAway),
+    minute: getNumberFromCachedValue(row.minute),
+    statusShort: getStringFromCachedValue(row.statusShort) ?? 'NS',
+    statusLong: getStringFromCachedValue(row.statusLong) ?? 'No iniciado',
+  }
+}
+
+async function fetchCachedHomeFixtures(
+  supabase: ReturnType<typeof getSupabaseAdminClient>,
+  date: string
+) {
+  const response = await supabase
+    .from('football_fixture_cache')
+    .select('normalized_payload')
+    .eq('date', date)
+    .order('fixture_external_id', { ascending: true })
+
+  if (response.error) {
+    const message = response.error.message.toLowerCase()
+    const missingCacheTable =
+      response.error.code === '42P01' ||
+      response.error.code === 'PGRST205' ||
+      message.includes('football_fixture_cache') ||
+      message.includes('schema cache')
+
+    if (missingCacheTable) return []
+
+    throw response.error
+  }
+
+  return ((response.data ?? []) as CachedHomeFixtureRow[])
+    .map((row) => mapCachedHomeFixturePayload(row.normalized_payload))
+    .filter((match): match is MatchListItem => Boolean(match))
+    .sort((a, b) => {
+      const dateCompare = new Date(a.date).getTime() - new Date(b.date).getTime()
+      if (dateCompare !== 0) return dateCompare
+
+      return a.id - b.id
+    })
 }
 
 function serializeGoalEventForLog(event: StoredMatchEventRow) {
@@ -1306,7 +1408,7 @@ async function fetchStoredHomeMatches(date: string): Promise<MatchListItem[]> {
   const matchRows = ((responseData ?? []) as StoredHomeMatchRow[])
     .filter((match) => getArgentinaDateKey(match.match_date) === date)
 
-  if (!matchRows.length) return []
+  if (!matchRows.length) return fetchCachedHomeFixtures(supabase, date)
 
   const leagueIds = [
     ...new Set(

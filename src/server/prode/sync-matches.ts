@@ -241,6 +241,7 @@ type HomeScoreboardSyncResult = {
   fetched: number
   selected: number
   processed: number
+  cached: number
   skipped: number
   eventsFound: number
   goalsInserted: number
@@ -475,6 +476,87 @@ function getFixtureVenuePayload(fixture: ApiFixture) {
     venue_city: normalizeNullableFixtureText(fixture.fixture.venue?.city),
     venue_country: normalizeNullableFixtureText(fixture.league.country),
   }
+}
+
+function getFixtureCachePayload(fixture: ApiFixture) {
+  return {
+    id: fixture.fixture.id,
+    externalId: fixture.fixture.id,
+    leagueId: fixture.league.id,
+    league: fixture.league.name,
+    leagueLogo: pickLeagueLogoUrl(null, fixture.league.id, fixture.league.logo) ?? null,
+    country: fixture.league.country ?? null,
+    date: fixture.fixture.date,
+    round: fixture.league.round ?? null,
+    homeId: fixture.teams.home.id,
+    home: fixture.teams.home.name,
+    awayId: fixture.teams.away.id,
+    away: fixture.teams.away.name,
+    homeLogo: pickTeamLogoUrl(null, fixture.teams.home.id, fixture.teams.home.logo) ?? null,
+    awayLogo: pickTeamLogoUrl(null, fixture.teams.away.id, fixture.teams.away.logo) ?? null,
+    goalsHome: getFixtureHomeScore(fixture),
+    goalsAway: getFixtureAwayScore(fixture),
+    minute: getFixtureStatusElapsedMinute(fixture.fixture.status),
+    statusShort: getCanonicalMatchStatusFromApi(fixture.fixture.status),
+    statusLong: fixture.fixture.status.long ?? fixture.fixture.status.short,
+  }
+}
+
+function isMissingFixtureCacheTable(error: { code?: string; message?: string } | null) {
+  if (!error) return false
+
+  const message = (error.message ?? '').toLowerCase()
+
+  return (
+    error.code === '42P01' ||
+    error.code === 'PGRST205' ||
+    message.includes('football_fixture_cache') ||
+    message.includes('schema cache')
+  )
+}
+
+async function upsertFixtureCache(
+  supabase: SupabaseClient,
+  fixture: ApiFixture,
+  debug?: boolean
+) {
+  const normalizedPayload = getFixtureCachePayload(fixture)
+  const response = await withTimeout(
+    supabase
+      .from('football_fixture_cache')
+      .upsert(
+        {
+          date: getArgentinaDateKey(fixture.fixture.date),
+          league_external_id: String(fixture.league.id),
+          fixture_external_id: String(fixture.fixture.id),
+          payload: fixture,
+          normalized_payload: normalizedPayload,
+        },
+        { onConflict: 'date,fixture_external_id' }
+      ),
+    `football fixture cache upsert ${fixture.fixture.id}`
+  )
+
+  if (!response.error) {
+    logDebug(debug, 'fixture cached', {
+      fixtureId: fixture.fixture.id,
+      date: normalizedPayload.date,
+      leagueExternalId: fixture.league.id,
+    })
+
+    return true
+  }
+
+  if (isMissingFixtureCacheTable(response.error)) {
+    console.warn('[sync-fixtures] football_fixture_cache no disponible; se continua con matches.', {
+      fixtureId: fixture.fixture.id,
+      message: response.error.message,
+    })
+
+    return false
+  }
+
+  throw new Error(`No se pudo cachear fixture ${fixture.fixture.id}: ${response.error.message}`)
 }
 
 function hasResolvedScore(fixture: ApiFixture) {
@@ -1063,6 +1145,7 @@ function createEmptyHomeScoreboardResult(dates: string[]): HomeScoreboardSyncRes
     fetched: 0,
     selected: 0,
     processed: 0,
+    cached: 0,
     skipped: 0,
     eventsFound: 0,
     goalsInserted: 0,
@@ -2783,6 +2866,19 @@ export async function syncHomeScoreboardMatches(
     leagueCounts.set(fixture.league.id, currentLeague)
 
     try {
+      try {
+        if (await upsertFixtureCache(supabase, fixture, debug)) {
+          result.cached += 1
+        }
+      } catch (error) {
+        addHomeScoreboardError(result, fixture.fixture.id, 'fixture-cache-upsert', error)
+        console.warn('[sync-fixtures] No se pudo guardar cache del fixture.', {
+          fixtureId: fixture.fixture.id,
+          league: fixture.league.name,
+          message: error instanceof Error ? error.message : String(error),
+        })
+      }
+
       const league = await upsertLeagueFromFixture(supabase, fixture, debug)
       const [homeTeam, awayTeam] = await Promise.all([
         upsertTeam(supabase, fixture.teams.home, debug),
@@ -2855,6 +2951,7 @@ export async function syncHomeScoreboardMatches(
     limit,
     offset,
     processed: result.processed,
+    cached: result.cached,
     eventsFound: result.eventsFound,
     goalsInserted: result.goalsInserted,
     leagues: result.leagues.map((league) => league.name),

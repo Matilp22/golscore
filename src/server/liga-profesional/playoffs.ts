@@ -262,7 +262,7 @@ function findExistingNextMatch(
   )
 
   if (officialPhaseMatches.length) {
-    return sortPhaseMatches(officialPhaseMatches)[bracketSlot - 1] ?? officialPhaseMatches[0] ?? null
+    return sortPhaseMatches(officialPhaseMatches)[bracketSlot - 1] ?? null
   }
 
   return null
