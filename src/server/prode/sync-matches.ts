@@ -2544,20 +2544,6 @@ async function fetchStoredMatchByExternalId(supabase: SupabaseClient, fixtureId:
     }
   }
 
-  if (!data && !error) {
-    const result = await withTimeout(
-      supabase
-        .from('matches')
-        .select('id, external_id, home_score, away_score, status')
-        .eq('id', fixtureId)
-        .maybeSingle(),
-      `matches debug lookup by id ${fixtureId}`
-    )
-
-    data = result.data
-    error = result.error
-  }
-
   if (error) {
     throw new Error(`No se pudo leer el partido ${fixtureId} desde Supabase: ${error.message}`)
   }

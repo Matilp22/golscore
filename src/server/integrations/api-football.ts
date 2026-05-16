@@ -2203,7 +2203,7 @@ export async function withGoalScorers(
   matches: MatchListItem[]
 ): Promise<MatchListItemWithGoalScorers[]> {
   let timeoutId: ReturnType<typeof setTimeout> | null = null
-  const extrasTimeoutMs = 2500
+  const extrasTimeoutMs = 12000
   const extrasByFixtureId = await Promise.race([
     getHomeMatchExtrasByFixtureId(matches),
     new Promise<Map<string, HomeMatchExtras>>((resolve) => {

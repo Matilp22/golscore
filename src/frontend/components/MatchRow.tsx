@@ -118,15 +118,9 @@ function GoalScorersLine({ goalScorers }: { goalScorers?: MatchGoalScorers }) {
 
   if (!homeGoals && !awayGoals && !unassignedGoals) return null
 
-  const clampStyle = {
-    display: '-webkit-box',
-    WebkitLineClamp: 2,
-    WebkitBoxOrient: 'vertical',
-  } as const
-
   if (unassignedGoals && !homeGoals && !awayGoals) {
     return (
-      <div className="mt-1 min-w-0 overflow-hidden break-words text-[10px] leading-tight text-[#8d98a7]" style={clampStyle}>
+      <div className="mt-1 min-w-0 break-words text-[10px] leading-tight text-[#8d98a7]">
         Goles: {unassignedGoals}
       </div>
     )
@@ -135,16 +129,16 @@ function GoalScorersLine({ goalScorers }: { goalScorers?: MatchGoalScorers }) {
   return (
     <div className="mt-1 space-y-0.5 text-[10px] leading-tight text-[#8d98a7]">
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_62px_minmax(0,1fr)] gap-1.5 md:grid-cols-[minmax(0,1fr)_72px_minmax(0,1fr)] md:gap-2">
-        <div className="min-w-0 overflow-hidden break-words" style={clampStyle}>
+        <div className="min-w-0 break-words">
           {homeGoals}
         </div>
         <div aria-hidden="true" />
-        <div className="min-w-0 overflow-hidden break-words text-right" style={clampStyle}>
+        <div className="min-w-0 break-words text-right">
           {awayGoals}
         </div>
       </div>
       {unassignedGoals ? (
-        <div className="min-w-0 overflow-hidden break-words" style={clampStyle}>
+        <div className="min-w-0 break-words">
           Goles: {unassignedGoals}
         </div>
       ) : null}

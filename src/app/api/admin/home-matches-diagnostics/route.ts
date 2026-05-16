@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
-import { getMatchesByDate } from '@/lib/api-football'
+import {
+  getMatchesByDate,
+  type MatchGoalScorers,
+  withGoalScorers,
+} from '@/lib/api-football'
 import { TOURNAMENT_PAGE_CONFIGS } from '@/shared/config/tournament-pages'
 import {
   getExcludedCompetitionReason,
@@ -81,6 +85,14 @@ function getScorerAuditState(params: {
   return 'OK'
 }
 
+function countGoalScorers(goalScorers?: MatchGoalScorers | null) {
+  return (
+    (goalScorers?.home.length ?? 0) +
+    (goalScorers?.away.length ?? 0) +
+    (goalScorers?.unassigned?.length ?? 0)
+  )
+}
+
 function isVisibleHomeCompetition(match: Awaited<ReturnType<typeof getMatchesByDate>>[number]) {
   const excludedReason = getExcludedCompetitionReason({
     league: match.league,
@@ -125,6 +137,13 @@ export async function GET(request: Request) {
     const supabase = getSupabaseAdminClient()
     const apiMatches = await getMatchesByDate(date)
     const visibleMatches = apiMatches.filter(isVisibleHomeCompetition)
+    const visibleMatchesWithScorers = await withGoalScorers(visibleMatches)
+    const renderedMatchesByExternalId = new Map(
+      visibleMatchesWithScorers.map((match) => [
+        String(match.externalId ?? match.id),
+        match,
+      ])
+    )
     const externalIds = [
       ...new Set(
         visibleMatches
@@ -214,6 +233,8 @@ export async function GET(request: Request) {
       const goalEvents = events.filter((event) =>
         isScoreboardGoalEvent(event.type, event.detail)
       )
+      const renderedMatch = renderedMatchesByExternalId.get(String(externalId)) ?? null
+      const homeGoalsRenderedCount = countGoalScorers(renderedMatch?.goalScorers)
       const broadcasterRows = matchRow
         ? broadcastersByMatchId.get(String(matchRow.id)) ?? []
         : []
@@ -229,6 +250,9 @@ export async function GET(request: Request) {
             : null
       const missingGoalEvents =
         expectedGoals === null ? null : expectedGoals - goalEvents.length
+      const missingInHome =
+        (expectedGoals !== null && homeGoalsRenderedCount < expectedGoals) ||
+        goalEvents.length > homeGoalsRenderedCount
       const state = getScorerAuditState({
         existsInSupabase: Boolean(matchRow),
         expectedGoals,
@@ -267,10 +291,15 @@ export async function GET(request: Request) {
         events_count: events.length,
         goal_events_count: goalEvents.length,
         goalEventsCount: goalEvents.length,
+        match_events_goal_count: goalEvents.length,
+        matchEventsGoalCount: goalEvents.length,
         expected_goals: expectedGoals,
         expectedGoals,
+        home_goals_rendered_count: homeGoalsRenderedCount,
+        homeGoalsRenderedCount,
         missing_goals: missingGoalEvents,
         missingGoalEvents,
+        missingInHome,
         state,
         broadcastersCount: broadcasterRows.length,
         has_score_without_goal_events:
@@ -280,6 +309,8 @@ export async function GET(request: Request) {
         events: goalEvents.map((event) => ({
           team_id: event.team_id,
           minute: formatEventMinute(event.minute, event.extra_minute),
+          minute_number: event.minute,
+          extra_minute: event.extra_minute,
           player: event.player_name,
           type: event.type,
           detail: event.detail,
@@ -294,6 +325,7 @@ export async function GET(request: Request) {
     const incompleteScorers = diagnostics.filter(
       (match) => match.exists_in_supabase && match.hasIncompleteScorers
     )
+    const missingInHome = diagnostics.filter((match) => match.missingInHome)
     const stateCounts = diagnostics.reduce<Record<string, number>>((accumulator, match) => {
       accumulator[match.state] = (accumulator[match.state] ?? 0) + 1
       return accumulator
@@ -304,6 +336,7 @@ export async function GET(request: Request) {
       date,
       states: stateCounts,
       visible_count: diagnostics.length,
+      partidos_visibles: diagnostics.length,
       exists_in_supabase: diagnostics.length - missing.length,
       missing_in_supabase: missing.length,
       with_events: withEvents.length,
@@ -311,11 +344,13 @@ export async function GET(request: Request) {
       matches_with_complete_scorers:
         diagnostics.length - missing.length - incompleteScorers.length,
       incomplete_scorers_count: incompleteScorers.length,
+      missing_in_home_count: missingInHome.length,
       visible_matches: diagnostics,
       missing_matches: missing,
       matches_with_events: withEvents,
       matches_with_score_without_goal_events: withScoreWithoutEvents,
       matches_with_incomplete_scorers: incompleteScorers,
+      matches_missing_in_home: missingInHome,
     })
   } catch (error) {
     console.error('[home-matches-diagnostics] Error completo', error)
