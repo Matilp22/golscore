@@ -119,15 +119,19 @@ export default function PredictionForm({
   )
   const [message, setMessage] = useState('')
   const [isPending, startTransition] = useTransition()
-  const [isEditing, setIsEditing] = useState(!hasExistingPrediction)
+  const hasLocalDraft = Boolean(draft)
+  const [isEditing, setIsEditing] = useState(!hasExistingPrediction || hasLocalDraft)
+  const [hasUserEdited, setHasUserEdited] = useState(false)
   const lockState = useMemo(() => getMatchPredictionLockState(match), [match])
   const isUnscheduled = !match.matchDate
   const locked = lockState.locked
-  const shouldUseDraftValue = isEditing || Boolean(draft)
+  const isFormEditing =
+    hasExistingPrediction && !hasUserEdited && !hasLocalDraft ? false : isEditing
+  const shouldUseDraftValue = isFormEditing || hasLocalDraft
   const homeValue = shouldUseDraftValue ? home : persistedHome
   const awayValue = shouldUseDraftValue ? away : persistedAway
   const actionLabel =
-    isUnscheduled ? 'A programar' : locked ? 'Bloqueado' : hasExistingPrediction && !isEditing ? 'Editar' : 'Guardar'
+    isUnscheduled ? 'A programar' : locked ? 'Bloqueado' : hasExistingPrediction && !isFormEditing ? 'Editar' : 'Guardar'
   const predictedHomeScore = homeValue.trim() === '' ? NaN : Number(homeValue)
   const predictedAwayScore = awayValue.trim() === '' ? NaN : Number(awayValue)
   const hasValidScores = useMemo(
@@ -138,14 +142,14 @@ export default function PredictionForm({
       predictedAwayScore >= 0,
     [predictedAwayScore, predictedHomeScore]
   )
-  const inputsDisabled = locked || isPending || isAuthLoading || (hasExistingPrediction && !isEditing)
-  const canEnterEditMode = hasExistingPrediction && !isEditing && !locked && !isPending && !isAuthLoading
+  const inputsDisabled = locked || isPending || isAuthLoading || (hasExistingPrediction && !isFormEditing)
+  const canEnterEditMode = hasExistingPrediction && !isFormEditing && !locked && !isPending && !isAuthLoading
   const canSavePrediction =
     !locked &&
     !isPending &&
     !isAuthLoading &&
     isAuthenticated &&
-    (!hasExistingPrediction || isEditing) &&
+    (!hasExistingPrediction || isFormEditing) &&
     hasValidScores
   const buttonDisabled = canEnterEditMode ? false : !canSavePrediction
   const hasRealScore = match.homeScore !== null && match.awayScore !== null
@@ -160,10 +164,11 @@ export default function PredictionForm({
   const handleSave = () => {
     setMessage('')
 
-    if (hasExistingPrediction && !isEditing) {
+    if (hasExistingPrediction && !isFormEditing) {
       setHome(draft?.home ?? persistedHome)
       setAway(draft?.away ?? persistedAway)
       setIsEditing(true)
+      setHasUserEdited(true)
       onEditingChange?.(match.id, true)
       return
     }
@@ -200,6 +205,7 @@ export default function PredictionForm({
           predictedAwayScore,
         })
         setIsEditing(false)
+        setHasUserEdited(false)
         onEditingChange?.(match.id, false)
         setMessage('Predicción guardada.')
       } catch (error) {
@@ -244,9 +250,13 @@ export default function PredictionForm({
           inputMode="numeric"
           disabled={inputsDisabled}
           value={homeValue}
-          onFocus={() => onEditingChange?.(match.id, true)}
+          onFocus={() => {
+            setHasUserEdited(true)
+            onEditingChange?.(match.id, true)
+          }}
           onChange={(event) => {
             const nextHome = event.target.value
+            setHasUserEdited(true)
             onEditingChange?.(match.id, true)
             setHome(nextHome)
             onDraftChange?.(match.id, { home: nextHome, away })
@@ -263,9 +273,13 @@ export default function PredictionForm({
           inputMode="numeric"
           disabled={inputsDisabled}
           value={awayValue}
-          onFocus={() => onEditingChange?.(match.id, true)}
+          onFocus={() => {
+            setHasUserEdited(true)
+            onEditingChange?.(match.id, true)
+          }}
           onChange={(event) => {
             const nextAway = event.target.value
+            setHasUserEdited(true)
             onEditingChange?.(match.id, true)
             setAway(nextAway)
             onDraftChange?.(match.id, { home, away: nextAway })

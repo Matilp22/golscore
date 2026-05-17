@@ -139,6 +139,34 @@ export default function ProdePanel() {
   }, [predictions, visibleMatchesById])
 
   useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') return
+
+    console.info('[prode-hydration]', {
+      userId: user?.id ?? null,
+      selectedLeagueId,
+      selectedRound: effectiveSelectedRound,
+      matchesLoaded: !isMatchesLoading,
+      predictionsLoaded: !isAuthLoading && Boolean(selectedLeagueId),
+      visibleMatchesCount: visibleMatches.length,
+      predictionsCount: predictions.length,
+      hydratedDraftsCount: visibleMatches.filter((match) =>
+        predictionsByMatchId.has(match.id)
+      ).length,
+      visibleMatchIds: visibleMatches.map((match) => match.id),
+      predictionMatchIds: predictions.map((prediction) => prediction.matchId),
+    })
+  }, [
+    effectiveSelectedRound,
+    isAuthLoading,
+    isMatchesLoading,
+    predictions,
+    predictionsByMatchId,
+    selectedLeagueId,
+    user,
+    visibleMatches,
+  ])
+
+  useEffect(() => {
     editingMatchIdsRef.current = editingMatchIds
   }, [editingMatchIds])
 
