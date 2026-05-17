@@ -8,7 +8,6 @@ import LiveEventToasts from '@/frontend/components/LiveEventToasts'
 import MatchRow from '@/frontend/components/MatchRow'
 import Link from 'next/link'
 import {
-  ApiFootballError,
   getMatchesByDate,
   type MatchListItemWithGoalScorers,
   withGoalScorers,
@@ -1208,7 +1207,7 @@ export default async function HomePage({
       const missingMatches = enrichedMatches.filter((match) => !match.persistedInSupabase)
 
       if (missingMatches.length) {
-        console.info('[home] partidos servidos por fallback/API sin extras de Supabase', {
+        console.info('[home] partidos servidos desde cache sin extras de Supabase', {
           selectedDate,
           fallback: missingMatches.length,
           sample: missingMatches.slice(0, 20).map((match) => ({
@@ -1222,15 +1221,8 @@ export default async function HomePage({
     }
 
     groupedSections = groupMatchesWithPromiedosStructure(dateMatches)
-  } catch (error) {
-    if (error instanceof ApiFootballError) {
-      dataError =
-        error.code === 'requests'
-          ? 'Se alcanzó el límite diario de la API. Los partidos no pudieron cargarse ahora mismo.'
-          : error.message
-    } else {
-      dataError = 'No se pudieron cargar los partidos en este momento.'
-    }
+  } catch {
+    dataError = 'Datos temporalmente no disponibles. Intentá nuevamente en unos minutos.'
   }
 
   const visibleSections = groupedSections.filter(

@@ -134,6 +134,12 @@ async function fetchApiFootballRoundAudit(leagueExternalId: number, season: numb
   url.searchParams.set('season', String(targetSeason))
   url.searchParams.set('timezone', 'America/Argentina/Buenos_Aires')
 
+  console.info('[api-football-call]', {
+    source: 'admin:uefa-rounds-audit',
+    endpoint: '/fixtures',
+    params: Object.fromEntries(url.searchParams.entries()),
+  })
+
   const response = await fetch(url, {
     cache: 'no-store',
     headers: {

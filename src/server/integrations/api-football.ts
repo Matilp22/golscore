@@ -1,15 +1,6 @@
-import {
-  readPersistentCache,
-  readStoredFixturesByDate,
-  readStoredFixturesByLeagueSeason,
-  upsertStoredFixtures,
-  writePersistentCache,
-} from '@/server/cache/cache-db'
-import { getFootballApiConfig } from '@/server/config/env'
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getLeagueEventStatsLeaders } from '@/server/match-event-stats'
 import {
-  getCanonicalMatchStatusFromApi,
   isFinishedStatus,
   isLiveStatus,
 } from '@/shared/utils/match-status'
@@ -18,7 +9,6 @@ import {
   addDaysToISO,
   getArgentinaDayUtcRange,
   getArgentinaDateISO,
-  getArgentinaTodayISO,
 } from '@/shared/utils/argentina-time'
 import {
   getGoalKindFromDetail,
@@ -36,41 +26,13 @@ import {
   getLeagueRoundLabel,
   isLigaProfesionalRegularSeasonRound,
 } from '@/shared/utils/league-rounds'
-import { getFixtureStatusElapsedMinute } from '@/shared/utils/match-minute'
-import {
-  enrichMatchDetailAssets,
-  enrichPlayerDetailAssets,
-  enrichTeamDetailAssets,
-  enrichTopPlayerAssets,
-  persistFixtureListAssets,
-} from '@/server/assets/image-assets'
 import { getHomeMatchVisibility } from '@/shared/utils/home-match-visibility'
 import {
   pickLeagueLogoUrl,
   pickTeamLogoUrl,
 } from '@/shared/utils/asset-urls'
 
-type ApiFootballResponse<T> = {
-  errors?: Record<string, string>
-  response?: T[]
-}
-
-type ApiRequestOptions = {
-  revalidate?: number
-  noStore?: boolean
-}
-
-type CacheEntry = {
-  expiresAt: number
-  data: ApiFootballResponse<unknown>
-}
-
-const apiResponseCache = new Map<string, CacheEntry>()
-const inflightApiRequests = new Map<string, Promise<ApiFootballResponse<unknown>>>()
-const API_FOOTBALL_REQUEST_TIMEOUT_MS = 8000
 const HOME_SUPABASE_TIMEOUT_MS = 5000
-const HOME_API_FALLBACK_TIMEOUT_MS = 9000
-const HOME_STORED_MATCHES_SUPPLEMENT_THRESHOLD = 6
 
 export class ApiFootballError extends Error {
   code?: string
@@ -171,6 +133,7 @@ export type MatchListItem = {
 
 export type HomeMatchesSourceSnapshot = {
   storedMatches: MatchListItem[]
+  cacheMatches: MatchListItem[]
   apiMatches: MatchListItem[]
   mergedMatches: MatchListItem[]
   apiError: string | null
@@ -430,80 +393,12 @@ export type TeamSquad = {
   players?: TeamSquadPlayer[]
 }
 
-type PlayerBirth = {
-  date?: string
-  place?: string
-  country?: string
-}
-
-type PlayerProfileInfo = {
-  id?: number
-  name?: string
-  firstname?: string
-  lastname?: string
-  age?: number
-  birth?: PlayerBirth
-  nationality?: string
-  height?: string
-  weight?: string
-  injured?: boolean
-  photo?: string
-}
-
-type LeagueSearchSeason = {
-  year: number
-  current?: boolean
-}
-
-type LeagueSearchItem = {
-  league?: {
-    id?: number
-    name?: string
-    type?: string
-    logo?: string
-  }
-  country?: {
-    name?: string
-  }
-  seasons?: LeagueSearchSeason[]
-}
-
 export type ResolvedTournament = {
   leagueId: number
   season: number
   name: string
   country?: string
   logo?: string
-}
-
-type StandingStats = {
-  played?: number
-  win?: number
-  draw?: number
-  lose?: number
-  goals?: {
-    for?: number
-    against?: number
-  }
-}
-
-type StandingEntry = {
-  rank?: number
-  points?: number
-  goalsDiff?: number
-  team?: TeamInfo
-  all?: StandingStats
-  group?: string
-  description?: string | null
-  form?: string
-}
-
-type StandingLeague = {
-  standings?: StandingEntry[][]
-}
-
-type StandingResponseItem = {
-  league?: StandingLeague
 }
 
 export type LeagueStandingRow = {
@@ -529,39 +424,6 @@ export type LeagueStandingGroup = {
 }
 
 type CalculatedStandingAccumulator = Omit<LeagueStandingRow, 'rank'>
-
-const CALCULATED_STANDINGS_LEAGUE_IDS = new Set([128])
-
-type PlayerStatistic = {
-  team?: TeamInfo
-  league?: {
-    id?: number
-    name?: string
-    country?: string
-    logo?: string
-    season?: number
-  }
-  games?: {
-    appearences?: number | null
-    lineups?: number | null
-    minutes?: number | null
-    position?: string | null
-    rating?: string | null
-  }
-  goals?: {
-    total?: number | null
-    assists?: number | null
-  }
-  cards?: {
-    yellow?: number | null
-    red?: number | null
-  }
-}
-
-type TopPlayerResponseItem = {
-  player?: PlayerProfileInfo
-  statistics?: PlayerStatistic[]
-}
 
 export type TopPlayerRow = {
   playerId?: number
@@ -660,341 +522,12 @@ function withTimeout<T>(
   ])
 }
 
-function isHomeApiFallbackFixture(item: FixtureListItem) {
-  return getHomeMatchVisibility({
-    leagueId: item.league.id ?? null,
-    league: item.league.name,
-    country: item.league.country,
-    home: item.teams.home.name,
-    away: item.teams.away.name,
-    round: item.league.round,
-  }).included
-}
-
 function getArgentinaDateKey(dateString: string) {
   return getArgentinaDateISO(dateString)
 }
 
-function getMatchMergeKey(match: MatchListItem) {
-  return String(match.externalId ?? match.id)
-}
-
-function mergeHomeMatches(
-  storedMatches: MatchListItem[],
-  apiMatches: MatchListItem[],
-  options: { apiAuthoritative?: boolean } = {}
-) {
-  const mergedByExternalId = new Map<string, MatchListItem>()
-
-  if (!options.apiAuthoritative) {
-    for (const match of storedMatches) {
-      mergedByExternalId.set(getMatchMergeKey(match), match)
-    }
-  }
-
-  for (const apiMatch of apiMatches) {
-    const key = getMatchMergeKey(apiMatch)
-    const storedMatch =
-      mergedByExternalId.get(key) ||
-      storedMatches.find((match) => getMatchMergeKey(match) === key)
-
-    mergedByExternalId.set(
-      key,
-      storedMatch
-        ? {
-            ...storedMatch,
-            ...apiMatch,
-            leagueLogo: apiMatch.leagueLogo ?? storedMatch.leagueLogo,
-            homeLogo: apiMatch.homeLogo ?? storedMatch.homeLogo,
-            awayLogo: apiMatch.awayLogo ?? storedMatch.awayLogo,
-          }
-        : apiMatch
-    )
-  }
-
-  return [...mergedByExternalId.values()]
-}
-
-function shouldSupplementStoredHomeMatches(date: string, storedMatches: MatchListItem[]) {
-  const today = getArgentinaTodayISO()
-  const yesterday = addDaysToISO(today, -1)
-  const tomorrow = addDaysToISO(today, 1)
-
-  if (date === yesterday || date === today || date === tomorrow) {
-    return true
-  }
-
-  return storedMatches.length < HOME_STORED_MATCHES_SUPPLEMENT_THRESHOLD
-}
-
-function pickBestSeason(seasons?: LeagueSearchSeason[]) {
-  if (!seasons?.length) return undefined
-
-  const currentSeason = seasons.find((entry) => entry.current)
-  if (currentSeason) return currentSeason.year
-
-  const currentYear = new Date().getFullYear()
-  const sorted = [...seasons].sort((a, b) => b.year - a.year)
-  const recentSeason = sorted.find((entry) => entry.year <= currentYear + 1)
-
-  return recentSeason?.year || sorted[0]?.year
-}
-
-async function apiFootball(
-  path: string,
-  params?: Record<string, string | number | undefined>,
-  options?: ApiRequestOptions
-): Promise<ApiFootballResponse<unknown>> {
-  const { apiKey, baseUrl } = getFootballApiConfig()
-  const url = new URL(`${baseUrl}${path}`)
-
-  if (params) {
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '') {
-        url.searchParams.set(key, String(value))
-      }
-    })
-  }
-
-  const cacheKey = url.toString()
-  const ttlSeconds = options?.noStore ? 0 : options?.revalidate ?? 30
-  const shouldPersist = ttlSeconds >= 300 || path === '/fixtures'
-
-  if (ttlSeconds > 0) {
-    const cached = apiResponseCache.get(cacheKey)
-
-    if (cached && cached.expiresAt > Date.now()) {
-      return cached.data
-    }
-  }
-
-  if (shouldPersist) {
-    const persistentCache = readPersistentCache<ApiFootballResponse<unknown>>(cacheKey)
-
-    if (persistentCache && !persistentCache.isExpired) {
-      apiResponseCache.set(cacheKey, {
-        expiresAt: persistentCache.expiresAt,
-        data: persistentCache.data,
-      })
-
-      return persistentCache.data
-    }
-  }
-
-  const existingRequest = inflightApiRequests.get(cacheKey)
-  if (existingRequest) return existingRequest
-
-  const requestPromise = (async () => {
-    const abortController = new AbortController()
-    const timeoutId = setTimeout(
-      () => abortController.abort(),
-      API_FOOTBALL_REQUEST_TIMEOUT_MS
-    )
-    let res: Response
-
-    try {
-      res = await fetch(url.toString(), {
-        headers: {
-          'x-apisports-key': apiKey,
-        },
-        signal: abortController.signal,
-        ...(options?.noStore
-          ? { cache: 'no-store' as const }
-          : { next: { revalidate: ttlSeconds } }),
-      })
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error(`API timeout: ${path}`)
-      }
-
-      throw error
-    } finally {
-      clearTimeout(timeoutId)
-    }
-
-    if (!res.ok) {
-      throw new Error(`API error: ${res.status}`)
-    }
-
-    const data = (await res.json()) as ApiFootballResponse<unknown>
-
-    if (data.errors && Object.keys(data.errors).length > 0) {
-      const [code, message] = Object.entries(data.errors)[0]
-      throw new ApiFootballError(message, code)
-    }
-
-    if (ttlSeconds > 0) {
-      apiResponseCache.set(cacheKey, {
-        expiresAt: Date.now() + ttlSeconds * 1000,
-        data,
-      })
-    }
-
-    if (shouldPersist) {
-      writePersistentCache(cacheKey, path, data, ttlSeconds)
-    }
-
-    return data
-  })()
-
-  inflightApiRequests.set(cacheKey, requestPromise)
-
-  try {
-    return await requestPromise
-  } catch (error) {
-    if (shouldPersist) {
-      const persistentCache = readPersistentCache<ApiFootballResponse<unknown>>(cacheKey)
-
-      if (persistentCache && (path !== '/fixtures' || !persistentCache.isExpired)) {
-        return persistentCache.data
-      }
-    }
-
-    throw error
-  } finally {
-    inflightApiRequests.delete(cacheKey)
-  }
-}
-
-async function fetchApiFallbackHomeMatches(date: string): Promise<MatchListItem[]> {
-  const requestedDates = [addDaysToISO(date, -1), date, addDaysToISO(date, 1)]
-  const responses = await withTimeout(
-    Promise.allSettled(
-      requestedDates.map((requestedDate) =>
-        apiFootball('/fixtures', {
-          date: requestedDate,
-          timezone: 'America/Argentina/Buenos_Aires',
-        }, {
-          noStore: true,
-        }) as Promise<ApiFootballResponse<FixtureListItem>>
-      )
-    ),
-    HOME_API_FALLBACK_TIMEOUT_MS,
-    'API-Football home fallback timeout'
-  )
-
-  const dedupedFixtures = new Map<number, FixtureListItem>()
-
-  for (const response of responses) {
-    if (response.status !== 'fulfilled') continue
-
-    for (const item of response.value.response || []) {
-      if (getArgentinaDateKey(item.fixture.date) !== date) continue
-      dedupedFixtures.set(item.fixture.id, item)
-    }
-  }
-
-  const apiFallbackFixtures = [...dedupedFixtures.values()].filter(isHomeApiFallbackFixture)
-  const mappedFixtures = apiFallbackFixtures.map((item): MatchListItem => ({
-    id: item.fixture.id,
-    externalId: item.fixture.id,
-    leagueId: item.league.id,
-    league: item.league.name,
-    leagueLogo: pickLeagueLogoUrl(null, item.league.id, item.league.logo) ?? undefined,
-    country: item.league.country,
-    date: item.fixture.date,
-    homeId: item.teams.home.id,
-    home: item.teams.home.name,
-    awayId: item.teams.away.id,
-    away: item.teams.away.name,
-    homeLogo: pickTeamLogoUrl(null, item.teams.home.id, item.teams.home.logo) ?? undefined,
-    awayLogo: pickTeamLogoUrl(null, item.teams.away.id, item.teams.away.logo) ?? undefined,
-    goalsHome: item.goals.home,
-    goalsAway: item.goals.away,
-    minute: getFixtureStatusElapsedMinute(item.fixture.status),
-    statusShort: getCanonicalMatchStatusFromApi(item.fixture.status),
-    statusLong: item.fixture.status.long,
-  }))
-
-  upsertStoredFixtures(
-    mappedFixtures.map((item) => ({
-      fixtureId: item.id,
-      leagueId: item.leagueId,
-      leagueName: item.league,
-      leagueLogo: item.leagueLogo,
-      country: item.country,
-      dateUtc: item.date,
-      statusShort: item.statusShort,
-      statusLong: item.statusLong,
-      minute: item.minute,
-      homeTeamId: item.homeId,
-      homeTeamName: item.home,
-      homeTeamLogo: item.homeLogo,
-      awayTeamId: item.awayId,
-      awayTeamName: item.away,
-      awayTeamLogo: item.awayLogo,
-      goalsHome: item.goalsHome,
-      goalsAway: item.goalsAway,
-    }))
-  )
-
-  const storedFixtures = readStoredFixturesByDate(date)
-  if (storedFixtures.length) {
-    return storedFixtures.map((item): MatchListItem => ({
-      id: item.fixtureId,
-      externalId: item.fixtureId,
-      leagueId: item.leagueId,
-      league: item.leagueName,
-      leagueLogo: pickLeagueLogoUrl(item.leagueLogo, item.leagueId) ?? undefined,
-      country: item.country,
-      date: item.date,
-      homeId: item.homeTeamId,
-      home: item.homeTeamName,
-      awayId: item.awayTeamId,
-      away: item.awayTeamName,
-      homeLogo: pickTeamLogoUrl(item.homeTeamLogo, item.homeTeamId) ?? undefined,
-      awayLogo: pickTeamLogoUrl(item.awayTeamLogo, item.awayTeamId) ?? undefined,
-      goalsHome: item.goalsHome,
-      goalsAway: item.goalsAway,
-      minute: item.minute,
-      statusShort: item.statusShort,
-      statusLong: item.statusLong,
-    }))
-  }
-
-  if (responses.every((response) => response.status === 'rejected')) {
-    const firstError = responses[0]?.status === 'rejected' ? responses[0].reason : null
-    throw firstError || new Error('No se pudieron sincronizar los fixtures del dia.')
-  }
-
-  return mappedFixtures
-}
-
 export async function getMatchesByDate(date: string): Promise<MatchListItem[]> {
   const sources = await getHomeMatchesSourceSnapshot(date)
-
-  if (sources.storedMatches.length && !sources.supplementRecommended) {
-    return sources.storedMatches
-  }
-
-  if (sources.apiMatches.length) {
-    if (sources.storedMatches.length && sources.apiMatches.length > sources.storedMatches.length) {
-      console.warn('[home] Supabase devolvio una tanda parcial; se completo con API-Football.', {
-        date,
-        stored: sources.storedMatches.length,
-        api: sources.apiMatches.length,
-        merged: sources.mergedMatches.length,
-      })
-    }
-
-    return sources.mergedMatches
-  }
-
-  if (sources.storedMatches.length) {
-    if (sources.apiError) {
-      console.warn('[home] No se pudo completar Supabase con API-Football; se usa la tanda persistida.', {
-        date,
-        stored: sources.storedMatches.length,
-        message: sources.apiError,
-      })
-    }
-
-    return sources.storedMatches
-  }
-
-  if (sources.apiError) {
-    throw new Error(sources.apiError)
-  }
 
   return sources.mergedMatches
 }
@@ -1003,6 +536,7 @@ export async function getHomeMatchesSourceSnapshot(
   date: string
 ): Promise<HomeMatchesSourceSnapshot> {
   let storedMatches: MatchListItem[] = []
+  let cacheMatches: MatchListItem[] = []
 
   try {
     storedMatches = await withTimeout(
@@ -1011,35 +545,48 @@ export async function getHomeMatchesSourceSnapshot(
       'Supabase home matches timeout'
     )
   } catch (error) {
-    console.warn('[home] No se pudieron leer partidos desde Supabase; se usa API fallback.', {
+    console.warn('[home] No se pudieron leer partidos desde Supabase/cache.', {
       date,
       message: error instanceof Error ? error.message : String(error),
     })
   }
 
-  const supplementRecommended = shouldSupplementStoredHomeMatches(date, storedMatches)
-  let apiMatches: MatchListItem[] = []
-  let apiError: string | null = null
-
   try {
-    if (supplementRecommended || !storedMatches.length) {
-      apiMatches = await fetchApiFallbackHomeMatches(date)
-    }
+    cacheMatches = await withTimeout(
+      fetchCachedHomeFixtures(getSupabaseAdminClient(), date),
+      HOME_SUPABASE_TIMEOUT_MS,
+      'Supabase fixture cache timeout'
+    )
   } catch (error) {
-    apiError = error instanceof Error ? error.message : String(error)
+    console.warn('[home] No se pudo leer football_fixture_cache.', {
+      date,
+      message: error instanceof Error ? error.message : String(error),
+    })
   }
 
-  const apiAuthoritative = supplementRecommended && !apiError
+  const mergedMatches = mergeHomeMatchesByExternalId(storedMatches, cacheMatches)
+
+  if (process.env.NODE_ENV === 'development') {
+    const { startUtc, endUtc } = getArgentinaDayUtcRange(date)
+
+    console.info('[home-date-debug]', {
+      selectedDate: date,
+      startUtc,
+      endUtc,
+      supabaseCount: storedMatches.length,
+      cacheCount: cacheMatches.length,
+      visibleCount: mergedMatches.length,
+    })
+  }
 
   return {
     storedMatches,
-    apiMatches,
-    mergedMatches: storedMatches.length
-      ? mergeHomeMatches(storedMatches, apiMatches, { apiAuthoritative })
-      : apiMatches,
-    apiError,
-    apiAuthoritative,
-    supplementRecommended,
+    cacheMatches,
+    apiMatches: [],
+    mergedMatches,
+    apiError: null,
+    apiAuthoritative: false,
+    supplementRecommended: false,
   }
 }
 
@@ -1068,6 +615,7 @@ type StoredHomeMatchRow = {
   home_team_id: number | string | null
   away_team_id: number | string | null
   match_date: string
+  round?: string | null
   home_score: number | null
   away_score: number | null
   status: string | null
@@ -1125,6 +673,7 @@ type HomeBroadcastRuleRow = {
 }
 
 type CachedHomeFixtureRow = {
+  date?: string | null
   normalized_payload: unknown
 }
 
@@ -1135,11 +684,6 @@ type HomeMatchExtras = {
   broadcastLogoUrl: string | null
   goalScorers: MatchGoalScorers
   liveEvents: HomeLiveEvent[]
-}
-
-type StoredMatchTeamLogos = {
-  homeLogo?: string
-  awayLogo?: string
 }
 
 function createEmptyGoalScorers(): MatchGoalScorers {
@@ -1173,6 +717,30 @@ function getNullableStringFromCachedValue(value: unknown) {
   return typeof value === 'string' && value.trim() ? value : undefined
 }
 
+function compareHomeMatchesByDateAndId(a: MatchListItem, b: MatchListItem) {
+  const dateCompare = new Date(a.date).getTime() - new Date(b.date).getTime()
+  if (dateCompare !== 0) return dateCompare
+
+  return a.id - b.id
+}
+
+function mergeHomeMatchesByExternalId(
+  storedMatches: MatchListItem[],
+  cacheMatches: MatchListItem[]
+) {
+  const mergedByExternalId = new Map<string, MatchListItem>()
+
+  for (const match of cacheMatches) {
+    mergedByExternalId.set(String(match.externalId ?? match.id), match)
+  }
+
+  for (const match of storedMatches) {
+    mergedByExternalId.set(String(match.externalId ?? match.id), match)
+  }
+
+  return [...mergedByExternalId.values()].sort(compareHomeMatchesByDateAndId)
+}
+
 function mapCachedHomeFixturePayload(payload: unknown): MatchListItem | null {
   if (!payload || typeof payload !== 'object') return null
 
@@ -1195,6 +763,7 @@ function mapCachedHomeFixturePayload(payload: unknown): MatchListItem | null {
     country: getNullableStringFromCachedValue(row.country),
     home,
     away,
+    round: getNullableStringFromCachedValue(row.round),
   }).excludedReason
 
   if (excludedReason) return null
@@ -1225,10 +794,15 @@ async function fetchCachedHomeFixtures(
   supabase: ReturnType<typeof getSupabaseAdminClient>,
   date: string
 ) {
+  const cacheDates = [
+    addDaysToISO(date, -1),
+    date,
+    addDaysToISO(date, 1),
+  ]
   const response = await supabase
     .from('football_fixture_cache')
-    .select('normalized_payload')
-    .eq('date', date)
+    .select('date, normalized_payload')
+    .in('date', cacheDates)
     .order('fixture_external_id', { ascending: true })
 
   if (response.error) {
@@ -1247,12 +821,8 @@ async function fetchCachedHomeFixtures(
   return ((response.data ?? []) as CachedHomeFixtureRow[])
     .map((row) => mapCachedHomeFixturePayload(row.normalized_payload))
     .filter((match): match is MatchListItem => Boolean(match))
-    .sort((a, b) => {
-      const dateCompare = new Date(a.date).getTime() - new Date(b.date).getTime()
-      if (dateCompare !== 0) return dateCompare
-
-      return a.id - b.id
-    })
+    .filter((match) => getArgentinaDateKey(match.date) === date)
+    .sort(compareHomeMatchesByDateAndId)
 }
 
 function serializeGoalEventForLog(event: StoredMatchEventRow) {
@@ -1281,99 +851,13 @@ function toFiniteNumber(value: number | string | null | undefined) {
   return Number.isFinite(numericValue) ? numericValue : null
 }
 
-async function fetchStoredMatchTeamLogosByExternalId(
-  fixtureId: number
-): Promise<StoredMatchTeamLogos | null> {
-  try {
-    const supabase = getSupabaseAdminClient()
-    const matchResponse = await supabase
-      .from('matches')
-      .select('home_team_id, away_team_id')
-      .eq('external_id', String(fixtureId))
-      .maybeSingle()
-
-    if (matchResponse.error) throw matchResponse.error
-    if (!matchResponse.data) return null
-
-    const match = matchResponse.data as Pick<StoredHomeMatchRow, 'home_team_id' | 'away_team_id'>
-    const teamIds = [match.home_team_id, match.away_team_id]
-      .filter((id): id is string | number => id !== null && id !== undefined)
-      .map(String)
-
-    if (!teamIds.length) return null
-
-    const teamsResponse = await supabase
-      .from('teams')
-      .select('id, external_id, logo_url')
-      .in('id', teamIds)
-
-    if (teamsResponse.error) throw teamsResponse.error
-
-    const teams = new Map(
-      ((teamsResponse.data ?? []) as StoredHomeTeamRow[]).map((team) => [
-        String(team.id),
-        team,
-      ])
-    )
-    const homeTeam = match.home_team_id ? teams.get(String(match.home_team_id)) : null
-    const awayTeam = match.away_team_id ? teams.get(String(match.away_team_id)) : null
-    const homeExternalId = toFiniteNumber(homeTeam?.external_id)
-    const awayExternalId = toFiniteNumber(awayTeam?.external_id)
-
-    return {
-      homeLogo: pickTeamLogoUrl(homeTeam?.logo_url, homeExternalId) ?? undefined,
-      awayLogo: pickTeamLogoUrl(awayTeam?.logo_url, awayExternalId) ?? undefined,
-    }
-  } catch (error) {
-    console.warn('[match-detail] No se pudieron leer escudos persistidos del partido.', {
-      fixtureId,
-      message: error instanceof Error ? error.message : String(error),
-    })
-
-    return null
-  }
-}
-
-function applyStoredMatchTeamLogos(
-  fixture: MatchFixture | null,
-  storedLogos: StoredMatchTeamLogos | null
-) {
-  if (!fixture || !storedLogos) return fixture
-
-  const homeExternalId = fixture.teams.home.id
-  const awayExternalId = fixture.teams.away.id
-
-  return {
-    ...fixture,
-    teams: {
-      ...fixture.teams,
-      home: {
-        ...fixture.teams.home,
-        logo: pickTeamLogoUrl(
-          storedLogos.homeLogo,
-          homeExternalId,
-          fixture.teams.home.logo
-        ) ?? undefined,
-      },
-      away: {
-        ...fixture.teams.away,
-        logo: pickTeamLogoUrl(
-          storedLogos.awayLogo,
-          awayExternalId,
-          fixture.teams.away.logo
-        ) ?? undefined,
-      },
-    },
-  }
-}
-
 async function fetchStoredHomeMatches(date: string): Promise<MatchListItem[]> {
   const supabase = getSupabaseAdminClient()
   const { startUtc, endUtc } = getArgentinaDayUtcRange(date)
   const selectWithElapsed =
-    'id, external_id, league_id, home_team_id, away_team_id, match_date, home_score, away_score, status, elapsed'
+    'id, external_id, league_id, home_team_id, away_team_id, match_date, round, home_score, away_score, status, elapsed'
   const selectBase =
-    'id, external_id, league_id, home_team_id, away_team_id, match_date, home_score, away_score, status'
+    'id, external_id, league_id, home_team_id, away_team_id, match_date, round, home_score, away_score, status'
 
   const primaryResponse = await supabase
     .from('matches')
@@ -1407,8 +891,6 @@ async function fetchStoredHomeMatches(date: string): Promise<MatchListItem[]> {
 
   const matchRows = ((responseData ?? []) as StoredHomeMatchRow[])
     .filter((match) => getArgentinaDateKey(match.match_date) === date)
-
-  if (!matchRows.length) return fetchCachedHomeFixtures(supabase, date)
 
   const leagueIds = [
     ...new Set(
@@ -1496,6 +978,7 @@ async function fetchStoredHomeMatches(date: string): Promise<MatchListItem[]> {
         country: league.country ?? undefined,
         home: homeTeam.name,
         away: awayTeam.name,
+        round: match.round ?? null,
       }).excludedReason
 
       if (excludedReason) return null
@@ -1699,7 +1182,7 @@ function homeBroadcastRuleMatches(rule: HomeBroadcastRuleRow, match: MatchListIt
 
   if (
     rule.match_date &&
-    match.date.slice(0, 10) !== rule.match_date.slice(0, 10)
+    getArgentinaDateISO(match.date) !== getArgentinaDateISO(rule.match_date)
   ) {
     return false
   }
@@ -2334,48 +1817,461 @@ async function getMatchHighlightsByExternalId(externalId: number) {
   }
 }
 
+type StoredDetailMatchRow = {
+  id: number | string
+  external_id: number | string | null
+  league_id: number | string | null
+  round: string | null
+  match_date: string | null
+  status: string | null
+  elapsed?: number | null
+  home_team_id: number | string | null
+  away_team_id: number | string | null
+  home_score: number | null
+  away_score: number | null
+  home_penalty_score?: number | null
+  away_penalty_score?: number | null
+  venue_name?: string | null
+  venue_city?: string | null
+  venue_country?: string | null
+  broadcast_channel?: string | null
+  broadcast_logo_url?: string | null
+  highlights_url?: string | null
+  highlights_title?: string | null
+}
+
+type StoredLeagueRow = {
+  id: number | string
+  external_id: number | string | null
+  name: string | null
+  country: string | null
+  season: number | null
+  logo_url?: string | null
+}
+
+type StoredTeamRow = {
+  id: number | string
+  external_id: number | string | null
+  name: string | null
+  logo_url?: string | null
+  country?: string | null
+}
+
+const KNOWN_TOURNAMENT_RESOLUTIONS: ResolvedTournament[] = [
+  { leagueId: 128, season: 2026, name: 'Liga Profesional Argentina', country: 'Argentina' },
+  { leagueId: 129, season: 2026, name: 'Primera Nacional', country: 'Argentina' },
+  { leagueId: 130, season: 2026, name: 'Copa Argentina', country: 'Argentina' },
+  { leagueId: 1, season: 2026, name: 'Mundial 2026', country: 'World' },
+  { leagueId: 13, season: 2026, name: 'Copa Libertadores', country: 'World' },
+  { leagueId: 11, season: 2026, name: 'Copa Sudamericana', country: 'World' },
+  { leagueId: 2, season: 2025, name: 'UEFA Champions League', country: 'World' },
+  { leagueId: 3, season: 2025, name: 'UEFA Europa League', country: 'World' },
+  { leagueId: 848, season: 2025, name: 'UEFA Europa Conference League', country: 'World' },
+  { leagueId: 39, season: 2025, name: 'Premier League', country: 'England' },
+  { leagueId: 140, season: 2025, name: 'La Liga', country: 'Spain' },
+  { leagueId: 135, season: 2025, name: 'Serie A', country: 'Italy' },
+  { leagueId: 78, season: 2025, name: 'Bundesliga', country: 'Germany' },
+  { leagueId: 61, season: 2025, name: 'Ligue 1', country: 'France' },
+  { leagueId: 71, season: 2026, name: 'Brasileirao Serie A', country: 'Brazil' },
+]
+
+const KNOWN_TOURNAMENT_ALIASES: Array<ResolvedTournament & { aliases: string[] }> =
+  KNOWN_TOURNAMENT_RESOLUTIONS.map((tournament) => ({
+    ...tournament,
+    aliases: [
+      tournament.name,
+      tournament.name.replace(/^UEFA\s+/i, ''),
+      tournament.name.replace(/\s+2026$/i, ''),
+      tournament.leagueId === 128 ? 'Primera Division' : '',
+      tournament.leagueId === 128 ? 'Liga Profesional' : '',
+      tournament.leagueId === 13 ? 'CONMEBOL Libertadores' : '',
+      tournament.leagueId === 11 ? 'CONMEBOL Sudamericana' : '',
+      tournament.leagueId === 848 ? 'Conference League' : '',
+      tournament.leagueId === 71 ? 'Brasileirao' : '',
+    ].filter(Boolean),
+  }))
+
+function normalizeStoredStatusShort(status?: string | null) {
+  const normalized = (status || '').trim()
+  const lower = normalized.toLowerCase()
+
+  if (!normalized) return 'NS'
+  if (lower === 'scheduled') return 'NS'
+  if (lower === 'final') return 'FT'
+  if (lower === 'live') return 'LIVE'
+
+  return normalized.toUpperCase()
+}
+
+function getStoredStatusLong(status?: string | null) {
+  const short = normalizeStoredStatusShort(status)
+
+  if (short === 'NS') return 'No iniciado'
+  if (short === 'TBD') return 'A programar'
+  if (short === '1H') return 'Primer tiempo'
+  if (short === 'HT') return 'Entretiempo'
+  if (short === '2H') return 'Segundo tiempo'
+  if (short === 'FT') return 'Finalizado'
+  if (short === 'AET') return 'Finalizado en suplementario'
+  if (short === 'PEN') return 'Finalizado por penales'
+  if (short === 'PST') return 'Postergado'
+  if (short === 'CANC') return 'Cancelado'
+  if (short === 'SUSP') return 'Suspendido'
+
+  return status || short
+}
+
+function toOptionalDate(value?: string | null) {
+  return value && !Number.isNaN(new Date(value).getTime()) ? value : null
+}
+
+function findKnownTournament(searchTerms: string[], country?: string) {
+  const normalizedSearchTerms = searchTerms.map((term) => normalizeSearchValue(term))
+  const normalizedCountry = country ? normalizeSearchValue(country) : null
+
+  return KNOWN_TOURNAMENT_ALIASES.find((tournament) => {
+    const countryMatches =
+      !normalizedCountry ||
+      normalizeSearchValue(tournament.country || '') === normalizedCountry ||
+      normalizedCountry === 'world'
+    const aliasMatches = tournament.aliases.some((alias) => {
+      const normalizedAlias = normalizeSearchValue(alias)
+      return normalizedSearchTerms.some(
+        (term) => normalizedAlias === term || normalizedAlias.includes(term) || term.includes(normalizedAlias)
+      )
+    })
+
+    return countryMatches && aliasMatches
+  }) ?? null
+}
+
+async function fetchStoredLeagueRowsByExternalId(leagueId: number, season?: number) {
+  const supabase = getSupabaseAdminClient()
+  let query = supabase
+    .from('leagues')
+    .select('id, external_id, name, country, season, logo_url')
+    .eq('external_id', String(leagueId))
+    .order('season', { ascending: false })
+
+  if (season) query = query.eq('season', season)
+
+  const response = await query
+  if (response.error) throw response.error
+  if (response.data?.length || !season) return (response.data ?? []) as StoredLeagueRow[]
+
+  const fallback = await supabase
+    .from('leagues')
+    .select('id, external_id, name, country, season, logo_url')
+    .eq('external_id', String(leagueId))
+    .order('season', { ascending: false })
+
+  if (fallback.error) throw fallback.error
+  return (fallback.data ?? []) as StoredLeagueRow[]
+}
+
+async function fetchStoredLeagueRowById(leagueId: string | number | null | undefined) {
+  if (leagueId === null || leagueId === undefined) return null
+
+  const supabase = getSupabaseAdminClient()
+  const response = await supabase
+    .from('leagues')
+    .select('id, external_id, name, country, season, logo_url')
+    .eq('id', String(leagueId))
+    .maybeSingle()
+
+  if (response.error) throw response.error
+
+  return (response.data as StoredLeagueRow | null) ?? null
+}
+
+async function fetchStoredDetailMatchRowByExternalId(externalId: number) {
+  const supabase = getSupabaseAdminClient()
+  const selectWithOptional =
+    'id, external_id, league_id, round, match_date, status, elapsed, home_team_id, away_team_id, home_score, away_score, home_penalty_score, away_penalty_score, venue_name, venue_city, venue_country, broadcast_channel, broadcast_logo_url, highlights_url, highlights_title'
+  const selectBase =
+    'id, external_id, league_id, round, match_date, status, home_team_id, away_team_id, home_score, away_score'
+  const candidates = [externalId, String(externalId)]
+
+  for (const candidate of candidates) {
+    let response = await supabase
+      .from('matches')
+      .select(selectWithOptional)
+      .eq('external_id', candidate)
+      .maybeSingle()
+
+    if (
+      response.error &&
+      (
+        response.error.code === '42703' ||
+        response.error.code === 'PGRST204' ||
+        response.error.message.toLowerCase().includes('schema cache')
+      )
+    ) {
+      response = await supabase
+        .from('matches')
+        .select(selectBase)
+        .eq('external_id', candidate)
+        .maybeSingle()
+    }
+
+    if (response.error) throw response.error
+    if (response.data) return response.data as StoredDetailMatchRow
+  }
+
+  return null
+}
+
+async function fetchStoredTeamsByIds(teamIds: Array<string | number | null | undefined>) {
+  const supabase = getSupabaseAdminClient()
+  const ids = [...new Set(teamIds.filter((id): id is string | number => id !== null && id !== undefined).map(String))]
+  const teams = new Map<string, StoredTeamRow>()
+
+  for (const chunk of chunkArray(ids, 100)) {
+    let response = await supabase
+      .from('teams')
+      .select('id, external_id, name, logo_url, country')
+      .in('id', chunk)
+
+    if (
+      response.error &&
+      (
+        response.error.code === '42703' ||
+        response.error.code === 'PGRST204' ||
+        response.error.message.toLowerCase().includes('country') ||
+        response.error.message.toLowerCase().includes('schema cache')
+      )
+    ) {
+      const fallbackResponse = await supabase
+        .from('teams')
+        .select('id, external_id, name, logo_url')
+        .in('id', chunk)
+      response = fallbackResponse as unknown as typeof response
+    }
+
+    if (response.error) throw response.error
+
+    for (const team of (response.data ?? []) as StoredTeamRow[]) {
+      teams.set(String(team.id), team)
+    }
+  }
+
+  return teams
+}
+
+async function fetchStoredEventsByMatchId(matchId: string | number) {
+  const supabase = getSupabaseAdminClient()
+  const response = await supabase
+    .from('match_events')
+    .select('id, external_event_id, match_id, team_id, player_name, assist_name, minute, extra_minute, type, detail')
+    .eq('match_id', String(matchId))
+    .order('minute', { ascending: true, nullsFirst: false })
+    .order('extra_minute', { ascending: true, nullsFirst: false })
+
+  if (response.error) {
+    if (isMissingOptionalStoredEvents(response.error)) return []
+    throw response.error
+  }
+
+  return (response.data ?? []) as StoredMatchEventRow[]
+}
+
+function mapStoredEventToMatchEvent(
+  row: StoredMatchEventRow,
+  teamsById: Map<string, StoredTeamRow>
+): MatchEvent {
+  const team = row.team_id !== null && row.team_id !== undefined
+    ? teamsById.get(String(row.team_id))
+    : null
+  const teamExternalId = toFiniteNumber(team?.external_id)
+
+  return {
+    team: team
+      ? {
+          id: teamExternalId ?? undefined,
+          name: team.name ?? undefined,
+        }
+      : undefined,
+    player: row.player_name
+      ? {
+          name: row.player_name,
+        }
+      : undefined,
+    assist: row.assist_name
+      ? {
+          name: row.assist_name,
+        }
+      : undefined,
+    time: {
+      elapsed: row.minute,
+      extra: row.extra_minute,
+    },
+    type: row.type,
+    detail: row.detail ?? undefined,
+    comments: null,
+  }
+}
+
+function mapStoredMatchToFixture(
+  match: StoredDetailMatchRow,
+  league: StoredLeagueRow | null,
+  teamsById: Map<string, StoredTeamRow>,
+  fallbackExternalId: number
+): MatchFixture | null {
+  const homeTeam = match.home_team_id !== null && match.home_team_id !== undefined
+    ? teamsById.get(String(match.home_team_id))
+    : null
+  const awayTeam = match.away_team_id !== null && match.away_team_id !== undefined
+    ? teamsById.get(String(match.away_team_id))
+    : null
+  const matchDate = toOptionalDate(match.match_date)
+
+  if (!homeTeam?.name || !awayTeam?.name || !matchDate) return null
+
+  const externalId = toFiniteNumber(match.external_id) ?? fallbackExternalId
+  const leagueExternalId = toFiniteNumber(league?.external_id)
+  const homeExternalId = toFiniteNumber(homeTeam.external_id)
+  const awayExternalId = toFiniteNumber(awayTeam.external_id)
+  const statusShort = normalizeStoredStatusShort(match.status)
+
+  return {
+    fixture: {
+      id: externalId,
+      date: matchDate,
+      status: {
+        short: statusShort,
+        long: getStoredStatusLong(match.status),
+        elapsed: match.elapsed ?? null,
+      },
+      venue: {
+        name: match.venue_name ?? undefined,
+        city: match.venue_city ?? undefined,
+      },
+    },
+    league: {
+      id: leagueExternalId ?? undefined,
+      name: league?.name || 'Torneo',
+      country: league?.country || match.venue_country || '',
+      logo: pickLeagueLogoUrl(league?.logo_url, leagueExternalId) ?? undefined,
+      round: match.round ?? undefined,
+      season: league?.season ?? undefined,
+    },
+    teams: {
+      home: {
+        id: homeExternalId ?? undefined,
+        name: homeTeam.name,
+        logo: pickTeamLogoUrl(homeTeam.logo_url, homeExternalId) ?? undefined,
+      },
+      away: {
+        id: awayExternalId ?? undefined,
+        name: awayTeam.name,
+        logo: pickTeamLogoUrl(awayTeam.logo_url, awayExternalId) ?? undefined,
+      },
+    },
+    goals: {
+      home: match.home_score,
+      away: match.away_score,
+    },
+    score: {
+      fulltime: {
+        home: match.home_score,
+        away: match.away_score,
+      },
+      penalty: {
+        home: match.home_penalty_score ?? null,
+        away: match.away_penalty_score ?? null,
+      },
+    },
+  }
+}
+
 export async function getMatchDetail(id: number) {
-  const [fixture, events, statistics, lineups, broadcast, highlights] = await Promise.all([
-    apiFootball('/fixtures', { id }, { revalidate: 30 }),
-    apiFootball('/fixtures/events', { fixture: id }, { revalidate: 30 }),
-    apiFootball('/fixtures/statistics', { fixture: id }, { revalidate: 30 }),
-    apiFootball('/fixtures/lineups', { fixture: id }, { revalidate: 30 }),
+  const match = await fetchStoredDetailMatchRowByExternalId(id)
+
+  if (!match) {
+    return {
+      fixture: null,
+      events: [],
+      statistics: [],
+      lineups: [],
+      broadcastChannel: null,
+      broadcastLogoUrl: null,
+      broadcasters: [],
+      highlightsUrl: null,
+      highlightsTitle: null,
+    }
+  }
+
+  const [league, teamsById, events, broadcast, highlights] = await Promise.all([
+    fetchStoredLeagueRowById(match.league_id).catch(() => null),
+    fetchStoredTeamsByIds([match.home_team_id, match.away_team_id]),
+    fetchStoredEventsByMatchId(match.id),
     getMatchBroadcastByExternalId(id),
     getMatchHighlightsByExternalId(id),
   ])
-  const rawFixture = (fixture as ApiFootballResponse<MatchFixture>).response?.[0] || null
-  const rawLineups = (lineups as ApiFootballResponse<MatchLineup>).response || []
-  const enriched = await enrichMatchDetailAssets(rawFixture, rawLineups)
-  const storedTeamLogos = rawFixture
-    ? await fetchStoredMatchTeamLogosByExternalId(id)
-    : null
+  const fixture = mapStoredMatchToFixture(match, league, teamsById, id)
 
   return {
-    fixture: applyStoredMatchTeamLogos(enriched.fixture, storedTeamLogos),
-    events: (events as ApiFootballResponse<MatchEvent>).response || [],
-    statistics:
-      (statistics as ApiFootballResponse<MatchStatisticsTeam>).response || [],
-    lineups: enriched.lineups,
-    broadcastChannel: broadcast.channel,
-    broadcastLogoUrl: broadcast.logoUrl,
-    broadcasters: broadcast.broadcasters,
-    highlightsUrl: highlights.url,
-    highlightsTitle: highlights.title,
+    fixture,
+    events: events.map((event) => mapStoredEventToMatchEvent(event, teamsById)),
+    statistics: [] as MatchStatisticsTeam[],
+    lineups: [] as MatchLineup[],
+    broadcastChannel: broadcast.channel ?? match.broadcast_channel ?? null,
+    broadcastLogoUrl: broadcast.logoUrl ?? match.broadcast_logo_url ?? null,
+    broadcasters: broadcast.broadcasters.length
+      ? broadcast.broadcasters
+      : match.broadcast_channel
+        ? [{
+            name: match.broadcast_channel,
+            logoUrl: match.broadcast_logo_url ?? null,
+            country: null,
+          }]
+        : [],
+    highlightsUrl: match.highlights_url ?? highlights.url,
+    highlightsTitle: match.highlights_title ?? highlights.title,
   }
 }
 
 export async function getTeamDetail(id: number) {
-  const [team, squad] = await Promise.all([
-    apiFootball('/teams', { id }, { revalidate: 300 }),
-    apiFootball('/players/squads', { team: id }, { revalidate: 300 }),
-  ])
-  const rawTeam = (team as ApiFootballResponse<TeamProfile>).response?.[0] || null
-  const rawSquad = (squad as ApiFootballResponse<TeamSquad>).response?.[0] || null
-  const enriched = await enrichTeamDetailAssets(rawTeam, rawSquad)
+  const supabase = getSupabaseAdminClient()
+  let response = await supabase
+    .from('teams')
+    .select('id, external_id, name, logo_url, country')
+    .eq('external_id', String(id))
+    .maybeSingle()
+
+  if (
+    response.error &&
+    (
+      response.error.code === '42703' ||
+      response.error.code === 'PGRST204' ||
+      response.error.message.toLowerCase().includes('country') ||
+      response.error.message.toLowerCase().includes('schema cache')
+    )
+  ) {
+    response = await supabase
+      .from('teams')
+      .select('id, external_id, name, logo_url')
+      .eq('external_id', String(id))
+      .maybeSingle()
+  }
+
+  if (response.error) throw response.error
+
+  const team = response.data as StoredTeamRow | null
+  const externalId = toFiniteNumber(team?.external_id) ?? id
 
   return {
-    team: enriched.team,
-    squad: enriched.squad,
+    team: team
+      ? {
+          team: {
+            id: externalId,
+            name: team.name || 'Equipo',
+            logo: pickTeamLogoUrl(team.logo_url, externalId) ?? undefined,
+            country: team.country ?? undefined,
+          },
+        }
+      : null,
+    squad: null as TeamSquad | null,
   }
 }
 
@@ -2384,245 +2280,127 @@ export async function getPlayerDetail(
   season: number,
   leagueId?: number
 ): Promise<PlayerDetail | null> {
-  const response = (await apiFootball('/players', {
-    id,
-    season,
-    league: leagueId,
-  }, {
-    revalidate: 300,
-  })) as ApiFootballResponse<TopPlayerResponseItem>
+  void id
+  void season
+  void leagueId
 
-  const item = response.response?.[0]
-  const stats = leagueId
-    ? item?.statistics?.find((entry) => entry.league?.id === leagueId) || item?.statistics?.[0]
-    : item?.statistics?.[0]
-
-  if (!item?.player) return null
-
-  return enrichPlayerDetailAssets({
-    player: {
-      id: item.player.id,
-      name: item.player.name || 'Jugador',
-      firstname: item.player.firstname,
-      lastname: item.player.lastname,
-      age: item.player.age,
-      nationality: item.player.nationality,
-      birthDate: item.player.birth?.date,
-      birthPlace: item.player.birth?.place,
-      birthCountry: item.player.birth?.country,
-      height: item.player.height,
-      weight: item.player.weight,
-      injured: item.player.injured,
-      photo: item.player.photo,
-    },
-    team: stats?.team
-      ? {
-          id: stats.team.id,
-          name: stats.team.name,
-          logo: stats.team.logo,
-        }
-      : undefined,
-    league: stats?.league
-      ? {
-          id: stats.league.id,
-          name: stats.league.name,
-          country: stats.league.country,
-          logo: stats.league.logo,
-          season: stats.league.season,
-        }
-      : undefined,
-    statistics: {
-      appearances: stats?.games?.appearences || 0,
-      lineups: stats?.games?.lineups || 0,
-      minutes: stats?.games?.minutes || 0,
-      position: stats?.games?.position,
-      rating: stats?.games?.rating,
-      goals: stats?.goals?.total || 0,
-      assists: stats?.goals?.assists || 0,
-      yellowCards: stats?.cards?.yellow || 0,
-      redCards: stats?.cards?.red || 0,
-    },
-  })
+  return null
 }
 
 export async function resolveTournament(
   searchTerms: string[],
   country?: string
 ): Promise<ResolvedTournament | null> {
-  for (const term of searchTerms) {
-    const response = (await apiFootball('/leagues', {
-      search: term,
-    }, {
-      revalidate: 3600,
-    })) as ApiFootballResponse<LeagueSearchItem>
+  const known = findKnownTournament(searchTerms, country)
 
-    const leagues = response.response || []
-    const normalizedTerm = normalizeSearchValue(term)
-    const normalizedCountry = country ? normalizeSearchValue(country) : null
+  if (known) {
+    const storedRows = await fetchStoredLeagueRowsByExternalId(known.leagueId, known.season)
+      .catch(() => [])
+    const stored = storedRows[0]
 
-    const filteredByCountry = normalizedCountry
-      ? leagues.filter((item) =>
-          normalizeSearchValue(item.country?.name || '') === normalizedCountry
-        )
-      : leagues
-
-    const candidateLeagues = filteredByCountry.length ? filteredByCountry : leagues
-
-    const selected =
-      candidateLeagues.find((item) =>
-        normalizeSearchValue(item.league?.name || '') === normalizedTerm
-      ) ||
-      candidateLeagues.find((item) =>
-        normalizeSearchValue(item.league?.name || '').includes(normalizedTerm)
-      ) ||
-      candidateLeagues[0]
-
-    const season = pickBestSeason(selected?.seasons)
-
-    if (selected?.league?.id && season) {
-      return {
-        leagueId: selected.league.id,
-        season,
-        name: selected.league.name || term,
-        country: selected.country?.name || country,
-        logo: selected.league.logo,
-      }
+    return {
+      leagueId: known.leagueId,
+      season: stored?.season ?? known.season,
+      name: stored?.name || known.name,
+      country: stored?.country || known.country,
+      logo: pickLeagueLogoUrl(stored?.logo_url, known.leagueId) ?? known.logo,
     }
   }
 
-  return null
+  const supabase = getSupabaseAdminClient()
+  const response = await supabase
+    .from('leagues')
+    .select('id, external_id, name, country, season, logo_url')
+    .order('season', { ascending: false })
+    .limit(1000)
+
+  if (response.error) throw response.error
+
+  const normalizedTerms = searchTerms.map((term) => normalizeSearchValue(term))
+  const normalizedCountry = country ? normalizeSearchValue(country) : null
+  const selected = ((response.data ?? []) as StoredLeagueRow[]).find((league) => {
+    const name = normalizeSearchValue(league.name || '')
+    const countryMatches =
+      !normalizedCountry ||
+      normalizeSearchValue(league.country || '') === normalizedCountry ||
+      normalizedCountry === 'world'
+
+    return countryMatches && normalizedTerms.some((term) => name === term || name.includes(term) || term.includes(name))
+  })
+
+  const leagueId = toFiniteNumber(selected?.external_id)
+  if (!selected || !leagueId || !selected.season) return null
+
+  return {
+    leagueId,
+    season: selected.season,
+    name: selected.name || searchTerms[0] || 'Torneo',
+    country: selected.country ?? country,
+    logo: pickLeagueLogoUrl(selected.logo_url, leagueId) ?? undefined,
+  }
+}
+
+function getStandingTeamKey(teamId: number | undefined, name: string) {
+  return teamId !== undefined ? `id:${teamId}` : `name:${normalizeSearchValue(name)}`
+}
+
+function getStandingAccumulator(
+  table: Map<string, CalculatedStandingAccumulator>,
+  teamId: number | undefined,
+  teamName: string,
+  teamLogo?: string
+) {
+  const key = getStandingTeamKey(teamId, teamName)
+  const current = table.get(key)
+
+  if (current) return current
+
+  const next: CalculatedStandingAccumulator = {
+    teamId,
+    teamName,
+    teamLogo,
+    points: 0,
+    played: 0,
+    won: 0,
+    drawn: 0,
+    lost: 0,
+    goalsFor: 0,
+    goalsAgainst: 0,
+    goalDifference: 0,
+  }
+
+  table.set(key, next)
+  return next
 }
 
 export async function getLeagueStandings(
   leagueId: number,
   season: number
 ): Promise<LeagueStandingGroup[]> {
-  if (CALCULATED_STANDINGS_LEAGUE_IDS.has(leagueId)) {
-    try {
-      const calculatedStandings = await getCalculatedLeagueStandings(leagueId, season)
+  const fixtures = await getLeagueFixtures(leagueId, season)
+  const table = new Map<string, CalculatedStandingAccumulator>()
+  let countedFixtures = 0
 
-      if (calculatedStandings.length && calculatedStandings[0]?.rows.length) {
-        return calculatedStandings
-      }
-    } catch (error) {
-      console.warn('[standings:calculated] No se pudo calcular tabla desde fixtures', {
-        leagueId,
-        season,
-        error: error instanceof Error ? error.message : 'Error desconocido',
-      })
-    }
-  }
-
-  const data = (await apiFootball('/standings', {
-    league: leagueId,
-    season,
-  }, {
-    revalidate: 300,
-  })) as ApiFootballResponse<StandingResponseItem>
-
-  const groups = data.response?.[0]?.league?.standings || []
-
-  return groups.map((group, index) => {
-    const groupName =
-      group.find((row) => row.group)?.group ||
-      (groups.length > 1 ? `Grupo ${index + 1}` : 'Tabla')
-
-    return {
-      name: groupName,
-      rows: group.map((row) => ({
-        rank: row.rank || 0,
-        teamId: row.team?.id,
-        teamName: row.team?.name || 'Equipo',
-        teamLogo: row.team?.logo,
-        points: row.points || 0,
-        played: row.all?.played || 0,
-        won: row.all?.win || 0,
-        drawn: row.all?.draw || 0,
-        lost: row.all?.lose || 0,
-        goalsFor: row.all?.goals?.for || 0,
-        goalsAgainst: row.all?.goals?.against || 0,
-        goalDifference: row.goalsDiff || 0,
-        form: row.form,
-        description: row.description,
-      })),
-    }
-  })
-}
-
-async function getCalculatedLeagueStandings(
-  leagueId: number,
-  season: number
-): Promise<LeagueStandingGroup[]> {
-  const [fixturesData, standingsData] = await Promise.all([
-    apiFootball('/fixtures', {
-      league: leagueId,
-      season,
-      timezone: 'America/Argentina/Buenos_Aires',
-    }, {
-      revalidate: 60,
-    }) as Promise<ApiFootballResponse<FixtureListItem>>,
-    apiFootball('/standings', {
-      league: leagueId,
-      season,
-    }, {
-      revalidate: 300,
-    }) as Promise<ApiFootballResponse<StandingResponseItem>>,
-  ])
-  const seenFixtureIds = new Set<number>()
-  const table = new Map<number | string, CalculatedStandingAccumulator>()
-  const zoneMembership = getStandingZoneMembership(standingsData.response?.[0]?.league?.standings || [])
-
-  function getTeamRow(team: TeamInfo | undefined) {
-    const teamId = team?.id ?? team?.name ?? 'unknown'
-    const current = table.get(teamId)
-
-    if (current) return current
-
-    const next: CalculatedStandingAccumulator = {
-      teamId: team?.id,
-      teamName: team?.name || 'Equipo',
-      teamLogo: team?.logo,
-      points: 0,
-      played: 0,
-      won: 0,
-      drawn: 0,
-      lost: 0,
-      goalsFor: 0,
-      goalsAgainst: 0,
-      goalDifference: 0,
-    }
-
-    table.set(teamId, next)
-    return next
-  }
-
-  for (const item of fixturesData.response ?? []) {
-    const fixtureId = item.fixture.id
-    const statusShort = item.fixture.status.short
-
-    if (seenFixtureIds.has(fixtureId)) continue
-    seenFixtureIds.add(fixtureId)
-
-    if (!isFinishedStatus(statusShort)) continue
+  for (const fixture of fixtures) {
+    if (!isFinishedStatus(fixture.statusShort)) continue
     if (
-      leagueId === 128 &&
-      !isLigaProfesionalRegularSeasonRound(item.league.round)
+      leagueId === LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID &&
+      !isLigaProfesionalRegularSeasonRound(fixture.round)
     ) {
       continue
     }
 
-    const homeGoals = item.goals.home ?? item.score?.fulltime?.home ?? null
-    const awayGoals = item.goals.away ?? item.score?.fulltime?.away ?? null
-
+    const homeGoals = fixture.goalsHome
+    const awayGoals = fixture.goalsAway
     if (homeGoals === null || awayGoals === null) continue
 
-    const home = getTeamRow(item.teams.home)
-    const away = getTeamRow(item.teams.away)
+    const home = getStandingAccumulator(table, fixture.homeId, fixture.home, fixture.homeLogo)
+    const away = getStandingAccumulator(table, fixture.awayId, fixture.away, fixture.awayLogo)
 
+    countedFixtures += 1
     home.played += 1
     home.goalsFor += homeGoals
     home.goalsAgainst += awayGoals
-
     away.played += 1
     away.goalsFor += awayGoals
     away.goalsAgainst += homeGoals
@@ -2659,83 +2437,15 @@ async function getCalculatedLeagueStandings(
       rank: index + 1,
     }))
 
-  if (zoneMembership.length) {
-    const rowsByTeam = new Map(rows.map((row) => [String(row.teamId || row.teamName), row]))
-    const zoneGroups = zoneMembership
-      .map((zone) => ({
-        name: zone.name,
-        rows: zone.teamKeys
-          .map((teamKey) => rowsByTeam.get(teamKey))
-          .filter((row): row is LeagueStandingRow => Boolean(row))
-          .sort((a, b) => {
-            if (b.points !== a.points) return b.points - a.points
-            if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference
-            if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor
-            return a.teamName.localeCompare(b.teamName, 'es-AR')
-          })
-          .map((row, index) => ({
-            ...row,
-            rank: index + 1,
-          })),
-      }))
-      .filter((group) => group.rows.length)
-
-    if (zoneGroups.length >= 2) {
-      console.info('[standings:calculated]', {
-        leagueId,
-        season,
-        fixtures: seenFixtureIds.size,
-        countedFixtures: zoneGroups.reduce((max, group) => Math.max(max, ...group.rows.map((row) => row.played)), 0),
-        groups: zoneGroups.map((group) => ({ name: group.name, teams: group.rows.length })),
-        source: 'fixtures+api-groups',
-      })
-
-      return zoneGroups
-    }
-  }
-
-  console.info('[standings:calculated]', {
+  console.info('[standings:supabase]', {
     leagueId,
     season,
-    fixtures: seenFixtureIds.size,
+    fixtures: fixtures.length,
+    countedFixtures,
     teams: rows.length,
-    source: 'fixtures',
   })
 
   return rows.length ? [{ name: 'Tabla', rows }] : []
-}
-
-function getStandingZoneMembership(groups: StandingEntry[][]) {
-  return groups
-    .map((group, index) => {
-      const groupName =
-        group.find((row) => row.group)?.group ||
-        (groups.length > 1 ? `Grupo ${index + 1}` : 'Tabla')
-      const normalized = normalizeStandingGroupName(groupName)
-
-      if (
-        !normalized.includes('group a') &&
-        !normalized.includes('group b') &&
-        !normalized.includes('grupo a') &&
-        !normalized.includes('grupo b')
-      ) {
-        return null
-      }
-
-      return {
-        name: normalized.includes('group b') || normalized.includes('grupo b') ? 'Zona B' : 'Zona A',
-        teamKeys: group.map((row) => String(row.team?.id || row.team?.name || '')).filter(Boolean),
-      }
-    })
-    .filter((group): group is { name: string; teamKeys: string[] } => Boolean(group))
-    .sort((a, b) => a.name.localeCompare(b.name, 'es-AR'))
-}
-
-function normalizeStandingGroupName(value: string) {
-  return value
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
 }
 
 type StoredLeagueFixtureMatchRow = {
@@ -3118,188 +2828,171 @@ async function mergeLigaProfesionalDerivedFixtures(
   return [...officialFixtures, ...missingDerivedFixtures].sort(compareLeagueFixturesByApiOrder)
 }
 
-export async function getLeagueFixtures(leagueId: number, season: number) {
-  const storedFixtures = readStoredFixturesByLeagueSeason(leagueId, season)
+function mapCachedLeagueFixturePayload(payload: unknown): LeagueFixtureSummary | null {
+  if (!payload || typeof payload !== 'object') return null
 
-  try {
-    const data = (await apiFootball('/fixtures', {
-      league: leagueId,
-      season,
-      timezone: 'America/Argentina/Buenos_Aires',
-    }, {
-      revalidate: 30,
-    })) as ApiFootballResponse<FixtureListItem>
+  const row = payload as Record<string, unknown>
+  const id = getNumberFromCachedValue(row.id ?? row.externalId)
+  const homeId = getNumberFromCachedValue(row.homeId)
+  const awayId = getNumberFromCachedValue(row.awayId)
+  const home = getStringFromCachedValue(row.home)
+  const away = getStringFromCachedValue(row.away)
+  const date = getStringFromCachedValue(row.date)
 
-    const mappedFixtures = (data.response || []).map((item): LeagueFixtureSummary => ({
-      id: item.fixture.id,
-      round: item.league.round || 'Fecha',
-      date: item.fixture.date,
-      statusShort: getCanonicalMatchStatusFromApi(item.fixture.status),
-      minute: getFixtureStatusElapsedMinute(item.fixture.status),
-      home: item.teams.home.name,
-      homeId: item.teams.home.id,
-      away: item.teams.away.name,
-      awayId: item.teams.away.id,
-      homeLogo: pickTeamLogoUrl(null, item.teams.home.id, item.teams.home.logo) ?? undefined,
-      awayLogo: pickTeamLogoUrl(null, item.teams.away.id, item.teams.away.logo) ?? undefined,
-      goalsHome: item.goals.home,
-      goalsAway: item.goals.away,
-      homePenaltyScore: item.score?.penalty?.home ?? null,
-      awayPenaltyScore: item.score?.penalty?.away ?? null,
-      venueName: item.fixture.venue?.name ?? null,
-      venueCity: item.fixture.venue?.city ?? null,
-      venueCountry: item.league.country ?? null,
-    }))
-    const enrichedMappedFixtures = await enrichLeagueFixturesWithStoredEvents(
-      leagueId,
-      mappedFixtures
-    )
-    const mergedMappedFixtures = await mergeLigaProfesionalDerivedFixtures(
-      leagueId,
-      season,
-      enrichedMappedFixtures
-    )
-    logCopaArgentinaFixtureDebug(leagueId, season, mergedMappedFixtures, 'api')
+  if (!id || !home || !away || !date) return null
 
-    if (mappedFixtures.length) {
-      await persistFixtureListAssets(data.response || [])
-      upsertStoredFixtures(
-        (data.response || []).map((item) => ({
-          fixtureId: item.fixture.id,
-          leagueId: item.league.id,
-          season,
-          leagueName: item.league.name,
-          leagueLogo: pickLeagueLogoUrl(null, item.league.id, item.league.logo) ?? undefined,
-          country: item.league.country,
-          round: item.league.round,
-          dateUtc: item.fixture.date,
-          statusShort: getCanonicalMatchStatusFromApi(item.fixture.status),
-          statusLong: item.fixture.status.long,
-          minute: getFixtureStatusElapsedMinute(item.fixture.status),
-          homeTeamId: item.teams.home.id,
-          homeTeamName: item.teams.home.name,
-          homeTeamLogo:
-            pickTeamLogoUrl(null, item.teams.home.id, item.teams.home.logo) ?? undefined,
-          awayTeamId: item.teams.away.id,
-          awayTeamName: item.teams.away.name,
-          awayTeamLogo:
-            pickTeamLogoUrl(null, item.teams.away.id, item.teams.away.logo) ?? undefined,
-          goalsHome: item.goals.home,
-          goalsAway: item.goals.away,
-          homePenaltyScore: item.score?.penalty?.home ?? null,
-          awayPenaltyScore: item.score?.penalty?.away ?? null,
-          venueName: item.fixture.venue?.name ?? null,
-          venueCity: item.fixture.venue?.city ?? null,
-          venueCountry: item.league.country ?? null,
-        }))
-      )
-    }
-
-    const refreshedStoredFixtures = readStoredFixturesByLeagueSeason(leagueId, season)
-    if (refreshedStoredFixtures.length) {
-      const refreshedFixtures = refreshedStoredFixtures.map((item): LeagueFixtureSummary => ({
-        id: item.fixtureId,
-        round: item.round || 'Fecha',
-        date: item.date,
-        statusShort: item.statusShort,
-        minute: item.minute,
-        home: item.homeTeamName,
-        homeId: item.homeTeamId,
-        away: item.awayTeamName,
-        awayId: item.awayTeamId,
-        homeLogo: pickTeamLogoUrl(item.homeTeamLogo, item.homeTeamId) ?? undefined,
-        awayLogo: pickTeamLogoUrl(item.awayTeamLogo, item.awayTeamId) ?? undefined,
-        goalsHome: item.goalsHome,
-        goalsAway: item.goalsAway,
-        homePenaltyScore: item.homePenaltyScore,
-        awayPenaltyScore: item.awayPenaltyScore,
-        venueName: item.venueName ?? null,
-        venueCity: item.venueCity ?? null,
-        venueCountry: item.venueCountry ?? item.country ?? null,
-      }))
-      const enrichedRefreshedFixtures = await enrichLeagueFixturesWithStoredEvents(
-        leagueId,
-        refreshedFixtures
-      )
-      const mergedRefreshedFixtures = await mergeLigaProfesionalDerivedFixtures(
-        leagueId,
-        season,
-        enrichedRefreshedFixtures
-      )
-      logCopaArgentinaFixtureDebug(leagueId, season, mergedRefreshedFixtures, 'cache')
-      return mergedRefreshedFixtures
-    }
-
-    return mergedMappedFixtures
-  } catch (error) {
-    if (storedFixtures.length) {
-      const fallbackFixtures = storedFixtures.map((item): LeagueFixtureSummary => ({
-        id: item.fixtureId,
-        round: item.round || 'Fecha',
-        date: item.date,
-        statusShort: item.statusShort,
-        minute: item.minute,
-        home: item.homeTeamName,
-        homeId: item.homeTeamId,
-        away: item.awayTeamName,
-        awayId: item.awayTeamId,
-        homeLogo: pickTeamLogoUrl(item.homeTeamLogo, item.homeTeamId) ?? undefined,
-        awayLogo: pickTeamLogoUrl(item.awayTeamLogo, item.awayTeamId) ?? undefined,
-        goalsHome: item.goalsHome,
-        goalsAway: item.goalsAway,
-        homePenaltyScore: item.homePenaltyScore,
-        awayPenaltyScore: item.awayPenaltyScore,
-        venueName: item.venueName ?? null,
-        venueCity: item.venueCity ?? null,
-        venueCountry: item.venueCountry ?? item.country ?? null,
-      }))
-      const enrichedFallbackFixtures = await enrichLeagueFixturesWithStoredEvents(
-        leagueId,
-        fallbackFixtures
-      )
-      const mergedFallbackFixtures = await mergeLigaProfesionalDerivedFixtures(
-        leagueId,
-        season,
-        enrichedFallbackFixtures
-      )
-      logCopaArgentinaFixtureDebug(leagueId, season, mergedFallbackFixtures, 'cache')
-      return mergedFallbackFixtures
-    }
-
-    throw error
+  return {
+    id,
+    round: getStringFromCachedValue(row.round) ?? 'Fecha',
+    date,
+    statusShort: getStringFromCachedValue(row.statusShort) ?? 'NS',
+    minute: getNumberFromCachedValue(row.minute),
+    home,
+    homeId: homeId ?? undefined,
+    away,
+    awayId: awayId ?? undefined,
+    homeLogo: getNullableStringFromCachedValue(row.homeLogo),
+    awayLogo: getNullableStringFromCachedValue(row.awayLogo),
+    goalsHome: getNumberFromCachedValue(row.goalsHome),
+    goalsAway: getNumberFromCachedValue(row.goalsAway),
+    venueName: null,
+    venueCity: null,
+    venueCountry: getNullableStringFromCachedValue(row.country) ?? null,
+    events: [],
   }
 }
 
-async function getTopPlayersByType(
-  path: string,
-  leagueId: number,
-  season: number,
-  selector: (statistics?: PlayerStatistic) => number | null | undefined
+async function fetchCachedLeagueFixtures(
+  supabase: ReturnType<typeof getSupabaseAdminClient>,
+  leagueId: number
 ) {
-  const data = (await apiFootball(path, {
-    league: leagueId,
-    season,
-  }, {
-    revalidate: 300,
-  })) as ApiFootballResponse<TopPlayerResponseItem>
+  const response = await supabase
+    .from('football_fixture_cache')
+    .select('normalized_payload')
+    .eq('league_external_id', String(leagueId))
+    .order('date', { ascending: true })
+    .order('fixture_external_id', { ascending: true })
+    .limit(1000)
 
-  const rows = (data.response || [])
-    .map((item): TopPlayerRow => {
-      const stats = item.statistics?.[0]
+  if (response.error) {
+    const message = response.error.message.toLowerCase()
+    const missingCacheTable =
+      response.error.code === '42P01' ||
+      response.error.code === 'PGRST205' ||
+      message.includes('football_fixture_cache') ||
+      message.includes('schema cache')
+
+    if (missingCacheTable) return []
+
+    throw response.error
+  }
+
+  return ((response.data ?? []) as CachedHomeFixtureRow[])
+    .map((row) => mapCachedLeagueFixturePayload(row.normalized_payload))
+    .filter((fixture): fixture is LeagueFixtureSummary => Boolean(fixture))
+    .sort(compareLeagueFixturesByApiOrder)
+}
+
+export async function getLeagueFixtures(leagueId: number, season: number) {
+  const supabase = getSupabaseAdminClient()
+  const leagueRows = await fetchStoredLeagueRowsByExternalId(leagueId, season)
+  const leagueIds = leagueRows.map((league) => String(league.id))
+  const storedMatches: StoredDetailMatchRow[] = []
+
+  for (const chunk of chunkArray(leagueIds, 50)) {
+    let response = await supabase
+      .from('matches')
+      .select('id, external_id, league_id, round, match_date, status, elapsed, home_team_id, away_team_id, home_score, away_score, home_penalty_score, away_penalty_score, venue_name, venue_city, venue_country')
+      .in('league_id', chunk)
+      .order('match_date', { ascending: true, nullsFirst: false })
+      .limit(1000)
+
+    if (
+      response.error &&
+      (
+        response.error.code === '42703' ||
+        response.error.code === 'PGRST204' ||
+        response.error.message.toLowerCase().includes('schema cache')
+      )
+    ) {
+      const fallbackResponse = await supabase
+        .from('matches')
+        .select('id, external_id, league_id, round, match_date, status, home_team_id, away_team_id, home_score, away_score')
+        .in('league_id', chunk)
+        .order('match_date', { ascending: true, nullsFirst: false })
+        .limit(1000)
+      response = fallbackResponse as unknown as typeof response
+    }
+
+    if (response.error) throw response.error
+    storedMatches.push(...((response.data ?? []) as StoredDetailMatchRow[]))
+  }
+
+  if (!storedMatches.length) {
+    const cachedFixtures = await fetchCachedLeagueFixtures(supabase, leagueId)
+    const mergedCachedFixtures = await mergeLigaProfesionalDerivedFixtures(
+      leagueId,
+      season,
+      cachedFixtures
+    )
+    logCopaArgentinaFixtureDebug(leagueId, season, mergedCachedFixtures, 'cache')
+    return mergedCachedFixtures
+  }
+
+  const teamsById = await fetchStoredTeamsByIds(
+    storedMatches.flatMap((match) => [match.home_team_id, match.away_team_id])
+  )
+  const leaguesById = new Map(leagueRows.map((league) => [String(league.id), league]))
+  const mappedFixtures = storedMatches
+    .map((match): LeagueFixtureSummary | null => {
+      const homeTeam = match.home_team_id !== null && match.home_team_id !== undefined
+        ? teamsById.get(String(match.home_team_id))
+        : null
+      const awayTeam = match.away_team_id !== null && match.away_team_id !== undefined
+        ? teamsById.get(String(match.away_team_id))
+        : null
+
+      if (!homeTeam?.name || !awayTeam?.name) return null
+
+      const league = match.league_id !== null && match.league_id !== undefined
+        ? leaguesById.get(String(match.league_id))
+        : null
+      const fixtureExternalId = toFiniteNumber(match.external_id)
+      const homeExternalId = toFiniteNumber(homeTeam.external_id)
+      const awayExternalId = toFiniteNumber(awayTeam.external_id)
 
       return {
-        playerId: item.player?.id,
-        name: item.player?.name || 'Jugador',
-        photo: item.player?.photo,
-        teamId: stats?.team?.id,
-        teamName: stats?.team?.name,
-        teamLogo: stats?.team?.logo,
-        value: selector(stats) || 0,
+        id: fixtureExternalId ?? String(match.id),
+        round: match.round || 'Fecha',
+        date: match.match_date,
+        statusShort: normalizeStoredStatusShort(match.status),
+        minute: match.elapsed ?? null,
+        home: homeTeam.name,
+        homeId: homeExternalId ?? undefined,
+        away: awayTeam.name,
+        awayId: awayExternalId ?? undefined,
+        homeLogo: pickTeamLogoUrl(homeTeam.logo_url, homeExternalId) ?? undefined,
+        awayLogo: pickTeamLogoUrl(awayTeam.logo_url, awayExternalId) ?? undefined,
+        goalsHome: match.home_score,
+        goalsAway: match.away_score,
+        homePenaltyScore: match.home_penalty_score ?? null,
+        awayPenaltyScore: match.away_penalty_score ?? null,
+        venueName: match.venue_name ?? null,
+        venueCity: match.venue_city ?? null,
+        venueCountry: match.venue_country ?? league?.country ?? null,
       }
     })
-    .filter((item) => item.value > 0)
+    .filter((fixture): fixture is LeagueFixtureSummary => Boolean(fixture))
 
-  return enrichTopPlayerAssets(rows)
+  const enrichedFixtures = await enrichLeagueFixturesWithStoredEvents(leagueId, mappedFixtures)
+  const mergedFixtures = await mergeLigaProfesionalDerivedFixtures(
+    leagueId,
+    season,
+    enrichedFixtures
+  )
+  logCopaArgentinaFixtureDebug(leagueId, season, mergedFixtures, 'cache')
+
+  return mergedFixtures
 }
 
 function isPlayedFixture(statusShort: string) {
@@ -3432,13 +3125,15 @@ async function getFixtureEvents(fixtureId: number) {
     return cached.data
   }
 
-  const eventResponse = (await apiFootball('/fixtures/events', {
-    fixture: fixtureId,
-  }, {
-    revalidate: 300,
-  })) as ApiFootballResponse<MatchEvent>
-
-  const data = eventResponse.response || []
+  const match = await fetchStoredDetailMatchRowByExternalId(fixtureId)
+  const teamsById = match
+    ? await fetchStoredTeamsByIds([match.home_team_id, match.away_team_id])
+    : new Map<string, StoredTeamRow>()
+  const data = match
+    ? (await fetchStoredEventsByMatchId(match.id)).map((event) =>
+        mapStoredEventToMatchEvent(event, teamsById)
+      )
+    : []
 
   fixtureEventCache.set(fixtureId, {
     expiresAt: Date.now() + 10 * 60 * 1000,
@@ -3547,37 +3242,10 @@ export async function getLeagueLeaders(leagueId: number, season: number) {
     })
   }
 
-  const [scorers, assists, yellowCards, redCards] = await Promise.all([
-    getTopPlayersByType(
-      '/players/topscorers',
-      leagueId,
-      season,
-      (statistics) => statistics?.goals?.total
-    ),
-    getTopPlayersByType(
-      '/players/topassists',
-      leagueId,
-      season,
-      (statistics) => statistics?.goals?.assists
-    ),
-    getTopPlayersByType(
-      '/players/topyellowcards',
-      leagueId,
-      season,
-      (statistics) => statistics?.cards?.yellow
-    ),
-    getTopPlayersByType(
-      '/players/topredcards',
-      leagueId,
-      season,
-      (statistics) => statistics?.cards?.red
-    ),
-  ])
-
   return {
-    scorers,
-    assists,
-    yellowCards,
-    redCards,
+    scorers: [],
+    assists: [],
+    yellowCards: [],
+    redCards: [],
   }
 }

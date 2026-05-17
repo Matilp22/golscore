@@ -19,7 +19,6 @@ import {
   isChampionsHistoryTournamentKey,
 } from '@/server/tournament-champions'
 import {
-  ApiFootballError,
   getLeagueFixtures,
   getLeagueLeaders,
   getLeagueStandings,
@@ -2118,7 +2117,7 @@ export default async function LigaPage({ params }: PageProps) {
     )
 
     if (!resolvedTournament) {
-      errorMessage = 'No se pudo resolver este torneo en la API.'
+      errorMessage = 'No hay datos sincronizados para este torneo.'
     } else {
       const [standingsResult, leadersResult, fixturesResult] = await Promise.allSettled([
         getLeagueStandings(resolvedTournament.leagueId, resolvedTournament.season),
@@ -2195,11 +2194,8 @@ export default async function LigaPage({ params }: PageProps) {
         throw standingsResult.reason
       }
     }
-  } catch (error) {
-    errorMessage =
-      error instanceof ApiFootballError
-        ? error.message
-        : 'No se pudo cargar la información del torneo.'
+  } catch {
+    errorMessage = 'Datos temporalmente no disponibles. Intentá nuevamente en unos minutos.'
   }
 
   const { primaryGroups, secondaryGroups } = splitPrimaryGroups(

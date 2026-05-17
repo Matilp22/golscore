@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import { getArgentinaDateISO } from '@/shared/utils/argentina-time'
+
 type DbId = string | number
 
 type MatchRow = {
@@ -316,7 +318,7 @@ function broadcastRuleMatches(rule: BroadcastRuleRow, match: BroadcastMatchRow) 
 
   if (
     rule.match_date &&
-    match.match_date.slice(0, 10) !== rule.match_date.slice(0, 10)
+    getArgentinaDateISO(match.match_date) !== getArgentinaDateISO(rule.match_date)
   ) {
     return false
   }

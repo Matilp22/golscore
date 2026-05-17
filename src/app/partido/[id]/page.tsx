@@ -1,5 +1,4 @@
 ﻿import {
-  ApiFootballError,
   getMatchDetail,
   type MatchBroadcaster,
   type MatchEvent,
@@ -1303,12 +1302,12 @@ export default async function PartidoDetallePage({ params }: PageProps) {
   try {
     data = await getMatchDetail(Number(id))
   } catch (error) {
-    const message =
-      error instanceof ApiFootballError
-        ? error.code === 'requests'
-          ? 'Se alcanzó el límite diario de la API. El detalle del partido no pudo cargarse.'
-          : error.message
-        : 'No se pudo cargar el detalle del partido.'
+    console.warn('[match-detail-page] No se pudo cargar detalle desde Supabase.', {
+      id,
+      message: error instanceof Error ? error.message : String(error),
+    })
+
+    const message = 'Datos temporalmente no disponibles. Intentá nuevamente en unos minutos.'
 
     return (
       <div className="min-h-screen text-white">

@@ -50,8 +50,13 @@ Deno.serve(async (req) => {
 
   const body = await req.json().catch(() => null)
   const fixtureId = body?.fixtureId ? Number(body.fixtureId) : null
-  const date = body?.date || new Date().toISOString().slice(0, 10)
   const timezone = body?.timezone || 'America/Argentina/Buenos_Aires'
+  const date = body?.date || new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
 
   const url = new URL(`${footballApiBaseUrl}/fixtures`)
   if (fixtureId) {

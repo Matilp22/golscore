@@ -1,11 +1,9 @@
 import { NextResponse } from 'next/server'
 
+import { getHomeMatchesSourceSnapshot, type MatchListItem } from '@/lib/api-football'
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
-import { getHomeMatchesSourceSnapshot } from '@/lib/api-football'
-import { getFootballApiConfig } from '@/server/config/env'
 import {
   addDaysToISO,
-  formatMatchDateLabelArgentina,
   formatMatchDateTimeArgentina,
   getArgentinaDateISO,
   getArgentinaDayUtcRange,
@@ -14,37 +12,11 @@ import {
 } from '@/shared/utils/argentina-time'
 import { getHomeMatchVisibility } from '@/shared/utils/home-match-visibility'
 
-type ApiAuditFixture = {
-  fixture?: {
-    id?: number
-    date?: string
-    status?: {
-      short?: string
-      long?: string
-    }
-  }
-  league?: {
-    id?: number
-    name?: string
-    country?: string
-    round?: string
-  }
-  teams?: {
-    home?: {
-      id?: number
-      name?: string
-    }
-    away?: {
-      id?: number
-      name?: string
-    }
-  }
-}
-
 type SupabaseAuditMatch = {
   id: string
   external_id: string | number | null
   match_date: string
+  round: string | null
   status: string | null
   home_score: number | null
   away_score: number | null
@@ -63,39 +35,40 @@ type SupabaseAuditMatch = {
   } | null
 }
 
-type DateAuditReason =
+type CacheAuditRow = {
+  date: string
+  league_external_id: string | null
+  fixture_external_id: string
+  normalized_payload: unknown
+  payload: unknown
+}
+
+type AuditReason =
   | 'included'
-  | 'apiSupplemented'
-  | 'supabaseOnly'
-  | 'excludedCompetition'
   | 'dateMismatch'
+  | 'excludedCompetition'
   | 'unsupportedLeague'
-  | 'noTeams'
-  | 'missingLeagueConfig'
-  | 'notInHome'
+  | 'missingLeagueGroup'
+  | 'renderBug'
+  | 'duplicate'
+  | 'unknown'
 
 type DateAuditRow = {
   external_id: number | string | null
   liga: string
+  leagueExternalId: number | string | null
   local: string
   visitante: string
-  source: 'supabase' | 'api' | 'home'
+  source: 'supabase' | 'cache' | 'home'
+  cacheDate: string | null
   match_date_original: string | null
   match_date_utc: string | null
   match_date_argentina: string | null
-  argentinaDateISO: string | null
-  diaMostrado: string | null
+  argentina_date_iso: string | null
   status: string | null
   includedInHome: boolean
-  reason: DateAuditReason
+  excludedReason: AuditReason
   detail: string | null
-}
-
-function isAuthorized(request: Request) {
-  const cronSecret = process.env.CRON_SECRET
-
-  if (!cronSecret) return false
-  return request.headers.get('x-cron-secret') === cronSecret
 }
 
 function jsonNoStore(body: unknown, init?: ResponseInit) {
@@ -106,6 +79,26 @@ function jsonNoStore(body: unknown, init?: ResponseInit) {
       ...(init?.headers ?? {}),
     },
   })
+}
+
+function getAuthorizationToken(request: Request) {
+  const authorization = request.headers.get('authorization') ?? ''
+  const bearerMatch = authorization.match(/^Bearer\s+(.+)$/i)
+
+  return bearerMatch?.[1] ?? request.headers.get('x-cron-secret')
+}
+
+function isAuthorized(request: Request) {
+  const cronSecret = process.env.CRON_SECRET
+  const isProduction = process.env.NODE_ENV === 'production'
+
+  if (!cronSecret) return !isProduction
+
+  return getAuthorizationToken(request) === cronSecret
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
 function toFiniteNumber(value: string | number | null | undefined) {
@@ -120,21 +113,62 @@ function getExternalIdKey(value: string | number | null | undefined) {
   return String(value)
 }
 
+function getStringValue(value: unknown) {
+  if (typeof value === 'string' && value.trim()) return value
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+
+  return null
+}
+
 function serializeDate(value: string | null | undefined) {
   if (!value) {
     return {
       match_date_utc: null,
       match_date_argentina: null,
-      argentinaDateISO: null,
-      diaMostrado: null,
+      argentina_date_iso: null,
     }
   }
 
   return {
     match_date_utc: toArgentinaDate(value).toISOString(),
     match_date_argentina: formatMatchDateTimeArgentina(value),
-    argentinaDateISO: getArgentinaDateISO(value),
-    diaMostrado: formatMatchDateLabelArgentina(value),
+    argentina_date_iso: getArgentinaDateISO(value),
+  }
+}
+
+function getVisibilityInfo(input: {
+  leagueId?: number | null
+  league: string
+  country?: string | null
+  home: string
+  away: string
+  round?: string | null
+}) {
+  if (!input.league || input.league === 'Sin liga') {
+    return {
+      included: false,
+      reason: 'missingLeagueGroup' as const,
+      detail: 'falta liga para agrupar en Home',
+    }
+  }
+
+  const visibility = getHomeMatchVisibility(input)
+
+  if (visibility.included) {
+    return {
+      included: true,
+      reason: 'included' as const,
+      detail: visibility.reason,
+    }
+  }
+
+  return {
+    included: false,
+    reason:
+      visibility.reason === 'excludedCompetition'
+        ? ('excludedCompetition' as const)
+        : ('unsupportedLeague' as const),
+    detail: visibility.excludedReason ? String(visibility.excludedReason) : visibility.reason,
   }
 }
 
@@ -144,7 +178,7 @@ async function fetchSupabaseMatchesForDate(date: string, leagueExternalId: strin
   const { data, error } = await supabase
     .from('matches')
     .select(
-      'id, external_id, match_date, status, home_score, away_score, leagues(name, external_id, country), home_team:teams!matches_home_team_id_fkey(name, external_id), away_team:teams!matches_away_team_id_fkey(name, external_id)'
+      'id, external_id, match_date, round, status, home_score, away_score, leagues(name, external_id, country), home_team:teams!matches_home_team_id_fkey(name, external_id), away_team:teams!matches_away_team_id_fkey(name, external_id)'
     )
     .gte('match_date', startUtc)
     .lt('match_date', endUtc)
@@ -159,161 +193,197 @@ async function fetchSupabaseMatchesForDate(date: string, leagueExternalId: strin
   })
 }
 
-async function fetchApiFixturesForDate(date: string) {
-  const { apiKey, baseUrl } = getFootballApiConfig()
-  const url = new URL(`${baseUrl}/fixtures`)
+async function fetchCacheMatchesForDateWindow(date: string, leagueExternalId: string | null) {
+  const supabase = getSupabaseAdminClient()
+  const cacheDateWindow = [addDaysToISO(date, -1), date, addDaysToISO(date, 1)]
+  let query = supabase
+    .from('football_fixture_cache')
+    .select('date, league_external_id, fixture_external_id, normalized_payload, payload')
+    .in('date', cacheDateWindow)
+    .order('date', { ascending: true })
+    .order('fixture_external_id', { ascending: true })
 
-  url.searchParams.set('date', date)
-  url.searchParams.set('timezone', 'America/Argentina/Buenos_Aires')
+  if (leagueExternalId) query = query.eq('league_external_id', leagueExternalId)
 
-  const response = await fetch(url, {
-    cache: 'no-store',
-    headers: {
-      'x-apisports-key': apiKey,
-    },
-  })
+  const { data, error } = await query
 
-  if (!response.ok) {
-    throw new Error(`API-Football respondio ${response.status} para ${date}.`)
+  if (error) {
+    const message = error.message.toLowerCase()
+    const missingCacheTable =
+      error.code === '42P01' ||
+      error.code === 'PGRST205' ||
+      message.includes('football_fixture_cache') ||
+      message.includes('schema cache')
+
+    if (missingCacheTable) return []
+    throw error
   }
 
-  const payload = (await response.json()) as { response?: ApiAuditFixture[] }
-
-  return payload.response ?? []
-}
-
-function getApiFixtureVisibility(fixture: ApiAuditFixture, selectedDate: string) {
-  const home = fixture.teams?.home?.name ?? null
-  const away = fixture.teams?.away?.name ?? null
-  const fixtureDate = fixture.fixture?.date ?? null
-
-  if (!home || !away) {
-    return {
-      included: false,
-      reason: 'noTeams' as const,
-      detail: 'fixture sin nombres de equipos',
-    }
-  }
-
-  if (!fixtureDate || getArgentinaDateISO(fixtureDate) !== selectedDate) {
-    return {
-      included: false,
-      reason: 'dateMismatch' as const,
-      detail: 'fixture no pertenece al dia argentino seleccionado',
-    }
-  }
-
-  const visibility = getHomeMatchVisibility({
-    leagueId: fixture.league?.id ?? null,
-    league: fixture.league?.name ?? '',
-    country: fixture.league?.country ?? '',
-    home,
-    away,
-    round: fixture.league?.round ?? null,
-  })
-
-  if (!visibility.included) {
-    return {
-      included: false,
-      reason:
-        visibility.reason === 'excludedCompetition'
-          ? ('excludedCompetition' as const)
-          : ('unsupportedLeague' as const),
-      detail: visibility.excludedReason ? String(visibility.excludedReason) : visibility.reason,
-    }
-  }
-
-  return {
-    included: true,
-    reason: 'included' as const,
-    detail: visibility.reason,
-  }
-}
-
-function serializeApiFixture(
-  fixture: ApiAuditFixture,
-  selectedDate: string,
-  homeVisibleIds: Set<string>,
-  reasonOverride?: DateAuditReason,
-  detailOverride?: string | null
-): DateAuditRow {
-  const fixtureId = fixture.fixture?.id ?? null
-  const dateInfo = serializeDate(fixture.fixture?.date)
-  const visibility = getApiFixtureVisibility(fixture, selectedDate)
-  const key = getExternalIdKey(fixtureId)
-  const includedInHome = key ? homeVisibleIds.has(key) : false
-
-  return {
-    external_id: fixtureId,
-    liga: fixture.league?.name ?? 'Sin liga',
-    local: fixture.teams?.home?.name ?? 'Sin local',
-    visitante: fixture.teams?.away?.name ?? 'Sin visitante',
-    source: 'api',
-    match_date_original: fixture.fixture?.date ?? null,
-    ...dateInfo,
-    status: fixture.fixture?.status?.short ?? null,
-    includedInHome,
-    reason: reasonOverride ?? (visibility.included ? 'included' : visibility.reason),
-    detail: detailOverride ?? visibility.detail,
-  }
+  return (data ?? []) as CacheAuditRow[]
 }
 
 function serializeSupabaseMatch(
   match: SupabaseAuditMatch,
   selectedDate: string,
-  homeVisibleIds: Set<string>,
-  apiFixtureByExternalId: Map<string, ApiAuditFixture>
+  homeVisibleIds: Set<string>
 ): DateAuditRow {
   const externalId = getExternalIdKey(match.external_id)
-  const apiFixture = externalId ? apiFixtureByExternalId.get(externalId) ?? null : null
-  const dateInfo = serializeDate(match.match_date)
   const home = match.home_team?.name ?? 'Sin local'
   const away = match.away_team?.name ?? 'Sin visitante'
-  const visibility = getHomeMatchVisibility({
+  const league = match.leagues?.name ?? 'Sin liga'
+  const dateInfo = serializeDate(match.match_date)
+  const visibility = getVisibilityInfo({
     leagueId: toFiniteNumber(match.leagues?.external_id),
-    league: match.leagues?.name ?? '',
+    league,
     country: match.leagues?.country ?? '',
     home,
     away,
+    round: match.round,
   })
   const includedInHome = externalId ? homeVisibleIds.has(externalId) : false
-  let reason: DateAuditReason = includedInHome ? 'included' : 'notInHome'
-  let detail: string | null = includedInHome ? 'visible en Home' : 'no visible en Home'
+  let excludedReason: AuditReason = visibility.reason
+  let detail: string | null = visibility.detail
 
-  if (!visibility.included) {
-    reason = visibility.reason === 'excludedCompetition' ? 'excludedCompetition' : 'unsupportedLeague'
-    detail = visibility.excludedReason ? String(visibility.excludedReason) : visibility.reason
-  } else if (dateInfo.argentinaDateISO !== selectedDate) {
-    reason = 'dateMismatch'
-    detail = 'Supabase no pertenece al dia argentino seleccionado'
-  } else if (apiFixture) {
-    const apiDate = apiFixture.fixture?.date
-      ? getArgentinaDateISO(apiFixture.fixture.date)
-      : null
-
-    if (apiDate !== selectedDate) {
-      reason = 'dateMismatch'
-      detail = apiDate
-        ? `API-Football ubica este fixture en ${apiDate}`
-        : 'API-Football no informa fecha para este fixture'
-    }
-  } else if (!includedInHome) {
-    reason = 'supabaseOnly'
-    detail = 'solo existe en Supabase para este dia; no vino en API-Football'
+  if (dateInfo.argentina_date_iso !== selectedDate) {
+    excludedReason = 'dateMismatch'
+    detail = 'match_date no pertenece al dia argentino seleccionado'
+  } else if (visibility.included && !includedInHome) {
+    excludedReason = 'renderBug'
+    detail = 'partido valido en Supabase pero ausente en Home'
   }
 
   return {
     external_id: match.external_id,
-    liga: match.leagues?.name ?? 'Sin liga',
+    liga: league,
+    leagueExternalId: match.leagues?.external_id ?? null,
     local: home,
     visitante: away,
     source: 'supabase',
+    cacheDate: null,
     match_date_original: match.match_date,
     ...dateInfo,
     status: match.status,
     includedInHome,
-    reason,
-    detail,
+    excludedReason: includedInHome ? 'included' : excludedReason,
+    detail: includedInHome ? 'visible en Home' : detail,
+  }
+}
+
+function readCacheFixture(row: CacheAuditRow) {
+  const normalized = isRecord(row.normalized_payload) ? row.normalized_payload : {}
+  const payload = isRecord(row.payload) ? row.payload : {}
+  const fixture = isRecord(payload.fixture) ? payload.fixture : {}
+  const league = isRecord(payload.league) ? payload.league : {}
+  const teams = isRecord(payload.teams) ? payload.teams : {}
+  const homeTeam = isRecord(teams.home) ? teams.home : {}
+  const awayTeam = isRecord(teams.away) ? teams.away : {}
+  const status = isRecord(fixture.status) ? fixture.status : {}
+
+  return {
+    externalId:
+      getStringValue(normalized.externalId) ??
+      getStringValue(normalized.id) ??
+      row.fixture_external_id ??
+      getStringValue(fixture.id),
+    leagueExternalId:
+      getStringValue(normalized.leagueId) ??
+      row.league_external_id ??
+      getStringValue(league.id),
+    league:
+      getStringValue(normalized.league) ??
+      getStringValue(league.name) ??
+      'Sin liga',
+    country:
+      getStringValue(normalized.country) ??
+      getStringValue(league.country) ??
+      null,
+    round:
+      getStringValue(normalized.round) ??
+      getStringValue(league.round) ??
+      null,
+    home:
+      getStringValue(normalized.home) ??
+      getStringValue(homeTeam.name) ??
+      'Sin local',
+    away:
+      getStringValue(normalized.away) ??
+      getStringValue(awayTeam.name) ??
+      'Sin visitante',
+    date:
+      getStringValue(normalized.date) ??
+      getStringValue(fixture.date),
+    status:
+      getStringValue(normalized.statusShort) ??
+      getStringValue(status.short),
+  }
+}
+
+function serializeCacheMatch(
+  row: CacheAuditRow,
+  selectedDate: string,
+  homeVisibleIds: Set<string>,
+  duplicateCacheIds: Set<string>
+): DateAuditRow {
+  const fixture = readCacheFixture(row)
+  const externalId = getExternalIdKey(fixture.externalId)
+  const dateInfo = serializeDate(fixture.date)
+  const visibility = getVisibilityInfo({
+    leagueId: toFiniteNumber(fixture.leagueExternalId),
+    league: fixture.league,
+    country: fixture.country,
+    home: fixture.home,
+    away: fixture.away,
+    round: fixture.round,
+  })
+  const includedInHome = externalId ? homeVisibleIds.has(externalId) : false
+  let excludedReason: AuditReason = visibility.reason
+  let detail: string | null = visibility.detail
+
+  if (dateInfo.argentina_date_iso !== selectedDate) {
+    excludedReason = 'dateMismatch'
+    detail = 'fixture cacheado no pertenece al dia argentino seleccionado'
+  } else if (externalId && duplicateCacheIds.has(externalId) && row.date !== selectedDate) {
+    excludedReason = 'duplicate'
+    detail = 'mismo fixture existe cacheado con mas de una fecha'
+  } else if (visibility.included && !includedInHome) {
+    excludedReason = 'renderBug'
+    detail = 'partido valido en cache pero ausente en Home'
+  }
+
+  return {
+    external_id: fixture.externalId,
+    liga: fixture.league,
+    leagueExternalId: fixture.leagueExternalId,
+    local: fixture.home,
+    visitante: fixture.away,
+    source: 'cache',
+    cacheDate: row.date,
+    match_date_original: fixture.date,
+    ...dateInfo,
+    status: fixture.status,
+    includedInHome,
+    excludedReason: includedInHome ? 'included' : excludedReason,
+    detail: includedInHome ? 'visible en Home' : detail,
+  }
+}
+
+function serializeHomeMatch(match: MatchListItem): DateAuditRow {
+  const dateInfo = serializeDate(match.date)
+
+  return {
+    external_id: match.externalId ?? match.id,
+    liga: match.league,
+    leagueExternalId: match.leagueId ?? null,
+    local: match.home,
+    visitante: match.away,
+    source: 'home',
+    cacheDate: null,
+    match_date_original: match.date,
+    ...dateInfo,
+    status: match.statusShort,
+    includedInHome: true,
+    excludedReason: 'included',
+    detail: 'renderizado por Home',
   }
 }
 
@@ -339,28 +409,52 @@ export async function GET(request: Request) {
     const selectedDate = searchParams.get('date') || getArgentinaTodayISO()
     const leagueExternalId = searchParams.get('leagueExternalId')
     const { startUtc, endUtc } = getArgentinaDayUtcRange(selectedDate)
-    const [supabaseMatches, homeSnapshot] = await Promise.all([
+    const [supabaseMatches, cacheRows, homeSnapshot] = await Promise.all([
       fetchSupabaseMatchesForDate(selectedDate, leagueExternalId),
+      fetchCacheMatchesForDateWindow(selectedDate, leagueExternalId),
       getHomeMatchesSourceSnapshot(selectedDate),
     ])
-    const auditDates = [addDaysToISO(selectedDate, -1), selectedDate, addDaysToISO(selectedDate, 1)]
-    const apiFixtures = (await Promise.all(auditDates.map(fetchApiFixturesForDate))).flat()
-    const apiFixtureByExternalId = new Map(
-      apiFixtures
-        .filter((fixture) => fixture.fixture?.id)
-        .map((fixture) => [String(fixture.fixture?.id), fixture] as const)
+    const homeVisibleIds = new Set(
+      homeSnapshot.mergedMatches.map((match) => String(match.externalId ?? match.id))
     )
-    const homeVisibleIds = new Set(homeSnapshot.mergedMatches.map((match) => String(match.externalId ?? match.id)))
-    const filteredApiFixtures = apiFixtures.filter((fixture) => {
-      if (!leagueExternalId) return true
+    const cacheIdCounts = new Map<string, number>()
 
-      return String(fixture.league?.id ?? '') === leagueExternalId
-    })
-    const apiRows = filteredApiFixtures
-      .map((fixture) => serializeApiFixture(fixture, selectedDate, homeVisibleIds))
-      .filter((row) => row.argentinaDateISO === selectedDate || row.reason !== 'included')
-    const supabaseRows = supabaseMatches.map((match) =>
-      serializeSupabaseMatch(match, selectedDate, homeVisibleIds, apiFixtureByExternalId)
+    for (const row of cacheRows) {
+      const fixture = readCacheFixture(row)
+      const key = getExternalIdKey(fixture.externalId)
+      if (!key) continue
+      cacheIdCounts.set(key, (cacheIdCounts.get(key) ?? 0) + 1)
+    }
+
+    const duplicateCacheIds = new Set(
+      [...cacheIdCounts.entries()].filter(([, count]) => count > 1).map(([key]) => key)
+    )
+    const matchesFromSupabase = supabaseMatches.map((match) =>
+      serializeSupabaseMatch(match, selectedDate, homeVisibleIds)
+    )
+    const allCacheRows = cacheRows.map((row) =>
+      serializeCacheMatch(row, selectedDate, homeVisibleIds, duplicateCacheIds)
+    )
+    const matchesFromCache = allCacheRows.filter((row) =>
+      row.argentina_date_iso === selectedDate || row.cacheDate === selectedDate
+    )
+    const visibleHomeMatches = homeSnapshot.mergedMatches
+      .filter((match) => !leagueExternalId || String(match.leagueId ?? '') === leagueExternalId)
+      .map(serializeHomeMatch)
+    const allSourceRows = [...matchesFromSupabase, ...matchesFromCache]
+    const missingFromHome = allSourceRows.filter((row) => row.excludedReason === 'renderBug')
+    const excludedByFilters = allSourceRows.filter((row) =>
+      row.excludedReason === 'excludedCompetition' ||
+      row.excludedReason === 'unsupportedLeague' ||
+      row.excludedReason === 'missingLeagueGroup'
+    )
+    const timezoneIssues = allCacheRows.filter((row) =>
+      Boolean(
+        row.cacheDate &&
+        row.argentina_date_iso &&
+        row.cacheDate !== row.argentina_date_iso &&
+        (row.argentina_date_iso === selectedDate || row.cacheDate === selectedDate)
+      )
     )
 
     return jsonNoStore({
@@ -369,20 +463,21 @@ export async function GET(request: Request) {
       startUtc,
       endUtc,
       leagueExternalId: leagueExternalId ?? null,
-      home: {
-        visibleCount: homeSnapshot.mergedMatches.length,
-        supabaseCount: homeSnapshot.storedMatches.length,
-        apiCount: homeSnapshot.apiMatches.length,
-        apiAuthoritative: homeSnapshot.apiAuthoritative,
-        apiError: homeSnapshot.apiError,
-      },
+      cacheDateWindow: [addDaysToISO(selectedDate, -1), selectedDate, addDaysToISO(selectedDate, 1)],
       counts: {
-        supabaseRows: supabaseRows.length,
-        apiRows: apiRows.length,
-        includedInHome: [...new Set([...supabaseRows, ...apiRows].filter((row) => row.includedInHome).map((row) => row.external_id))].length,
-        excludedOrMismatch: [...supabaseRows, ...apiRows].filter((row) => row.reason !== 'included').length,
+        matchesFromSupabase: matchesFromSupabase.length,
+        matchesFromCache: matchesFromCache.length,
+        visibleHomeMatches: visibleHomeMatches.length,
+        missingFromHome: missingFromHome.length,
+        excludedByFilters: excludedByFilters.length,
+        timezoneIssues: timezoneIssues.length,
       },
-      partidosEncontrados: sortAuditRows([...supabaseRows, ...apiRows]),
+      matchesFromSupabase: sortAuditRows(matchesFromSupabase),
+      matchesFromCache: sortAuditRows(matchesFromCache),
+      visibleHomeMatches: sortAuditRows(visibleHomeMatches),
+      missingFromHome: sortAuditRows(missingFromHome),
+      excludedByFilters: sortAuditRows(excludedByFilters),
+      timezoneIssues: sortAuditRows(timezoneIssues),
     })
   } catch (error) {
     console.error('[home-date-audit] Error completo', error)

@@ -40,6 +40,11 @@ export async function requestFootballApi<T>(
   console.info(`[football-api:${options.logContext}] key configured: ${hasApiKey}`)
   console.info(`[football-api:${options.logContext}] base url: ${baseUrl}`)
   console.info(`[football-api:${options.logContext}] request: ${url.pathname}${url.search}`)
+  console.info('[api-football-call]', {
+    source: options.logContext,
+    endpoint: path,
+    params: Object.fromEntries(url.searchParams.entries()),
+  })
 
   if (!apiKey) {
     throw new Error('Falta FOOTBALL_API_KEY en el entorno.')

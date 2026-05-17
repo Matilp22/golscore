@@ -2,7 +2,6 @@ import SafeImage from '@/frontend/components/SafeImage'
 import { PlayerPhoto, TeamLogo } from '@/frontend/components/AssetImage'
 
 import {
-  ApiFootballError,
   getTeamDetail,
   type TeamProfile,
   type TeamSquadPlayer,
@@ -84,13 +83,8 @@ export default async function EquipoPage({ params }: PageProps) {
 
   try {
     data = await getTeamDetail(Number(id))
-  } catch (error) {
-    const message =
-      error instanceof ApiFootballError
-        ? error.code === 'requests'
-          ? 'Se alcanzó el límite diario de la API. La ficha del equipo no pudo cargarse.'
-          : error.message
-        : 'No se pudo cargar la información del equipo.'
+  } catch {
+    const message = 'Datos temporalmente no disponibles. Intentá nuevamente en unos minutos.'
 
     return (
       <div className="min-h-screen text-white">

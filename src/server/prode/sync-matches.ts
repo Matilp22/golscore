@@ -19,7 +19,7 @@ import {
   getTournamentConfig,
   type TournamentPageConfig,
 } from '@/shared/config/tournament-pages'
-import { getExcludedCompetitionReason } from '@/shared/utils/competition-filter'
+import { getHomeMatchVisibility } from '@/shared/utils/home-match-visibility'
 import {
   isCancelledEvent,
   isImportantLiveEvent,
@@ -28,6 +28,7 @@ import {
 } from '@/shared/utils/football-events'
 import { getCanonicalMatchStatusFromApi, isFinishedStatus } from '@/shared/utils/match-status'
 import {
+  ARGENTINA_TIME_ZONE,
   addDaysToISO,
   getArgentinaDateISO,
   getArgentinaTodayISO,
@@ -521,12 +522,13 @@ async function upsertFixtureCache(
   debug?: boolean
 ) {
   const normalizedPayload = getFixtureCachePayload(fixture)
+  const cacheDate = getArgentinaDateKey(fixture.fixture.date)
   const response = await withTimeout(
     supabase
       .from('football_fixture_cache')
       .upsert(
         {
-          date: getArgentinaDateKey(fixture.fixture.date),
+          date: cacheDate,
           league_external_id: String(fixture.league.id),
           fixture_external_id: String(fixture.fixture.id),
           payload: fixture,
@@ -538,9 +540,24 @@ async function upsertFixtureCache(
   )
 
   if (!response.error) {
+    const cleanup = await withTimeout(
+      supabase
+        .from('football_fixture_cache')
+        .delete()
+        .eq('fixture_external_id', String(fixture.fixture.id))
+        .neq('date', cacheDate),
+      `football fixture cache cleanup ${fixture.fixture.id}`
+    )
+
+    if (cleanup.error && !isMissingFixtureCacheTable(cleanup.error)) {
+      throw new Error(
+        `No se pudo limpiar cache duplicado del fixture ${fixture.fixture.id}: ${cleanup.error.message}`
+      )
+    }
+
     logDebug(debug, 'fixture cached', {
       fixtureId: fixture.fixture.id,
-      date: normalizedPayload.date,
+      date: cacheDate,
       leagueExternalId: fixture.league.id,
     })
 
@@ -1015,20 +1032,14 @@ function containsNormalizedPhrase(value: string, phrase: string) {
 }
 
 function fixtureMatchesHomeTournament(fixture: ApiFixture) {
-  const excludedReason = getExcludedCompetitionReason({
+  return getHomeMatchVisibility({
+    leagueId: fixture.league.id ?? null,
     league: fixture.league.name,
-    leagueName: fixture.league.name,
     country: fixture.league.country,
     home: fixture.teams.home.name,
     away: fixture.teams.away.name,
     round: fixture.league.round,
-  })
-
-  if (excludedReason) return false
-
-  return VISIBLE_TOURNAMENT_PAGE_CONFIGS.some((tournament) =>
-    fixtureMatchesTournamentConfig(fixture, tournament)
-  )
+  }).included
 }
 
 function getEventTournamentConfig(competition: string) {
@@ -1272,14 +1283,14 @@ async function fetchTournamentFixtures(tournament: AllowedTournament) {
   return payload.response ?? []
 }
 
-async function fetchFixturesByDate(date: string) {
+async function fetchFixturesByApiDate(date: string, logContext: string) {
   const { payload } = await requestFootballApi<ApiFixture[]>(
     '/fixtures',
     {
       date,
-      timezone: 'America/Argentina/Buenos_Aires',
+      timezone: ARGENTINA_TIME_ZONE,
     },
-    { logContext: `sync-home-scoreboard:${date}` }
+    { logContext }
   )
   const apiErrors = payload.errors ? Object.values(payload.errors).filter(Boolean) : []
 
@@ -1287,9 +1298,26 @@ async function fetchFixturesByDate(date: string) {
     throw new Error(apiErrors.join(' | '))
   }
 
-  return (payload.response ?? []).filter(
-    (fixture) => getArgentinaDateKey(fixture.fixture.date) === date
-  )
+  return payload.response ?? []
+}
+
+async function fetchFixturesByDate(date: string) {
+  const apiDates = [addDaysToISO(date, -1), date, addDaysToISO(date, 1)]
+  const fixturesById = new Map<number, ApiFixture>()
+
+  for (const apiDate of apiDates) {
+    const fixtures = await fetchFixturesByApiDate(
+      apiDate,
+      `sync-home-scoreboard:${date}:api-date:${apiDate}`
+    )
+
+    for (const fixture of fixtures) {
+      if (getArgentinaDateKey(fixture.fixture.date) !== date) continue
+      fixturesById.set(fixture.fixture.id, fixture)
+    }
+  }
+
+  return [...fixturesById.values()].sort(compareFixturesByApiOrder)
 }
 
 async function fetchCurrentLeagues() {

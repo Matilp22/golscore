@@ -1,7 +1,6 @@
 import { PlayerPhoto } from '@/frontend/components/AssetImage'
 import PlayerIncidentsList from '@/frontend/components/PlayerIncidentsList'
 import {
-  ApiFootballError,
   getPlayerDetail,
   type LeaderStatType,
 } from '@/lib/api-football'
@@ -252,11 +251,8 @@ export default async function JugadorPage({ params, searchParams }: PageProps) {
         </div>
       </div>
     )
-  } catch (error) {
-    const message =
-      error instanceof ApiFootballError
-        ? error.message
-        : 'No se pudo cargar la información del jugador.'
+  } catch {
+    const message = 'Datos temporalmente no disponibles. Intentá nuevamente en unos minutos.'
 
     return (
       <div className="min-h-screen text-white">

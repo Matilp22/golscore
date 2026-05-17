@@ -108,6 +108,12 @@ async function fetchApiFixturesForHomeAudit(date: string) {
   url.searchParams.set('date', date)
   url.searchParams.set('timezone', 'America/Argentina/Buenos_Aires')
 
+  console.info('[api-football-call]', {
+    source: 'admin:home-matches-audit',
+    endpoint: '/fixtures',
+    params: Object.fromEntries(url.searchParams.entries()),
+  })
+
   const response = await fetch(url, {
     cache: 'no-store',
     headers: {
