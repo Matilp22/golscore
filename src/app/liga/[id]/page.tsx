@@ -760,15 +760,27 @@ function splitPrimaryGroups(
   }
 }
 
-function isConmebolGroupStage(key: string, standingsMode: string) {
-  return (
-    standingsMode === 'groups' &&
-    (key === 'internacional-libertadores' || key === 'internacional-sudamericana')
-  )
+const CONMEBOL_GROUP_STAGE_TOURNAMENT_KEYS = new Set([
+  'internacional-libertadores',
+  'internacional-sudamericana',
+])
+
+function isConmebolGroupStage(key: string) {
+  return CONMEBOL_GROUP_STAGE_TOURNAMENT_KEYS.has(key)
 }
 
-function isUefaLeaguePhaseTournamentKey(key: string) {
-  return key === 'internacional-champions' || key === 'internacional-europa-league'
+function isUefaLeaguePhaseTournamentKey(key: string, leagueExternalId?: number | null) {
+  if (isConmebolGroupStage(key)) return false
+
+  if (key === 'internacional-champions') {
+    return leagueExternalId === null || leagueExternalId === undefined || leagueExternalId === 2
+  }
+
+  if (key === 'internacional-europa-league') {
+    return leagueExternalId === null || leagueExternalId === undefined || leagueExternalId === 3
+  }
+
+  return false
 }
 
 function buildUefaLeaguePhaseRows(groups: LeagueStandingGroup[]) {
@@ -1736,24 +1748,6 @@ function getTeamShortCode(teamName: string, existingCode?: string | null) {
   return (initials.length >= 3 ? initials : compactName).slice(0, 3).toUpperCase()
 }
 
-function cleanLocationPart(value?: string | null) {
-  const trimmed = value?.trim()
-
-  return trimmed || null
-}
-
-function getGroupFixtureLocationLabel(fixture: LeagueFixtureSummary) {
-  const parts = [
-    cleanLocationPart(fixture.venueName),
-    cleanLocationPart(fixture.venueCity),
-    cleanLocationPart(fixture.venueCountry),
-  ].filter((part): part is string => Boolean(part))
-
-  if (!parts.length) return null
-
-  return `Lugar: ${parts.join(', ')}`
-}
-
 function FixtureTeamLabel({
   name,
   logo,
@@ -1802,37 +1796,28 @@ function GroupFixtures({ fixtures }: { fixtures: LeagueFixtureSummary[] }) {
 
   return (
     <div className="grid min-w-0 grid-cols-2 gap-1.5 md:grid-cols-2 md:gap-2">
-      {sortedFixtures.map((fixture) => {
-        const locationLabel = getGroupFixtureLocationLabel(fixture)
+      {sortedFixtures.map((fixture) => (
+        <Link
+          key={fixture.id}
+          href={`/partido/${fixture.id}`}
+          className="block w-full min-w-0 overflow-hidden rounded-xl border border-white/8 bg-[#11161b] p-1.5 text-[11px] transition hover:border-[#2a5c46] hover:bg-[#151b21] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7ff0b2]/60 sm:p-2 md:p-3 md:text-sm"
+        >
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1 md:gap-2">
+            <FixtureTeamLabel name={fixture.home} logo={fixture.homeLogo} side="home" />
 
-        return (
-          <Link
-            key={fixture.id}
-            href={`/partido/${fixture.id}`}
-            className="block w-full min-w-0 overflow-hidden rounded-xl border border-white/8 bg-[#11161b] p-1.5 text-[11px] transition hover:border-[#2a5c46] hover:bg-[#151b21] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7ff0b2]/60 sm:p-2 md:p-3 md:text-sm"
-          >
-            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1 md:gap-2">
-              <FixtureTeamLabel name={fixture.home} logo={fixture.homeLogo} side="home" />
+            <span className="min-w-[32px] shrink-0 rounded-md border border-white/8 bg-[#0d1216] px-1 py-0.5 text-center text-[10.5px] font-black leading-none text-white md:min-w-[52px] md:rounded-lg md:px-2 md:py-1 md:text-xs">
+              <span className="md:hidden">{getGroupFixtureCompactScoreLabel(fixture)}</span>
+              <span className="hidden md:inline">{getGroupFixtureScoreLabel(fixture)}</span>
+            </span>
 
-              <span className="min-w-[32px] shrink-0 rounded-md border border-white/8 bg-[#0d1216] px-1 py-0.5 text-center text-[10.5px] font-black leading-none text-white md:min-w-[52px] md:rounded-lg md:px-2 md:py-1 md:text-xs">
-                <span className="md:hidden">{getGroupFixtureCompactScoreLabel(fixture)}</span>
-                <span className="hidden md:inline">{getGroupFixtureScoreLabel(fixture)}</span>
-              </span>
+            <FixtureTeamLabel name={fixture.away} logo={fixture.awayLogo} side="away" />
+          </div>
 
-              <FixtureTeamLabel name={fixture.away} logo={fixture.awayLogo} side="away" />
-            </div>
-
-            <div className="mt-1 text-center text-[10.5px] font-semibold text-[#9eacb8] md:mt-1.5 md:text-xs">
-              {formatGroupFixtureDateTime(fixture.date)}
-            </div>
-            {locationLabel ? (
-              <div className="mt-0.5 hidden text-center text-xs text-[#7f8c98] md:block">
-                {locationLabel}
-              </div>
-            ) : null}
-          </Link>
-        )
-      })}
+          <div className="mt-1 text-center text-[10.5px] font-semibold text-[#9eacb8] md:mt-1.5 md:text-xs">
+            {formatGroupFixtureDateTime(fixture.date)}
+          </div>
+        </Link>
+      ))}
     </div>
   )
 }
@@ -2202,11 +2187,11 @@ export default async function LigaPage({ params }: PageProps) {
     standings,
     displayOptions.groupMode
   )
-  const showConmebolGroupStage = isConmebolGroupStage(
+  const showConmebolGroupStage = isConmebolGroupStage(tournament.key)
+  const isUefaLeaguePhaseTournament = isUefaLeaguePhaseTournamentKey(
     tournament.key,
-    displayOptions.standingsMode
+    resolvedTournament?.leagueId ?? null
   )
-  const isUefaLeaguePhaseTournament = isUefaLeaguePhaseTournamentKey(tournament.key)
   const displayPrimaryGroups = showConmebolGroupStage
     ? sortGroupStageGroups(primaryGroups)
     : primaryGroups
@@ -2376,7 +2361,7 @@ export default async function LigaPage({ params }: PageProps) {
             </>
           ) : null}
 
-          {!isUefaLeaguePhaseTournament && knockoutRounds.length ? (
+          {!isUefaLeaguePhaseTournament && !showConmebolGroupStage && knockoutRounds.length ? (
             <BracketView
               rounds={knockoutRounds}
               useCopaArgentinaTree={tournament.key === 'argentina-copa-argentina'}
@@ -2399,7 +2384,7 @@ export default async function LigaPage({ params }: PageProps) {
             </SectionCard>
           ) : null}
 
-          {!isUefaLeaguePhaseTournament && currentRoundBlocks.length ? (
+          {!isUefaLeaguePhaseTournament && !showConmebolGroupStage && currentRoundBlocks.length ? (
             <CurrentRoundNavigator
               rounds={currentRoundBlocks}
               initialIndex={currentRoundInitialIndex}
@@ -2408,38 +2393,45 @@ export default async function LigaPage({ params }: PageProps) {
 
           {!isUefaLeaguePhaseTournament && displayPrimaryGroups.length ? (
             showConmebolGroupStage ? (
-              <GroupStageGrid
-                groups={displayPrimaryGroups.map((group, index) => {
-                  const groupId = getGroupId(group)
-                  const tableLegendItems = getTableLegendItems(
-                    group.rows,
-                    displayOptions.rule,
-                    displayOptions.protected
-                  )
+              <>
+                <GroupStageGrid
+                  groups={displayPrimaryGroups.map((group, index) => {
+                    const groupId = getGroupId(group)
+                    const tableLegendItems = getTableLegendItems(
+                      group.rows,
+                      displayOptions.rule,
+                      displayOptions.protected
+                    )
 
-                  return {
-                    id: `${groupId}-${index}`,
-                    title: getDisplayGroupName(group.name),
-                    table: (
-                      <>
-                        <StandingsTable
-                          rows={group.rows}
-                          compact
-                          fitNarrow
-                          rule={displayOptions.rule}
-                          allowLegacyFallback={false}
-                        />
-                        {tableLegendItems.length ? (
-                          <TableLegend items={tableLegendItems} />
-                        ) : null}
-                      </>
-                    ),
-                    fixtures: (
-                      <GroupFixtures fixtures={fixturesByGroup.get(groupId) || []} />
-                    ),
-                  }
-                })}
-              />
+                    return {
+                      id: `${groupId}-${index}`,
+                      title: getDisplayGroupName(group.name),
+                      table: (
+                        <>
+                          <StandingsTable
+                            rows={group.rows}
+                            compact
+                            fitNarrow
+                            rule={displayOptions.rule}
+                            allowLegacyFallback={false}
+                            preferConfiguredRules
+                          />
+                          {tableLegendItems.length ? (
+                            <TableLegend items={tableLegendItems} />
+                          ) : null}
+                        </>
+                      ),
+                      fixtures: (
+                        <GroupFixtures fixtures={fixturesByGroup.get(groupId) || []} />
+                      ),
+                    }
+                  })}
+                />
+
+                {knockoutRounds.length ? (
+                  <BracketView rounds={knockoutRounds} />
+                ) : null}
+              </>
             ) : (
               <div className={compactGroups ? 'grid gap-4 lg:grid-cols-2' : 'space-y-4'}>
                 {displayPrimaryGroups.map((group) => {

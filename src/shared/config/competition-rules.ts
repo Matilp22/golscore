@@ -33,6 +33,7 @@ export type GroupMode =
 export type BracketMode =
   | 'none'
   | 'knockout_rounds'
+  | 'knockout_after_groups'
   | 'api_rounds'
 
 export type RuleTone =
@@ -349,7 +350,7 @@ export const COMPETITION_RULES: CompetitionRule[] = [
     showPromedios: false,
     ...noRelegation,
     groupMode: 'api_groups',
-    bracketMode: 'knockout_rounds',
+    bracketMode: 'knockout_after_groups',
     showBracket: true,
     qualificationRules: [
       { from: 1, to: 2, label: 'Octavos de final Copa Libertadores', tone: 'champions' },
@@ -359,7 +360,10 @@ export const COMPETITION_RULES: CompetitionRule[] = [
       { label: 'Octavos de final Copa Libertadores', tone: 'champions' },
       { label: 'Playoffs Copa Sudamericana', tone: 'sudamericana' },
     ],
-    playoffRules: ['Fase de grupos y eliminatorias cuando la API publica rounds finales.'],
+    playoffRules: [
+      'Formato tradicional: 8 grupos; 1° y 2° a octavos, 3° a Sudamericana; sin fase liga UEFA.',
+      'Las llaves se muestran solo si existen fases eliminatorias reales.',
+    ],
     roundLabels: ['Grupos', 'Octavos', 'Cuartos', 'Semifinal', 'Final'],
     sourceUsed: [apiDescriptionSource, supabaseSource, 'CONMEBOL reglamento/formato de competiciones'],
   }),
@@ -373,7 +377,7 @@ export const COMPETITION_RULES: CompetitionRule[] = [
     showPromedios: false,
     ...noRelegation,
     groupMode: 'api_groups',
-    bracketMode: 'knockout_rounds',
+    bracketMode: 'knockout_after_groups',
     showBracket: true,
     qualificationRules: [
       { from: 1, to: 1, label: 'Octavos de final Copa Sudamericana', tone: 'champions' },

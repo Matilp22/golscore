@@ -2373,11 +2373,231 @@ function getStandingAccumulator(
   return next
 }
 
+const CONMEBOL_GROUP_STAGE_LEAGUE_IDS = new Set([11, 13])
+const CONMEBOL_GROUP_LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+
+function isConmebolTraditionalGroupStageLeague(leagueId: number) {
+  return CONMEBOL_GROUP_STAGE_LEAGUE_IDS.has(leagueId)
+}
+
+function isConmebolGroupStageFixtureRound(round: string) {
+  const normalized = normalizeSearchValue(round)
+
+  return (
+    normalized.includes('group stage') ||
+    normalized.includes('fase de grupos') ||
+    /\bgroup\b/.test(normalized) ||
+    /\bgrupo\b/.test(normalized)
+  )
+}
+
+function updateStandingWithFixtureResult(
+  home: CalculatedStandingAccumulator,
+  away: CalculatedStandingAccumulator,
+  homeGoals: number,
+  awayGoals: number
+) {
+  home.played += 1
+  home.goalsFor += homeGoals
+  home.goalsAgainst += awayGoals
+  away.played += 1
+  away.goalsFor += awayGoals
+  away.goalsAgainst += homeGoals
+
+  if (homeGoals > awayGoals) {
+    home.won += 1
+    home.points += 3
+    away.lost += 1
+  } else if (homeGoals < awayGoals) {
+    away.won += 1
+    away.points += 3
+    home.lost += 1
+  } else {
+    home.drawn += 1
+    away.drawn += 1
+    home.points += 1
+    away.points += 1
+  }
+
+  home.goalDifference = home.goalsFor - home.goalsAgainst
+  away.goalDifference = away.goalsFor - away.goalsAgainst
+}
+
+function buildConmebolGroupStageStandings(fixtures: LeagueFixtureSummary[]) {
+  const groupStageFixtures = fixtures.filter((fixture) =>
+    isConmebolGroupStageFixtureRound(fixture.round)
+  )
+
+  if (!groupStageFixtures.length) return []
+
+  const parentByTeamKey = new Map<string, string>()
+  const teamsByKey = new Map<
+    string,
+    { teamId?: number; teamName: string; teamLogo?: string }
+  >()
+
+  const find = (key: string): string => {
+    const parent = parentByTeamKey.get(key)
+
+    if (!parent || parent === key) return key
+
+    const root = find(parent)
+    parentByTeamKey.set(key, root)
+    return root
+  }
+
+  const ensureTeam = (teamId: number | undefined, teamName: string, teamLogo?: string) => {
+    const key = getStandingTeamKey(teamId, teamName)
+
+    if (!parentByTeamKey.has(key)) parentByTeamKey.set(key, key)
+    if (!teamsByKey.has(key)) {
+      teamsByKey.set(key, { teamId, teamName, teamLogo })
+    }
+
+    return key
+  }
+
+  const union = (a: string, b: string) => {
+    const rootA = find(a)
+    const rootB = find(b)
+
+    if (rootA !== rootB) parentByTeamKey.set(rootB, rootA)
+  }
+
+  for (const fixture of groupStageFixtures) {
+    const homeKey = ensureTeam(fixture.homeId, fixture.home, fixture.homeLogo)
+    const awayKey = ensureTeam(fixture.awayId, fixture.away, fixture.awayLogo)
+
+    union(homeKey, awayKey)
+  }
+
+  const teamKeysByGroup = new Map<string, string[]>()
+
+  for (const teamKey of teamsByKey.keys()) {
+    const root = find(teamKey)
+    const current = teamKeysByGroup.get(root) ?? []
+
+    current.push(teamKey)
+    teamKeysByGroup.set(root, current)
+  }
+
+  const groupMetadata = new Map<string, { firstDate: number; firstFixtureId: number | string }>()
+
+  for (const fixture of groupStageFixtures) {
+    const homeKey = getStandingTeamKey(fixture.homeId, fixture.home)
+    const root = find(homeKey)
+    const current = groupMetadata.get(root)
+    const fixtureDate = getLeagueFixtureTimestamp(fixture.date)
+
+    if (
+      !current ||
+      fixtureDate < current.firstDate ||
+      (
+        fixtureDate === current.firstDate &&
+        compareLeagueFixtureIds(fixture.id, current.firstFixtureId) < 0
+      )
+    ) {
+      groupMetadata.set(root, {
+        firstDate: fixtureDate,
+        firstFixtureId: fixture.id,
+      })
+    }
+  }
+
+  return [...teamKeysByGroup.entries()]
+    .sort(([groupA, teamKeysA], [groupB, teamKeysB]) => {
+      const metadataA = groupMetadata.get(groupA)
+      const metadataB = groupMetadata.get(groupB)
+      const dateA = metadataA?.firstDate ?? Number.MAX_SAFE_INTEGER
+      const dateB = metadataB?.firstDate ?? Number.MAX_SAFE_INTEGER
+
+      if (dateA !== dateB) return dateA - dateB
+
+      const fixtureIdCompare = compareLeagueFixtureIds(
+        metadataA?.firstFixtureId ?? '',
+        metadataB?.firstFixtureId ?? ''
+      )
+
+      if (fixtureIdCompare !== 0) return fixtureIdCompare
+
+      const nameA = teamKeysA
+        .map((teamKey) => teamsByKey.get(teamKey)?.teamName ?? '')
+        .sort((a, b) => a.localeCompare(b, 'es-AR'))[0] ?? ''
+      const nameB = teamKeysB
+        .map((teamKey) => teamsByKey.get(teamKey)?.teamName ?? '')
+        .sort((a, b) => a.localeCompare(b, 'es-AR'))[0] ?? ''
+
+      return nameA.localeCompare(nameB, 'es-AR')
+    })
+    .map(([, teamKeys], groupIndex) => {
+      const table = new Map<string, CalculatedStandingAccumulator>()
+      const groupTeamKeys = new Set(teamKeys)
+
+      for (const teamKey of teamKeys) {
+        const team = teamsByKey.get(teamKey)
+
+        if (!team) continue
+        getStandingAccumulator(table, team.teamId, team.teamName, team.teamLogo)
+      }
+
+      for (const fixture of groupStageFixtures) {
+        const homeKey = getStandingTeamKey(fixture.homeId, fixture.home)
+        const awayKey = getStandingTeamKey(fixture.awayId, fixture.away)
+
+        if (!groupTeamKeys.has(homeKey) || !groupTeamKeys.has(awayKey)) continue
+        if (!isFinishedStatus(fixture.statusShort)) continue
+
+        const homeGoals = fixture.goalsHome
+        const awayGoals = fixture.goalsAway
+        if (homeGoals === null || awayGoals === null) continue
+
+        const home = getStandingAccumulator(table, fixture.homeId, fixture.home, fixture.homeLogo)
+        const away = getStandingAccumulator(table, fixture.awayId, fixture.away, fixture.awayLogo)
+
+        updateStandingWithFixtureResult(home, away, homeGoals, awayGoals)
+      }
+
+      const rows = [...table.values()]
+        .sort((a, b) => {
+          if (b.points !== a.points) return b.points - a.points
+          if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference
+          if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor
+          return a.teamName.localeCompare(b.teamName, 'es-AR')
+        })
+        .map((row, index) => ({
+          ...row,
+          rank: index + 1,
+        }))
+
+      return {
+        name: `Grupo ${CONMEBOL_GROUP_LABELS[groupIndex] ?? groupIndex + 1}`,
+        rows,
+      }
+    })
+}
+
 export async function getLeagueStandings(
   leagueId: number,
   season: number
 ): Promise<LeagueStandingGroup[]> {
   const fixtures = await getLeagueFixtures(leagueId, season)
+
+  if (isConmebolTraditionalGroupStageLeague(leagueId)) {
+    const groups = buildConmebolGroupStageStandings(fixtures)
+
+    if (groups.length) {
+      console.info('[standings:supabase:conmebol-groups]', {
+        leagueId,
+        season,
+        fixtures: fixtures.length,
+        groups: groups.length,
+        teams: groups.reduce((total, group) => total + group.rows.length, 0),
+      })
+
+      return groups
+    }
+  }
+
   const table = new Map<string, CalculatedStandingAccumulator>()
   let countedFixtures = 0
 
@@ -2398,30 +2618,7 @@ export async function getLeagueStandings(
     const away = getStandingAccumulator(table, fixture.awayId, fixture.away, fixture.awayLogo)
 
     countedFixtures += 1
-    home.played += 1
-    home.goalsFor += homeGoals
-    home.goalsAgainst += awayGoals
-    away.played += 1
-    away.goalsFor += awayGoals
-    away.goalsAgainst += homeGoals
-
-    if (homeGoals > awayGoals) {
-      home.won += 1
-      home.points += 3
-      away.lost += 1
-    } else if (homeGoals < awayGoals) {
-      away.won += 1
-      away.points += 3
-      home.lost += 1
-    } else {
-      home.drawn += 1
-      away.drawn += 1
-      home.points += 1
-      away.points += 1
-    }
-
-    home.goalDifference = home.goalsFor - home.goalsAgainst
-    away.goalDifference = away.goalsFor - away.goalsAgainst
+    updateStandingWithFixtureResult(home, away, homeGoals, awayGoals)
   }
 
   const rows = [...table.values()]
