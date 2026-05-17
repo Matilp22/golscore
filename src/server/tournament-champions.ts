@@ -1,4 +1,5 @@
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
+import { TOURNAMENT_CHAMPION_SEEDS } from '@/server/tournament-champion-seeds'
 
 export type TournamentChampion = {
   season: string
@@ -16,6 +17,14 @@ type TeamLogoRow = {
   logo_url: string | null
 }
 
+type TournamentChampionRow = {
+  season: string | number | null
+  champion_name: string | null
+  runner_up_name: string | null
+  final_score: string | null
+  venue: string | null
+}
+
 const TOURNAMENT_CHAMPION_KEYS = new Set([
   'internacional-libertadores',
   'internacional-sudamericana',
@@ -28,7 +37,9 @@ const TEAM_NAME_ALIASES: Record<string, string[]> = {
   'athletico paranaense': ['atletico paranaense', 'paranaense', 'ath paranaense'],
   'atletico nacional': ['atletico nacional medellin'],
   'atletico de madrid': ['atletico madrid'],
+  'barcelona sc': ['barcelona guayaquil'],
   'bayern munchen': ['bayern munich', 'fc bayern munchen'],
+  'bolivar': ['club bolivar'],
   'boca juniors': ['boca'],
   'borussia monchengladbach': ['borussia mgladbach'],
   'central cordoba (sde)': ['central cordoba sde', 'central cordoba de santiago'],
@@ -40,6 +51,7 @@ const TEAM_NAME_ALIASES: Record<string, string[]> = {
   'juventus': ['juventus turin'],
   'lanus': ['lanús'],
   'liga de quito': ['ldu quito', 'liga deportiva universitaria de quito'],
+  'red bull bragantino': ['bragantino'],
   'manchester city': ['man city'],
   'manchester united': ['man united'],
   'olympique de marseille': ['marseille'],
@@ -52,64 +64,9 @@ const TEAM_NAME_ALIASES: Record<string, string[]> = {
   'sao paulo': ['são paulo', 'sao paulo fc'],
   'sevilla': ['sevilla fc'],
   'tottenham hotspur': ['tottenham'],
+  'uanl': ['tigres', 'tigres uanl'],
+  'unam': ['pumas unam', 'pumas'],
   'velez sarsfield': ['velez', 'vélez sarsfield'],
-}
-
-const TOURNAMENT_CHAMPION_SEEDS: Record<string, TournamentChampion[]> = {
-  'internacional-libertadores': [
-    { season: '2025', championName: 'Flamengo', runnerUpName: 'Palmeiras', finalScore: '1-0', venue: 'Lima, Peru' },
-    { season: '2024', championName: 'Botafogo', runnerUpName: 'Atletico Mineiro', finalScore: '3-1', venue: 'Buenos Aires, Argentina' },
-    { season: '2023', championName: 'Fluminense', runnerUpName: 'Boca Juniors', finalScore: '2-1', venue: 'Rio de Janeiro, Brasil' },
-    { season: '2022', championName: 'Flamengo', runnerUpName: 'Athletico Paranaense', finalScore: '1-0', venue: 'Guayaquil, Ecuador' },
-    { season: '2021', championName: 'Palmeiras', runnerUpName: 'Flamengo', finalScore: '2-1', venue: 'Montevideo, Uruguay' },
-    { season: '2020', championName: 'Palmeiras', runnerUpName: 'Santos', finalScore: '1-0', venue: 'Rio de Janeiro, Brasil' },
-    { season: '2019', championName: 'Flamengo', runnerUpName: 'River Plate', finalScore: '2-1', venue: 'Lima, Peru' },
-    { season: '2018', championName: 'River Plate', runnerUpName: 'Boca Juniors', finalScore: '3-1', venue: 'Madrid, Espana' },
-    { season: '2017', championName: 'Gremio', runnerUpName: 'Lanus', finalScore: '3-1', venue: null },
-    { season: '2016', championName: 'Atletico Nacional', runnerUpName: 'Independiente del Valle', finalScore: '2-1', venue: null },
-    { season: '2015', championName: 'River Plate', runnerUpName: 'Tigres', finalScore: '3-0', venue: null },
-    { season: '2014', championName: 'San Lorenzo', runnerUpName: 'Nacional', finalScore: '2-1', venue: null },
-  ],
-  'internacional-sudamericana': [
-    { season: '2025', championName: 'Lanus', runnerUpName: 'Atletico Mineiro', finalScore: '1-1 (4-2 pen.)', venue: 'Asuncion, Paraguay' },
-    { season: '2024', championName: 'Racing Club', runnerUpName: 'Cruzeiro', finalScore: '3-1', venue: 'Asuncion, Paraguay' },
-    { season: '2023', championName: 'Liga de Quito', runnerUpName: 'Fortaleza', finalScore: '1-1 (4-3 pen.)', venue: 'Punta del Este, Uruguay' },
-    { season: '2022', championName: 'Independiente del Valle', runnerUpName: 'Sao Paulo', finalScore: '2-0', venue: 'Cordoba, Argentina' },
-    { season: '2021', championName: 'Athletico Paranaense', runnerUpName: 'Bragantino', finalScore: '1-0', venue: 'Montevideo, Uruguay' },
-    { season: '2020', championName: 'Defensa y Justicia', runnerUpName: 'Lanus', finalScore: '3-0', venue: 'Cordoba, Argentina' },
-    { season: '2019', championName: 'Independiente del Valle', runnerUpName: 'Colon', finalScore: '3-1', venue: 'Asuncion, Paraguay' },
-    { season: '2018', championName: 'Athletico Paranaense', runnerUpName: 'Junior', finalScore: '1-1 (4-3 pen.)', venue: null },
-    { season: '2017', championName: 'Independiente', runnerUpName: 'Flamengo', finalScore: '3-2', venue: null },
-    { season: '2016', championName: 'Chapecoense', runnerUpName: 'Atletico Nacional', finalScore: 'Titulo otorgado por CONMEBOL', venue: null },
-    { season: '2015', championName: 'Santa Fe', runnerUpName: 'Huracan', finalScore: '0-0 (3-1 pen.)', venue: 'Bogota, Colombia' },
-    { season: '2014', championName: 'River Plate', runnerUpName: 'Atletico Nacional', finalScore: '3-1', venue: null },
-  ],
-  'internacional-champions': [
-    { season: '2024/25', championName: 'Paris Saint Germain', runnerUpName: 'Inter', finalScore: '5-0', venue: 'Munich, Alemania' },
-    { season: '2023/24', championName: 'Real Madrid', runnerUpName: 'Borussia Dortmund', finalScore: '2-0', venue: 'Londres, Inglaterra' },
-    { season: '2022/23', championName: 'Manchester City', runnerUpName: 'Inter', finalScore: '1-0', venue: 'Estambul, Turquia' },
-    { season: '2021/22', championName: 'Real Madrid', runnerUpName: 'Liverpool', finalScore: '1-0', venue: 'Saint-Denis, Francia' },
-    { season: '2020/21', championName: 'Chelsea', runnerUpName: 'Manchester City', finalScore: '1-0', venue: 'Porto, Portugal' },
-    { season: '2019/20', championName: 'Bayern Munchen', runnerUpName: 'Paris Saint Germain', finalScore: '1-0', venue: 'Lisboa, Portugal' },
-    { season: '2018/19', championName: 'Liverpool', runnerUpName: 'Tottenham Hotspur', finalScore: '2-0', venue: 'Madrid, Espana' },
-    { season: '2017/18', championName: 'Real Madrid', runnerUpName: 'Liverpool', finalScore: '3-1', venue: 'Kiev, Ucrania' },
-    { season: '2016/17', championName: 'Real Madrid', runnerUpName: 'Juventus', finalScore: '4-1', venue: 'Cardiff, Gales' },
-    { season: '2015/16', championName: 'Real Madrid', runnerUpName: 'Atletico de Madrid', finalScore: '1-1 (5-3 pen.)', venue: 'Milan, Italia' },
-    { season: '2014/15', championName: 'Barcelona', runnerUpName: 'Juventus', finalScore: '3-1', venue: 'Berlin, Alemania' },
-  ],
-  'internacional-europa-league': [
-    { season: '2024/25', championName: 'Tottenham Hotspur', runnerUpName: 'Manchester United', finalScore: '1-0', venue: 'Bilbao, Espana' },
-    { season: '2023/24', championName: 'Atalanta', runnerUpName: 'Bayer Leverkusen', finalScore: '3-0', venue: 'Dublin, Irlanda' },
-    { season: '2022/23', championName: 'Sevilla', runnerUpName: 'Roma', finalScore: '1-1 (4-1 pen.)', venue: 'Budapest, Hungria' },
-    { season: '2021/22', championName: 'Eintracht Frankfurt', runnerUpName: 'Rangers', finalScore: '1-1 (5-4 pen.)', venue: 'Sevilla, Espana' },
-    { season: '2020/21', championName: 'Villarreal', runnerUpName: 'Manchester United', finalScore: '1-1 (11-10 pen.)', venue: 'Gdansk, Polonia' },
-    { season: '2019/20', championName: 'Sevilla', runnerUpName: 'Inter', finalScore: '3-2', venue: 'Colonia, Alemania' },
-    { season: '2018/19', championName: 'Chelsea', runnerUpName: 'Arsenal', finalScore: '4-1', venue: 'Baku, Azerbaiyan' },
-    { season: '2017/18', championName: 'Atletico de Madrid', runnerUpName: 'Olympique de Marseille', finalScore: '3-0', venue: 'Lyon, Francia' },
-    { season: '2016/17', championName: 'Manchester United', runnerUpName: 'Ajax', finalScore: '2-0', venue: 'Estocolmo, Suecia' },
-    { season: '2015/16', championName: 'Sevilla', runnerUpName: 'Liverpool', finalScore: '3-1', venue: 'Basilea, Suiza' },
-    { season: '2014/15', championName: 'Sevilla', runnerUpName: 'Dnipro', finalScore: '3-2', venue: 'Varsovia, Polonia' },
-  ],
 }
 
 function normalizeTeamName(value: string | null | undefined) {
@@ -153,14 +110,61 @@ function enrichChampionLogos(
   })
 }
 
+function mapStoredChampion(row: TournamentChampionRow): TournamentChampion | null {
+  if (!row.season || !row.champion_name || !row.runner_up_name) return null
+
+  return {
+    season: String(row.season),
+    championName: row.champion_name,
+    runnerUpName: row.runner_up_name,
+    finalScore: row.final_score ?? '',
+    venue: row.venue,
+  }
+}
+
+function getSeededChampions(key: string): TournamentChampion[] {
+  return (TOURNAMENT_CHAMPION_SEEDS[key as keyof typeof TOURNAMENT_CHAMPION_SEEDS] ?? [])
+    .map((champion) => ({ ...champion }))
+}
+
+function isMissingChampionsTable(error: { code?: string; message?: string } | null | undefined) {
+  const message = (error?.message ?? '').toLowerCase()
+
+  return (
+    error?.code === '42P01' ||
+    error?.code === 'PGRST205' ||
+    message.includes('tournament_champions') ||
+    message.includes('schema cache')
+  )
+}
+
 export async function getTournamentChampions(key: string): Promise<TournamentChampion[]> {
   if (!isChampionsHistoryTournamentKey(key)) return []
 
-  const seededChampions = TOURNAMENT_CHAMPION_SEEDS[key] || []
+  const seededChampions = getSeededChampions(key)
   if (!seededChampions.length) return []
 
   try {
     const supabase = getSupabaseAdminClient()
+    let champions = seededChampions
+    const championsResponse = await supabase
+      .from('tournament_champions')
+      .select('season, champion_name, runner_up_name, final_score, venue')
+      .eq('competition_key', key)
+      .order('season', { ascending: false })
+
+    if (championsResponse.error && !isMissingChampionsTable(championsResponse.error)) {
+      throw championsResponse.error
+    }
+
+    if (!championsResponse.error) {
+      const storedChampions = ((championsResponse.data ?? []) as TournamentChampionRow[])
+        .map(mapStoredChampion)
+        .filter((champion): champion is TournamentChampion => Boolean(champion))
+
+      if (storedChampions.length) champions = storedChampions
+    }
+
     const teamsResponse = await supabase
       .from('teams')
       .select('id, name, logo_url')
@@ -175,7 +179,7 @@ export async function getTournamentChampions(key: string): Promise<TournamentCha
         .map((team) => [normalizeTeamName(team.name), team] as const)
     )
 
-    return enrichChampionLogos(seededChampions, teamsByName)
+    return enrichChampionLogos(champions, teamsByName)
   } catch (error) {
     console.warn('[tournament-champions] No se pudieron enriquecer logos.', {
       key,

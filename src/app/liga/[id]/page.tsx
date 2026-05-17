@@ -645,11 +645,11 @@ function normalizeGroupName(value: string) {
     .replace(/[\u0300-\u036f]/g, '')
 }
 
-const GROUP_STAGE_ORDER = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+const GROUP_STAGE_ORDER = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']
 
 function getGroupKeyFromText(value?: string | null) {
   const normalized = normalizeGroupName(value || '')
-  const match = normalized.match(/\b(?:group|grupo)\s+([a-h])\b/)
+  const match = normalized.match(/\b(?:group|grupo)\s+([a-l])\b/)
 
   return match ? match[1].toUpperCase() : null
 }
@@ -769,6 +769,15 @@ function isConmebolGroupStage(key: string) {
   return CONMEBOL_GROUP_STAGE_TOURNAMENT_KEYS.has(key)
 }
 
+function usesGroupStageCards(key: string) {
+  return (
+    isConmebolGroupStage(key) ||
+    key === 'selecciones-mundial' ||
+    key === 'selecciones-copa-america' ||
+    key === 'selecciones-eurocopa'
+  )
+}
+
 function isUefaLeaguePhaseTournamentKey(key: string, leagueExternalId?: number | null) {
   if (isConmebolGroupStage(key)) return false
 
@@ -780,7 +789,18 @@ function isUefaLeaguePhaseTournamentKey(key: string, leagueExternalId?: number |
     return leagueExternalId === null || leagueExternalId === undefined || leagueExternalId === 3
   }
 
+  if (key === 'internacional-conference-league') {
+    return leagueExternalId === null || leagueExternalId === undefined || leagueExternalId === 848
+  }
+
   return false
+}
+
+function getUefaLeaguePhaseMatchdayLimit(key: string) {
+  if (key === 'internacional-conference-league') return 6
+  if (key === 'internacional-champions' || key === 'internacional-europa-league') return 8
+
+  return null
 }
 
 function buildUefaLeaguePhaseRows(groups: LeagueStandingGroup[]) {
@@ -2188,11 +2208,13 @@ export default async function LigaPage({ params }: PageProps) {
     displayOptions.groupMode
   )
   const showConmebolGroupStage = isConmebolGroupStage(tournament.key)
+  const showGroupStageCards = usesGroupStageCards(tournament.key)
   const isUefaLeaguePhaseTournament = isUefaLeaguePhaseTournamentKey(
     tournament.key,
     resolvedTournament?.leagueId ?? null
   )
-  const displayPrimaryGroups = showConmebolGroupStage
+  const uefaLeaguePhaseMatchdayLimit = getUefaLeaguePhaseMatchdayLimit(tournament.key)
+  const displayPrimaryGroups = showGroupStageCards
     ? sortGroupStageGroups(primaryGroups)
     : primaryGroups
   const uefaLeaguePhaseRows = isUefaLeaguePhaseTournament
@@ -2201,13 +2223,18 @@ export default async function LigaPage({ params }: PageProps) {
   const uefaTableLegendItems = isUefaLeaguePhaseTournament
     ? getTableLegendItems(uefaLeaguePhaseRows, displayOptions.rule, displayOptions.protected)
     : []
-  const fixturesByGroup = showConmebolGroupStage
+  const fixturesByGroup = showGroupStageCards
     ? buildFixturesByGroup(fixtures, displayPrimaryGroups)
     : new Map<string, LeagueFixtureSummary[]>()
+  const shouldRenderStandings = displayOptions.standingsMode !== 'none'
   const visibleSecondaryGroups = isUefaLeaguePhaseTournament
     ? []
+    : !shouldRenderStandings
+      ? []
     : secondaryGroups.filter((group) => !isDerivedTableGroup(group.name))
-  const baseRows = primaryGroups.flatMap((group) => group.rows)
+  const baseRows = shouldRenderStandings
+    ? primaryGroups.flatMap((group) => group.rows)
+    : []
   const annualTable = displayOptions.showAnnualTable ? buildAnnualTable(baseRows) : []
   if (!promedioTable.length && displayOptions.showPromedios) {
     promedioTable = buildPromediosTable(baseRows).map((row) => ({
@@ -2255,6 +2282,11 @@ export default async function LigaPage({ params }: PageProps) {
   const compactSummaryTables = annualTable.length > 0 && promedioTable.length > 0
   const visibleTournamentTitle = displayOptions.visibleNameEs
   const visibleTournamentCountry = displayOptions.countryNameEs
+  const hasTournamentData =
+    fixtures.length > 0 ||
+    standings.some((group) => group.rows.length > 0) ||
+    tournamentChampions.length > 0 ||
+    copaArgentinaChampions.length > 0
   const tournamentTheme = getTournamentTheme(tournament.key)
   const tournamentThemeStyle = {
     background: tournamentTheme.background,
@@ -2324,6 +2356,14 @@ export default async function LigaPage({ params }: PageProps) {
             </div>
           ) : null}
 
+          {!errorMessage && !hasTournamentData ? (
+            <SectionCard title="Sin datos disponibles">
+              <p className="text-sm text-[#8d98a7]">
+                Todavia no hay partidos ni tablas sincronizadas para esta temporada.
+              </p>
+            </SectionCard>
+          ) : null}
+
           {isUefaLeaguePhaseTournament ? (
             <>
               <UefaKnockoutBracket fixtures={fixtures} standingsRows={uefaLeaguePhaseRows} />
@@ -2356,12 +2396,15 @@ export default async function LigaPage({ params }: PageProps) {
                   )}
                 </SectionCard>
 
-                <UefaMatchPhaseNavigator fixtures={fixtures} />
+                <UefaMatchPhaseNavigator
+                  fixtures={fixtures}
+                  leaguePhaseMatchdayLimit={uefaLeaguePhaseMatchdayLimit}
+                />
               </div>
             </>
           ) : null}
 
-          {!isUefaLeaguePhaseTournament && !showConmebolGroupStage && knockoutRounds.length ? (
+          {!isUefaLeaguePhaseTournament && !showGroupStageCards && knockoutRounds.length ? (
             <BracketView
               rounds={knockoutRounds}
               useCopaArgentinaTree={tournament.key === 'argentina-copa-argentina'}
@@ -2384,15 +2427,15 @@ export default async function LigaPage({ params }: PageProps) {
             </SectionCard>
           ) : null}
 
-          {!isUefaLeaguePhaseTournament && !showConmebolGroupStage && currentRoundBlocks.length ? (
+          {!isUefaLeaguePhaseTournament && !showGroupStageCards && currentRoundBlocks.length ? (
             <CurrentRoundNavigator
               rounds={currentRoundBlocks}
               initialIndex={currentRoundInitialIndex}
             />
           ) : null}
 
-          {!isUefaLeaguePhaseTournament && displayPrimaryGroups.length ? (
-            showConmebolGroupStage ? (
+          {!isUefaLeaguePhaseTournament && shouldRenderStandings && displayPrimaryGroups.length ? (
+            showGroupStageCards ? (
               <>
                 <GroupStageGrid
                   groups={displayPrimaryGroups.map((group, index) => {
@@ -2433,7 +2476,7 @@ export default async function LigaPage({ params }: PageProps) {
                 ) : null}
               </>
             ) : (
-              <div className={compactGroups ? 'grid gap-4 lg:grid-cols-2' : 'space-y-4'}>
+              <div className={compactGroups ? 'grid gap-4 md:grid-cols-2' : 'space-y-4'}>
                 {displayPrimaryGroups.map((group) => {
                   const tableLegendItems = getTableLegendItems(
                     group.rows,
@@ -2461,7 +2504,7 @@ export default async function LigaPage({ params }: PageProps) {
                 })}
               </div>
             )
-          ) : !isUefaLeaguePhaseTournament && !displayOptions.hideEmptyStandings ? (
+          ) : !isUefaLeaguePhaseTournament && shouldRenderStandings && !displayOptions.hideEmptyStandings ? (
             <SectionCard
               title="Tabla de posiciones"
               subtitle="Algunos torneos de copa no publican tabla tradicional."

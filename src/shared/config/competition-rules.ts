@@ -117,6 +117,47 @@ export const PROTECTED_COMPETITION_AUDIT: Record<
   },
 }
 
+const PROTECTED_COMPETITION_DISPLAY_OVERRIDES: Record<
+  string,
+  {
+    standingsMode: StandingsMode
+    groupMode: GroupMode
+    bracketMode: BracketMode
+    showAnnualTable: boolean
+    showPromedios: boolean
+    showBracket: boolean
+    hideEmptyStandings: boolean
+    hasAverages: boolean
+    hasRelegation: boolean
+    relegationMode: RelegationMode
+  }
+> = {
+  'argentina-liga-profesional': {
+    standingsMode: 'groups',
+    groupMode: 'api_groups',
+    bracketMode: 'api_rounds',
+    showAnnualTable: true,
+    showPromedios: true,
+    showBracket: true,
+    hideEmptyStandings: false,
+    hasAverages: true,
+    hasRelegation: true,
+    relegationMode: 'api_description',
+  },
+  'argentina-copa-argentina': {
+    standingsMode: 'none',
+    groupMode: 'none',
+    bracketMode: 'knockout_rounds',
+    showAnnualTable: false,
+    showPromedios: false,
+    showBracket: true,
+    hideEmptyStandings: true,
+    hasAverages: false,
+    hasRelegation: false,
+    relegationMode: 'none',
+  },
+}
+
 export const ROW_TONE_CLASSES: Record<RuleTone, string> = {
   title: 'border-l-[#39e67a] bg-[#10301f]',
   champions: 'border-l-[#46d98e] bg-[#10261c]',
@@ -452,12 +493,17 @@ export const COMPETITION_RULES: CompetitionRule[] = [
       { from: 1, to: 8, label: 'Octavos', tone: 'conference' },
       { from: 9, to: 24, label: 'Playoff eliminatorio', tone: 'playoff' },
     ],
+    legendItems: [
+      { label: 'Octavos de final', tone: 'conference' },
+      { label: 'Playoffs', tone: 'playoff' },
+    ],
+    playoffRules: ['Top 8 a octavos; 9 a 24 a playoff; resto eliminado.'],
     sourceUsed: [apiDescriptionSource, supabaseSource, 'UEFA formato 2024/25 de fase liga'],
   }),
   cupRule({
     key: 'internacional-concacaf-champions',
     externalIds: [16],
-    aliases: ['CONCACAF Champions Cup', 'Concacaf Champions Cup'],
+    aliases: ['CONCACAF Champions Cup', 'Concacaf Champions Cup', 'CONCACAF Champions League'],
     type: 'cup',
     standingsMode: 'none',
     hasAverages: false,
@@ -835,6 +881,7 @@ export const COMPETITION_RULES: CompetitionRule[] = [
       { from: 3, to: 3, label: 'Mejores terceros si aplica', tone: 'relegationPlayoff' },
     ],
     playoffRules: ['Grupos y eliminatorias según formato FIFA y rounds de API.'],
+    roundLabels: ['Grupos', 'Dieciseisavos', 'Octavos', 'Cuartos', 'Semifinales', 'Final'],
     sourceUsed: [apiDescriptionSource, supabaseSource, 'FIFA World Cup format'],
   }),
   cupRule({
@@ -1344,6 +1391,7 @@ export function getStandingRuleForRank(
 export function getTournamentDisplayOptions(tournament: TournamentPageConfig) {
   if (PROTECTED_COMPETITION_KEYS.has(tournament.key)) {
     const protectedAudit = getProtectedCompetitionAudit(tournament.key)
+    const displayOverride = PROTECTED_COMPETITION_DISPLAY_OVERRIDES[tournament.key]
 
     return {
       protected: true,
@@ -1352,17 +1400,19 @@ export function getTournamentDisplayOptions(tournament: TournamentPageConfig) {
       visibleNameEs: protectedAudit?.visibleNameEs ?? tournament.title,
       countryNameEs: protectedAudit?.countryNameEs ?? tournament.country ?? 'Torneo',
       rule: null,
-      standingsMode: 'single' as StandingsMode,
-      groupMode: 'api_groups' as GroupMode,
-      bracketMode: 'api_rounds' as BracketMode,
-      showAnnualTable: Boolean(tournament.showAnnualTable),
-      showPromedios: Boolean(tournament.showPromedios),
-      showBracket: true,
-      hideEmptyStandings: false,
+      standingsMode: displayOverride?.standingsMode ?? ('single' as StandingsMode),
+      groupMode: displayOverride?.groupMode ?? ('api_groups' as GroupMode),
+      bracketMode: displayOverride?.bracketMode ?? ('api_rounds' as BracketMode),
+      showAnnualTable: displayOverride?.showAnnualTable ?? Boolean(tournament.showAnnualTable),
+      showPromedios: displayOverride?.showPromedios ?? Boolean(tournament.showPromedios),
+      showBracket: displayOverride?.showBracket ?? true,
+      hideEmptyStandings: displayOverride?.hideEmptyStandings ?? false,
       legendItems: [] as Array<{ label: string; tone: RuleTone }>,
-      hasAverages: Boolean(tournament.showPromedios),
-      hasRelegation: Boolean(tournament.showPromedios || tournament.showAnnualTable),
-      relegationMode: 'api_description' as RelegationMode,
+      hasAverages: displayOverride?.hasAverages ?? Boolean(tournament.showPromedios),
+      hasRelegation:
+        displayOverride?.hasRelegation ??
+        Boolean(tournament.showPromedios || tournament.showAnnualTable),
+      relegationMode: displayOverride?.relegationMode ?? ('api_description' as RelegationMode),
     }
   }
 

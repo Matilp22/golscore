@@ -39,6 +39,7 @@ type ApiFixtureItem = {
 const UEFA_AUDITED_LEAGUES = [
   { externalId: 2, fallbackName: 'UEFA Champions League' },
   { externalId: 3, fallbackName: 'UEFA Europa League' },
+  { externalId: 848, fallbackName: 'UEFA Europa Conference League' },
 ] as const
 
 function getAuthorizationError(request: Request) {

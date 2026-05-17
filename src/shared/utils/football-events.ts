@@ -274,6 +274,11 @@ export function translateMatchEventDetail(
   }
 
   if (combined.includes('offside')) return 'Fuera de juego'
+  if (combined.includes('substitution') || combined.includes('subst')) return 'Cambio'
+  if (combined.includes('second yellow')) return 'Segunda amarilla'
+  if (combined.includes('own goal')) return 'Gol en contra'
+  if (combined.includes('normal goal')) return 'Gol'
+  if (combined.includes('missed penalty') || combined.includes('penalty missed')) return 'Penal errado'
   if (normalizedType.includes('var') || normalizedDetail.includes('var') || normalizedComments.includes('var')) {
     return 'Revisión VAR'
   }

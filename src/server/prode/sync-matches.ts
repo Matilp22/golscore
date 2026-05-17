@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { requestFootballApi } from '@/server/integrations/football-api-client'
+import { syncLeagueStandingsCache } from '@/server/football-standings-cache'
 import {
   findDerivedLigaProfesionalMatchForOfficialFixture,
   generateLigaProfesionalPlayoffs,
@@ -11,7 +12,6 @@ import {
   getAllowedTournamentBySlug,
   getAllowedTournamentByExternalId,
   normalizeLeagueName,
-  type AllowedTournament,
 } from '@/shared/config/prode-leagues'
 import {
   TOURNAMENT_PAGE_CONFIGS,
@@ -19,6 +19,10 @@ import {
   getTournamentConfig,
   type TournamentPageConfig,
 } from '@/shared/config/tournament-pages'
+import {
+  getCompetitionRule,
+  getCompetitionVisibleNameEs,
+} from '@/shared/config/competition-rules'
 import { getHomeMatchVisibility } from '@/shared/utils/home-match-visibility'
 import {
   isCancelledEvent,
@@ -215,6 +219,16 @@ type SyncOptions = {
   onlyEvents?: boolean
 }
 
+type SyncableTournament = {
+  slug: string
+  name: string
+  type: string
+  country?: string | null
+  externalLeagueId: number
+  season: number
+  aliases: readonly string[]
+}
+
 type UpsertAction = 'created' | 'updated'
 
 type UpsertResult = {
@@ -306,6 +320,29 @@ export type SyncLeagueEventsOptions = {
   limit?: number | null
   offset?: number | null
   onlyEvents?: boolean
+}
+
+export type SyncCompetitionFullOptions = {
+  competition?: string | null
+  leagueExternalId?: string | number | null
+  season?: number | null
+  debug?: boolean
+  limit?: number | null
+  offset?: number | null
+  syncEvents?: boolean
+}
+
+export type SyncCompetitionFullResult = SyncTournamentResult & {
+  selected: number
+  cached: number
+  syncEvents: boolean
+  fixturesChecked: number
+  fixturesSynced: number
+  standingsChecked: number
+  standingsSynced: number
+  roundsDetected: string[]
+  groupsDetected: string[]
+  warnings: string[]
 }
 
 export type SyncHomeBroadcastsFromApiOptions = {
@@ -959,6 +996,124 @@ function getBatchOffset(value: number | null | undefined) {
   return Math.floor(value)
 }
 
+const FULL_SYNC_PROTECTED_EXTERNAL_IDS: Record<string, number> = {
+  'argentina-liga-profesional': 128,
+  'argentina-copa-argentina': 130,
+}
+
+const EUROPEAN_SEASON_EXTERNAL_IDS = new Set([
+  2,
+  3,
+  848,
+  39,
+  45,
+  61,
+  66,
+  78,
+  81,
+  94,
+  96,
+  135,
+  137,
+  140,
+  143,
+])
+
+function getDefaultSyncSeason(leagueExternalId: number) {
+  const now = new Date()
+  const year = now.getUTCFullYear()
+  const month = now.getUTCMonth() + 1
+
+  if (EUROPEAN_SEASON_EXTERNAL_IDS.has(leagueExternalId)) {
+    return month >= 7 ? year : year - 1
+  }
+
+  if (leagueExternalId === 9 || leagueExternalId === 4 || leagueExternalId === 960) {
+    return 2024
+  }
+
+  if (leagueExternalId === 5) return 2025
+
+  return year
+}
+
+function getConfiguredExternalIdForTournament(tournament: TournamentPageConfig | null) {
+  if (!tournament) return null
+
+  return (
+    getCompetitionRule(tournament.key)?.externalIds[0] ??
+    FULL_SYNC_PROTECTED_EXTERNAL_IDS[tournament.key] ??
+    null
+  )
+}
+
+function getTournamentByExternalId(leagueExternalId: number) {
+  return VISIBLE_TOURNAMENT_PAGE_CONFIGS.find((tournament) =>
+    getCompetitionRule(tournament.key)?.externalIds.includes(leagueExternalId) ||
+    FULL_SYNC_PROTECTED_EXTERNAL_IDS[tournament.key] === leagueExternalId
+  ) ?? null
+}
+
+function getFullSyncTournament(options: SyncCompetitionFullOptions): SyncableTournament {
+  const directAllowed =
+    getAllowedTournamentBySlug(options.competition) ??
+    getAllowedTournamentByExternalId(options.leagueExternalId ?? options.competition)
+  const configuredTournament = options.competition
+    ? getEventTournamentConfig(options.competition)
+    : null
+  const optionExternalId =
+    options.leagueExternalId === null || options.leagueExternalId === undefined
+      ? null
+      : Number(options.leagueExternalId)
+  const directExternalId =
+    Number.isFinite(optionExternalId) && optionExternalId
+      ? optionExternalId
+      : null
+  const configuredExternalId =
+    directAllowed?.externalLeagueId ??
+    directExternalId ??
+    getConfiguredExternalIdForTournament(configuredTournament)
+
+  if (!configuredExternalId) {
+    throw new Error('Debe indicar competition o leagueExternalId valido para sync full.')
+  }
+
+  const tournament =
+    configuredTournament ??
+    getTournamentByExternalId(configuredExternalId) ??
+    null
+  const rule = tournament ? getCompetitionRule(tournament.key) : null
+  const season =
+    options.season ??
+    directAllowed?.season ??
+    getDefaultSyncSeason(configuredExternalId)
+  const slug =
+    directAllowed?.slug ??
+    tournament?.key ??
+    `league-${configuredExternalId}`
+  const name =
+    directAllowed?.name ??
+    (tournament
+      ? getCompetitionVisibleNameEs(tournament.key, tournament.title)
+      : `Liga ${configuredExternalId}`)
+  const aliases = [
+    name,
+    ...(directAllowed?.aliases ?? []),
+    ...(tournament?.searchTerms ?? []),
+    ...(rule?.aliases ?? []),
+  ]
+
+  return {
+    slug,
+    name,
+    type: directAllowed?.type ?? rule?.type ?? 'cup',
+    country: tournament?.country ?? null,
+    externalLeagueId: configuredExternalId,
+    season,
+    aliases,
+  }
+}
+
 function fixtureMatchesTournamentConfig(fixture: ApiFixture, tournament: EventTournamentConfig) {
   if (
     tournament.externalLeagueId !== undefined &&
@@ -1264,7 +1419,7 @@ function buildLigaProfesionalOfficialBracketSlots(fixtures: ApiFixture[]) {
   return slotsByFixtureId
 }
 
-async function fetchTournamentFixtures(tournament: AllowedTournament) {
+async function fetchTournamentFixtures(tournament: SyncableTournament) {
   const { payload } = await requestFootballApi<ApiFixture[]>(
     '/fixtures',
     {
@@ -1378,14 +1533,17 @@ async function fetchFixtureEvents(fixtureId: number) {
 
 async function upsertLeague(
   supabase: SupabaseClient,
-  tournament: AllowedTournament,
+  tournament: SyncableTournament,
   fixture: ApiFixture | null,
   debug?: boolean
 ) {
   const payload = {
     external_id: tournament.externalLeagueId,
     name: tournament.name,
-    country: fixture?.league.country ?? (tournament.type === 'cup' ? 'World' : 'Argentina'),
+    country:
+      fixture?.league.country ??
+      tournament.country ??
+      (tournament.type === 'cup' || tournament.type === 'group_cup' ? 'World' : 'Argentina'),
     season: tournament.season,
     logo_url: getLeagueLogoUrl({
       id: tournament.externalLeagueId,
@@ -3303,6 +3461,203 @@ export async function syncLeagueEvents(
     goalsInserted: result.goalsInserted,
     leagues: result.leagues.map((league) => league.name),
   })
+
+  return result
+}
+
+export async function syncCompetitionFull(
+  supabase: SupabaseClient,
+  options: SyncCompetitionFullOptions = {}
+): Promise<SyncCompetitionFullResult> {
+  const tournament = getFullSyncTournament(options)
+  const offset = getBatchOffset(options.offset)
+  const syncEvents = options.syncEvents ?? true
+  const warnings: string[] = []
+  const result: SyncCompetitionFullResult = {
+    slug: tournament.slug,
+    name: tournament.name,
+    externalLeagueId: tournament.externalLeagueId,
+    season: tournament.season,
+    fetched: 0,
+    selected: 0,
+    processed: 0,
+    discarded: 0,
+    leaguesCreated: 0,
+    leaguesUpdated: 0,
+    teamsCreated: 0,
+    teamsUpdated: 0,
+    matchesCreated: 0,
+    matchesUpdated: 0,
+    eventsFound: 0,
+    goalsInserted: 0,
+    created: 0,
+    updated: 0,
+    skipped: 0,
+    cached: 0,
+    syncEvents,
+    fixturesChecked: 0,
+    fixturesSynced: 0,
+    standingsChecked: 0,
+    standingsSynced: 0,
+    roundsDetected: [],
+    groupsDetected: [],
+    roundSummary: [],
+    warnings,
+    errors: [],
+    sampleErrors: [],
+  }
+
+  let fixtures: ApiFixture[] = []
+
+  try {
+    fixtures = await fetchTournamentFixtures(tournament)
+  } catch (error) {
+    addFixtureError(result, null, 'fetch-fixtures', error)
+    return result
+  }
+
+  result.fetched = fixtures.length
+  result.fixturesChecked = fixtures.length
+  result.roundSummary = summarizeFixtureRounds(fixtures)
+  result.roundsDetected = result.roundSummary.map((round) => round.round)
+
+  const standingsSync = await syncLeagueStandingsCache(supabase, {
+    leagueExternalId: tournament.externalLeagueId,
+    season: tournament.season,
+    logContext: `sync-competition-full:${tournament.slug}:standings`,
+  })
+  result.standingsChecked = standingsSync.standingsChecked
+  result.standingsSynced = standingsSync.standingsSynced
+  result.groupsDetected = standingsSync.groupsDetected
+
+  for (const warning of standingsSync.warnings) {
+    warnings.push(warning)
+  }
+
+  for (const error of standingsSync.errors) {
+    result.errors.push(`standings-cache: ${error}`)
+  }
+
+  const orderedFixtures = [...fixtures].sort(compareFixturesByApiOrder)
+  const limit =
+    options.limit && options.limit > 0
+      ? Math.floor(options.limit)
+      : null
+  const fixturesToProcess = limit
+    ? orderedFixtures.slice(offset, offset + limit)
+    : orderedFixtures.slice(offset)
+  result.selected = fixturesToProcess.length
+
+  if (!fixtures.length) {
+    warnings.push('API-Football no devolvio fixtures para esta competencia/temporada.')
+  }
+
+  let league: UpsertResult | null = null
+
+  try {
+    league = await upsertLeague(supabase, tournament, fixtures[0] ?? null, options.debug)
+
+    if (league.action === 'created') result.leaguesCreated += 1
+    if (league.action === 'updated') result.leaguesUpdated += 1
+  } catch (error) {
+    addFixtureError(result, null, 'league-upsert', error)
+    return result
+  }
+
+  const ligaProfesionalOfficialBracketSlots =
+    tournament.externalLeagueId === LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID
+      ? buildLigaProfesionalOfficialBracketSlots(orderedFixtures)
+      : new Map<number, number>()
+
+  for (const fixture of fixturesToProcess) {
+    try {
+      if (fixture.league.id !== tournament.externalLeagueId) {
+        result.skipped += 1
+        result.discarded += 1
+        result.errors.push(
+          `Fixture ${fixture.fixture.id} ignorado: pertenece a liga ${fixture.league.id}, no a ${tournament.externalLeagueId}.`
+        )
+        continue
+      }
+
+      if (!fixture.teams.home.id || !fixture.teams.away.id) {
+        result.skipped += 1
+        result.discarded += 1
+        continue
+      }
+
+      try {
+        if (await upsertFixtureCache(supabase, fixture, options.debug)) {
+          result.cached += 1
+        }
+      } catch (error) {
+        addFixtureError(result, fixture.fixture.id, 'fixture-cache-upsert', error)
+      }
+
+      const [homeTeam, awayTeam] = await Promise.all([
+        upsertTeam(supabase, fixture.teams.home, options.debug),
+        upsertTeam(supabase, fixture.teams.away, options.debug),
+      ])
+
+      if (homeTeam.action === 'created') result.teamsCreated += 1
+      if (homeTeam.action === 'updated') result.teamsUpdated += 1
+      if (awayTeam.action === 'created') result.teamsCreated += 1
+      if (awayTeam.action === 'updated') result.teamsUpdated += 1
+
+      const matchUpsert = await upsertMatch(
+        supabase,
+        fixture,
+        league.id,
+        homeTeam.id,
+        awayTeam.id,
+        options.debug,
+        ligaProfesionalOfficialBracketSlots.get(fixture.fixture.id) ?? null
+      )
+
+      if (matchUpsert.action === 'created') {
+        result.created += 1
+        result.matchesCreated += 1
+      }
+
+      if (matchUpsert.action === 'updated') {
+        result.updated += 1
+        result.matchesUpdated += 1
+      }
+
+      if (syncEvents) {
+        const eventSync = await syncMatchEventsIfSupported(
+          supabase,
+          fixture,
+          matchUpsert.id,
+          homeTeam.id,
+          awayTeam.id,
+          options.debug
+        )
+        result.eventsFound += eventSync.eventsFound
+        result.goalsInserted += eventSync.goalsInserted
+      }
+
+      result.processed += 1
+      result.fixturesSynced = result.processed
+    } catch (error) {
+      addFixtureError(result, fixture.fixture.id, 'fixture-processing', error)
+    }
+  }
+
+  if (
+    tournament.externalLeagueId === LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID &&
+    !limit
+  ) {
+    try {
+      await generateLigaProfesionalPlayoffs(supabase, {
+        leagueExternalId: tournament.externalLeagueId,
+        season: tournament.season,
+        dryRun: false,
+      })
+    } catch (error) {
+      addFixtureError(result, null, 'liga-profesional-playoff-generation', error)
+    }
+  }
 
   return result
 }

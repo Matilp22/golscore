@@ -923,7 +923,10 @@ function getLeaguePhaseOptionLabel(round: string) {
   return 'Fase liga'
 }
 
-function buildMatchOptions(fixtures: LeagueFixtureSummary[]) {
+function buildMatchOptions(
+  fixtures: LeagueFixtureSummary[],
+  leaguePhaseMatchdayLimit?: number | null
+) {
   const grouped = new Map<string, MatchOption>()
 
   for (const fixture of fixtures) {
@@ -933,6 +936,10 @@ function buildMatchOptions(fixtures: LeagueFixtureSummary[]) {
     if (!phaseKey && !isLeaguePhaseRound) continue
 
     const roundNumber = getUefaLeaguePhaseRoundNumber(fixture.round)
+    if (isLeaguePhaseRound && leaguePhaseMatchdayLimit) {
+      if (!roundNumber || roundNumber > leaguePhaseMatchdayLimit) continue
+    }
+
     const optionKey = phaseKey || `league-${roundNumber || normalizeText(fixture.round)}`
     const label = phaseKey
       ? getUefaKnockoutRoundLabel(phaseKey)
@@ -963,8 +970,17 @@ function buildMatchOptions(fixtures: LeagueFixtureSummary[]) {
     })
 }
 
-export function UefaMatchPhaseNavigator({ fixtures }: { fixtures: LeagueFixtureSummary[] }) {
-  const options = useMemo(() => buildMatchOptions(fixtures), [fixtures])
+export function UefaMatchPhaseNavigator({
+  fixtures,
+  leaguePhaseMatchdayLimit,
+}: {
+  fixtures: LeagueFixtureSummary[]
+  leaguePhaseMatchdayLimit?: number | null
+}) {
+  const options = useMemo(
+    () => buildMatchOptions(fixtures, leaguePhaseMatchdayLimit),
+    [fixtures, leaguePhaseMatchdayLimit]
+  )
   const [selectedKey, setSelectedKey] = useState(options[0]?.key || '')
   const selectedOption = options.find((option) => option.key === selectedKey) || options[0]
   const dayGroups = useMemo(

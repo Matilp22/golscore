@@ -85,7 +85,7 @@ export default function GroupStageGrid({
   defaultTab?: GroupStageTab
 }) {
   return (
-    <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
+    <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2">
       {groups.map((group) => (
         <GroupStageCard
           key={group.id}

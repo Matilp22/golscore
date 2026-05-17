@@ -1,5 +1,6 @@
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getLeagueEventStatsLeaders } from '@/server/match-event-stats'
+import { readCachedLeagueStandings } from '@/server/football-standings-cache'
 import {
   isFinishedStatus,
   isLiveStatus,
@@ -26,6 +27,10 @@ import {
   getLeagueRoundLabel,
   isLigaProfesionalRegularSeasonRound,
 } from '@/shared/utils/league-rounds'
+import {
+  getUefaLeaguePhaseRoundNumber,
+  isUefaLeaguePhaseRound,
+} from '@/shared/utils/uefa-rounds'
 import { getHomeMatchVisibility } from '@/shared/utils/home-match-visibility'
 import {
   pickLeagueLogoUrl,
@@ -1861,18 +1866,50 @@ const KNOWN_TOURNAMENT_RESOLUTIONS: ResolvedTournament[] = [
   { leagueId: 128, season: 2026, name: 'Liga Profesional Argentina', country: 'Argentina' },
   { leagueId: 129, season: 2026, name: 'Primera Nacional', country: 'Argentina' },
   { leagueId: 130, season: 2026, name: 'Copa Argentina', country: 'Argentina' },
+  { leagueId: 131, season: 2026, name: 'Primera B Metropolitana', country: 'Argentina' },
+  { leagueId: 134, season: 2026, name: 'Federal A', country: 'Argentina' },
+  { leagueId: 132, season: 2026, name: 'Primera C', country: 'Argentina' },
   { leagueId: 1, season: 2026, name: 'Mundial 2026', country: 'World' },
   { leagueId: 13, season: 2026, name: 'Copa Libertadores', country: 'World' },
   { leagueId: 11, season: 2026, name: 'Copa Sudamericana', country: 'World' },
   { leagueId: 2, season: 2025, name: 'UEFA Champions League', country: 'World' },
   { leagueId: 3, season: 2025, name: 'UEFA Europa League', country: 'World' },
   { leagueId: 848, season: 2025, name: 'UEFA Europa Conference League', country: 'World' },
+  { leagueId: 16, season: 2026, name: 'CONCACAF Champions Cup', country: 'World' },
   { leagueId: 39, season: 2025, name: 'Premier League', country: 'England' },
+  { leagueId: 45, season: 2025, name: 'FA Cup', country: 'England' },
   { leagueId: 140, season: 2025, name: 'La Liga', country: 'Spain' },
+  { leagueId: 143, season: 2025, name: 'Copa del Rey', country: 'Spain' },
   { leagueId: 135, season: 2025, name: 'Serie A', country: 'Italy' },
+  { leagueId: 137, season: 2025, name: 'Coppa Italia', country: 'Italy' },
   { leagueId: 78, season: 2025, name: 'Bundesliga', country: 'Germany' },
+  { leagueId: 81, season: 2025, name: 'DFB Pokal', country: 'Germany' },
   { leagueId: 61, season: 2025, name: 'Ligue 1', country: 'France' },
+  { leagueId: 66, season: 2025, name: 'Coupe de France', country: 'France' },
+  { leagueId: 94, season: 2025, name: 'Primeira Liga', country: 'Portugal' },
+  { leagueId: 96, season: 2025, name: 'Taca de Portugal', country: 'Portugal' },
   { leagueId: 71, season: 2026, name: 'Brasileirao Serie A', country: 'Brazil' },
+  { leagueId: 73, season: 2026, name: 'Copa do Brasil', country: 'Brazil' },
+  { leagueId: 268, season: 2026, name: 'Primera Division', country: 'Uruguay' },
+  { leagueId: 930, season: 2026, name: 'Copa Uruguay', country: 'Uruguay' },
+  { leagueId: 250, season: 2026, name: 'Division Profesional', country: 'Paraguay' },
+  { leagueId: 252, season: 2026, name: 'Copa Paraguay', country: 'Paraguay' },
+  { leagueId: 239, season: 2026, name: 'Primera A', country: 'Colombia' },
+  { leagueId: 240, season: 2026, name: 'Copa Colombia', country: 'Colombia' },
+  { leagueId: 265, season: 2026, name: 'Primera Division', country: 'Chile' },
+  { leagueId: 267, season: 2026, name: 'Copa Chile', country: 'Chile' },
+  { leagueId: 262, season: 2026, name: 'Liga MX', country: 'Mexico' },
+  { leagueId: 263, season: 2026, name: 'Copa MX', country: 'Mexico' },
+  { leagueId: 253, season: 2026, name: 'Major League Soccer', country: 'USA' },
+  { leagueId: 257, season: 2026, name: 'US Open Cup', country: 'USA' },
+  { leagueId: 9, season: 2024, name: 'Copa America', country: 'World' },
+  { leagueId: 4, season: 2024, name: 'UEFA Euro', country: 'World' },
+  { leagueId: 5, season: 2025, name: 'UEFA Nations League', country: 'World' },
+  { leagueId: 34, season: 2026, name: 'World Cup - Qualification South America', country: 'World' },
+  { leagueId: 32, season: 2026, name: 'World Cup - Qualification Europe', country: 'World' },
+  { leagueId: 31, season: 2026, name: 'World Cup - Qualification CONCACAF', country: 'World' },
+  { leagueId: 960, season: 2024, name: 'UEFA Euro Qualification', country: 'World' },
+  { leagueId: 15, season: 2026, name: 'World Cup - Qualification Intercontinental Play-offs', country: 'World' },
 ]
 
 const KNOWN_TOURNAMENT_ALIASES: Array<ResolvedTournament & { aliases: string[] }> =
@@ -1884,9 +1921,14 @@ const KNOWN_TOURNAMENT_ALIASES: Array<ResolvedTournament & { aliases: string[] }
       tournament.name.replace(/\s+2026$/i, ''),
       tournament.leagueId === 128 ? 'Primera Division' : '',
       tournament.leagueId === 128 ? 'Liga Profesional' : '',
+      tournament.leagueId === 1 ? 'World Cup' : '',
+      tournament.leagueId === 1 ? 'FIFA World Cup' : '',
+      tournament.leagueId === 1 ? 'Mundial' : '',
       tournament.leagueId === 13 ? 'CONMEBOL Libertadores' : '',
       tournament.leagueId === 11 ? 'CONMEBOL Sudamericana' : '',
       tournament.leagueId === 848 ? 'Conference League' : '',
+      tournament.leagueId === 16 ? 'CONCACAF Champions League' : '',
+      tournament.leagueId === 16 ? 'Concacaf Champions' : '',
       tournament.leagueId === 71 ? 'Brasileirao' : '',
     ].filter(Boolean),
   }))
@@ -2075,6 +2117,93 @@ async function fetchStoredEventsByMatchId(matchId: string | number) {
   return (response.data ?? []) as StoredMatchEventRow[]
 }
 
+type StoredMatchDetailCacheRow = {
+  events: unknown
+  lineups: unknown
+  statistics: unknown
+}
+
+type StoredFixtureDetailCacheRow = {
+  normalized_payload: unknown
+}
+
+function isMissingOptionalMatchDetailCache(error: { code?: string; message?: string } | null | undefined) {
+  const message = (error?.message ?? '').toLowerCase()
+
+  return (
+    error?.code === '42P01' ||
+    error?.code === '42703' ||
+    error?.code === 'PGRST204' ||
+    error?.code === 'PGRST205' ||
+    message.includes('football_match_detail_cache') ||
+    message.includes('schema cache')
+  )
+}
+
+function readRecord(value: unknown) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+async function fetchStoredFixtureDetailCacheByExternalId(externalId: number) {
+  const supabase = getSupabaseAdminClient()
+  const response = await supabase
+    .from('football_fixture_cache')
+    .select('normalized_payload')
+    .eq('fixture_external_id', String(externalId))
+    .limit(1)
+    .maybeSingle()
+
+  if (response.error) {
+    const message = response.error.message.toLowerCase()
+    const missingCacheTable =
+      response.error.code === '42P01' ||
+      response.error.code === 'PGRST205' ||
+      message.includes('football_fixture_cache') ||
+      message.includes('schema cache')
+
+    if (missingCacheTable) return null
+
+    throw response.error
+  }
+
+  const row = (response.data as StoredFixtureDetailCacheRow | null) ?? null
+  const normalizedPayload = readRecord(row?.normalized_payload)
+  const matchDetail = readRecord(normalizedPayload?.matchDetail)
+
+  if (!matchDetail) return null
+
+  return {
+    events: matchDetail.events,
+    lineups: matchDetail.lineups,
+    statistics: matchDetail.statistics,
+  } satisfies StoredMatchDetailCacheRow
+}
+
+async function fetchStoredMatchDetailCacheByExternalId(externalId: number) {
+  const supabase = getSupabaseAdminClient()
+  const response = await supabase
+    .from('football_match_detail_cache')
+    .select('events, lineups, statistics')
+    .eq('fixture_external_id', String(externalId))
+    .maybeSingle()
+
+  if (response.error) {
+    if (isMissingOptionalMatchDetailCache(response.error)) {
+      return fetchStoredFixtureDetailCacheByExternalId(externalId)
+    }
+    throw response.error
+  }
+
+  return (response.data as StoredMatchDetailCacheRow | null) ??
+    await fetchStoredFixtureDetailCacheByExternalId(externalId)
+}
+
+function readCachedArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : []
+}
+
 function mapStoredEventToMatchEvent(
   row: StoredMatchEventRow,
   teamsById: Map<string, StoredTeamRow>
@@ -2201,20 +2330,24 @@ export async function getMatchDetail(id: number) {
     }
   }
 
-  const [league, teamsById, events, broadcast, highlights] = await Promise.all([
+  const [league, teamsById, events, detailCache, broadcast, highlights] = await Promise.all([
     fetchStoredLeagueRowById(match.league_id).catch(() => null),
     fetchStoredTeamsByIds([match.home_team_id, match.away_team_id]),
     fetchStoredEventsByMatchId(match.id),
+    fetchStoredMatchDetailCacheByExternalId(id),
     getMatchBroadcastByExternalId(id),
     getMatchHighlightsByExternalId(id),
   ])
   const fixture = mapStoredMatchToFixture(match, league, teamsById, id)
+  const cachedEvents = readCachedArray<MatchEvent>(detailCache?.events)
 
   return {
     fixture,
-    events: events.map((event) => mapStoredEventToMatchEvent(event, teamsById)),
-    statistics: [] as MatchStatisticsTeam[],
-    lineups: [] as MatchLineup[],
+    events: cachedEvents.length
+      ? cachedEvents
+      : events.map((event) => mapStoredEventToMatchEvent(event, teamsById)),
+    statistics: readCachedArray<MatchStatisticsTeam>(detailCache?.statistics),
+    lineups: readCachedArray<MatchLineup>(detailCache?.lineups),
     broadcastChannel: broadcast.channel ?? match.broadcast_channel ?? null,
     broadcastLogoUrl: broadcast.logoUrl ?? match.broadcast_logo_url ?? null,
     broadcasters: broadcast.broadcasters.length
@@ -2373,11 +2506,33 @@ function getStandingAccumulator(
   return next
 }
 
-const CONMEBOL_GROUP_STAGE_LEAGUE_IDS = new Set([11, 13])
-const CONMEBOL_GROUP_LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+const CONMEBOL_GROUP_STAGE_LEAGUE_IDS = new Set([1, 4, 9, 11, 13])
+const CONMEBOL_GROUP_LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']
+const UEFA_LEAGUE_PHASE_LIMITS = new Map<number, number>([
+  [2, 8],
+  [3, 8],
+  [848, 6],
+])
 
 function isConmebolTraditionalGroupStageLeague(leagueId: number) {
   return CONMEBOL_GROUP_STAGE_LEAGUE_IDS.has(leagueId)
+}
+
+function isUefaLeaguePhaseCompetition(leagueId: number) {
+  return UEFA_LEAGUE_PHASE_LIMITS.has(leagueId)
+}
+
+function isUefaLeaguePhaseFixture(leagueId: number, round: string) {
+  const matchdayLimit = UEFA_LEAGUE_PHASE_LIMITS.get(leagueId)
+  const roundNumber = getUefaLeaguePhaseRoundNumber(round)
+
+  return Boolean(
+    matchdayLimit &&
+    roundNumber &&
+    roundNumber >= 1 &&
+    roundNumber <= matchdayLimit &&
+    isUefaLeaguePhaseRound(round)
+  )
 }
 
 function isConmebolGroupStageFixtureRound(round: string) {
@@ -2576,22 +2731,387 @@ function buildConmebolGroupStageStandings(fixtures: LeagueFixtureSummary[]) {
     })
 }
 
+function buildUefaLeaguePhaseStandings(leagueId: number, fixtures: LeagueFixtureSummary[]) {
+  const leaguePhaseFixtures = fixtures.filter((fixture) =>
+    isUefaLeaguePhaseFixture(leagueId, fixture.round)
+  )
+
+  if (!leaguePhaseFixtures.length) return []
+
+  const table = new Map<string, CalculatedStandingAccumulator>()
+
+  for (const fixture of leaguePhaseFixtures) {
+    getStandingAccumulator(table, fixture.homeId, fixture.home, fixture.homeLogo)
+    getStandingAccumulator(table, fixture.awayId, fixture.away, fixture.awayLogo)
+
+    if (!isFinishedStatus(fixture.statusShort)) continue
+
+    const homeGoals = fixture.goalsHome
+    const awayGoals = fixture.goalsAway
+    if (homeGoals === null || awayGoals === null) continue
+
+    const home = getStandingAccumulator(table, fixture.homeId, fixture.home, fixture.homeLogo)
+    const away = getStandingAccumulator(table, fixture.awayId, fixture.away, fixture.awayLogo)
+
+    updateStandingWithFixtureResult(home, away, homeGoals, awayGoals)
+  }
+
+  const rows = [...table.values()]
+    .sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points
+      if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference
+      if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor
+      return a.teamName.localeCompare(b.teamName, 'es-AR')
+    })
+    .map((row, index) => ({
+      ...row,
+      rank: index + 1,
+    }))
+
+  return rows.length ? [{ name: 'Fase liga', rows }] : []
+}
+
+type LigaProfesionalPartition = {
+  groupA: Set<string>
+  groupB: Set<string>
+  teamsByKey: Map<string, { teamId?: number; teamName: string; teamLogo?: string }>
+}
+
+function getPairKey(a: string, b: string) {
+  return [a, b].sort().join('__')
+}
+
+function getPairWeight(weights: Map<string, number>, a: string, b: string) {
+  return weights.get(getPairKey(a, b)) ?? 0
+}
+
+function scoreLigaProfesionalPartition(
+  weights: Map<string, number>,
+  groupA: Set<string>,
+  groupB: Set<string>
+) {
+  const scoreGroup = (group: Set<string>) => {
+    const keys = [...group]
+    let score = 0
+
+    for (let i = 0; i < keys.length; i += 1) {
+      for (let j = i + 1; j < keys.length; j += 1) {
+        score += getPairWeight(weights, keys[i], keys[j])
+      }
+    }
+
+    return score
+  }
+
+  return scoreGroup(groupA) + scoreGroup(groupB)
+}
+
+function cloneSet<T>(input: Set<T>) {
+  return new Set(input)
+}
+
+function improveLigaProfesionalPartition(
+  weights: Map<string, number>,
+  groupA: Set<string>,
+  groupB: Set<string>
+) {
+  let improved = true
+
+  while (improved) {
+    improved = false
+    let bestSwap: { a: string; b: string; score: number } | null = null
+    const currentScore = scoreLigaProfesionalPartition(weights, groupA, groupB)
+
+    for (const a of groupA) {
+      for (const b of groupB) {
+        const nextA = cloneSet(groupA)
+        const nextB = cloneSet(groupB)
+
+        nextA.delete(a)
+        nextB.delete(b)
+        nextA.add(b)
+        nextB.add(a)
+
+        const nextScore = scoreLigaProfesionalPartition(weights, nextA, nextB)
+
+        if (nextScore > (bestSwap?.score ?? currentScore)) {
+          bestSwap = { a, b, score: nextScore }
+        }
+      }
+    }
+
+    if (bestSwap) {
+      groupA.delete(bestSwap.a)
+      groupB.delete(bestSwap.b)
+      groupA.add(bestSwap.b)
+      groupB.add(bestSwap.a)
+      improved = true
+    }
+  }
+}
+
+function inferLigaProfesionalPartition(fixtures: LeagueFixtureSummary[]): LigaProfesionalPartition | null {
+  const regularFixtures = fixtures.filter((fixture) =>
+    isLigaProfesionalRegularSeasonRound(fixture.round)
+  )
+
+  if (!regularFixtures.length) return null
+
+  const teamsByKey = new Map<string, { teamId?: number; teamName: string; teamLogo?: string }>()
+  const weights = new Map<string, number>()
+
+  const ensureTeam = (teamId: number | undefined, teamName: string, teamLogo?: string) => {
+    const key = getStandingTeamKey(teamId, teamName)
+
+    if (!teamsByKey.has(key)) {
+      teamsByKey.set(key, { teamId, teamName, teamLogo })
+    }
+
+    return key
+  }
+
+  for (const fixture of regularFixtures) {
+    const homeKey = ensureTeam(fixture.homeId, fixture.home, fixture.homeLogo)
+    const awayKey = ensureTeam(fixture.awayId, fixture.away, fixture.awayLogo)
+    const pairKey = getPairKey(homeKey, awayKey)
+
+    weights.set(pairKey, (weights.get(pairKey) ?? 0) + 1)
+  }
+
+  const teamKeys = [...teamsByKey.keys()].sort((a, b) => {
+    const teamA = teamsByKey.get(a)?.teamName ?? a
+    const teamB = teamsByKey.get(b)?.teamName ?? b
+
+    return teamA.localeCompare(teamB, 'es-AR')
+  })
+  const groupSize = teamKeys.length / 2
+
+  if (!Number.isInteger(groupSize) || groupSize < 2) return null
+
+  const seedPairs: Array<{ a: string; b: string; weight: number }> = []
+
+  for (let i = 0; i < teamKeys.length; i += 1) {
+    for (let j = i + 1; j < teamKeys.length; j += 1) {
+      seedPairs.push({
+        a: teamKeys[i],
+        b: teamKeys[j],
+        weight: getPairWeight(weights, teamKeys[i], teamKeys[j]),
+      })
+    }
+  }
+
+  seedPairs.sort((left, right) => {
+    if (left.weight !== right.weight) return left.weight - right.weight
+    const leftName = `${teamsByKey.get(left.a)?.teamName ?? left.a}-${teamsByKey.get(left.b)?.teamName ?? left.b}`
+    const rightName = `${teamsByKey.get(right.a)?.teamName ?? right.a}-${teamsByKey.get(right.b)?.teamName ?? right.b}`
+
+    return leftName.localeCompare(rightName, 'es-AR')
+  })
+
+  let best: { groupA: Set<string>; groupB: Set<string>; score: number } | null = null
+
+  for (const seed of seedPairs.slice(0, 60)) {
+    const groupA = new Set([seed.a])
+    const groupB = new Set([seed.b])
+    const remaining = teamKeys.filter((key) => key !== seed.a && key !== seed.b)
+
+    while (remaining.length) {
+      let bestIndex = 0
+      let bestSide: 'A' | 'B' = groupA.size <= groupB.size ? 'A' : 'B'
+      let bestValue = Number.NEGATIVE_INFINITY
+
+      for (let index = 0; index < remaining.length; index += 1) {
+        const key = remaining[index]
+        const scoreA = [...groupA].reduce((sum, current) => sum + getPairWeight(weights, key, current), 0)
+        const scoreB = [...groupB].reduce((sum, current) => sum + getPairWeight(weights, key, current), 0)
+        const side =
+          groupA.size >= groupSize
+            ? 'B'
+            : groupB.size >= groupSize
+              ? 'A'
+              : scoreA >= scoreB
+                ? 'A'
+                : 'B'
+        const value = Math.abs(scoreA - scoreB)
+
+        if (value > bestValue) {
+          bestIndex = index
+          bestSide = side
+          bestValue = value
+        }
+      }
+
+      const [nextTeam] = remaining.splice(bestIndex, 1)
+      if (bestSide === 'A') groupA.add(nextTeam)
+      else groupB.add(nextTeam)
+    }
+
+    improveLigaProfesionalPartition(weights, groupA, groupB)
+
+    const score = scoreLigaProfesionalPartition(weights, groupA, groupB)
+    if (!best || score > best.score) {
+      best = { groupA, groupB, score }
+    }
+  }
+
+  if (!best) return null
+
+  const firstHomeKey = getStandingTeamKey(
+    regularFixtures[0]?.homeId,
+    regularFixtures[0]?.home ?? ''
+  )
+  const groupA = best.groupA.has(firstHomeKey) ? best.groupA : best.groupB
+  const groupB = best.groupA.has(firstHomeKey) ? best.groupB : best.groupA
+
+  return { groupA, groupB, teamsByKey }
+}
+
+function updateSingleTeamStanding(
+  team: CalculatedStandingAccumulator,
+  goalsFor: number,
+  goalsAgainst: number
+) {
+  team.played += 1
+  team.goalsFor += goalsFor
+  team.goalsAgainst += goalsAgainst
+
+  if (goalsFor > goalsAgainst) {
+    team.won += 1
+    team.points += 3
+  } else if (goalsFor < goalsAgainst) {
+    team.lost += 1
+  } else {
+    team.drawn += 1
+    team.points += 1
+  }
+
+  team.goalDifference = team.goalsFor - team.goalsAgainst
+}
+
+function buildLigaProfesionalGroupStandings(fixtures: LeagueFixtureSummary[]) {
+  const partition = inferLigaProfesionalPartition(fixtures)
+
+  if (!partition) return []
+
+  const regularFixtures = fixtures.filter((fixture) =>
+    isLigaProfesionalRegularSeasonRound(fixture.round)
+  )
+  const groupByTeamKey = new Map<string, 'A' | 'B'>()
+  const tableA = new Map<string, CalculatedStandingAccumulator>()
+  const tableB = new Map<string, CalculatedStandingAccumulator>()
+
+  for (const teamKey of partition.groupA) {
+    const team = partition.teamsByKey.get(teamKey)
+    if (!team) continue
+    groupByTeamKey.set(teamKey, 'A')
+    getStandingAccumulator(tableA, team.teamId, team.teamName, team.teamLogo)
+  }
+
+  for (const teamKey of partition.groupB) {
+    const team = partition.teamsByKey.get(teamKey)
+    if (!team) continue
+    groupByTeamKey.set(teamKey, 'B')
+    getStandingAccumulator(tableB, team.teamId, team.teamName, team.teamLogo)
+  }
+
+  for (const fixture of regularFixtures) {
+    if (!isFinishedStatus(fixture.statusShort)) continue
+
+    const homeGoals = fixture.goalsHome
+    const awayGoals = fixture.goalsAway
+    if (homeGoals === null || awayGoals === null) continue
+
+    const homeKey = getStandingTeamKey(fixture.homeId, fixture.home)
+    const awayKey = getStandingTeamKey(fixture.awayId, fixture.away)
+    const homeTable = groupByTeamKey.get(homeKey) === 'A' ? tableA : tableB
+    const awayTable = groupByTeamKey.get(awayKey) === 'A' ? tableA : tableB
+    const home = getStandingAccumulator(homeTable, fixture.homeId, fixture.home, fixture.homeLogo)
+    const away = getStandingAccumulator(awayTable, fixture.awayId, fixture.away, fixture.awayLogo)
+
+    updateSingleTeamStanding(home, homeGoals, awayGoals)
+    updateSingleTeamStanding(away, awayGoals, homeGoals)
+  }
+
+  const buildRows = (table: Map<string, CalculatedStandingAccumulator>) =>
+    [...table.values()]
+      .sort((a, b) => {
+        if (b.points !== a.points) return b.points - a.points
+        if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference
+        if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor
+        return a.teamName.localeCompare(b.teamName, 'es-AR')
+      })
+      .map((row, index) => ({
+        ...row,
+        rank: index + 1,
+      }))
+
+  return [
+    { name: 'Grupo A', rows: buildRows(tableA) },
+    { name: 'Grupo B', rows: buildRows(tableB) },
+  ].filter((group) => group.rows.length > 0)
+}
+
 export async function getLeagueStandings(
   leagueId: number,
   season: number
 ): Promise<LeagueStandingGroup[]> {
+  const supabase = getSupabaseAdminClient()
+  const cachedStandings = await readCachedLeagueStandings(supabase, leagueId, season)
+
+  if (cachedStandings.length) {
+    console.info('[standings:supabase:standings-cache]', {
+      leagueId,
+      season,
+      groups: cachedStandings.length,
+      teams: cachedStandings.reduce((total, group) => total + group.rows.length, 0),
+    })
+
+    return cachedStandings
+  }
+
   const fixtures = await getLeagueFixtures(leagueId, season)
 
   if (isConmebolTraditionalGroupStageLeague(leagueId)) {
     const groups = buildConmebolGroupStageStandings(fixtures)
 
     if (groups.length) {
-      console.info('[standings:supabase:conmebol-groups]', {
+      console.info('[standings:supabase:group-stage]', {
         leagueId,
         season,
         fixtures: fixtures.length,
         groups: groups.length,
         teams: groups.reduce((total, group) => total + group.rows.length, 0),
+      })
+
+      return groups
+    }
+  }
+
+  if (leagueId === LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID) {
+    const groups = buildLigaProfesionalGroupStandings(fixtures)
+
+    if (groups.length >= 2) {
+      console.info('[standings:supabase:liga-profesional-groups]', {
+        leagueId,
+        season,
+        fixtures: fixtures.length,
+        groups: groups.length,
+        teams: groups.reduce((total, group) => total + group.rows.length, 0),
+      })
+
+      return groups
+    }
+  }
+
+  if (isUefaLeaguePhaseCompetition(leagueId)) {
+    const groups = buildUefaLeaguePhaseStandings(leagueId, fixtures)
+
+    if (groups.length) {
+      console.info('[standings:supabase:uefa-league-phase]', {
+        leagueId,
+        season,
+        fixtures: fixtures.length,
+        teams: groups[0]?.rows.length ?? 0,
       })
 
       return groups

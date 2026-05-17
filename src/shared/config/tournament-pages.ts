@@ -51,8 +51,8 @@ export const TOURNAMENT_PAGE_CONFIGS: TournamentPageConfig[] = [
     sectionKey: 'argentina',
     country: 'Argentina',
     searchTerms: ['Copa Argentina'],
-    showAnnualTable: true,
-    showPromedios: true,
+    showAnnualTable: false,
+    showPromedios: false,
   },
   {
     key: 'argentina-reserva',
@@ -346,7 +346,7 @@ export const TOURNAMENT_PAGE_CONFIGS: TournamentPageConfig[] = [
     title: 'Mundial',
     sectionKey: 'selecciones',
     country: 'World',
-    searchTerms: ['World Cup'],
+    searchTerms: ['World Cup', 'FIFA World Cup', 'Mundial 2026', 'Mundial'],
   },
   {
     key: 'selecciones-copa-america',

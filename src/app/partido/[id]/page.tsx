@@ -269,7 +269,7 @@ function translateEventDetail(event: MatchEvent) {
     return 'Penal errado'
   }
   if (normalizedDetail.includes('penalty')) return 'Penal'
-  if (normalizedType.includes('subst')) return 'Sustitución'
+  if (normalizedType.includes('subst')) return 'Cambio'
   if (normalizedType.includes('var') || normalizedComments.includes('var')) {
     return 'Revisión VAR'
   }
@@ -290,7 +290,7 @@ function getEventPrimary(event: MatchEvent) {
 
   if (kind === 'var') return 'VAR'
   if (kind === 'substitution') {
-    return event.assist?.name || event.player?.name || 'Sustitución'
+    return event.assist?.name || event.player?.name || 'Cambio'
   }
 
   return event.player?.name || event.type || 'Evento'
