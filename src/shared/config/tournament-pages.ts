@@ -78,8 +78,8 @@ export const TOURNAMENT_PAGE_CONFIGS: TournamentPageConfig[] = [
     sectionKey: 'argentina',
     country: 'Argentina',
     searchTerms: ['Primera Nacional'],
-    showAnnualTable: true,
-    showPromedios: true,
+    showAnnualTable: false,
+    showPromedios: false,
   },
   {
     key: 'argentina-primera-b-metro',
@@ -87,8 +87,8 @@ export const TOURNAMENT_PAGE_CONFIGS: TournamentPageConfig[] = [
     sectionKey: 'argentina',
     country: 'Argentina',
     searchTerms: ['Primera B Metropolitana', 'Primera B'],
-    showAnnualTable: true,
-    showPromedios: true,
+    showAnnualTable: false,
+    showPromedios: false,
   },
   {
     key: 'argentina-federal-a',
@@ -96,8 +96,8 @@ export const TOURNAMENT_PAGE_CONFIGS: TournamentPageConfig[] = [
     sectionKey: 'argentina',
     country: 'Argentina',
     searchTerms: ['Federal A'],
-    showAnnualTable: true,
-    showPromedios: true,
+    showAnnualTable: false,
+    showPromedios: false,
   },
   {
     key: 'argentina-primera-c',
@@ -105,8 +105,8 @@ export const TOURNAMENT_PAGE_CONFIGS: TournamentPageConfig[] = [
     sectionKey: 'argentina',
     country: 'Argentina',
     searchTerms: ['Primera C'],
-    showAnnualTable: true,
-    showPromedios: true,
+    showAnnualTable: false,
+    showPromedios: false,
   },
   {
     key: 'argentina-promocional-amateur',

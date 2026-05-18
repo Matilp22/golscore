@@ -30,6 +30,7 @@ export async function requestFootballApi<T>(
 ) {
   const { apiKey, baseUrl, hasApiKey } = getFootballApiClientConfig()
   const url = new URL(`${baseUrl}${path}`)
+  const shouldLog = process.env.NODE_ENV === 'development'
 
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== '') {
@@ -37,14 +38,16 @@ export async function requestFootballApi<T>(
     }
   })
 
-  console.info(`[football-api:${options.logContext}] key configured: ${hasApiKey}`)
-  console.info(`[football-api:${options.logContext}] base url: ${baseUrl}`)
-  console.info(`[football-api:${options.logContext}] request: ${url.pathname}${url.search}`)
-  console.info('[api-football-call]', {
-    source: options.logContext,
-    endpoint: path,
-    params: Object.fromEntries(url.searchParams.entries()),
-  })
+  if (shouldLog) {
+    console.info(`[football-api:${options.logContext}] key configured: ${hasApiKey}`)
+    console.info(`[football-api:${options.logContext}] base url: ${baseUrl}`)
+    console.info(`[football-api:${options.logContext}] request: ${url.pathname}${url.search}`)
+    console.info('[api-football-call]', {
+      source: options.logContext,
+      endpoint: path,
+      params: Object.fromEntries(url.searchParams.entries()),
+    })
+  }
 
   if (!apiKey) {
     throw new Error('Falta FOOTBALL_API_KEY en el entorno.')
@@ -57,13 +60,17 @@ export async function requestFootballApi<T>(
     cache: 'no-store',
   })
 
-  console.info(`[football-api:${options.logContext}] status: ${response.status}`)
+  if (shouldLog) {
+    console.info(`[football-api:${options.logContext}] status: ${response.status}`)
+  }
 
   const payload = (await response.json().catch(() => null)) as FootballApiPayload<T> | null
   const responseLength = Array.isArray(payload?.response) ? payload.response.length : null
 
-  console.info(`[football-api:${options.logContext}] payload parsed: ${Boolean(payload)}`)
-  console.info(`[football-api:${options.logContext}] response length: ${responseLength}`)
+  if (shouldLog) {
+    console.info(`[football-api:${options.logContext}] payload parsed: ${Boolean(payload)}`)
+    console.info(`[football-api:${options.logContext}] response length: ${responseLength}`)
+  }
 
   if (payload?.errors && Object.keys(payload.errors).length > 0) {
     console.warn(`[football-api:${options.logContext}] errors: ${JSON.stringify(payload.errors)}`)

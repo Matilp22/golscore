@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { TeamLogo } from '@/frontend/components/AssetImage'
 import type { LeagueFixtureSummary } from '@/lib/api-football'
+import { formatMatchScoreWithPenalties } from '@/shared/utils/match-display'
 import { parseMatchDate } from '@/shared/utils/prediction-lock'
 
 type RoundBlock = {
@@ -44,7 +45,13 @@ function getMatchStatusLabel(match: LeagueFixtureSummary) {
 
 function getMatchScoreLabel(match: LeagueFixtureSummary) {
   if (match.goalsHome !== null || match.goalsAway !== null) {
-    return `${match.goalsHome ?? '-'}-${match.goalsAway ?? '-'}`
+    return formatMatchScoreWithPenalties({
+      goalsHome: match.goalsHome,
+      goalsAway: match.goalsAway,
+      homePenaltyScore: match.homePenaltyScore,
+      awayPenaltyScore: match.awayPenaltyScore,
+      separator: '-',
+    })
   }
 
   return '-'
@@ -207,7 +214,7 @@ export default function CurrentRoundNavigator({
                     </div>
 
                     <div className="px-2 py-1.5">
-                      <div className="grid grid-cols-[minmax(0,1fr)_44px_minmax(0,1fr)] items-center gap-1.5">
+                      <div className="grid grid-cols-[minmax(0,1fr)_minmax(86px,max-content)_minmax(0,1fr)] items-center gap-1.5">
                         <div className="flex items-center justify-end gap-1.5 text-right">
                           <span className="truncate font-semibold text-[#dce5ef]">{match.home}</span>
                           <TeamLogo
@@ -219,7 +226,7 @@ export default function CurrentRoundNavigator({
                           />
                         </div>
 
-                        <div className="text-center text-sm font-black text-white">
+                        <div className="whitespace-nowrap text-center text-sm font-black text-white">
                           {getMatchScoreLabel(match)}
                         </div>
 

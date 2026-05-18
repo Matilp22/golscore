@@ -447,6 +447,36 @@ async function insertDerivedMatch(
   return (fallback.data as { id: DbId }).id
 }
 
+async function updateExistingPlayoffMetadataIfSupported(
+  supabase: SupabaseClient,
+  match: LigaProfesionalPlayoffMatchRow,
+  plan: PhasePlan,
+  bracketSlot: number,
+  home: Winner,
+  away: Winner
+) {
+  const alreadyTagged =
+    match.bracket_phase === plan.nextPhase &&
+    Number(match.bracket_slot) === bracketSlot
+
+  if (alreadyTagged) return
+
+  const { error } = await supabase
+    .from('matches')
+    .update({
+      bracket_phase: plan.nextPhase,
+      bracket_slot: bracketSlot,
+      source_match_a_id: String(home.sourceMatchId),
+      source_match_b_id: String(away.sourceMatchId),
+    })
+    .eq('id', match.id)
+
+  if (!error) return
+  if (isMissingPlayoffMetadataColumn(error)) return
+
+  throw error
+}
+
 export async function generateLigaProfesionalPlayoffs(
   supabase: SupabaseClient,
   options: {
@@ -549,6 +579,16 @@ export async function generateLigaProfesionalPlayoffs(
       }
 
       if (existing) {
+        if (!dryRun) {
+          await updateExistingPlayoffMetadataIfSupported(
+            supabase,
+            existing,
+            plan,
+            bracketSlot,
+            winnerA,
+            winnerB
+          )
+        }
         skippedBecauseAlreadyExists.push(crossing)
       } else if (!dryRun) {
         crossing.createdMatchId = await insertDerivedMatch(

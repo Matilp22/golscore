@@ -21,6 +21,7 @@ const LIVE_STATUSES = new Set([
   'first half',
   'second half',
   'extra time',
+  'break time',
   'penalty in progress',
 ])
 
@@ -36,6 +37,19 @@ const POSTPONED_STATUSES = new Set([
   'canc',
   'abd',
   'susp',
+  'int',
+  'postponed',
+  'cancelled',
+  'canceled',
+  'abandoned',
+  'suspended',
+  'interrupted',
+  'match postponed',
+  'match cancelled',
+  'match canceled',
+  'match abandoned',
+  'match suspended',
+  'match interrupted',
 ])
 
 export function normalizeMatchStatus(status: string | null | undefined) {

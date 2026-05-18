@@ -31,7 +31,10 @@ import {
   getExcludedCompetitionReason,
   isExcludedCompetition,
 } from '@/shared/utils/competition-filter'
-import { formatHomeMatchStatus } from '@/shared/utils/match-display'
+import {
+  formatHomeMatchStatus,
+  formatMatchScoreWithPenalties,
+} from '@/shared/utils/match-display'
 
 type ApiMatch = MatchListItemWithGoalScorers
 
@@ -200,16 +203,35 @@ function getFallbackSectionForMatch(match: ApiMatch) {
 function shouldFastRefreshMatch(match: ApiMatch, now: number) {
   if (isLiveStatus(match.statusShort)) return true
 
+  const matchTimestamp = getArgentinaMatchTimestamp(match.date)
+  if (!Number.isFinite(matchTimestamp)) return false
+
+  const missingScore = match.goalsHome === null || match.goalsAway === null
+  const recentlyStartedOrPlayed =
+    matchTimestamp <= now &&
+    matchTimestamp >= now - 36 * 60 * 60 * 1000
+
+  if (!isUpcomingStatus(match.statusShort)) {
+    return missingScore && recentlyStartedOrPlayed
+  }
+
+  const startsSoonOrAlreadyStarted =
+    matchTimestamp <= now + 15 * 60 * 1000 &&
+    matchTimestamp >= now - 36 * 60 * 60 * 1000
+
+  return startsSoonOrAlreadyStarted
+}
+
+function shouldCatchUpStaleRecentMatch(match: ApiMatch, now: number) {
   if (!isUpcomingStatus(match.statusShort)) return false
 
   const matchTimestamp = getArgentinaMatchTimestamp(match.date)
   if (!Number.isFinite(matchTimestamp)) return false
 
-  const startsSoonOrAlreadyStarted =
-    matchTimestamp <= now + 15 * 60 * 1000 &&
-    matchTimestamp >= now - 4 * 60 * 60 * 1000
-
-  return startsSoonOrAlreadyStarted
+  return (
+    matchTimestamp <= now &&
+    matchTimestamp >= now - 36 * 60 * 60 * 1000
+  )
 }
 
 const SECTION_ORDER = [
@@ -1254,6 +1276,9 @@ export default async function HomePage({
   const hasFastRefreshMatches = dateMatches.some((match) =>
     shouldFastRefreshMatch(match, now)
   )
+  const hasStaleRecentMatches = dateMatches.some((match) =>
+    shouldCatchUpStaleRecentMatch(match, now)
+  )
   const hasLiveMatches = dateMatches.some((match) => isLiveStatus(match.statusShort))
   const liveEvents = visibleCompetitions.flatMap((competition) =>
     competition.matches.flatMap((match) => match.liveEvents || [])
@@ -1283,7 +1308,9 @@ export default async function HomePage({
               initialUpdatedAt={renderedAt}
               syncBeforeRefreshUrl={
                 hasFastRefreshMatches
-                  ? `/api/home/live-sync?date=${encodeURIComponent(selectedDate)}`
+                  ? `/api/home/live-sync?date=${encodeURIComponent(selectedDate)}${
+                      hasStaleRecentMatches ? '&catchup=1' : ''
+                    }`
                   : null
               }
             />
@@ -1379,7 +1406,12 @@ export default async function HomePage({
                             time={formatMatchTimeArgentina(match.date)}
                             home={match.home}
                             away={match.away}
-                            score={`${match.goalsHome ?? '-'} - ${match.goalsAway ?? '-'}`}
+                            score={formatMatchScoreWithPenalties({
+                              goalsHome: match.goalsHome,
+                              goalsAway: match.goalsAway,
+                              homePenaltyScore: match.homePenaltyScore,
+                              awayPenaltyScore: match.awayPenaltyScore,
+                            })}
                             status={formatHomeMatchStatus({
                               statusShort: match.statusShort,
                               minute: match.minute,

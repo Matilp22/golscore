@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react'
 
 import { TeamLogo } from '@/frontend/components/AssetImage'
 import type { LeagueFixtureSummary, LeagueStandingRow } from '@/lib/api-football'
+import { formatMatchScoreWithPenalties } from '@/shared/utils/match-display'
 import {
   getUefaKnockoutRoundLabel,
   getUefaLeaguePhaseRoundNumber,
@@ -138,7 +139,13 @@ function isPlayed(match: LeagueFixtureSummary) {
 
 function getMatchScoreLabel(match: LeagueFixtureSummary) {
   if (match.goalsHome !== null || match.goalsAway !== null) {
-    return `${match.goalsHome ?? '-'}-${match.goalsAway ?? '-'}`
+    return formatMatchScoreWithPenalties({
+      goalsHome: match.goalsHome,
+      goalsAway: match.goalsAway,
+      homePenaltyScore: match.homePenaltyScore,
+      awayPenaltyScore: match.awayPenaltyScore,
+      separator: '-',
+    })
   }
 
   return 'vs'

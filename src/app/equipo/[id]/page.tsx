@@ -16,20 +16,52 @@ function formatCapacity(value?: number) {
   return new Intl.NumberFormat('es-AR').format(value)
 }
 
+function normalizePlayerPosition(position?: string) {
+  const normalized = (position || '').trim().toLowerCase()
+
+  if (['goalkeeper', 'keeper', 'gk', 'arquero', 'portero'].includes(normalized)) {
+    return 'Goalkeeper'
+  }
+  if (['defender', 'defence', 'defense', 'df', 'defensor'].includes(normalized)) {
+    return 'Defender'
+  }
+  if (['midfielder', 'midfield', 'mf', 'mediocampista', 'volante'].includes(normalized)) {
+    return 'Midfielder'
+  }
+  if (['attacker', 'forward', 'fw', 'delantero'].includes(normalized)) {
+    return 'Attacker'
+  }
+
+  return 'Other'
+}
+
+function translatePlayerPosition(position?: string) {
+  const labels: Record<string, string> = {
+    Goalkeeper: 'Arquero',
+    Defender: 'Defensor',
+    Midfielder: 'Mediocampista',
+    Attacker: 'Delantero',
+    Other: 'Posición no disponible',
+  }
+
+  return labels[normalizePlayerPosition(position)]
+}
+
 function groupPlayersByPosition(players: TeamSquadPlayer[]) {
-  const order = ['Goalkeeper', 'Defender', 'Midfielder', 'Attacker']
+  const order = ['Goalkeeper', 'Defender', 'Midfielder', 'Attacker', 'Other']
   const labels: Record<string, string> = {
     Goalkeeper: 'Arqueros',
     Defender: 'Defensores',
     Midfielder: 'Mediocampistas',
     Attacker: 'Delanteros',
+    Other: 'Otros',
   }
 
   return order
     .map((position) => ({
       key: position,
       title: labels[position] || position,
-      players: players.filter((player) => player.position === position),
+      players: players.filter((player) => normalizePlayerPosition(player.position) === position),
     }))
     .filter((group) => group.players.length > 0)
 }
@@ -71,6 +103,7 @@ function PlayerCard({ player }: { player: TeamSquadPlayer }) {
         <div className="mt-0.5 flex flex-wrap gap-1.5 text-[11px] text-[#8d98a7]">
           <span>N° {player.number ?? '-'}</span>
           <span>Edad {player.age ?? '-'}</span>
+          <span>{translatePlayerPosition(player.position)}</span>
         </div>
       </div>
     </div>
@@ -176,6 +209,7 @@ export default async function EquipoPage({ params }: PageProps) {
               <div className="px-2 py-1 md:px-3">
                 <TeamInfoRow label="País" value={team.country || 'No disponible'} />
                 <TeamInfoRow label="Fundación" value={String(team.founded || 'No disponible')} />
+                <TeamInfoRow label="Código" value={team.code || 'No disponible'} />
                 <TeamInfoRow label="Estadio" value={venue?.name || 'No disponible'} />
                 <TeamInfoRow label="Ciudad" value={venue?.city || 'No disponible'} />
                 <TeamInfoRow label="Capacidad" value={formatCapacity(venue?.capacity)} />

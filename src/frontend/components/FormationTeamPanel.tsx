@@ -13,6 +13,7 @@ type PanelPlayer = {
   id: string
   name: string
   number?: number
+  position?: string
   photo?: string
   style: TeamStyle
   isCaptain?: boolean
@@ -109,6 +110,17 @@ function TinyEventBadges({
   )
 }
 
+function translatePosition(position?: string) {
+  const normalized = (position || '').trim().toUpperCase()
+
+  if (normalized === 'G') return 'Arquero'
+  if (normalized === 'D') return 'Defensor'
+  if (normalized === 'M') return 'Mediocampista'
+  if (normalized === 'F' || normalized === 'A' || normalized === 'S') return 'Delantero'
+
+  return position || null
+}
+
 export default function FormationTeamPanel({
   title,
   coachName,
@@ -179,6 +191,11 @@ export default function FormationTeamPanel({
                 <p className="truncate text-[13px] font-semibold text-white">
                   {player.name}
                 </p>
+                {translatePosition(player.position) ? (
+                  <p className="mt-0.5 truncate text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8d98a7]">
+                    {translatePosition(player.position)}
+                  </p>
+                ) : null}
                 {player.replacedPlayerName && player.substitutionLabel ? (
                   <div className="mt-0.5 leading-tight">
                     <p

@@ -283,6 +283,8 @@ export type SyncHomeMatchesOptions = {
   limit?: number | null
   offset?: number | null
   liveOnly?: boolean
+  skipEvents?: boolean
+  skipPoints?: boolean
 }
 
 export type AvailableLeagueRow = {
@@ -522,6 +524,7 @@ function getFixtureCachePayload(fixture: ApiFixture) {
     externalId: fixture.fixture.id,
     leagueId: fixture.league.id,
     league: fixture.league.name,
+    season: fixture.league.season ?? null,
     leagueLogo: pickLeagueLogoUrl(null, fixture.league.id, fixture.league.logo) ?? null,
     country: fixture.league.country ?? null,
     date: fixture.fixture.date,
@@ -534,10 +537,46 @@ function getFixtureCachePayload(fixture: ApiFixture) {
     awayLogo: pickTeamLogoUrl(null, fixture.teams.away.id, fixture.teams.away.logo) ?? null,
     goalsHome: getFixtureHomeScore(fixture),
     goalsAway: getFixtureAwayScore(fixture),
+    homePenaltyScore: fixture.score?.penalty?.home ?? null,
+    awayPenaltyScore: fixture.score?.penalty?.away ?? null,
     minute: getFixtureStatusElapsedMinute(fixture.fixture.status),
     statusShort: getCanonicalMatchStatusFromApi(fixture.fixture.status),
     statusLong: fixture.fixture.status.long ?? fixture.fixture.status.short,
   }
+}
+
+function readFixtureCacheRecord(value: unknown) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+async function readExistingFixtureMatchDetail(
+  supabase: SupabaseClient,
+  fixtureExternalId: number
+) {
+  const response = await withTimeout(
+    supabase
+      .from('football_fixture_cache')
+      .select('normalized_payload')
+      .eq('fixture_external_id', String(fixtureExternalId))
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    `football fixture cache existing detail ${fixtureExternalId}`
+  )
+
+  if (response.error) {
+    if (isMissingFixtureCacheTable(response.error)) return null
+    throw new Error(
+      `No se pudo leer cache existente del fixture ${fixtureExternalId}: ${response.error.message}`
+    )
+  }
+
+  const normalizedPayload = readFixtureCacheRecord(
+    (response.data as { normalized_payload?: unknown } | null)?.normalized_payload
+  )
+  return normalizedPayload?.matchDetail ?? null
 }
 
 function isMissingFixtureCacheTable(error: { code?: string; message?: string } | null) {
@@ -558,7 +597,14 @@ async function upsertFixtureCache(
   fixture: ApiFixture,
   debug?: boolean
 ) {
-  const normalizedPayload = getFixtureCachePayload(fixture)
+  const existingMatchDetail = await readExistingFixtureMatchDetail(
+    supabase,
+    fixture.fixture.id
+  )
+  const normalizedPayload = {
+    ...getFixtureCachePayload(fixture),
+    ...(existingMatchDetail ? { matchDetail: existingMatchDetail } : {}),
+  }
   const cacheDate = getArgentinaDateKey(fixture.fixture.date)
   const response = await withTimeout(
     supabase
@@ -2974,6 +3020,8 @@ export async function syncHomeScoreboardMatches(
     : null
   const offset = getBatchOffset(normalizedOptions.offset)
   const liveOnly = Boolean(normalizedOptions.liveOnly)
+  const skipEvents = Boolean(normalizedOptions.skipEvents)
+  const skipPoints = Boolean(normalizedOptions.skipPoints)
   const leagueExternalId = normalizedOptions.leagueExternalId
   const result = createEmptyHomeScoreboardResult(dates)
   const fixturesById = new Map<number, ApiFixture>()
@@ -3064,27 +3112,35 @@ export async function syncHomeScoreboardMatches(
         awayTeam.id,
         debug
       )
-      const eventSync = await syncMatchEventsIfSupported(
-        supabase,
-        fixture,
-        matchUpsert.id,
-        homeTeam.id,
-        awayTeam.id,
-        debug
-      )
+      const eventSync = skipEvents
+        ? {
+            eventsFound: 0,
+            goalsInserted: 0,
+          }
+        : await syncMatchEventsIfSupported(
+            supabase,
+            fixture,
+            matchUpsert.id,
+            homeTeam.id,
+            awayTeam.id,
+            debug
+          )
 
       result.processed += 1
       result.eventsFound += eventSync.eventsFound
       result.goalsInserted += eventSync.goalsInserted
 
-      console.info('events processed', {
-        fixtureId: fixture.fixture.id,
-        league: fixture.league.name,
-        eventsFound: eventSync.eventsFound,
-        goalsStored: eventSync.goalsInserted,
-      })
+      if (!skipEvents || debug) {
+        console.info('events processed', {
+          fixtureId: fixture.fixture.id,
+          league: fixture.league.name,
+          eventsFound: eventSync.eventsFound,
+          goalsStored: eventSync.goalsInserted,
+          skipped: skipEvents,
+        })
+      }
 
-      if (shouldRecalculateProdePoints(fixture)) {
+      if (!skipPoints && shouldRecalculateProdePoints(fixture)) {
         try {
           const pointsResult = await recalculateProdePoints(supabase, matchUpsert.id)
           result.pointsRecalculated += pointsResult.calculated
@@ -3116,6 +3172,8 @@ export async function syncHomeScoreboardMatches(
   console.info('[sync-home-scoreboard] resumen', {
     dates: result.dates,
     liveOnly,
+    skipEvents,
+    skipPoints,
     leagueExternalId: leagueExternalId ?? null,
     fetched: result.fetched,
     selected: result.selected,
@@ -3126,6 +3184,120 @@ export async function syncHomeScoreboardMatches(
     cached: result.cached,
     eventsFound: result.eventsFound,
     goalsInserted: result.goalsInserted,
+    leagues: result.leagues.map((league) => league.name),
+  })
+
+  return result
+}
+
+export async function syncHomeFixtureCacheOnly(
+  supabase: SupabaseClient,
+  options: SyncHomeMatchesOptions = {}
+): Promise<HomeScoreboardSyncResult> {
+  const debug = options.debug
+  const today = getArgentinaTodayISO()
+  const rangeStart = options.dateFrom ?? options.date ?? null
+  const rangeEnd = options.dateTo ?? rangeStart
+  const dates = rangeStart && rangeEnd
+    ? getInclusiveDateRange(rangeStart, rangeEnd)
+    : [addDaysToISO(today, -1), today, addDaysToISO(today, 1)]
+  const limit = options.limit && options.limit > 0
+    ? Math.min(Math.floor(options.limit), MAX_SYNC_LIMIT)
+    : null
+  const offset = getBatchOffset(options.offset)
+  const liveOnly = Boolean(options.liveOnly)
+  const leagueExternalId = options.leagueExternalId
+  const result = createEmptyHomeScoreboardResult(dates)
+  const fixturesById = new Map<number, ApiFixture>()
+
+  for (const date of dates) {
+    try {
+      const fixtures = await fetchFixturesByDate(date)
+      result.fetched += fixtures.length
+
+      for (const fixture of fixtures) {
+        if (!fixtureMatchesHomeTournament(fixture)) continue
+        if (
+          leagueExternalId !== null &&
+          leagueExternalId !== undefined &&
+          String(fixture.league.id) !== String(leagueExternalId)
+        ) {
+          continue
+        }
+        fixturesById.set(fixture.fixture.id, fixture)
+      }
+    } catch (error) {
+      addHomeScoreboardError(result, null, `fetch-home-fixtures-cache-only:${date}`, error)
+      console.warn('[sync-home-cache-only] No se pudieron leer fixtures del dia.', {
+        date,
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  const selectedFixtures = [...fixturesById.values()]
+    .filter((fixture) =>
+      !liveOnly ||
+      isLiveEventSyncStatus(getCanonicalMatchStatusFromApi(fixture.fixture.status)) ||
+      isFinishedStatus(getCanonicalMatchStatusFromApi(fixture.fixture.status))
+    )
+    .sort(compareFixturesByApiOrder)
+  const fixturesToProcess = limit
+    ? selectedFixtures.slice(offset, offset + limit)
+    : selectedFixtures.slice(offset)
+  result.selected = selectedFixtures.length
+
+  const leagueCounts = new Map<number, {
+    leagueId: number
+    name: string
+    country?: string
+    fixtures: number
+  }>()
+
+  for (const fixture of fixturesToProcess) {
+    try {
+      if (await upsertFixtureCache(supabase, fixture, debug)) {
+        result.cached += 1
+      }
+      result.processed += 1
+
+      if (fixture.league.id) {
+        const currentLeague = leagueCounts.get(fixture.league.id) ?? {
+          leagueId: fixture.league.id,
+          name: fixture.league.name,
+          country: fixture.league.country,
+          fixtures: 0,
+        }
+        currentLeague.fixtures += 1
+        leagueCounts.set(fixture.league.id, currentLeague)
+      }
+    } catch (error) {
+      result.skipped += 1
+      addHomeScoreboardError(result, fixture.fixture.id, 'fixture-cache-only-upsert', error)
+      console.warn('[sync-home-cache-only] Fixture omitido.', {
+        fixtureId: fixture.fixture.id,
+        league: fixture.league.name,
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  result.leagues = [...leagueCounts.values()].sort((a, b) => {
+    if (b.fixtures !== a.fixtures) return b.fixtures - a.fixtures
+    return a.name.localeCompare(b.name)
+  })
+
+  console.info('[sync-home-cache-only] resumen', {
+    dates: result.dates,
+    liveOnly,
+    leagueExternalId: leagueExternalId ?? null,
+    fetched: result.fetched,
+    selected: result.selected,
+    processedBatch: fixturesToProcess.length,
+    limit,
+    offset,
+    processed: result.processed,
+    cached: result.cached,
     leagues: result.leagues.map((league) => league.name),
   })
 

@@ -135,6 +135,24 @@ function asRecord(value: unknown) {
     : null
 }
 
+function hasDetailItems(value: unknown) {
+  return Array.isArray(value) && value.length > 0
+}
+
+function mergeDetailCacheRows(
+  primary: DetailCacheRow | null,
+  fallback: DetailCacheRow | null
+): DetailCacheRow | null {
+  if (!primary) return fallback
+  if (!fallback) return primary
+
+  return {
+    events: hasDetailItems(primary.events) ? primary.events : fallback.events,
+    lineups: hasDetailItems(primary.lineups) ? primary.lineups : fallback.lineups,
+    statistics: hasDetailItems(primary.statistics) ? primary.statistics : fallback.statistics,
+  }
+}
+
 async function fetchApiArray<T>(
   path: string,
   params: Record<string, string | number>,
@@ -353,7 +371,10 @@ async function readDetailCacheByFixture(
     throw response.error
   }
 
-  return (response.data as DetailCacheRow | null) ?? null
+  const primary = (response.data as DetailCacheRow | null) ?? null
+  const fallback = await readFixtureCacheDetailByFixture(supabase, fixtureExternalId)
+
+  return mergeDetailCacheRows(primary, fallback)
 }
 
 function extractMatchDetailFromFixtureCache(row: FixtureCacheDetailRow | null) {
@@ -518,6 +539,46 @@ function buildAuditSnapshot(cache: DetailCacheRow | null): MatchDetailAuditSnaps
   }
 }
 
+async function countStoredMatchEvents(
+  supabase: SupabaseClient,
+  matchId: DbId | null | undefined
+) {
+  if (matchId === null || matchId === undefined) return 0
+
+  const response = await supabase
+    .from('match_events')
+    .select('id', { count: 'exact', head: true })
+    .eq('match_id', String(matchId))
+
+  if (response.error) {
+    if (isMissingOptionalTable(response.error, 'match_events')) return 0
+    throw response.error
+  }
+
+  return response.count ?? 0
+}
+
+function mergeStoredEventsIntoAudit(
+  snapshot: MatchDetailAuditSnapshot,
+  storedEventsCount: number
+): MatchDetailAuditSnapshot {
+  if (storedEventsCount <= snapshot.eventsCount) return snapshot
+
+  const missingSections = snapshot.missingSections.filter(
+    (section) => section !== 'events'
+  )
+
+  return {
+    ...snapshot,
+    hasEvents: true,
+    eventsCount: storedEventsCount,
+    missingSections,
+    warnings: missingSections.length
+      ? [`Faltan secciones de detalle: ${missingSections.join(', ')}.`]
+      : [],
+  }
+}
+
 export async function auditMatchDetailCache(
   supabase: SupabaseClient,
   input: { fixtureExternalId?: number | null; matchId?: string | null }
@@ -538,11 +599,12 @@ export async function auditMatchDetailCache(
   }
 
   const cache = await readDetailCacheByFixture(supabase, fixtureExternalId)
+  const storedEventsCount = await countStoredMatchEvents(supabase, match?.id)
 
   return {
     fixtureExternalId,
     matchId: match?.id ?? null,
-    ...buildAuditSnapshot(cache),
+    ...mergeStoredEventsIntoAudit(buildAuditSnapshot(cache), storedEventsCount),
   }
 }
 

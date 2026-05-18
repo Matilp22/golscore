@@ -64,6 +64,9 @@ import {
   type RuleTone,
   type StandingLegendItem,
 } from '@/shared/config/competition-rules'
+import {
+  formatMatchScoreWithPenalties,
+} from '@/shared/utils/match-display'
 
 type PageProps = {
   params: Promise<{ id: string }>
@@ -1682,7 +1685,13 @@ function formatGroupFixtureDateTime(date: string | null) {
 
 function getGroupFixtureScoreLabel(fixture: LeagueFixtureSummary) {
   if (fixture.goalsHome !== null && fixture.goalsAway !== null) {
-    return `${fixture.goalsHome} vs ${fixture.goalsAway}`
+    return formatMatchScoreWithPenalties({
+      goalsHome: fixture.goalsHome,
+      goalsAway: fixture.goalsAway,
+      homePenaltyScore: fixture.homePenaltyScore,
+      awayPenaltyScore: fixture.awayPenaltyScore,
+      separator: ' vs ',
+    })
   }
 
   return 'vs'
@@ -1690,10 +1699,23 @@ function getGroupFixtureScoreLabel(fixture: LeagueFixtureSummary) {
 
 function getGroupFixtureCompactScoreLabel(fixture: LeagueFixtureSummary) {
   if (fixture.goalsHome !== null && fixture.goalsAway !== null) {
-    return `${fixture.goalsHome}-${fixture.goalsAway}`
+    return formatMatchScoreWithPenalties({
+      goalsHome: fixture.goalsHome,
+      goalsAway: fixture.goalsAway,
+      homePenaltyScore: fixture.homePenaltyScore,
+      awayPenaltyScore: fixture.awayPenaltyScore,
+      separator: '-',
+    })
   }
 
   return 'vs'
+}
+
+function getBracketParticipantScoreLabel(match: BracketMatchCard, participantIndex: number) {
+  const participant = match.participants[participantIndex]
+  if (participant.isPlaceholder) return ''
+
+  return participant.goals ?? '-'
 }
 
 const TEAM_SHORT_CODE_OVERRIDES: Record<string, string> = {
@@ -2062,7 +2084,7 @@ function BracketView({
                                   </span>
                                 </div>
                                 <span className={`text-[10.5px] font-black ${team.isPlaceholder ? 'text-[#6f7d8b]' : team.isWinner ? 'text-[#7ff0b2]' : 'text-[#dce5ef]'}`}>
-                                  {team.isPlaceholder ? '' : team.goals ?? '-'}
+                                  {getBracketParticipantScoreLabel(match, participantIndex)}
                                 </span>
                               </div>
                             ))}

@@ -77,6 +77,12 @@ type StandingCacheRow = {
   payload: unknown
 }
 
+const API_STANDINGS_MEMORY_CACHE_TTL_MS = 10 * 60 * 1000
+const apiStandingsMemoryCache = new Map<string, {
+  expiresAt: number
+  groups: CachedStandingGroup[]
+}>()
+
 function normalizeText(value: string | null | undefined) {
   return (value ?? '')
     .toLowerCase()
@@ -223,6 +229,70 @@ export async function readCachedLeagueStandings(
       }))
       .filter((group) => group.rows.length > 0)
   )
+}
+
+export async function readApiLeagueStandings(
+  leagueExternalId: number,
+  season: number,
+  options: { logContext?: string } = {}
+): Promise<CachedStandingGroup[]> {
+  const cacheKey = `${leagueExternalId}:${season}`
+  const cached = apiStandingsMemoryCache.get(cacheKey)
+
+  if (cached && cached.expiresAt > Date.now()) return cached.groups
+
+  try {
+    const { payload } = await requestFootballApi<ApiStandingsResponse[]>(
+      '/standings',
+      {
+        league: leagueExternalId,
+        season,
+      },
+      { logContext: options.logContext ?? `read-api-standings:${leagueExternalId}` }
+    )
+    const apiErrors = payload.errors ? Object.values(payload.errors).filter(Boolean) : []
+
+    if (apiErrors.length) throw new Error(apiErrors.join(' | '))
+
+    const standingsSets = (payload.response ?? [])
+      .flatMap((entry) => entry.league?.standings ?? [])
+      .filter((rows) => Array.isArray(rows) && rows.length > 0)
+    const groupsByName = new Map<string, ApiStandingRow[]>()
+
+    standingsSets.forEach((rows, index) => {
+      const groupName = getStandingGroupName(rows, index)
+      const current = groupsByName.get(groupName) ?? []
+
+      current.push(...rows)
+      groupsByName.set(groupName, current)
+    })
+
+    const groups = sortCachedGroups(
+      [...groupsByName.entries()]
+        .map(([name, rows]) => ({
+          name,
+          rows: rows
+            .map((row, index) => mapStandingRow(row, index))
+            .filter((row): row is CachedStandingRow => Boolean(row)),
+        }))
+        .filter((group) => group.rows.length > 0)
+    )
+
+    apiStandingsMemoryCache.set(cacheKey, {
+      expiresAt: Date.now() + API_STANDINGS_MEMORY_CACHE_TTL_MS,
+      groups,
+    })
+
+    return groups
+  } catch (error) {
+    console.warn('[football-standings-cache] No se pudieron leer standings oficiales.', {
+      leagueExternalId,
+      season,
+      message: error instanceof Error ? error.message : String(error),
+    })
+
+    return []
+  }
 }
 
 export async function syncLeagueStandingsCache(

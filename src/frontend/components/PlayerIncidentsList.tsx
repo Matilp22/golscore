@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 
 import type { LeaderStatType, PlayerEventMatch } from '@/lib/api-football'
 import { formatEventMinute } from '@/shared/utils/event-minute'
+import { formatMatchScoreWithPenalties } from '@/shared/utils/match-display'
 
 type PlayerIncidentsListProps = {
   leagueId?: number
@@ -164,7 +165,14 @@ export default function PlayerIncidentsList({
                     {translateRoundName(match.round, tournamentName)}
                   </p>
                   <p className="mt-0.5 text-[13px] font-semibold text-white">
-                    {match.home} {match.goalsHome ?? '-'} - {match.goalsAway ?? '-'} {match.away}
+                    {match.home}{' '}
+                    {formatMatchScoreWithPenalties({
+                      goalsHome: match.goalsHome,
+                      goalsAway: match.goalsAway,
+                      homePenaltyScore: match.homePenaltyScore,
+                      awayPenaltyScore: match.awayPenaltyScore,
+                    })}{' '}
+                    {match.away}
                   </p>
                 </div>
                 <p className="text-[11px] text-[#8d98a7]">{formatDate(match.date)}</p>

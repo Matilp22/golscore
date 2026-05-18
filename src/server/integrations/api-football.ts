@@ -1,9 +1,14 @@
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getLeagueEventStatsLeaders } from '@/server/match-event-stats'
-import { readCachedLeagueStandings } from '@/server/football-standings-cache'
+import {
+  readApiLeagueStandings,
+  readCachedLeagueStandings,
+} from '@/server/football-standings-cache'
 import {
   isFinishedStatus,
   isLiveStatus,
+  isPostponedStatus,
+  isUpcomingStatus,
 } from '@/shared/utils/match-status'
 import { formatEventMinute } from '@/shared/utils/event-minute'
 import {
@@ -26,16 +31,20 @@ import {
   getLeagueFinalPhaseKey,
   getLeagueRoundLabel,
   isLigaProfesionalRegularSeasonRound,
+  normalizeRoundText,
 } from '@/shared/utils/league-rounds'
 import {
   getUefaLeaguePhaseRoundNumber,
   isUefaLeaguePhaseRound,
 } from '@/shared/utils/uefa-rounds'
 import { getHomeMatchVisibility } from '@/shared/utils/home-match-visibility'
+import { formatMatchScoreWithPenalties } from '@/shared/utils/match-display'
 import {
   pickLeagueLogoUrl,
   pickTeamLogoUrl,
 } from '@/shared/utils/asset-urls'
+import { requestFootballApi } from '@/server/integrations/football-api-client'
+import { getCompetitionRuleByExternalId } from '@/shared/config/competition-rules'
 
 const HOME_SUPABASE_TIMEOUT_MS = 5000
 
@@ -114,6 +123,7 @@ type FixtureListItem = {
   teams: FixtureTeams
   goals: FixtureGoals
   score?: {
+    halftime?: FixtureGoals
     fulltime?: FixtureGoals
     penalty?: FixtureGoals
   }
@@ -135,6 +145,8 @@ export type MatchListItem = {
   awayLogo?: string
   goalsHome: number | null
   goalsAway: number | null
+  homePenaltyScore?: number | null
+  awayPenaltyScore?: number | null
   minute: number | null
   statusShort: string
   statusLong: string
@@ -459,6 +471,8 @@ export type PlayerEventMatch = {
   awayLogo?: string
   goalsHome: number | null
   goalsAway: number | null
+  homePenaltyScore?: number | null
+  awayPenaltyScore?: number | null
   events: Array<{
     minute: number | null
     extraMinute?: number | null
@@ -585,6 +599,22 @@ export async function getHomeMatchesSourceSnapshot(
 
   if (process.env.NODE_ENV === 'development') {
     const { startUtc, endUtc } = getArgentinaDayUtcRange(date)
+    const activeOrFinishedWithoutScore = mergedMatches
+      .filter((match) =>
+        !hasCompleteMatchScore(match) &&
+        (
+          isLiveStatus(match.statusShort) ||
+          isFinishedStatus(match.statusShort) ||
+          isPostponedStatus(match.statusShort)
+        )
+      )
+      .map((match) => ({
+        fixtureId: match.externalId ?? match.id,
+        statusShort: match.statusShort,
+        statusLong: match.statusLong,
+        goalsHome: match.goalsHome,
+        goalsAway: match.goalsAway,
+      }))
 
     console.info('[home-date-debug]', {
       selectedDate: date,
@@ -593,6 +623,7 @@ export async function getHomeMatchesSourceSnapshot(
       supabaseCount: storedMatches.length,
       cacheCount: cacheMatches.length,
       visibleCount: mergedMatches.length,
+      activeOrFinishedWithoutScore,
     })
   }
 
@@ -635,6 +666,8 @@ type StoredHomeMatchRow = {
   round?: string | null
   home_score: number | null
   away_score: number | null
+  home_penalty_score?: number | null
+  away_penalty_score?: number | null
   status: string | null
   elapsed?: number | null
 }
@@ -741,6 +774,84 @@ function compareHomeMatchesByDateAndId(a: MatchListItem, b: MatchListItem) {
   return a.id - b.id
 }
 
+function hasCompleteMatchScore(match: MatchListItem) {
+  return match.goalsHome !== null && match.goalsHome !== undefined &&
+    match.goalsAway !== null && match.goalsAway !== undefined
+}
+
+function hasAnyMatchScore(match: MatchListItem) {
+  return match.goalsHome !== null && match.goalsHome !== undefined ||
+    match.goalsAway !== null && match.goalsAway !== undefined
+}
+
+function getHomeMatchStatusRank(match: MatchListItem) {
+  const statusShort = match.statusShort
+  const statusLong = match.statusLong
+
+  if (isLiveStatus(statusShort) || isLiveStatus(statusLong)) return 50
+  if (isFinishedStatus(statusShort) || isFinishedStatus(statusLong)) return 45
+  if (isPostponedStatus(statusShort) || isPostponedStatus(statusLong)) return 35
+  if (!isUpcomingStatus(statusShort) && !isUpcomingStatus(statusLong)) return 25
+
+  return 10
+}
+
+function getHomeMatchDataRank(match: MatchListItem) {
+  let score = getHomeMatchStatusRank(match)
+
+  if (hasCompleteMatchScore(match)) score += 20
+  else if (hasAnyMatchScore(match)) score += 10
+  if (match.minute !== null && match.minute !== undefined) score += 3
+
+  return score
+}
+
+function pickTextValue(primary?: string | null, fallback?: string | null) {
+  return primary || fallback || undefined
+}
+
+function pickNumberValue(primary?: number | null, fallback?: number | null) {
+  return primary !== null && primary !== undefined
+    ? primary
+    : fallback !== null && fallback !== undefined
+      ? fallback
+      : null
+}
+
+function mergeHomeMatchData(existing: MatchListItem, incoming: MatchListItem) {
+  const existingRank = getHomeMatchDataRank(existing)
+  const incomingRank = getHomeMatchDataRank(incoming)
+  const primary = incomingRank >= existingRank ? incoming : existing
+  const secondary = primary === incoming ? existing : incoming
+  const statusSource =
+    getHomeMatchStatusRank(incoming) >= getHomeMatchStatusRank(existing)
+      ? incoming
+      : existing
+  const scoreSource =
+    hasCompleteMatchScore(incoming) || (!hasCompleteMatchScore(existing) && hasAnyMatchScore(incoming))
+      ? incoming
+      : existing
+
+  return {
+    ...secondary,
+    ...primary,
+    leagueId: primary.leagueId ?? secondary.leagueId,
+    leagueLogo: pickTextValue(primary.leagueLogo, secondary.leagueLogo),
+    country: pickTextValue(primary.country, secondary.country),
+    homeId: primary.homeId ?? secondary.homeId,
+    awayId: primary.awayId ?? secondary.awayId,
+    homeLogo: pickTextValue(primary.homeLogo, secondary.homeLogo),
+    awayLogo: pickTextValue(primary.awayLogo, secondary.awayLogo),
+    goalsHome: pickNumberValue(scoreSource.goalsHome, secondary.goalsHome),
+    goalsAway: pickNumberValue(scoreSource.goalsAway, secondary.goalsAway),
+    homePenaltyScore: pickNumberValue(scoreSource.homePenaltyScore, secondary.homePenaltyScore),
+    awayPenaltyScore: pickNumberValue(scoreSource.awayPenaltyScore, secondary.awayPenaltyScore),
+    minute: Math.max(primary.minute ?? 0, secondary.minute ?? 0) || primary.minute || secondary.minute || null,
+    statusShort: statusSource.statusShort || primary.statusShort,
+    statusLong: statusSource.statusLong || primary.statusLong,
+  }
+}
+
 function mergeHomeMatchesByExternalId(
   storedMatches: MatchListItem[],
   cacheMatches: MatchListItem[]
@@ -748,11 +859,15 @@ function mergeHomeMatchesByExternalId(
   const mergedByExternalId = new Map<string, MatchListItem>()
 
   for (const match of cacheMatches) {
-    mergedByExternalId.set(String(match.externalId ?? match.id), match)
+    const key = String(match.externalId ?? match.id)
+    const existing = mergedByExternalId.get(key)
+    mergedByExternalId.set(key, existing ? mergeHomeMatchData(existing, match) : match)
   }
 
   for (const match of storedMatches) {
-    mergedByExternalId.set(String(match.externalId ?? match.id), match)
+    const key = String(match.externalId ?? match.id)
+    const existing = mergedByExternalId.get(key)
+    mergedByExternalId.set(key, existing ? mergeHomeMatchData(existing, match) : match)
   }
 
   return [...mergedByExternalId.values()].sort(compareHomeMatchesByDateAndId)
@@ -801,6 +916,8 @@ function mapCachedHomeFixturePayload(payload: unknown): MatchListItem | null {
     awayLogo: getNullableStringFromCachedValue(row.awayLogo),
     goalsHome: getNumberFromCachedValue(row.goalsHome),
     goalsAway: getNumberFromCachedValue(row.goalsAway),
+    homePenaltyScore: getNumberFromCachedValue(row.homePenaltyScore),
+    awayPenaltyScore: getNumberFromCachedValue(row.awayPenaltyScore),
     minute: getNumberFromCachedValue(row.minute),
     statusShort: getStringFromCachedValue(row.statusShort) ?? 'NS',
     statusLong: getStringFromCachedValue(row.statusLong) ?? 'No iniciado',
@@ -872,7 +989,7 @@ async function fetchStoredHomeMatches(date: string): Promise<MatchListItem[]> {
   const supabase = getSupabaseAdminClient()
   const { startUtc, endUtc } = getArgentinaDayUtcRange(date)
   const selectWithElapsed =
-    'id, external_id, league_id, home_team_id, away_team_id, match_date, round, home_score, away_score, status, elapsed'
+    'id, external_id, league_id, home_team_id, away_team_id, match_date, round, home_score, away_score, home_penalty_score, away_penalty_score, status, elapsed'
   const selectBase =
     'id, external_id, league_id, home_team_id, away_team_id, match_date, round, home_score, away_score, status'
 
@@ -1022,6 +1139,8 @@ async function fetchStoredHomeMatches(date: string): Promise<MatchListItem[]> {
           pickTeamLogoUrl(awayTeam.logo_url, awayTeam.external_id ?? awayTeam.id) ?? undefined,
         goalsHome: match.home_score,
         goalsAway: match.away_score,
+        homePenaltyScore: match.home_penalty_score ?? null,
+        awayPenaltyScore: match.away_penalty_score ?? null,
         minute: match.elapsed ?? null,
         statusShort: match.status ?? 'NS',
         statusLong: match.status ?? 'No iniciado',
@@ -1377,7 +1496,12 @@ function mapStoredLiveEvent(
     fixtureId,
     home: visibleMatch.home,
     away: visibleMatch.away,
-    score: `${visibleMatch.goalsHome ?? '-'} - ${visibleMatch.goalsAway ?? '-'}`,
+    score: formatMatchScoreWithPenalties({
+      goalsHome: visibleMatch.goalsHome,
+      goalsAway: visibleMatch.goalsAway,
+      homePenaltyScore: visibleMatch.homePenaltyScore,
+      awayPenaltyScore: visibleMatch.awayPenaltyScore,
+    }),
     minute: row.minute,
     extraMinute: row.extra_minute,
     playerName: row.player_name,
@@ -1798,6 +1922,62 @@ async function getMatchBroadcastByExternalId(externalId: number) {
   }
 }
 
+function mapFixtureToBroadcastMatch(fixture: MatchFixture): MatchListItem {
+  return {
+    id: fixture.fixture.id,
+    externalId: fixture.fixture.id,
+    leagueId: fixture.league.id,
+    league: fixture.league.name,
+    leagueLogo: fixture.league.logo_url ?? fixture.league.logo,
+    country: fixture.league.country,
+    date: fixture.fixture.date,
+    homeId: fixture.teams.home.id,
+    home: fixture.teams.home.name,
+    awayId: fixture.teams.away.id,
+    away: fixture.teams.away.name,
+    homeLogo: fixture.teams.home.logo_url ?? fixture.teams.home.logo,
+    awayLogo: fixture.teams.away.logo_url ?? fixture.teams.away.logo,
+    goalsHome: fixture.goals.home,
+    goalsAway: fixture.goals.away,
+    homePenaltyScore: fixture.score?.penalty?.home ?? null,
+    awayPenaltyScore: fixture.score?.penalty?.away ?? null,
+    minute: fixture.fixture.status.elapsed,
+    statusShort: fixture.fixture.status.short,
+    statusLong: fixture.fixture.status.long,
+  }
+}
+
+async function getMatchBroadcastFromRules(fixture: MatchFixture) {
+  try {
+    const supabase = getSupabaseAdminClient()
+    const rules = await fetchHomeBroadcastRules(supabase)
+    const matchingRules = getBestHomeBroadcastRules(
+      rules,
+      mapFixtureToBroadcastMatch(fixture)
+    )
+    const broadcasters = matchingRules.map((rule) => ({
+      name: rule.broadcaster_name,
+      logoUrl: rule.broadcaster_logo_url,
+      country: rule.country,
+    }))
+
+    return {
+      channel: broadcasters.length
+        ? broadcasters.map((broadcaster) => broadcaster.name).join(' / ')
+        : null,
+      logoUrl: broadcasters.find((broadcaster) => broadcaster.logoUrl)?.logoUrl ?? null,
+      broadcasters,
+    }
+  } catch (error) {
+    console.warn('[match-broadcast-rules] No se pudo aplicar regla de televisacion.', {
+      fixtureId: fixture.fixture.id,
+      message: error instanceof Error ? error.message : String(error),
+    })
+
+    return { channel: null, logoUrl: null, broadcasters: [] }
+  }
+}
+
 async function getMatchHighlightsByExternalId(externalId: number) {
   try {
     const supabase = getSupabaseAdminClient()
@@ -1883,6 +2063,45 @@ type StoredPlayerRow = {
   number: number | null
   position: string | null
   photo_url: string | null
+}
+
+type ApiFootballTeamDetailRow = {
+  team?: {
+    id?: number
+    name?: string
+    code?: string | null
+    country?: string | null
+    founded?: number | null
+    national?: boolean | null
+    logo?: string | null
+  }
+  venue?: {
+    id?: number
+    name?: string | null
+    address?: string | null
+    city?: string | null
+    capacity?: number | null
+    surface?: string | null
+    image?: string | null
+  }
+}
+
+type ApiFootballSquadPlayer = {
+  id?: number
+  name?: string
+  age?: number | null
+  number?: number | null
+  position?: string | null
+  photo?: string | null
+}
+
+type ApiFootballSquadRow = {
+  team?: {
+    id?: number
+    name?: string
+    logo?: string | null
+  }
+  players?: ApiFootballSquadPlayer[]
 }
 
 const KNOWN_TOURNAMENT_RESOLUTIONS: ResolvedTournament[] = [
@@ -1982,6 +2201,7 @@ function getStoredStatusLong(status?: string | null) {
   if (short === 'PST') return 'Postergado'
   if (short === 'CANC') return 'Cancelado'
   if (short === 'SUSP') return 'Suspendido'
+  if (short === 'INT') return 'Interrumpido'
 
   return status || short
 }
@@ -2141,6 +2361,7 @@ async function fetchStoredEventsByMatchId(matchId: string | number) {
 }
 
 type StoredMatchDetailCacheRow = {
+  fixture_payload?: unknown
   events: unknown
   lineups: unknown
   statistics: unknown
@@ -2148,6 +2369,17 @@ type StoredMatchDetailCacheRow = {
 
 type StoredFixtureDetailCacheRow = {
   normalized_payload: unknown
+}
+
+type CachedFixtureSummary = {
+  date?: string
+  goalsHome: number | null
+  goalsAway: number | null
+  homePenaltyScore?: number | null
+  awayPenaltyScore?: number | null
+  minute: number | null
+  statusShort?: string
+  statusLong?: string
 }
 
 function isMissingOptionalMatchDetailCache(error: { code?: string; message?: string } | null | undefined) {
@@ -2163,10 +2395,88 @@ function isMissingOptionalMatchDetailCache(error: { code?: string; message?: str
   )
 }
 
+function isMissingMatchDetailFixturePayloadColumn(error: { code?: string; message?: string } | null | undefined) {
+  const message = (error?.message ?? '').toLowerCase()
+
+  return (
+    (error?.code === '42703' || error?.code === 'PGRST204') &&
+    message.includes('fixture_payload')
+  )
+}
+
 function readRecord(value: unknown) {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null
+}
+
+function hasCachedDetailItems(value: unknown) {
+  return Array.isArray(value) && value.length > 0
+}
+
+function hasCachedDetailRecord(value: unknown) {
+  return Boolean(readRecord(value))
+}
+
+function mergeStoredMatchDetailCacheRows(
+  primary: StoredMatchDetailCacheRow | null,
+  fallback: StoredMatchDetailCacheRow | null
+): StoredMatchDetailCacheRow | null {
+  if (!primary) return fallback
+  if (!fallback) return primary
+
+  return {
+    fixture_payload: hasCachedDetailRecord(primary.fixture_payload)
+      ? primary.fixture_payload
+      : fallback.fixture_payload,
+    events: hasCachedDetailItems(primary.events) ? primary.events : fallback.events,
+    lineups: hasCachedDetailItems(primary.lineups) ? primary.lineups : fallback.lineups,
+    statistics: hasCachedDetailItems(primary.statistics)
+      ? primary.statistics
+      : fallback.statistics,
+  }
+}
+
+function mapCachedFixtureSummaryPayload(payload: unknown): CachedFixtureSummary | null {
+  const row = readRecord(payload)
+  if (!row) return null
+
+  return {
+    date: getStringFromCachedValue(row.date) ?? undefined,
+    goalsHome: getNumberFromCachedValue(row.goalsHome),
+    goalsAway: getNumberFromCachedValue(row.goalsAway),
+    homePenaltyScore: getNumberFromCachedValue(row.homePenaltyScore),
+    awayPenaltyScore: getNumberFromCachedValue(row.awayPenaltyScore),
+    minute: getNumberFromCachedValue(row.minute),
+    statusShort: getStringFromCachedValue(row.statusShort) ?? undefined,
+    statusLong: getStringFromCachedValue(row.statusLong) ?? undefined,
+  }
+}
+
+async function fetchCachedFixtureSummaryByExternalId(externalId: number) {
+  const supabase = getSupabaseAdminClient()
+  const response = await supabase
+    .from('football_fixture_cache')
+    .select('normalized_payload')
+    .eq('fixture_external_id', String(externalId))
+    .limit(1)
+    .maybeSingle()
+
+  if (response.error) {
+    const message = response.error.message.toLowerCase()
+    const missingCacheTable =
+      response.error.code === '42P01' ||
+      response.error.code === 'PGRST205' ||
+      message.includes('football_fixture_cache') ||
+      message.includes('schema cache')
+
+    if (missingCacheTable) return null
+
+    throw response.error
+  }
+
+  const row = (response.data as StoredFixtureDetailCacheRow | null) ?? null
+  return mapCachedFixtureSummaryPayload(row?.normalized_payload)
 }
 
 async function fetchStoredFixtureDetailCacheByExternalId(externalId: number) {
@@ -2198,6 +2508,7 @@ async function fetchStoredFixtureDetailCacheByExternalId(externalId: number) {
   if (!matchDetail) return null
 
   return {
+    fixture_payload: matchDetail.fixture,
     events: matchDetail.events,
     lineups: matchDetail.lineups,
     statistics: matchDetail.statistics,
@@ -2208,23 +2519,69 @@ async function fetchStoredMatchDetailCacheByExternalId(externalId: number) {
   const supabase = getSupabaseAdminClient()
   const response = await supabase
     .from('football_match_detail_cache')
-    .select('events, lineups, statistics')
+    .select('fixture_payload, events, lineups, statistics')
     .eq('fixture_external_id', String(externalId))
     .maybeSingle()
 
   if (response.error) {
+    if (isMissingMatchDetailFixturePayloadColumn(response.error)) {
+      const legacyResponse = await supabase
+        .from('football_match_detail_cache')
+        .select('events, lineups, statistics')
+        .eq('fixture_external_id', String(externalId))
+        .maybeSingle()
+
+      if (legacyResponse.error) {
+        if (isMissingOptionalMatchDetailCache(legacyResponse.error)) {
+          return fetchStoredFixtureDetailCacheByExternalId(externalId)
+        }
+        throw legacyResponse.error
+      }
+
+      const primary = (legacyResponse.data as StoredMatchDetailCacheRow | null) ?? null
+      const fallback = await fetchStoredFixtureDetailCacheByExternalId(externalId)
+
+      return mergeStoredMatchDetailCacheRows(primary, fallback)
+    }
+
     if (isMissingOptionalMatchDetailCache(response.error)) {
       return fetchStoredFixtureDetailCacheByExternalId(externalId)
     }
     throw response.error
   }
 
-  return (response.data as StoredMatchDetailCacheRow | null) ??
-    await fetchStoredFixtureDetailCacheByExternalId(externalId)
+  const primary = (response.data as StoredMatchDetailCacheRow | null) ?? null
+  const fallback = await fetchStoredFixtureDetailCacheByExternalId(externalId)
+
+  return mergeStoredMatchDetailCacheRows(primary, fallback)
 }
 
 function readCachedArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : []
+}
+
+type CachedFixturePayload = Partial<FixtureListItem> & {
+  fixture?: Partial<FixtureInfo>
+  league?: Partial<LeagueInfo>
+  teams?: {
+    home?: Partial<TeamInfo>
+    away?: Partial<TeamInfo>
+  }
+  goals?: Partial<FixtureGoals>
+  score?: {
+    halftime?: Partial<FixtureGoals>
+    fulltime?: Partial<FixtureGoals>
+    penalty?: Partial<FixtureGoals>
+  }
+}
+
+function readCachedFixturePayload(value: unknown): CachedFixturePayload | null {
+  const payload = readRecord(value)
+  const fixture = readRecord(payload?.fixture)
+
+  if (!payload || !fixture) return null
+
+  return payload as CachedFixturePayload
 }
 
 function mapStoredEventToMatchEvent(
@@ -2263,11 +2620,72 @@ function mapStoredEventToMatchEvent(
   }
 }
 
+function getMatchEventSortValue(event: MatchEvent) {
+  const elapsed = Number(event.time?.elapsed ?? 0)
+  const extra = Number(event.time?.extra ?? 0)
+
+  return elapsed * 100 + extra
+}
+
+function normalizeEventKeyPart(value: unknown) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+}
+
+function getEventPersonKey(person?: { id?: number; name?: string }) {
+  return person?.name || person?.id || ''
+}
+
+function getEventTeamKey(team?: { id?: number; name?: string }) {
+  return team?.name || team?.id || ''
+}
+
+function getMatchEventMergeKey(event: MatchEvent) {
+  return [
+    getEventTeamKey(event.team),
+    event.time?.elapsed ?? '',
+    event.time?.extra ?? '',
+    event.type ?? '',
+    event.detail ?? '',
+    getEventPersonKey(event.player),
+    getEventPersonKey(event.assist),
+  ].map(normalizeEventKeyPart).join('|')
+}
+
+function mergeMatchEvents(cachedEvents: MatchEvent[], storedEvents: MatchEvent[]) {
+  const merged = new Map<string, MatchEvent>()
+
+  for (const event of storedEvents) {
+    merged.set(getMatchEventMergeKey(event), event)
+  }
+
+  for (const event of cachedEvents) {
+    const key = getMatchEventMergeKey(event)
+    const previous = merged.get(key)
+    merged.set(key, {
+      ...(previous ?? {}),
+      ...event,
+      team: event.team ?? previous?.team,
+      player: event.player ?? previous?.player,
+      assist: event.assist ?? previous?.assist,
+      time: event.time ?? previous?.time,
+      comments: event.comments ?? previous?.comments ?? null,
+    })
+  }
+
+  return [...merged.values()].sort((a, b) => getMatchEventSortValue(a) - getMatchEventSortValue(b))
+}
+
 function mapStoredMatchToFixture(
   match: StoredDetailMatchRow,
   league: StoredLeagueRow | null,
   teamsById: Map<string, StoredTeamRow>,
-  fallbackExternalId: number
+  fallbackExternalId: number,
+  cachedSummary?: CachedFixtureSummary | null,
+  cachedFixture?: CachedFixturePayload | null
 ): MatchFixture | null {
   const homeTeam = match.home_team_id !== null && match.home_team_id !== undefined
     ? teamsById.get(String(match.home_team_id))
@@ -2275,18 +2693,62 @@ function mapStoredMatchToFixture(
   const awayTeam = match.away_team_id !== null && match.away_team_id !== undefined
     ? teamsById.get(String(match.away_team_id))
     : null
-  const matchDate = toOptionalDate(match.match_date)
+  const matchDate =
+    toOptionalDate(cachedSummary?.date) ??
+    toOptionalDate(cachedFixture?.fixture?.date) ??
+    toOptionalDate(match.match_date)
 
   if (!homeTeam?.name || !awayTeam?.name || !matchDate) return null
 
   const externalId = toFiniteNumber(match.external_id) ?? fallbackExternalId
-  const leagueExternalId = toFiniteNumber(league?.external_id)
+  const leagueExternalId =
+    toFiniteNumber(league?.external_id) ??
+    toFiniteNumber(cachedFixture?.league?.id)
   const homeExternalId = toFiniteNumber(homeTeam.external_id)
   const awayExternalId = toFiniteNumber(awayTeam.external_id)
-  const statusShort = normalizeStoredStatusShort(match.status)
-  const leagueLogoUrl = pickLeagueLogoUrl(league?.logo_url, leagueExternalId) ?? undefined
+  const statusShort = normalizeStoredStatusShort(
+    cachedSummary?.statusShort ??
+    cachedFixture?.fixture?.status?.short ??
+    match.status
+  )
+  const leagueLogoUrl = pickLeagueLogoUrl(
+    league?.logo_url ??
+    cachedFixture?.league?.logo_url ??
+    cachedFixture?.league?.logoUrl ??
+    cachedFixture?.league?.logo,
+    leagueExternalId
+  ) ?? undefined
   const homeLogoUrl = pickTeamLogoUrl(homeTeam.logo_url, homeExternalId) ?? undefined
   const awayLogoUrl = pickTeamLogoUrl(awayTeam.logo_url, awayExternalId) ?? undefined
+  const cachedGoalsHome = getNumberFromCachedValue(
+    cachedFixture?.goals?.home ??
+    cachedFixture?.score?.fulltime?.home
+  )
+  const cachedGoalsAway = getNumberFromCachedValue(
+    cachedFixture?.goals?.away ??
+    cachedFixture?.score?.fulltime?.away
+  )
+  const goalsHome = cachedSummary?.goalsHome ?? cachedGoalsHome ?? match.home_score
+  const goalsAway = cachedSummary?.goalsAway ?? cachedGoalsAway ?? match.away_score
+  const halftimeHome = getNumberFromCachedValue(cachedFixture?.score?.halftime?.home)
+  const halftimeAway = getNumberFromCachedValue(cachedFixture?.score?.halftime?.away)
+  const penaltyHome =
+    match.home_penalty_score ??
+    cachedSummary?.homePenaltyScore ??
+    getNumberFromCachedValue(cachedFixture?.score?.penalty?.home)
+  const penaltyAway =
+    match.away_penalty_score ??
+    cachedSummary?.awayPenaltyScore ??
+    getNumberFromCachedValue(cachedFixture?.score?.penalty?.away)
+  const venueName =
+    getStringFromCachedValue(match.venue_name) ??
+    getStringFromCachedValue(cachedFixture?.fixture?.venue?.name) ??
+    undefined
+  const venueCity =
+    getStringFromCachedValue(match.venue_city) ??
+    getStringFromCachedValue(cachedFixture?.fixture?.venue?.city) ??
+    undefined
+  const referee = getStringFromCachedValue(cachedFixture?.fixture?.referee) ?? undefined
 
   return {
     fixture: {
@@ -2294,23 +2756,31 @@ function mapStoredMatchToFixture(
       date: matchDate,
       status: {
         short: statusShort,
-        long: getStoredStatusLong(match.status),
-        elapsed: match.elapsed ?? null,
+        long:
+          cachedSummary?.statusLong ??
+          cachedFixture?.fixture?.status?.long ??
+          getStoredStatusLong(match.status),
+        elapsed:
+          cachedSummary?.minute ??
+          getNumberFromCachedValue(cachedFixture?.fixture?.status?.elapsed) ??
+          match.elapsed ??
+          null,
       },
       venue: {
-        name: match.venue_name ?? undefined,
-        city: match.venue_city ?? undefined,
+        name: venueName,
+        city: venueCity,
       },
+      referee,
     },
     league: {
       id: leagueExternalId ?? undefined,
-      name: league?.name || 'Torneo',
-      country: league?.country || match.venue_country || '',
+      name: league?.name || cachedFixture?.league?.name || 'Torneo',
+      country: league?.country || cachedFixture?.league?.country || match.venue_country || '',
       logo: leagueLogoUrl,
       logo_url: leagueLogoUrl,
       logoUrl: leagueLogoUrl,
-      round: match.round ?? undefined,
-      season: league?.season ?? undefined,
+      round: match.round ?? cachedFixture?.league?.round ?? undefined,
+      season: league?.season ?? cachedFixture?.league?.season ?? undefined,
     },
     teams: {
       home: {
@@ -2329,17 +2799,21 @@ function mapStoredMatchToFixture(
       },
     },
     goals: {
-      home: match.home_score,
-      away: match.away_score,
+      home: goalsHome,
+      away: goalsAway,
     },
     score: {
+      halftime: {
+        home: halftimeHome,
+        away: halftimeAway,
+      },
       fulltime: {
-        home: match.home_score,
-        away: match.away_score,
+        home: goalsHome,
+        away: goalsAway,
       },
       penalty: {
-        home: match.home_penalty_score ?? null,
-        away: match.away_penalty_score ?? null,
+        home: penaltyHome,
+        away: penaltyAway,
       },
     },
   }
@@ -2362,28 +2836,68 @@ export async function getMatchDetail(id: number) {
     }
   }
 
-  const [league, teamsById, events, detailCache, broadcast, highlights] = await Promise.all([
+  const [league, teamsById, events, detailCache, fixtureSummary, broadcast, highlights] = await Promise.all([
     fetchStoredLeagueRowById(match.league_id).catch(() => null),
     fetchStoredTeamsByIds([match.home_team_id, match.away_team_id]),
     fetchStoredEventsByMatchId(match.id),
     fetchStoredMatchDetailCacheByExternalId(id),
+    fetchCachedFixtureSummaryByExternalId(id),
     getMatchBroadcastByExternalId(id),
     getMatchHighlightsByExternalId(id),
   ])
-  const fixture = mapStoredMatchToFixture(match, league, teamsById, id)
+  const cachedFixture = readCachedFixturePayload(detailCache?.fixture_payload)
+  const fixture = mapStoredMatchToFixture(match, league, teamsById, id, fixtureSummary, cachedFixture)
+  const ruleBroadcast =
+    fixture && !broadcast.channel && !broadcast.broadcasters.length
+      ? await getMatchBroadcastFromRules(fixture)
+      : { channel: null, logoUrl: null, broadcasters: [] }
+  const resolvedBroadcast =
+    broadcast.channel || broadcast.broadcasters.length ? broadcast : ruleBroadcast
   const cachedEvents = readCachedArray<MatchEvent>(detailCache?.events)
+  const storedEvents = events.map((event) => mapStoredEventToMatchEvent(event, teamsById))
+  const mergedEvents = mergeMatchEvents(cachedEvents, storedEvents)
+  const statistics = readCachedArray<MatchStatisticsTeam>(detailCache?.statistics)
+  const lineups = readCachedArray<MatchLineup>(detailCache?.lineups)
+
+  if (process.env.NODE_ENV === 'development') {
+    console.info('[match-detail-data]', {
+      fixtureId: id,
+      storedEvents: storedEvents.length,
+      cachedEvents: cachedEvents.length,
+      renderedEvents: mergedEvents.length,
+      cachedFixtureStatus: fixtureSummary?.statusShort ?? null,
+      cachedFixtureGoals: fixtureSummary
+        ? { home: fixtureSummary.goalsHome, away: fixtureSummary.goalsAway }
+        : null,
+      cachedFixtureInfo: {
+        hasPayload: Boolean(cachedFixture),
+        venue: fixture?.fixture.venue?.name ?? null,
+        referee: fixture?.fixture.referee ?? null,
+      },
+      broadcast: {
+        direct: broadcast.channel,
+        rules: ruleBroadcast.channel,
+        rendered: resolvedBroadcast.channel,
+      },
+      statisticsTeams: statistics.length,
+      statisticsCount: statistics.reduce((count, team) => count + (team.statistics?.length ?? 0), 0),
+      lineups: lineups.length,
+      lineupPlayers: lineups.reduce(
+        (count, lineup) => count + (lineup.startXI?.length ?? 0) + (lineup.substitutes?.length ?? 0),
+        0
+      ),
+    })
+  }
 
   return {
     fixture,
-    events: cachedEvents.length
-      ? cachedEvents
-      : events.map((event) => mapStoredEventToMatchEvent(event, teamsById)),
-    statistics: readCachedArray<MatchStatisticsTeam>(detailCache?.statistics),
-    lineups: readCachedArray<MatchLineup>(detailCache?.lineups),
-    broadcastChannel: broadcast.channel ?? match.broadcast_channel ?? null,
-    broadcastLogoUrl: broadcast.logoUrl ?? match.broadcast_logo_url ?? null,
-    broadcasters: broadcast.broadcasters.length
-      ? broadcast.broadcasters
+    events: mergedEvents,
+    statistics,
+    lineups,
+    broadcastChannel: resolvedBroadcast.channel ?? match.broadcast_channel ?? null,
+    broadcastLogoUrl: resolvedBroadcast.logoUrl ?? match.broadcast_logo_url ?? null,
+    broadcasters: resolvedBroadcast.broadcasters.length
+      ? resolvedBroadcast.broadcasters
       : match.broadcast_channel
         ? [{
             name: match.broadcast_channel,
@@ -2449,6 +2963,126 @@ async function fetchStoredPlayersByTeam(
   return (fallback.data ?? []) as StoredPlayerRow[]
 }
 
+async function fetchApiTeamDetailSafe(externalId: number) {
+  try {
+    const { payload } = await requestFootballApi<ApiFootballTeamDetailRow[]>(
+      '/teams',
+      { id: externalId },
+      { logContext: `team-detail:${externalId}:profile` }
+    )
+
+    return payload.response?.[0] ?? null
+  } catch (error) {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[team-detail-data] No se pudo enriquecer perfil desde API-Football.', {
+        teamExternalId: externalId,
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+
+    return null
+  }
+}
+
+async function fetchApiTeamSquadSafe(externalId: number) {
+  try {
+    const { payload } = await requestFootballApi<ApiFootballSquadRow[]>(
+      '/players/squads',
+      { team: externalId },
+      { logContext: `team-detail:${externalId}:squad` }
+    )
+
+    return payload.response?.[0] ?? null
+  } catch (error) {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[team-detail-data] No se pudo enriquecer plantel desde API-Football.', {
+        teamExternalId: externalId,
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+
+    return null
+  }
+}
+
+function mapStoredPlayerToSquadPlayer(player: StoredPlayerRow): TeamSquadPlayer {
+  const playerExternalId = toFiniteNumber(player.external_id) ?? undefined
+  const photoUrl = player.photo_url ?? undefined
+
+  return {
+    id: playerExternalId,
+    name: player.name ?? 'Jugador',
+    number: player.number ?? undefined,
+    position: player.position ?? undefined,
+    photo: photoUrl,
+    photo_url: photoUrl,
+    photoUrl,
+  }
+}
+
+function mapApiPlayerToSquadPlayer(player: ApiFootballSquadPlayer): TeamSquadPlayer {
+  const photoUrl = player.photo ?? undefined
+
+  return {
+    id: player.id,
+    name: player.name ?? 'Jugador',
+    age: player.age ?? undefined,
+    number: player.number ?? undefined,
+    position: player.position ?? undefined,
+    photo: photoUrl,
+    photo_url: photoUrl,
+    photoUrl,
+  }
+}
+
+function normalizeSquadPlayerKey(value?: string | null) {
+  return (value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+}
+
+function getSquadPlayerMergeKey(player: TeamSquadPlayer) {
+  return player.id ? `id:${player.id}` : `name:${normalizeSquadPlayerKey(player.name)}`
+}
+
+function mergeSquadPlayers(
+  storedPlayers: TeamSquadPlayer[],
+  apiPlayers: TeamSquadPlayer[]
+) {
+  const merged = new Map<string, TeamSquadPlayer>()
+
+  for (const player of storedPlayers) {
+    merged.set(getSquadPlayerMergeKey(player), player)
+  }
+
+  for (const player of apiPlayers) {
+    const key = getSquadPlayerMergeKey(player)
+    const previous = merged.get(key)
+
+    merged.set(key, {
+      ...(previous ?? {}),
+      ...player,
+      id: previous?.id ?? player.id,
+      name: previous?.name || player.name,
+      number: previous?.number ?? player.number,
+      position: previous?.position ?? player.position,
+      photo: previous?.photo ?? player.photo,
+      photo_url: previous?.photo_url ?? player.photo_url,
+      photoUrl: previous?.photoUrl ?? player.photoUrl,
+    })
+  }
+
+  return [...merged.values()].sort((a, b) => {
+    const positionCompare = String(a.position ?? '').localeCompare(String(b.position ?? ''))
+    if (positionCompare !== 0) return positionCompare
+
+    return (a.number ?? 999) - (b.number ?? 999) ||
+      String(a.name ?? '').localeCompare(String(b.name ?? ''))
+  })
+}
+
 export async function getTeamDetail(id: number) {
   const supabase = getSupabaseAdminClient()
   let response = await supabase
@@ -2477,41 +3111,67 @@ export async function getTeamDetail(id: number) {
 
   const team = response.data as StoredTeamRow | null
   const externalId = toFiniteNumber(team?.external_id) ?? id
-  const logoUrl = pickTeamLogoUrl(team?.logo_url, externalId) ?? undefined
-  const players = await fetchStoredPlayersByTeam(supabase, team, externalId)
-  const squadPlayers = players.map((player): TeamSquadPlayer => {
-    const playerExternalId = toFiniteNumber(player.external_id) ?? undefined
-    const photoUrl = player.photo_url ?? undefined
+  const [players, apiTeamDetail, apiSquad] = await Promise.all([
+    fetchStoredPlayersByTeam(supabase, team, externalId),
+    fetchApiTeamDetailSafe(externalId),
+    fetchApiTeamSquadSafe(externalId),
+  ])
+  const apiTeam = apiTeamDetail?.team
+  const apiVenue = apiTeamDetail?.venue
+  const resolvedExternalId = toFiniteNumber(apiTeam?.id) ?? externalId
+  const logoUrl =
+    pickTeamLogoUrl(team?.logo_url, resolvedExternalId) ??
+    pickTeamLogoUrl(apiTeam?.logo, resolvedExternalId) ??
+    undefined
+  const apiSquadPlayers = (apiSquad?.players ?? []).map(mapApiPlayerToSquadPlayer)
+  const squadPlayers = mergeSquadPlayers(
+    players.map(mapStoredPlayerToSquadPlayer),
+    apiSquadPlayers
+  )
+  const resolvedTeamName = team?.name || apiTeam?.name || apiSquad?.team?.name || 'Equipo'
 
-    return {
-      id: playerExternalId,
-      name: player.name ?? 'Jugador',
-      number: player.number ?? undefined,
-      position: player.position ?? undefined,
-      photo: photoUrl,
-      photo_url: photoUrl,
-      photoUrl,
-    }
-  })
+  if (process.env.NODE_ENV === 'development') {
+    console.info('[team-detail-data]', {
+      teamExternalId: resolvedExternalId,
+      hasStoredTeam: Boolean(team),
+      hasApiTeam: Boolean(apiTeam),
+      storedPlayers: players.length,
+      apiSquadPlayers: apiSquadPlayers.length,
+      renderedPlayers: squadPlayers.length,
+    })
+  }
 
   return {
-    team: team
+    team: team || apiTeam
       ? {
           team: {
-            id: externalId,
-            name: team.name || 'Equipo',
+            id: resolvedExternalId,
+            name: resolvedTeamName,
             logo: logoUrl,
             logo_url: logoUrl,
             logoUrl,
-            country: team.country ?? undefined,
+            code: apiTeam?.code ?? undefined,
+            country: team?.country ?? apiTeam?.country ?? undefined,
+            founded: apiTeam?.founded ?? undefined,
+            national: apiTeam?.national ?? undefined,
           },
+          venue: apiVenue
+            ? {
+                name: apiVenue.name ?? undefined,
+                address: apiVenue.address ?? undefined,
+                city: apiVenue.city ?? undefined,
+                capacity: apiVenue.capacity ?? undefined,
+                surface: apiVenue.surface ?? undefined,
+                image: apiVenue.image ?? undefined,
+              }
+            : undefined,
         }
       : null,
-    squad: team
+    squad: team || apiTeam || apiSquad
       ? {
           team: {
-            id: externalId,
-            name: team.name || 'Equipo',
+            id: resolvedExternalId,
+            name: resolvedTeamName,
             logo: logoUrl,
             logo_url: logoUrl,
             logoUrl,
@@ -3253,25 +3913,500 @@ function buildLigaProfesionalGroupStandings(fixtures: LeagueFixtureSummary[]) {
   ].filter((group) => group.rows.length > 0)
 }
 
+const PRIMERA_NACIONAL_EXTERNAL_ID = 129
+const PRIMERA_C_EXTERNAL_ID = 132
+const FEDERAL_A_EXTERNAL_ID = 134
+
+const ZONED_LEAGUE_STANDINGS_CONFIGS = new Map<number, {
+  expectedGroups: number
+  expectedTeamsPerGroup?: number
+  labelPrefix: 'Zona' | 'Grupo'
+}>([
+  [PRIMERA_NACIONAL_EXTERNAL_ID, { expectedGroups: 2, expectedTeamsPerGroup: 18, labelPrefix: 'Zona' }],
+  [PRIMERA_C_EXTERNAL_ID, { expectedGroups: 2, expectedTeamsPerGroup: 14, labelPrefix: 'Zona' }],
+  [FEDERAL_A_EXTERNAL_ID, { expectedGroups: 4, labelPrefix: 'Grupo' }],
+])
+
+const GROUP_LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+
+const STATIC_ZONED_LEAGUE_TEAM_GROUPS = new Map<number, string[][]>([
+  [
+    PRIMERA_C_EXTERNAL_ID,
+    [
+      [
+        'Argentino Rosario',
+        'Berazategui',
+        'Centro Español',
+        'Defensores de Cambaceres',
+        'Deportivo Paraguayo',
+        'Estrella Del Sur',
+        'JJ Urquiza',
+        'Juventud Unida',
+        'Leandro N. Alem',
+        'Lugano',
+        'Mercedes',
+        'Puerto Nuevo',
+        'Sacachispas',
+        'Victoriano Arenas',
+      ],
+      [
+        'Atletico Atlas',
+        'Canuelas',
+        'Central Ballester',
+        'Central Cordoba',
+        'Claypole',
+        'Deportivo Español',
+        'Deportivo Muñiz',
+        'El Porvenir',
+        'Fénix',
+        'General Lamadrid',
+        'Leones de Rosario',
+        'Lujan',
+        'Sportivo Barracas',
+        'Yupanqui',
+      ],
+    ],
+  ],
+])
+
+function isRegularLeagueTableRound(round: string | null | undefined) {
+  const normalized = normalizeRoundText(round)
+
+  if (!normalized) return true
+  if (getLeagueFinalPhaseKey(normalized)) return false
+
+  return !(
+    /\b(playoff|play-off|play offs|play-offs|reducido|liguilla|promotion|promocion)\b/.test(normalized) ||
+    /\b(round of 16|8th finals?|16th finals?|32nd finals?|octavos?|cuartos?|quarter finals?|semi finals?|semifinal(?:es)?|final)\b/.test(normalized)
+  )
+}
+
+function getRegularLeagueTableFixtures(fixtures: LeagueFixtureSummary[]) {
+  return fixtures.filter((fixture) => isRegularLeagueTableRound(fixture.round))
+}
+
+function sortStandingRows(table: Map<string, CalculatedStandingAccumulator>) {
+  return [...table.values()]
+    .sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points
+      if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference
+      if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor
+      return a.teamName.localeCompare(b.teamName, 'es-AR')
+    })
+    .map((row, index) => ({
+      ...row,
+      rank: index + 1,
+    }))
+}
+
+function buildSingleLeagueTableStandings(
+  fixtures: LeagueFixtureSummary[],
+  options: { includeUnplayedTeams?: boolean } = {}
+) {
+  const table = new Map<string, CalculatedStandingAccumulator>()
+  let countedFixtures = 0
+  const regularFixtures = getRegularLeagueTableFixtures(fixtures)
+
+  for (const fixture of regularFixtures) {
+    if (options.includeUnplayedTeams) {
+      getStandingAccumulator(table, fixture.homeId, fixture.home, fixture.homeLogo)
+      getStandingAccumulator(table, fixture.awayId, fixture.away, fixture.awayLogo)
+    }
+
+    if (!isFinishedStatus(fixture.statusShort)) continue
+
+    const homeGoals = fixture.goalsHome
+    const awayGoals = fixture.goalsAway
+    if (homeGoals === null || awayGoals === null) continue
+
+    const home = getStandingAccumulator(table, fixture.homeId, fixture.home, fixture.homeLogo)
+    const away = getStandingAccumulator(table, fixture.awayId, fixture.away, fixture.awayLogo)
+
+    countedFixtures += 1
+    updateStandingWithFixtureResult(home, away, homeGoals, awayGoals)
+  }
+
+  const rows = sortStandingRows(table)
+    .filter((row) => options.includeUnplayedTeams || row.played > 0)
+
+  return rows.length ? {
+    groups: [{ name: 'Tabla', rows }],
+    countedFixtures,
+    regularFixtures: regularFixtures.length,
+  } : {
+    groups: [] as LeagueStandingGroup[],
+    countedFixtures,
+    regularFixtures: regularFixtures.length,
+  }
+}
+
+function buildZonedLeagueStandings(
+  leagueId: number,
+  fixtures: LeagueFixtureSummary[]
+): LeagueStandingGroup[] {
+  const config = ZONED_LEAGUE_STANDINGS_CONFIGS.get(leagueId)
+  if (!config) return []
+
+  const regularFixtures = getRegularLeagueTableFixtures(fixtures)
+  if (!regularFixtures.length) return []
+
+  const teamsByKey = new Map<
+    string,
+    { teamId?: number; teamName: string; teamLogo?: string }
+  >()
+
+  const ensureTeam = (
+    teamId: number | undefined,
+    teamName: string,
+    teamLogo?: string
+  ) => {
+    const key = getStandingTeamKey(teamId, teamName)
+
+    if (!teamsByKey.has(key)) {
+      teamsByKey.set(key, { teamId, teamName, teamLogo })
+    }
+
+    return key
+  }
+
+  for (const fixture of regularFixtures) {
+    ensureTeam(fixture.homeId, fixture.home, fixture.homeLogo)
+    ensureTeam(fixture.awayId, fixture.away, fixture.awayLogo)
+  }
+
+  const getPairKey = (fixture: LeagueFixtureSummary) => {
+    const homeKey = getStandingTeamKey(fixture.homeId, fixture.home)
+    const awayKey = getStandingTeamKey(fixture.awayId, fixture.away)
+
+    return [homeKey, awayKey].sort().join('::')
+  }
+
+  const getRegularRoundNumber = (round: string | null | undefined) => {
+    const normalized = normalizeRoundText(round)
+    const match = normalized.match(/\b(?:regular season|fecha|jornada|round)\s*-?\s*(\d+)\b/)
+
+    return match ? Number(match[1]) : null
+  }
+
+  const firstLegFixtures = config.expectedTeamsPerGroup
+    ? regularFixtures.filter((fixture) => {
+        const roundNumber = getRegularRoundNumber(fixture.round)
+
+        return roundNumber !== null && roundNumber >= 1 && roundNumber < config.expectedTeamsPerGroup!
+      })
+    : []
+
+  const buildComponents = (
+    sourceFixtures: LeagueFixtureSummary[],
+    options: { minPairMeetings: number }
+  ) => {
+    const parentByTeamKey = new Map<string, string>()
+
+    for (const teamKey of teamsByKey.keys()) parentByTeamKey.set(teamKey, teamKey)
+
+    const find = (key: string): string => {
+      const parent = parentByTeamKey.get(key)
+
+      if (!parent || parent === key) return key
+
+      const root = find(parent)
+      parentByTeamKey.set(key, root)
+      return root
+    }
+
+    const union = (a: string, b: string) => {
+      const rootA = find(a)
+      const rootB = find(b)
+
+      if (rootA !== rootB) parentByTeamKey.set(rootB, rootA)
+    }
+
+    const pairMeetings = new Map<string, number>()
+
+    for (const fixture of sourceFixtures) {
+      const homeKey = getStandingTeamKey(fixture.homeId, fixture.home)
+      const awayKey = getStandingTeamKey(fixture.awayId, fixture.away)
+
+      if (!teamsByKey.has(homeKey) || !teamsByKey.has(awayKey)) continue
+      pairMeetings.set(getPairKey(fixture), (pairMeetings.get(getPairKey(fixture)) ?? 0) + 1)
+    }
+
+    for (const fixture of sourceFixtures) {
+      const pairKey = getPairKey(fixture)
+
+      if ((pairMeetings.get(pairKey) ?? 0) < options.minPairMeetings) continue
+      union(
+        getStandingTeamKey(fixture.homeId, fixture.home),
+        getStandingTeamKey(fixture.awayId, fixture.away)
+      )
+    }
+
+    const teamKeysByRoot = new Map<string, string[]>()
+
+    for (const teamKey of teamsByKey.keys()) {
+      const root = find(teamKey)
+      const current = teamKeysByRoot.get(root) ?? []
+
+      current.push(teamKey)
+      teamKeysByRoot.set(root, current)
+    }
+
+    const groupMetadata = new Map<string, { firstDate: number; firstFixtureId: number | string }>()
+
+    for (const fixture of sourceFixtures) {
+      const root = find(getStandingTeamKey(fixture.homeId, fixture.home))
+      const current = groupMetadata.get(root)
+      const fixtureDate = getLeagueFixtureTimestamp(fixture.date)
+
+      if (
+        !current ||
+        fixtureDate < current.firstDate ||
+        (
+          fixtureDate === current.firstDate &&
+          compareLeagueFixtureIds(fixture.id, current.firstFixtureId) < 0
+        )
+      ) {
+        groupMetadata.set(root, {
+          firstDate: fixtureDate,
+          firstFixtureId: fixture.id,
+        })
+      }
+    }
+
+    return [...teamKeysByRoot.entries()]
+      .filter(([, teamKeys]) => teamKeys.length > 1)
+      .sort(([rootA, keysA], [rootB, keysB]) => {
+        const metadataA = groupMetadata.get(rootA)
+        const metadataB = groupMetadata.get(rootB)
+        const dateA = metadataA?.firstDate ?? Number.MAX_SAFE_INTEGER
+        const dateB = metadataB?.firstDate ?? Number.MAX_SAFE_INTEGER
+
+        if (dateA !== dateB) return dateA - dateB
+
+        const sizeCompare = keysB.length - keysA.length
+        if (sizeCompare !== 0) return sizeCompare
+
+        const firstNameA = keysA
+          .map((teamKey) => teamsByKey.get(teamKey)?.teamName ?? teamKey)
+          .sort((a, b) => a.localeCompare(b, 'es-AR'))[0] ?? ''
+        const firstNameB = keysB
+          .map((teamKey) => teamsByKey.get(teamKey)?.teamName ?? teamKey)
+          .sort((a, b) => a.localeCompare(b, 'es-AR'))[0] ?? ''
+
+        return firstNameA.localeCompare(firstNameB, 'es-AR')
+      })
+      .map(([, teamKeys]) => teamKeys)
+  }
+
+  const hasExpectedShape = (components: string[][]) =>
+    components.length === config.expectedGroups &&
+    (!config.expectedTeamsPerGroup ||
+      components.every((teamKeys) => teamKeys.length === config.expectedTeamsPerGroup))
+  const configuredTeamGroups = STATIC_ZONED_LEAGUE_TEAM_GROUPS.get(leagueId)
+  const configuredComponents = configuredTeamGroups
+    ?.map((teamNames) => {
+      const expectedNames = new Set(teamNames.map(normalizeSearchValue))
+
+      return [...teamsByKey.entries()]
+        .filter(([, team]) => expectedNames.has(normalizeSearchValue(team.teamName)))
+        .map(([teamKey]) => teamKey)
+    })
+    .filter((teamKeys) => teamKeys.length > 0)
+
+  const componentCandidates: string[][][] = []
+
+  if (configuredComponents) componentCandidates.push(configuredComponents)
+  componentCandidates.push(buildComponents(regularFixtures, { minPairMeetings: 2 }))
+  if (firstLegFixtures.length) {
+    componentCandidates.push(buildComponents(firstLegFixtures, { minPairMeetings: 1 }))
+  }
+  componentCandidates.push(buildComponents(regularFixtures, { minPairMeetings: 1 }))
+
+  const components = componentCandidates.find(hasExpectedShape)
+
+  if (!components) return []
+
+  const groupIndexByTeamKey = new Map<string, number>()
+
+  components.forEach((teamKeys, index) => {
+    for (const teamKey of teamKeys) groupIndexByTeamKey.set(teamKey, index)
+  })
+
+  return components.map((teamKeys, index) => {
+    const table = new Map<string, CalculatedStandingAccumulator>()
+
+    for (const teamKey of teamKeys) {
+      const team = teamsByKey.get(teamKey)
+      if (!team) continue
+      getStandingAccumulator(table, team.teamId, team.teamName, team.teamLogo)
+    }
+
+    for (const fixture of regularFixtures) {
+      const homeKey = getStandingTeamKey(fixture.homeId, fixture.home)
+      const awayKey = getStandingTeamKey(fixture.awayId, fixture.away)
+      const homeGroupIndex = groupIndexByTeamKey.get(homeKey)
+      const awayGroupIndex = groupIndexByTeamKey.get(awayKey)
+
+      if (homeGroupIndex !== index && awayGroupIndex !== index) continue
+      if (!isFinishedStatus(fixture.statusShort)) continue
+
+      const homeGoals = fixture.goalsHome
+      const awayGoals = fixture.goalsAway
+      if (homeGoals === null || awayGoals === null) continue
+
+      if (homeGroupIndex === index) {
+        const home = getStandingAccumulator(table, fixture.homeId, fixture.home, fixture.homeLogo)
+
+        home.played += 1
+        home.goalsFor += homeGoals
+        home.goalsAgainst += awayGoals
+
+        if (homeGoals > awayGoals) {
+          home.won += 1
+          home.points += 3
+        } else if (homeGoals < awayGoals) {
+          home.lost += 1
+        } else {
+          home.drawn += 1
+          home.points += 1
+        }
+
+        home.goalDifference = home.goalsFor - home.goalsAgainst
+      }
+
+      if (awayGroupIndex === index) {
+        const away = getStandingAccumulator(table, fixture.awayId, fixture.away, fixture.awayLogo)
+
+        away.played += 1
+        away.goalsFor += awayGoals
+        away.goalsAgainst += homeGoals
+
+        if (awayGoals > homeGoals) {
+          away.won += 1
+          away.points += 3
+        } else if (awayGoals < homeGoals) {
+          away.lost += 1
+        } else {
+          away.drawn += 1
+          away.points += 1
+        }
+
+        away.goalDifference = away.goalsFor - away.goalsAgainst
+      }
+    }
+
+    return {
+      name: `${config.labelPrefix} ${GROUP_LABELS[index] ?? index + 1}`,
+      rows: sortStandingRows(table),
+    }
+  }).filter((group) => group.rows.length > 0)
+}
+
+function getCachedStandingDescriptions(groups: LeagueStandingGroup[]) {
+  const descriptions = new Map<string, string | null | undefined>()
+
+  for (const group of groups) {
+    for (const row of group.rows) {
+      for (const key of [
+        getStandingTeamKey(row.teamId, row.teamName),
+        `name:${normalizeSearchValue(row.teamName)}`,
+      ]) {
+        if (!descriptions.has(key)) descriptions.set(key, row.description)
+      }
+    }
+  }
+
+  return descriptions
+}
+
+function applyCachedStandingDescriptions(
+  groups: LeagueStandingGroup[],
+  cachedStandings: LeagueStandingGroup[]
+) {
+  if (!cachedStandings.length) return groups
+
+  const descriptions = getCachedStandingDescriptions(cachedStandings)
+
+  return groups.map((group) => ({
+    ...group,
+    rows: group.rows.map((row) => ({
+      ...row,
+      description:
+        row.description ??
+        descriptions.get(getStandingTeamKey(row.teamId, row.teamName)) ??
+        descriptions.get(`name:${normalizeSearchValue(row.teamName)}`) ??
+        null,
+    })),
+  }))
+}
+
+function normalizeOfficialStandingGroupNames(
+  leagueId: number,
+  groups: LeagueStandingGroup[]
+): LeagueStandingGroup[] {
+  const config = ZONED_LEAGUE_STANDINGS_CONFIGS.get(leagueId)
+
+  if (!config || groups.length !== config.expectedGroups) return groups
+
+  return groups.map((group, index) => ({
+    ...group,
+    name: `${config.labelPrefix} ${GROUP_LABELS[index] ?? index + 1}`,
+  }))
+}
+
+function shouldPreferOfficialStandings(
+  leagueId: number,
+  rule: ReturnType<typeof getCompetitionRuleByExternalId> | null | undefined,
+  groups: LeagueStandingGroup[]
+) {
+  if (!groups.length) return false
+  if (leagueId === LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID) return true
+  if (!rule) return false
+  if (rule.standingsMode === 'zones') {
+    const config = ZONED_LEAGUE_STANDINGS_CONFIGS.get(leagueId)
+
+    return Boolean(config && groups.length === config.expectedGroups)
+  }
+
+  return (
+    rule.type === 'league' ||
+    rule.standingsMode === 'groups' ||
+    rule.standingsMode === 'conferences' ||
+    rule.standingsMode === 'league_phase'
+  )
+}
+
 export async function getLeagueStandings(
   leagueId: number,
   season: number
 ): Promise<LeagueStandingGroup[]> {
   const supabase = getSupabaseAdminClient()
-  const cachedStandings = await readCachedLeagueStandings(supabase, leagueId, season)
+  const fixtures = await getLeagueFixtures(leagueId, season)
+  const cachedStandings = normalizeOfficialStandingGroupNames(
+    leagueId,
+    await readCachedLeagueStandings(supabase, leagueId, season)
+  )
+  const competitionRule = getCompetitionRuleByExternalId(leagueId)
+  const officialStandings = cachedStandings.length
+    ? cachedStandings
+    : normalizeOfficialStandingGroupNames(
+        leagueId,
+        await readApiLeagueStandings(leagueId, season, {
+          logContext: `league-page-standings:${leagueId}`,
+        })
+      )
 
-  if (cachedStandings.length) {
-    console.info('[standings:supabase:standings-cache]', {
+  if (shouldPreferOfficialStandings(leagueId, competitionRule, officialStandings)) {
+    console.info('[standings:official]', {
       leagueId,
       season,
-      groups: cachedStandings.length,
-      teams: cachedStandings.reduce((total, group) => total + group.rows.length, 0),
+      source: cachedStandings.length ? 'supabase-cache' : 'api-football-memory-cache',
+      groups: officialStandings.length,
+      teams: officialStandings.reduce((total, group) => total + group.rows.length, 0),
     })
 
-    return cachedStandings
+    return officialStandings
   }
-
-  const fixtures = await getLeagueFixtures(leagueId, season)
 
   if (isConmebolTraditionalGroupStageLeague(leagueId)) {
     const groups = buildConmebolGroupStageStandings(fixtures)
@@ -3285,7 +4420,7 @@ export async function getLeagueStandings(
         teams: groups.reduce((total, group) => total + group.rows.length, 0),
       })
 
-      return groups
+      return applyCachedStandingDescriptions(groups, officialStandings)
     }
   }
 
@@ -3301,8 +4436,22 @@ export async function getLeagueStandings(
         teams: groups.reduce((total, group) => total + group.rows.length, 0),
       })
 
-      return groups
+      return applyCachedStandingDescriptions(groups, officialStandings)
     }
+  }
+
+  const zonedGroups = buildZonedLeagueStandings(leagueId, fixtures)
+
+  if (zonedGroups.length) {
+    console.info('[standings:supabase:zoned-league]', {
+      leagueId,
+      season,
+      fixtures: fixtures.length,
+      groups: zonedGroups.length,
+      teams: zonedGroups.reduce((total, group) => total + group.rows.length, 0),
+    })
+
+    return applyCachedStandingDescriptions(zonedGroups, officialStandings)
   }
 
   if (isUefaLeaguePhaseCompetition(leagueId)) {
@@ -3316,55 +4465,56 @@ export async function getLeagueStandings(
         teams: groups[0]?.rows.length ?? 0,
       })
 
-      return groups
+      return applyCachedStandingDescriptions(groups, officialStandings)
     }
   }
 
-  const table = new Map<string, CalculatedStandingAccumulator>()
-  let countedFixtures = 0
+  const shouldCalculateSingleLeagueTable =
+    !competitionRule ||
+    (
+      competitionRule.standingsMode === 'single' &&
+      (competitionRule.type === 'league' || competitionRule.type === 'playoff')
+    )
 
-  for (const fixture of fixtures) {
-    if (!isFinishedStatus(fixture.statusShort)) continue
-    if (
-      leagueId === LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID &&
-      !isLigaProfesionalRegularSeasonRound(fixture.round)
-    ) {
-      continue
+  if (shouldCalculateSingleLeagueTable) {
+    const calculated = buildSingleLeagueTableStandings(fixtures)
+
+    if (calculated.groups.length) {
+      console.info('[standings:supabase:calculated-league-table]', {
+        leagueId,
+        season,
+        fixtures: fixtures.length,
+        regularFixtures: calculated.regularFixtures,
+        countedFixtures: calculated.countedFixtures,
+        teams: calculated.groups[0]?.rows.length ?? 0,
+      })
+
+      return applyCachedStandingDescriptions(calculated.groups, officialStandings)
     }
-
-    const homeGoals = fixture.goalsHome
-    const awayGoals = fixture.goalsAway
-    if (homeGoals === null || awayGoals === null) continue
-
-    const home = getStandingAccumulator(table, fixture.homeId, fixture.home, fixture.homeLogo)
-    const away = getStandingAccumulator(table, fixture.awayId, fixture.away, fixture.awayLogo)
-
-    countedFixtures += 1
-    updateStandingWithFixtureResult(home, away, homeGoals, awayGoals)
   }
 
-  const rows = [...table.values()]
-    .filter((row) => row.played > 0)
-    .sort((a, b) => {
-      if (b.points !== a.points) return b.points - a.points
-      if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference
-      if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor
-      return a.teamName.localeCompare(b.teamName, 'es-AR')
+  if (officialStandings.length) {
+    console.info('[standings:supabase:standings-cache]', {
+      leagueId,
+      season,
+      groups: officialStandings.length,
+      teams: officialStandings.reduce((total, group) => total + group.rows.length, 0),
     })
-    .map((row, index) => ({
-      ...row,
-      rank: index + 1,
-    }))
+
+    return officialStandings
+  }
+
+  const calculatedFallback = buildSingleLeagueTableStandings(fixtures)
 
   console.info('[standings:supabase]', {
     leagueId,
     season,
     fixtures: fixtures.length,
-    countedFixtures,
-    teams: rows.length,
+    countedFixtures: calculatedFallback.countedFixtures,
+    teams: calculatedFallback.groups[0]?.rows.length ?? 0,
   })
 
-  return rows.length ? [{ name: 'Tabla', rows }] : []
+  return calculatedFallback.groups
 }
 
 type StoredLeagueFixtureMatchRow = {
@@ -3747,7 +4897,56 @@ async function mergeLigaProfesionalDerivedFixtures(
   return [...officialFixtures, ...missingDerivedFixtures].sort(compareLeagueFixturesByApiOrder)
 }
 
-function mapCachedLeagueFixturePayload(payload: unknown): LeagueFixtureSummary | null {
+const EUROPEAN_SEASON_LEAGUE_IDS = new Set([
+  2,
+  3,
+  39,
+  45,
+  61,
+  66,
+  78,
+  81,
+  88,
+  94,
+  96,
+  135,
+  137,
+  140,
+  143,
+  848,
+])
+
+function getFixtureDateYear(value?: string | null) {
+  if (!value) return null
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+
+  return date.getUTCFullYear()
+}
+
+function cachedFixtureMatchesSeason(input: {
+  leagueId: number
+  targetSeason: number
+  payloadSeason: number | null
+  date?: string | null
+}) {
+  if (input.payloadSeason !== null) return input.payloadSeason === input.targetSeason
+
+  const year = getFixtureDateYear(input.date)
+  if (year === null) return true
+
+  if (EUROPEAN_SEASON_LEAGUE_IDS.has(input.leagueId)) {
+    return year === input.targetSeason || year === input.targetSeason + 1
+  }
+
+  return year === input.targetSeason
+}
+
+function mapCachedLeagueFixturePayload(
+  payload: unknown,
+  options: { leagueId: number; season: number; cacheDate?: string | null }
+): LeagueFixtureSummary | null {
   if (!payload || typeof payload !== 'object') return null
 
   const row = payload as Record<string, unknown>
@@ -3757,8 +4956,19 @@ function mapCachedLeagueFixturePayload(payload: unknown): LeagueFixtureSummary |
   const home = getStringFromCachedValue(row.home)
   const away = getStringFromCachedValue(row.away)
   const date = getStringFromCachedValue(row.date)
+  const payloadSeason = getNumberFromCachedValue(row.season)
 
   if (!id || !home || !away || !date) return null
+  if (
+    !cachedFixtureMatchesSeason({
+      leagueId: options.leagueId,
+      targetSeason: options.season,
+      payloadSeason,
+      date: date ?? options.cacheDate,
+    })
+  ) {
+    return null
+  }
 
   return {
     id,
@@ -3774,6 +4984,8 @@ function mapCachedLeagueFixturePayload(payload: unknown): LeagueFixtureSummary |
     awayLogo: getNullableStringFromCachedValue(row.awayLogo),
     goalsHome: getNumberFromCachedValue(row.goalsHome),
     goalsAway: getNumberFromCachedValue(row.goalsAway),
+    homePenaltyScore: getNumberFromCachedValue(row.homePenaltyScore),
+    awayPenaltyScore: getNumberFromCachedValue(row.awayPenaltyScore),
     venueName: null,
     venueCity: null,
     venueCountry: getNullableStringFromCachedValue(row.country) ?? null,
@@ -3783,11 +4995,12 @@ function mapCachedLeagueFixturePayload(payload: unknown): LeagueFixtureSummary |
 
 async function fetchCachedLeagueFixtures(
   supabase: ReturnType<typeof getSupabaseAdminClient>,
-  leagueId: number
+  leagueId: number,
+  season: number
 ) {
   const response = await supabase
     .from('football_fixture_cache')
-    .select('normalized_payload')
+    .select('date, normalized_payload')
     .eq('league_external_id', String(leagueId))
     .order('date', { ascending: true })
     .order('fixture_external_id', { ascending: true })
@@ -3807,9 +5020,79 @@ async function fetchCachedLeagueFixtures(
   }
 
   return ((response.data ?? []) as CachedHomeFixtureRow[])
-    .map((row) => mapCachedLeagueFixturePayload(row.normalized_payload))
+    .map((row) => mapCachedLeagueFixturePayload(row.normalized_payload, {
+      leagueId,
+      season,
+      cacheDate: row.date,
+    }))
     .filter((fixture): fixture is LeagueFixtureSummary => Boolean(fixture))
     .sort(compareLeagueFixturesByApiOrder)
+}
+
+function getLeagueFixtureDataRank(fixture: LeagueFixtureSummary) {
+  let score = 0
+
+  if (isLiveStatus(fixture.statusShort)) score += 50
+  else if (isFinishedStatus(fixture.statusShort)) score += 45
+  else if (isPostponedStatus(fixture.statusShort)) score += 35
+  else if (!isUpcomingStatus(fixture.statusShort)) score += 20
+
+  if (fixture.goalsHome !== null && fixture.goalsAway !== null) score += 20
+  else if (fixture.goalsHome !== null || fixture.goalsAway !== null) score += 10
+  if (fixture.minute !== null && fixture.minute !== undefined) score += 2
+  if (fixture.events?.length) score += 1
+
+  return score
+}
+
+function mergeLeagueFixtureData(
+  existing: LeagueFixtureSummary,
+  incoming: LeagueFixtureSummary
+): LeagueFixtureSummary {
+  const incomingWins = getLeagueFixtureDataRank(incoming) >= getLeagueFixtureDataRank(existing)
+  const primary = incomingWins ? incoming : existing
+  const secondary = incomingWins ? existing : incoming
+
+  return {
+    ...secondary,
+    ...primary,
+    round: primary.round || secondary.round,
+    date: primary.date ?? secondary.date,
+    statusShort: primary.statusShort || secondary.statusShort,
+    minute: primary.minute ?? secondary.minute,
+    homeId: primary.homeId ?? secondary.homeId,
+    awayId: primary.awayId ?? secondary.awayId,
+    homeLogo: primary.homeLogo ?? secondary.homeLogo,
+    awayLogo: primary.awayLogo ?? secondary.awayLogo,
+    goalsHome: primary.goalsHome ?? secondary.goalsHome,
+    goalsAway: primary.goalsAway ?? secondary.goalsAway,
+    homePenaltyScore: primary.homePenaltyScore ?? secondary.homePenaltyScore,
+    awayPenaltyScore: primary.awayPenaltyScore ?? secondary.awayPenaltyScore,
+    venueName: primary.venueName ?? secondary.venueName,
+    venueCity: primary.venueCity ?? secondary.venueCity,
+    venueCountry: primary.venueCountry ?? secondary.venueCountry,
+    events: primary.events?.length ? primary.events : secondary.events,
+  }
+}
+
+function mergeLeagueFixtureSources(
+  cachedFixtures: LeagueFixtureSummary[],
+  storedFixtures: LeagueFixtureSummary[]
+) {
+  const fixturesById = new Map<string, LeagueFixtureSummary>()
+
+  for (const fixture of cachedFixtures) {
+    fixturesById.set(String(fixture.id), fixture)
+  }
+
+  for (const fixture of storedFixtures) {
+    const key = String(fixture.id)
+    const existing = fixturesById.get(key)
+
+    fixturesById.set(key, existing ? mergeLeagueFixtureData(existing, fixture) : fixture)
+  }
+
+  return [...fixturesById.values()].sort(compareLeagueFixturesByApiOrder)
 }
 
 export async function getLeagueFixtures(leagueId: number, season: number) {
@@ -3817,11 +5100,14 @@ export async function getLeagueFixtures(leagueId: number, season: number) {
   const leagueRows = await fetchStoredLeagueRowsByExternalId(leagueId, season)
   const leagueIds = leagueRows.map((league) => String(league.id))
   const storedMatches: StoredDetailMatchRow[] = []
+  const cachedFixtures = await fetchCachedLeagueFixtures(supabase, leagueId, season)
 
   for (const chunk of chunkArray(leagueIds, 50)) {
+    const selectWithPenaltyScores =
+      'id, external_id, league_id, round, match_date, status, elapsed, home_team_id, away_team_id, home_score, away_score, home_penalty_score, away_penalty_score'
     let response = await supabase
       .from('matches')
-      .select('id, external_id, league_id, round, match_date, status, elapsed, home_team_id, away_team_id, home_score, away_score, home_penalty_score, away_penalty_score, venue_name, venue_city, venue_country')
+      .select(`${selectWithPenaltyScores}, venue_name, venue_city, venue_country`)
       .in('league_id', chunk)
       .order('match_date', { ascending: true, nullsFirst: false })
       .limit(1000)
@@ -3836,11 +5122,30 @@ export async function getLeagueFixtures(leagueId: number, season: number) {
     ) {
       const fallbackResponse = await supabase
         .from('matches')
-        .select('id, external_id, league_id, round, match_date, status, home_team_id, away_team_id, home_score, away_score')
+        .select(selectWithPenaltyScores)
         .in('league_id', chunk)
         .order('match_date', { ascending: true, nullsFirst: false })
         .limit(1000)
-      response = fallbackResponse as unknown as typeof response
+
+      if (
+        fallbackResponse.error &&
+        (
+          fallbackResponse.error.code === '42703' ||
+          fallbackResponse.error.code === 'PGRST204' ||
+          fallbackResponse.error.message.toLowerCase().includes('schema cache')
+        )
+      ) {
+        const baseResponse = await supabase
+          .from('matches')
+          .select('id, external_id, league_id, round, match_date, status, home_team_id, away_team_id, home_score, away_score')
+          .in('league_id', chunk)
+          .order('match_date', { ascending: true, nullsFirst: false })
+          .limit(1000)
+
+        response = baseResponse as unknown as typeof response
+      } else {
+        response = fallbackResponse as unknown as typeof response
+      }
     }
 
     if (response.error) throw response.error
@@ -3848,7 +5153,6 @@ export async function getLeagueFixtures(leagueId: number, season: number) {
   }
 
   if (!storedMatches.length) {
-    const cachedFixtures = await fetchCachedLeagueFixtures(supabase, leagueId)
     const mergedCachedFixtures = await mergeLigaProfesionalDerivedFixtures(
       leagueId,
       season,
@@ -3904,10 +5208,14 @@ export async function getLeagueFixtures(leagueId: number, season: number) {
     .filter((fixture): fixture is LeagueFixtureSummary => Boolean(fixture))
 
   const enrichedFixtures = await enrichLeagueFixturesWithStoredEvents(leagueId, mappedFixtures)
+  const mergedStoredAndCachedFixtures = mergeLeagueFixtureSources(
+    cachedFixtures,
+    enrichedFixtures
+  )
   const mergedFixtures = await mergeLigaProfesionalDerivedFixtures(
     leagueId,
     season,
-    enrichedFixtures
+    mergedStoredAndCachedFixtures
   )
   logCopaArgentinaFixtureDebug(leagueId, season, mergedFixtures, 'cache')
 
@@ -4123,6 +5431,8 @@ export async function getPlayerEventMatches(
       awayLogo: fixture.awayLogo,
       goalsHome: fixture.goalsHome,
       goalsAway: fixture.goalsAway,
+      homePenaltyScore: fixture.homePenaltyScore ?? null,
+      awayPenaltyScore: fixture.awayPenaltyScore ?? null,
       events: matchingEvents,
     })
 

@@ -107,6 +107,7 @@ function getExpectedFormat(
 
   if (rule?.standingsMode === 'none' && rule.showBracket) return 'knockout_cup'
   if (rule?.standingsMode === 'groups') return 'groups'
+  if (rule?.standingsMode === 'zones') return 'zones'
   if (rule?.standingsMode === 'conferences') return 'conferences_plus_playoffs'
   if (rule?.showBracket && rule.standingsMode === 'single') return 'regular_season_plus_playoffs'
   if (rule?.standingsMode === 'single') return 'league_table'
@@ -132,9 +133,13 @@ function getExpectedRounds(tournament: TournamentPageConfig, rule: CompetitionRu
 
 function getExpectedGroupCount(tournament: TournamentPageConfig, rule: CompetitionRule | null) {
   if (tournament.key === 'argentina-liga-profesional') return 2
+  if (tournament.key === 'argentina-primera-nacional') return 2
+  if (tournament.key === 'argentina-primera-c') return 2
+  if (tournament.key === 'argentina-federal-a') return 4
   if (tournament.key === 'selecciones-mundial') return 12
   if (CONMEBOL_GROUP_KEYS.has(tournament.key)) return 8
   if (rule?.standingsMode === 'conferences') return 2
+  if (rule?.standingsMode === 'zones') return null
   if (rule?.standingsMode === 'groups') return null
 
   return 0
@@ -142,6 +147,8 @@ function getExpectedGroupCount(tournament: TournamentPageConfig, rule: Competiti
 
 function getExpectedTeamsPerGroup(tournament: TournamentPageConfig) {
   if (tournament.key === 'argentina-liga-profesional') return null
+  if (tournament.key === 'argentina-primera-nacional') return 18
+  if (tournament.key === 'argentina-primera-c') return 14
   if (tournament.key === 'selecciones-mundial') return 4
   if (CONMEBOL_GROUP_KEYS.has(tournament.key)) return 4
 
@@ -150,6 +157,9 @@ function getExpectedTeamsPerGroup(tournament: TournamentPageConfig) {
 
 function getExpectedTeams(tournament: TournamentPageConfig) {
   if (tournament.key === 'argentina-liga-profesional') return 30
+  if (tournament.key === 'argentina-primera-nacional') return 36
+  if (tournament.key === 'argentina-primera-b-metro') return 22
+  if (tournament.key === 'argentina-primera-c') return 28
   if (tournament.key === 'selecciones-mundial') return 48
   if (CONMEBOL_GROUP_KEYS.has(tournament.key)) return 32
 
@@ -322,6 +332,10 @@ function detectActualFormat(input: {
 
   if (hasLeaguePhase && hasBracket) return 'league_phase_plus_knockout'
   if (hasLeaguePhase) return 'league_phase_only'
+  if (rule?.standingsMode === 'zones' && hasGroups && hasBracket) return 'zones_plus_knockout'
+  if (rule?.standingsMode === 'zones' && hasGroups) return 'zones'
+  if (rule?.standingsMode === 'conferences' && hasGroups && hasBracket) return 'conferences_plus_playoffs'
+  if (rule?.standingsMode === 'conferences' && hasGroups) return 'conferences'
   if (hasGroups && hasBracket) return 'groups_plus_knockout'
   if (hasGroups) return 'groups'
   if (hasBracket) return 'knockout_cup'
@@ -359,6 +373,8 @@ function getRenderedSections(input: {
 
   if (displayOptions.standingsMode === 'league_phase') sections.push('uefaLeaguePhaseTable')
   if (displayOptions.standingsMode === 'groups') sections.push('groups')
+  if (displayOptions.standingsMode === 'zones') sections.push('zones')
+  if (displayOptions.standingsMode === 'conferences') sections.push('conferences')
   if (displayOptions.standingsMode === 'single') sections.push('standings')
   if (displayOptions.showBracket || hasBracket) sections.push('bracket')
   if (fixtures.length && displayOptions.standingsMode !== 'league_phase') sections.push('fixturesByRound')
@@ -503,6 +519,8 @@ function buildProblems(input: {
     rule &&
     rule.standingsMode !== 'single' &&
     rule.standingsMode !== 'none' &&
+    rule.standingsMode !== 'zones' &&
+    rule.standingsMode !== 'conferences' &&
     fixtures.length > 0 &&
     phases.size <= 1
   ) {
@@ -510,7 +528,8 @@ function buildProblems(input: {
   }
 
   if (
-    rule?.standingsMode === 'single' &&
+    rule?.type === 'league' &&
+    ['single', 'zones', 'conferences'].includes(rule.standingsMode) &&
     foundTeams >= 10 &&
     fixtures.length > 0 &&
     fixtures.length < foundTeams * 5
@@ -632,6 +651,8 @@ export async function getCompetitionDataAudit(options: CompetitionAuditOptions =
     if (displayOptions.standingsMode !== 'none' && !standings.length) missingSections.push('standings')
     if (displayOptions.showBracket && !renderedSections.includes('bracket')) missingSections.push('bracket')
     if (displayOptions.standingsMode === 'groups' && !groupsDetected.length) missingSections.push('groups')
+    if (displayOptions.standingsMode === 'zones' && !groupsDetected.length) missingSections.push('zones')
+    if (displayOptions.standingsMode === 'conferences' && !groupsDetected.length) missingSections.push('conferences')
     if (displayOptions.standingsMode === 'league_phase' && !renderedSections.includes('uefaLeaguePhaseTable')) {
       missingSections.push('uefaLeaguePhaseTable')
     }

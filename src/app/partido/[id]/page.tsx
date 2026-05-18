@@ -15,6 +15,10 @@ import SafeImage from '@/frontend/components/SafeImage'
 import { formatMatchTimeArgentina } from '@/shared/utils/argentina-time'
 import { formatEventMinute } from '@/shared/utils/event-minute'
 import { translateMatchEventDetail } from '@/shared/utils/football-events'
+import {
+  formatMatchScoreWithPenalties,
+  hasPenaltyShootoutScore,
+} from '@/shared/utils/match-display'
 import { getEventElapsedMinute, getFixtureStatusElapsedMinute } from '@/shared/utils/match-minute'
 import { isFinishedStatus } from '@/shared/utils/match-status'
 import { getYouTubeThumbnailUrl } from '@/shared/utils/youtube'
@@ -158,6 +162,9 @@ function translateStatType(type: string) {
     'Passes accurate': 'Pases correctos',
     'Passes %': 'Precisión de pase',
     expected_goals: 'Goles esperados',
+    'Expected Goals': 'Goles esperados',
+    'Expected goals': 'Goles esperados',
+    Saves: 'Atajadas',
   }
 
   return map[type] || type
@@ -192,12 +199,78 @@ function formatReferee(referee?: string | null) {
   return `${name} (${nationalityParts.join(', ')})`
 }
 
-function isHomeEvent(event: MatchEvent, homeTeamName: string) {
-  return event.team?.name === homeTeamName
+function normalizeTeamRefName(value?: string | null) {
+  return (value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
 }
 
-function isAwayEvent(event: MatchEvent, awayTeamName: string) {
-  return event.team?.name === awayTeamName
+function isSameTeamRef(
+  candidate: { id?: number; name?: string } | undefined,
+  target: { id?: number; name?: string }
+) {
+  if (!candidate || !target) return false
+  if (candidate.id && target.id && Number(candidate.id) === Number(target.id)) return true
+
+  const candidateName = normalizeTeamRefName(candidate.name)
+  const targetName = normalizeTeamRefName(target.name)
+
+  return Boolean(candidateName && targetName && candidateName === targetName)
+}
+
+function isHomeEvent(event: MatchEvent, homeTeam: MatchFixture['teams']['home']) {
+  return isSameTeamRef(event.team, homeTeam)
+}
+
+function isAwayEvent(event: MatchEvent, awayTeam: MatchFixture['teams']['away']) {
+  return isSameTeamRef(event.team, awayTeam)
+}
+
+function getEventSortValue(event: MatchEvent) {
+  return (event.time?.elapsed ?? 0) * 100 + (event.time?.extra ?? 0)
+}
+
+function isPenaltyShootoutEvent(event: MatchEvent) {
+  const text = [
+    event.type,
+    event.detail,
+    event.comments,
+  ].join(' ').toLowerCase()
+
+  return text.includes('penalty shootout') || text.includes('shootout')
+}
+
+function didPenaltyShootoutEventScore(event: MatchEvent) {
+  const text = [
+    event.type,
+    event.detail,
+    event.comments,
+  ].join(' ').toLowerCase()
+
+  return !(text.includes('missed') || text.includes('saved') || text.includes('failed'))
+}
+
+function getStatsForTeam(
+  stats: MatchStatisticsTeam[],
+  team: MatchFixture['teams']['home'] | MatchFixture['teams']['away'],
+  fallbackIndex: number
+) {
+  return stats.find((statTeam) => isSameTeamRef(statTeam.team, team)) ?? stats[fallbackIndex]
+}
+
+function buildStatPairs(homeStats: MatchStatistic[], awayStats: MatchStatistic[]) {
+  const statTypes = [
+    ...homeStats.map((stat) => stat.type),
+    ...awayStats.map((stat) => stat.type),
+  ].filter((type, index, allTypes) => Boolean(type) && allTypes.indexOf(type) === index)
+
+  return statTypes.map((type) => ({
+    type,
+    homeValue: homeStats.find((stat) => stat.type === type)?.value ?? null,
+    awayValue: awayStats.find((stat) => stat.type === type)?.value ?? null,
+  }))
 }
 
 type EventKind =
@@ -463,6 +536,199 @@ function EventIcon({
   return <span className="text-xs font-black leading-none">EVT</span>
 }
 
+type PenaltyShootoutAttempt = {
+  attempt: number
+  home?: MatchEvent
+  away?: MatchEvent
+}
+
+function buildPenaltyShootoutAttempts(
+  events: MatchEvent[],
+  homeTeam: MatchFixture['teams']['home'],
+  awayTeam: MatchFixture['teams']['away']
+) {
+  const attempts = new Map<number, PenaltyShootoutAttempt>()
+  const counters = { home: 0, away: 0 }
+
+  const orderedEvents = [...events].sort((a, b) => getEventSortValue(a) - getEventSortValue(b))
+
+  for (const event of orderedEvents) {
+    const side = isHomeEvent(event, homeTeam)
+      ? 'home'
+      : isAwayEvent(event, awayTeam)
+        ? 'away'
+        : null
+
+    if (!side) continue
+
+    counters[side] += 1
+    const attemptNumber = counters[side]
+    const current = attempts.get(attemptNumber) ?? { attempt: attemptNumber }
+
+    attempts.set(attemptNumber, {
+      ...current,
+      [side]: event,
+    })
+  }
+
+  return [...attempts.values()].sort((a, b) => b.attempt - a.attempt)
+}
+
+function getPenaltyPlayerNumber(event: MatchEvent | undefined, lineup?: MatchLineup | null) {
+  if (!event?.player || !lineup) return null
+
+  const eventPlayerId = event.player.id ? Number(event.player.id) : null
+  const eventPlayerName = normalizeTeamRefName(event.player.name)
+  const lineupPlayers = [
+    ...(lineup.startXI || []),
+    ...(lineup.substitutes || []),
+  ]
+
+  const matchedPlayer = lineupPlayers
+    .map((wrapper) => wrapper.player)
+    .find((player) => {
+      if (!player) return false
+      if (eventPlayerId !== null && player.id && Number(player.id) === eventPlayerId) return true
+
+      return Boolean(eventPlayerName && normalizeTeamRefName(player.name) === eventPlayerName)
+    })
+
+  return matchedPlayer?.number ?? null
+}
+
+function PenaltyPlayerNumber({
+  number,
+  side,
+}: {
+  number: number | null
+  side: 'home' | 'away'
+}) {
+  if (number === null || number === undefined) return null
+
+  return (
+    <span
+      className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-black ${
+        side === 'home'
+          ? 'bg-[#079320] text-white'
+          : 'bg-[#ecff8c] text-[#0a2319]'
+      }`}
+    >
+      {number}
+    </span>
+  )
+}
+
+function PenaltyOutcomeIcon({ event }: { event?: MatchEvent }) {
+  if (!event) return <span className="h-6 w-6" aria-hidden="true" />
+
+  const scored = didPenaltyShootoutEventScore(event)
+
+  if (!scored) {
+    return (
+      <span className="inline-flex h-6 w-6 items-center justify-center text-white">
+        <EventIcon kind="penalty-missed" />
+      </span>
+    )
+  }
+
+  return (
+    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-[#c8f6ce] bg-[#f2ffe9] text-[11px] font-black text-[#0b7a35] shadow-[inset_0_-2px_0_rgba(11,122,53,0.18)]">
+      P
+    </span>
+  )
+}
+
+function PenaltyAttemptSide({
+  event,
+  side,
+  lineup,
+}: {
+  event?: MatchEvent
+  side: 'home' | 'away'
+  lineup?: MatchLineup | null
+}) {
+  if (!event) return <div aria-hidden="true" />
+
+  const playerNumber = getPenaltyPlayerNumber(event, lineup)
+
+  return (
+    <div
+      className={`flex min-w-0 items-center gap-2 ${
+        side === 'away' ? 'justify-end text-right' : ''
+      }`}
+    >
+      {side === 'home' ? (
+        <PenaltyPlayerNumber number={playerNumber} side={side} />
+      ) : null}
+      <span className="min-w-0 truncate text-[13px] font-black text-white md:text-[15px]">
+        {event.player?.name || 'Ejecutante'}
+      </span>
+      {side === 'away' ? (
+        <PenaltyPlayerNumber number={playerNumber} side={side} />
+      ) : null}
+    </div>
+  )
+}
+
+function PenaltyShootoutBlock({
+  events,
+  homeTeam,
+  awayTeam,
+  homeLineup,
+  awayLineup,
+  homePenaltyScore,
+  awayPenaltyScore,
+}: {
+  events: MatchEvent[]
+  homeTeam: MatchFixture['teams']['home']
+  awayTeam: MatchFixture['teams']['away']
+  homeLineup?: MatchLineup | null
+  awayLineup?: MatchLineup | null
+  homePenaltyScore: number | null | undefined
+  awayPenaltyScore: number | null | undefined
+}) {
+  const attempts = buildPenaltyShootoutAttempts(events, homeTeam, awayTeam)
+
+  return (
+    <div className="border-b border-white/8 bg-[#0d1a14]">
+      <div className="grid grid-cols-[1fr_92px_1fr] items-center border-b border-white/8 px-2 py-2 md:grid-cols-[1fr_128px_1fr] md:px-3">
+        <div className="text-right text-base font-black text-[#ff6d6d]">
+          {homePenaltyScore ?? '-'}
+        </div>
+        <div className="text-center text-[11px] font-black uppercase tracking-[0.14em] text-white">
+          Penales
+        </div>
+        <div className="text-base font-black text-[#ff6d6d]">
+          {awayPenaltyScore ?? '-'}
+        </div>
+      </div>
+
+      {attempts.length ? (
+        attempts.map((attempt) => (
+          <div
+            key={`penalty-${attempt.attempt}`}
+            className="grid grid-cols-[minmax(0,1fr)_88px_minmax(0,1fr)] items-center border-b border-white/6 px-2 py-2 last:border-b-0 md:grid-cols-[minmax(0,1fr)_116px_minmax(0,1fr)] md:px-3"
+          >
+            <PenaltyAttemptSide event={attempt.home} side="home" lineup={homeLineup} />
+            <div className="grid grid-cols-[26px_28px_26px] items-center justify-center gap-1 text-center md:grid-cols-[30px_32px_30px]">
+              <PenaltyOutcomeIcon event={attempt.home} />
+              <span className="text-sm font-black text-white md:text-base">
+                {attempt.attempt}
+              </span>
+              <PenaltyOutcomeIcon event={attempt.away} />
+            </div>
+            <PenaltyAttemptSide event={attempt.away} side="away" lineup={awayLineup} />
+          </div>
+        ))
+      ) : (
+        <div className="px-2 py-3 text-center text-sm text-[#8d98a7] md:px-4">
+          Definición por penales registrada sin detalle de ejecutantes.
+        </div>
+      )}
+    </div>
+  )
+}
+
 type TeamStyle = {
   shirt: string
   secondary?: string
@@ -642,6 +908,38 @@ function getInferredFormationPosition(
   }
 }
 
+function getFormationPositionFromIndex(formation: string | undefined, playerIndex = 0) {
+  if (!formation) return null
+
+  const lineCounts = [1, ...formation.split('-').map(Number).filter(Boolean)]
+  if (lineCounts.length <= 1) return null
+
+  let offset = Math.max(playerIndex, 0)
+
+  for (let rowIndex = 0; rowIndex < lineCounts.length; rowIndex += 1) {
+    const sameRowPlayers = lineCounts[rowIndex]
+    if (offset < sameRowPlayers) {
+      return {
+        row: rowIndex + 1,
+        col: offset + 1,
+        sameRowPlayers,
+        totalRows: lineCounts.length,
+      }
+    }
+
+    offset -= sameRowPlayers
+  }
+
+  const lastRowPlayers = lineCounts[lineCounts.length - 1] || 1
+
+  return {
+    row: lineCounts.length,
+    col: Math.min(lastRowPlayers, Math.max(1, offset + 1)),
+    sameRowPlayers: lastRowPlayers,
+    totalRows: lineCounts.length,
+  }
+}
+
 function getPlayerPosition(
   playerWrap: PlayerWrapper,
   formation?: string,
@@ -654,12 +952,13 @@ function getPlayerPosition(
   const hasGrid = Boolean(rawGrid && rawGrid.includes(':'))
   const { row, col } = parseGrid(rawGrid)
   const inferredPosition =
-    !formation && !hasGrid
-      ? getInferredFormationPosition(lineupPlayers, playerWrap)
+    !hasGrid
+      ? getInferredFormationPosition(lineupPlayers, playerWrap) ??
+        getFormationPositionFromIndex(formation, fallbackIndex)
       : null
   const totalRows = inferredPosition?.totalRows || totalRowsFromFormation(formation)
 
-  if (!formation && !hasGrid && !inferredPosition) {
+  if (!hasGrid && !inferredPosition) {
     const fallback =
       FALLBACK_FIELD_COORDINATES[
         Math.min(Math.max(fallbackIndex, 0), FALLBACK_FIELD_COORDINATES.length - 1)
@@ -1268,6 +1567,7 @@ function buildPanelPlayers({
       id: String(player.id || `${teamName}-${index}`),
       name: player.name || 'Jugador',
       number: player.number,
+      position: player.pos,
       photo: player.photo,
       style: getStyleForPlayer(playerWrap, teamName, isHome, lineup),
       isCaptain,
@@ -1292,7 +1592,7 @@ function buildPanelPlayers({
 
 function hasVisualFormation(lineup?: MatchLineup | null) {
   const starters = lineup?.startXI || []
-  return starters.some((playerWrap) => Boolean(playerWrap.player?.grid && playerWrap.player.grid.includes(':')))
+  return starters.length > 0
 }
 
 export default async function PartidoDetallePage({ params }: PageProps) {
@@ -1339,6 +1639,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
   const homeTeam = fixture.teams.home
   const awayTeam = fixture.teams.away
   const goals = fixture.goals
+  const penaltyScore = fixture.score?.penalty ?? { home: null, away: null }
   const status = fixture.fixture.status
   const broadcastChannel =
     typeof data.broadcastChannel === 'string' ? data.broadcastChannel : null
@@ -1357,14 +1658,23 @@ export default async function PartidoDetallePage({ params }: PageProps) {
   const stats: MatchStatisticsTeam[] = Array.isArray(data.statistics) ? data.statistics : []
   const events: MatchEvent[] = Array.isArray(data.events) ? data.events : []
   const lineups: MatchLineup[] = Array.isArray(data.lineups) ? data.lineups : []
+  const shouldSyncMissingDetail =
+    Boolean(fixture.fixture.id) &&
+    (!events.length || !stats.length || !lineups.length)
 
-  const homeStats: MatchStatistic[] = stats[0]?.statistics || []
-  const awayStats: MatchStatistic[] = stats[1]?.statistics || []
+  const homeStats: MatchStatistic[] = getStatsForTeam(stats, homeTeam, 0)?.statistics || []
+  const awayStats: MatchStatistic[] = getStatsForTeam(stats, awayTeam, 1)?.statistics || []
+  const statPairs = buildStatPairs(homeStats, awayStats)
+  const penaltyShootoutEvents = events.filter(isPenaltyShootoutEvent)
+  const hasPenaltyScore = hasPenaltyShootoutScore(penaltyScore.home, penaltyScore.away)
+  const hasPenaltyShootout = hasPenaltyScore || penaltyShootoutEvents.length > 0
+  const regularEvents = events.filter((event) => !isPenaltyShootoutEvent(event))
+  const timelineEvents = [...regularEvents].sort((a, b) => getEventSortValue(b) - getEventSortValue(a))
 
   const homeLineup =
-    lineups.find((lineup) => lineup.team?.name === homeTeam.name) || lineups[0] || null
+    lineups.find((lineup) => isSameTeamRef(lineup.team, homeTeam)) || lineups[0] || null
   const awayLineup =
-    lineups.find((lineup) => lineup.team?.name === awayTeam.name) || lineups[1] || null
+    lineups.find((lineup) => isSameTeamRef(lineup.team, awayTeam)) || lineups[1] || null
 
   const homeColors = getTeamStyle(homeTeam.name, true, homeLineup, 'player')
   const awayColors = getTeamStyle(awayTeam.name, false, awayLineup, 'player')
@@ -1376,8 +1686,8 @@ export default async function PartidoDetallePage({ params }: PageProps) {
     fixture.fixture.date
   )
   const headerStatusIsLive = isHeaderLiveStatus(status.short)
-  const homeTeamEvents = events.filter((event) => isHomeEvent(event, homeTeam.name))
-  const awayTeamEvents = events.filter((event) => isAwayEvent(event, awayTeam.name))
+  const homeTeamEvents = regularEvents.filter((event) => isHomeEvent(event, homeTeam))
+  const awayTeamEvents = regularEvents.filter((event) => isAwayEvent(event, awayTeam))
   const homeCaptainReference = getCaptainReference(homeLineup)
   const awayCaptainReference = getCaptainReference(awayLineup)
   const homeHasVisualFormation = hasVisualFormation(homeLineup)
@@ -1413,6 +1723,19 @@ export default async function PartidoDetallePage({ params }: PageProps) {
     isHome: false,
     lineup: awayLineup,
   })
+
+  if (process.env.NODE_ENV === 'development') {
+    console.info('[match-detail-render]', {
+      fixtureId: fixture.fixture.id,
+      events: events.length,
+      statisticsTeams: stats.length,
+      statisticsCount: statPairs.length,
+      lineups: lineups.length,
+      homeLineupPlayers: (homeLineup?.startXI?.length ?? 0) + (homeLineup?.substitutes?.length ?? 0),
+      awayLineupPlayers: (awayLineup?.startXI?.length ?? 0) + (awayLineup?.substitutes?.length ?? 0),
+    })
+  }
+
   return (
     <div className="min-h-screen text-white">
       <div className="w-full max-w-none px-0 py-3 lg:mx-auto lg:max-w-7xl lg:px-5 lg:py-6">
@@ -1421,6 +1744,11 @@ export default async function PartidoDetallePage({ params }: PageProps) {
             intervalMs={60000}
             showButton
             className="absolute right-4 top-4 z-10"
+            syncBeforeRefreshUrl={
+              shouldSyncMissingDetail
+                ? `/api/match-detail/live-sync?fixture=${encodeURIComponent(String(fixture.fixture.id))}`
+                : null
+            }
           />
 
           <div className="relative z-10 border-b border-white/6 px-2 py-3 md:px-4">
@@ -1455,7 +1783,12 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                 {headerStatusLabel}
               </div>
               <div className="mt-1 whitespace-nowrap text-3xl font-black leading-none tracking-normal text-white md:mt-2 md:text-6xl">
-                {goals.home ?? '-'} <span className="text-[#566170]">-</span> {goals.away ?? '-'}
+                {formatMatchScoreWithPenalties({
+                  goalsHome: goals.home,
+                  goalsAway: goals.away,
+                  homePenaltyScore: penaltyScore.home,
+                  awayPenaltyScore: penaltyScore.away,
+                })}
               </div>
             </div>
 
@@ -1510,7 +1843,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                 <h2 className="text-base font-bold text-white">Minuto a minuto</h2>
               </div>
 
-              {events.length ? (
+              {events.length || hasPenaltyShootout ? (
                 <div>
                   <div className="grid grid-cols-[1fr_56px_1fr] border-b border-white/6 bg-[#12171c] px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8d98a7] md:grid-cols-[1fr_72px_1fr] md:px-3">
                     <div>{homeTeam.name}</div>
@@ -1518,9 +1851,21 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                     <div className="text-right">{awayTeam.name}</div>
                   </div>
 
-                  {[...events].reverse().map((event, index) => {
-                    const isHome = isHomeEvent(event, homeTeam.name)
-                    const isAway = isAwayEvent(event, awayTeam.name)
+                  {hasPenaltyShootout ? (
+                    <PenaltyShootoutBlock
+                      events={penaltyShootoutEvents}
+                      homeTeam={homeTeam}
+                      awayTeam={awayTeam}
+                      homeLineup={homeLineup}
+                      awayLineup={awayLineup}
+                      homePenaltyScore={penaltyScore.home}
+                      awayPenaltyScore={penaltyScore.away}
+                    />
+                  ) : null}
+
+                  {timelineEvents.map((event, index) => {
+                    const isHome = isHomeEvent(event, homeTeam)
+                    const isAway = isAwayEvent(event, awayTeam)
                     const minuteLabel = formatEventMinute(
                       event.time?.elapsed,
                       event.time?.extra
@@ -1576,6 +1921,12 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                       </div>
                     )
                   })}
+
+                  {!timelineEvents.length && !hasPenaltyShootout ? (
+                    <div className="px-2 py-5 text-sm text-[#8d98a7] md:px-4">
+                      No hay eventos disponibles.
+                    </div>
+                  ) : null}
                 </div>
               ) : (
                 <div className="px-2 py-5 text-sm text-[#8d98a7] md:px-4">
@@ -1671,12 +2022,11 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                 </div>
               </div>
 
-              {homeStats.length && awayStats.length ? (
+              {statPairs.length ? (
                 <div className="space-y-2 px-2 py-2 md:px-3 md:py-3">
-                  {homeStats.map((stat, index) => {
-                    const awayValue = awayStats[index]?.value
-                    const homeNumber = parseStatNumber(stat.value)
-                    const awayNumber = parseStatNumber(awayValue)
+                  {statPairs.map((stat, index) => {
+                    const homeNumber = parseStatNumber(stat.homeValue)
+                    const awayNumber = parseStatNumber(stat.awayValue)
                     const total = homeNumber + awayNumber
                     const splitPoint = total > 0 ? (homeNumber / total) * 100 : 50
 
@@ -1687,13 +2037,13 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                       >
                         <div className="mb-1.5 flex items-center justify-between gap-2">
                           <span className="text-sm font-extrabold text-white">
-                            {formatStatValue(stat.value)}
+                            {formatStatValue(stat.homeValue)}
                           </span>
                           <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#8d98a7]">
                             {translateStatType(stat.type)}
                           </span>
                           <span className="text-sm font-extrabold text-white">
-                            {formatStatValue(awayValue)}
+                            {formatStatValue(stat.awayValue)}
                           </span>
                         </div>
 
@@ -1717,7 +2067,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                 </div>
               ) : (
                 <div className="px-2 py-5 text-sm text-[#8d98a7] md:px-4">
-                  No hay estadísticas disponibles.
+                  Estadísticas no disponibles para este partido.
                 </div>
               )}
             </div>

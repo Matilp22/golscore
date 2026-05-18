@@ -39,7 +39,16 @@ export default function AutoRefresh({
 
   useEffect(() => {
     if (syncBeforeRefreshUrl) {
-      void syncWithoutRefresh()
+      const syncKey = `hf-auto-sync:${syncBeforeRefreshUrl}`
+      const lastSyncedAt = Number(window.sessionStorage.getItem(syncKey) ?? 0)
+
+      if (!lastSyncedAt || Date.now() - lastSyncedAt > 60_000) {
+        window.sessionStorage.setItem(syncKey, String(Date.now()))
+        void refreshWithOptionalSync()
+      } else {
+        void syncWithoutRefresh()
+      }
+
       return
     }
 

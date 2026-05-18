@@ -1,4 +1,5 @@
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
+import { fetchAllTeamLogoRows, type TeamLogoLookupRow } from '@/server/team-logo-lookup'
 import { TOURNAMENT_CHAMPION_SEEDS } from '@/server/tournament-champion-seeds'
 
 export type TournamentChampion = {
@@ -9,12 +10,6 @@ export type TournamentChampion = {
   venue?: string | null
   championLogo?: string | null
   runnerUpLogo?: string | null
-}
-
-type TeamLogoRow = {
-  id: string
-  name: string | null
-  logo_url: string | null
 }
 
 type TournamentChampionRow = {
@@ -33,7 +28,8 @@ const TOURNAMENT_CHAMPION_KEYS = new Set([
 ])
 
 const TEAM_NAME_ALIASES: Record<string, string[]> = {
-  'atletico mineiro': ['clube atletico mineiro', 'atletico mineiro mg'],
+  'argentinos juniors': ['argentinos jrs'],
+  'atletico mineiro': ['atletico mg', 'clube atletico mineiro', 'atletico mineiro mg'],
   'athletico paranaense': ['atletico paranaense', 'paranaense', 'ath paranaense'],
   'atletico nacional': ['atletico nacional medellin'],
   'atletico de madrid': ['atletico madrid'],
@@ -46,14 +42,17 @@ const TEAM_NAME_ALIASES: Record<string, string[]> = {
   'chelsea': ['chelsea fc'],
   'dnipro': ['dnipro dnipropetrovsk'],
   'eintracht frankfurt': ['eintracht frankfurt am main'],
+  'estudiantes': ['estudiantes l p', 'estudiantes la plata'],
   'independiente del valle': ['ind del valle'],
   'inter': ['internazionale', 'inter milan'],
   'juventus': ['juventus turin'],
   'lanus': ['lanús'],
-  'liga de quito': ['ldu quito', 'liga deportiva universitaria de quito'],
+  'liga de quito': ['ldu de quito', 'ldu quito', 'liga deportiva universitaria de quito'],
   'red bull bragantino': ['bragantino'],
   'manchester city': ['man city'],
   'manchester united': ['man united'],
+  'nacional': ['club nacional'],
+  "newell's old boys": ['newells old boys'],
   'olympique de marseille': ['marseille'],
   'paris saint germain': ['psg', 'paris sg'],
   'porto': ['fc porto', 'oporto'],
@@ -85,14 +84,19 @@ function isChampionsHistoryTournamentKey(key: string | null | undefined) {
 
 function buildTeamLookupKeys(name: string) {
   const normalized = normalizeTeamName(name)
-  const aliasValues = TEAM_NAME_ALIASES[normalized] || []
+  const aliasValues =
+    TEAM_NAME_ALIASES[normalized] ||
+    Object.entries(TEAM_NAME_ALIASES).find(
+      ([aliasName]) => normalizeTeamName(aliasName) === normalized
+    )?.[1] ||
+    []
 
   return [normalized, ...aliasValues.map(normalizeTeamName)]
 }
 
 function enrichChampionLogos(
   champions: TournamentChampion[],
-  teamsByName: Map<string, TeamLogoRow>
+  teamsByName: Map<string, TeamLogoLookupRow>
 ) {
   return champions.map((champion) => {
     const championTeam = buildTeamLookupKeys(champion.championName)
@@ -165,14 +169,7 @@ export async function getTournamentChampions(key: string): Promise<TournamentCha
       if (storedChampions.length) champions = storedChampions
     }
 
-    const teamsResponse = await supabase
-      .from('teams')
-      .select('id, name, logo_url')
-      .limit(4000)
-
-    if (teamsResponse.error) throw teamsResponse.error
-
-    const teams = (teamsResponse.data ?? []) as TeamLogoRow[]
+    const teams = await fetchAllTeamLogoRows(supabase)
     const teamsByName = new Map(
       teams
         .filter((team) => Boolean(team.name))

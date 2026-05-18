@@ -1,4 +1,5 @@
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
+import { fetchAllTeamLogoRows, type TeamLogoLookupRow } from '@/server/team-logo-lookup'
 import { normalizeCopaArgentinaTeamName } from '@/shared/utils/copa-argentina'
 
 export type CopaArgentinaChampion = {
@@ -19,12 +20,6 @@ type ChampionRow = {
   runner_up_name: string
   final_score: string
   venue: string | null
-}
-
-type TeamLogoRow = {
-  id: string
-  name: string | null
-  logo_url: string | null
 }
 
 export const COPA_ARGENTINA_CHAMPIONS_SEED: CopaArgentinaChampion[] = [
@@ -128,7 +123,11 @@ export const COPA_ARGENTINA_CHAMPIONS_SEED: CopaArgentinaChampion[] = [
   },
 ]
 
-function toChampion(row: ChampionRow, teamsById: Map<string, TeamLogoRow>, teamsByName: Map<string, TeamLogoRow>) {
+function toChampion(
+  row: ChampionRow,
+  teamsById: Map<string, TeamLogoLookupRow>,
+  teamsByName: Map<string, TeamLogoLookupRow>
+) {
   const championTeam =
     (row.champion_team_id ? teamsById.get(String(row.champion_team_id)) : null) ??
     teamsByName.get(normalizeCopaArgentinaTeamName(row.champion_name))
@@ -169,14 +168,7 @@ export async function getCopaArgentinaChampions(): Promise<CopaArgentinaChampion
       ),
     ]
 
-    const teamsResponse = await supabase
-      .from('teams')
-      .select('id, name, logo_url')
-      .limit(3000)
-
-    if (teamsResponse.error) throw teamsResponse.error
-
-    const teams = (teamsResponse.data ?? []) as TeamLogoRow[]
+    const teams = await fetchAllTeamLogoRows(supabase)
     const teamsById = new Map(teams.map((team) => [String(team.id), team]))
     const teamsByName = new Map(
       teams

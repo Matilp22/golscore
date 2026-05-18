@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react'
 
 import { TeamLogo } from '@/frontend/components/AssetImage'
 import type { LeagueFixtureSummary } from '@/lib/api-football'
+import { formatMatchScoreWithPenalties } from '@/shared/utils/match-display'
 import { parseMatchDate } from '@/shared/utils/prediction-lock'
 
 type CopaArgentinaMatchListProps = {
@@ -39,22 +40,15 @@ function formatDate(date: string | null) {
   }).format(parseMatchDate(date))
 }
 
-function hasPenaltyScore(match: LeagueFixtureSummary) {
-  return (
-    match.homePenaltyScore !== null &&
-    match.homePenaltyScore !== undefined &&
-    match.awayPenaltyScore !== null &&
-    match.awayPenaltyScore !== undefined
-  )
-}
-
 function getScoreLabel(match: LeagueFixtureSummary) {
   if (match.goalsHome === null && match.goalsAway === null) return 'vs'
-  if (hasPenaltyScore(match)) {
-    return `${match.goalsHome ?? '-'} (${match.homePenaltyScore}) - ${match.goalsAway ?? '-'} (${match.awayPenaltyScore})`
-  }
 
-  return `${match.goalsHome ?? '-'} - ${match.goalsAway ?? '-'}`
+  return formatMatchScoreWithPenalties({
+    goalsHome: match.goalsHome,
+    goalsAway: match.goalsAway,
+    homePenaltyScore: match.homePenaltyScore,
+    awayPenaltyScore: match.awayPenaltyScore,
+  })
 }
 
 function getStatusLabel(match: LeagueFixtureSummary) {
