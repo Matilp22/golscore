@@ -6,12 +6,13 @@ import {
   getAllowedProdeLeagueLabel,
   getAllowedTournamentExternalIds,
 } from '@/shared/config/prode-leagues'
+import { pickLeagueLogoUrl } from '@/shared/utils/asset-urls'
 
 export async function getLeagues(): Promise<TournamentOption[]> {
   const supabase = getSupabaseBrowserClient()
   const { data, error } = await supabase
     .from('leagues')
-    .select('id, name, country, external_id, season')
+    .select('id, name, country, external_id, season, logo_url')
     .in('external_id', getAllowedTournamentExternalIds())
     .order('country', { ascending: true })
     .order('name', { ascending: true })
@@ -24,6 +25,7 @@ export async function getLeagues(): Promise<TournamentOption[]> {
     country: string | null
     external_id: string | number | null
     season: number | null
+    logo_url: string | null
   }>
 
   const tournaments = leagues
@@ -39,7 +41,7 @@ export async function getLeagues(): Promise<TournamentOption[]> {
       name: getAllowedProdeLeagueLabel(league.name),
       country: league.country,
       season: league.season ?? new Date().getFullYear(),
-      logoUrl: null,
+      logoUrl: pickLeagueLogoUrl(league.logo_url, league.external_id),
     }))
     .sort((a, b) => {
       const aIndex = ALLOWED_TOURNAMENTS.findIndex((tournament) => tournament.slug === a.slug)

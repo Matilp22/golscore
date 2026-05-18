@@ -3,20 +3,21 @@ import { NextResponse } from 'next/server'
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import {
   fillMissingAssetUrlsFromStaticSource,
-  upsertLeagueAssets,
-  upsertPlayerAssets,
-  upsertTeamAssets,
+  summarizeAssetSyncReports,
+  syncLeagueAssetsFromApiFootball,
+  syncPlayerAssetsFromApiFootball,
+  syncTeamAssetsFromApiFootball,
+  type VisualAssetScope,
+  type VisualAssetSyncReport,
 } from '@/server/assets/image-assets'
-import {
-  getMatchDetail,
-  getPlayerDetail,
-  getTeamDetail,
-} from '@/lib/api-football'
+import { getMatchDetail } from '@/lib/api-football'
 
 type AssetScope = 'teams' | 'players' | 'leagues' | 'all'
 
+export const dynamic = 'force-dynamic'
+
 function isAuthorized(request: Request) {
-  const cronSecret = process.env.CRON_SECRET
+  const cronSecret = process.env.CRON_SECRET || process.env.ADMIN_CRON_SECRET
   if (!cronSecret) return false
 
   return request.headers.get('x-cron-secret') === cronSecret
@@ -47,9 +48,40 @@ async function readOptions(request: Request) {
     teamId: teamExternalId,
     teamExternalId,
     playerId: searchParams.get('playerId') ?? fromBody('playerId') ?? null,
+    playerExternalId:
+      searchParams.get('playerExternalId') ??
+      fromBody('playerExternalId') ??
+      searchParams.get('playerId') ??
+      fromBody('playerId') ??
+      null,
     matchId: searchParams.get('matchId') ?? fromBody('matchId') ?? null,
     season: Number(searchParams.get('season') ?? fromBody('season')) || null,
     limit: Number(searchParams.get('limit') ?? fromBody('limit')) || 500,
+    force: ['1', 'true', 'yes', 'si', 'sí'].includes(
+      String(searchParams.get('force') ?? fromBody('force') ?? 'false').toLowerCase()
+    ),
+  }
+}
+
+function includesScope(scope: AssetScope, candidate: VisualAssetScope) {
+  return scope === 'all' || scope === candidate
+}
+
+function staticResultToReport(
+  scope: VisualAssetScope,
+  result: {
+    processed: number
+    updated: number
+  }
+): VisualAssetSyncReport {
+  return {
+    scope,
+    checked: result.processed,
+    updated: result.updated,
+    skipped: Math.max(0, result.processed - result.updated),
+    missing: 0,
+    errors: [],
+    sample: [],
   }
 }
 
@@ -61,11 +93,12 @@ export async function GET(request: Request) {
   try {
     const options = await readOptions(request)
     const supabase = getSupabaseAdminClient()
-    const results: unknown[] = []
+    const reports: VisualAssetSyncReport[] = []
+    const sideEffects: unknown[] = []
 
     if (options.matchId) {
       const detail = await getMatchDetail(Number(options.matchId))
-      results.push({
+      sideEffects.push({
         mode: 'match-detail',
         matchId: options.matchId,
         teams: detail.fixture ? 2 : 0,
@@ -78,74 +111,78 @@ export async function GET(request: Request) {
       })
     }
 
-    if (options.teamId) {
-      const detail = await getTeamDetail(Number(options.teamId))
-      results.push({
-        mode: 'team-detail',
-        teamId: options.teamId,
-        players: detail.squad?.players?.length ?? 0,
-      })
-    }
-
-    if (options.playerId) {
-      if (options.season) {
-        await getPlayerDetail(
-          Number(options.playerId),
-          options.season,
-          Number(options.leagueExternalId) || undefined
-        )
-      } else {
-        await upsertPlayerAssets(supabase, [{ externalId: options.playerId }])
-      }
-
-      results.push({
-        mode: 'player',
-        playerId: options.playerId,
-        source: options.season ? 'api-football' : 'static-url',
-      })
-    }
-
-    if (options.leagueExternalId) {
-      results.push(
-        await upsertLeagueAssets(supabase, [{ externalId: options.leagueExternalId }])
+    if (includesScope(options.scope, 'leagues')) {
+      reports.push(
+        await syncLeagueAssetsFromApiFootball(supabase, {
+          leagueExternalId: options.leagueExternalId,
+          season: options.season,
+          limit: options.limit,
+          force: options.force,
+        })
       )
     }
 
-    if (options.teamId) {
-      results.push(await upsertTeamAssets(supabase, [{ externalId: options.teamId }]))
+    if (includesScope(options.scope, 'teams')) {
+      reports.push(
+        await syncTeamAssetsFromApiFootball(supabase, {
+          leagueExternalId: options.leagueExternalId,
+          teamExternalId: options.teamExternalId,
+          season: options.season,
+          limit: options.limit,
+          force: options.force,
+        })
+      )
+    }
+
+    if (includesScope(options.scope, 'players')) {
+      reports.push(
+        await syncPlayerAssetsFromApiFootball(supabase, {
+          leagueExternalId: options.leagueExternalId,
+          teamExternalId: options.teamExternalId,
+          playerExternalId: options.playerExternalId,
+          season: options.season,
+          limit: options.limit,
+        })
+      )
     }
 
     if (options.scope === 'all' || options.scope === 'teams') {
-      results.push(
-        await fillMissingAssetUrlsFromStaticSource(supabase, 'teams', options.limit, {
+      reports.push(
+        staticResultToReport('teams', await fillMissingAssetUrlsFromStaticSource(supabase, 'teams', options.limit, {
           leagueExternalId: options.leagueExternalId,
           teamId: options.teamId,
-        })
+          force: options.force,
+        }))
       )
     }
 
     if (options.scope === 'all' || options.scope === 'leagues') {
-      results.push(
-        await fillMissingAssetUrlsFromStaticSource(supabase, 'leagues', options.limit, {
+      reports.push(
+        staticResultToReport('leagues', await fillMissingAssetUrlsFromStaticSource(supabase, 'leagues', options.limit, {
           leagueExternalId: options.leagueExternalId,
-        })
+          force: options.force,
+        }))
       )
     }
 
     if (options.scope === 'all' || options.scope === 'players') {
-      results.push(
-        await fillMissingAssetUrlsFromStaticSource(supabase, 'players', options.limit, {
+      reports.push(
+        staticResultToReport('players', await fillMissingAssetUrlsFromStaticSource(supabase, 'players', options.limit, {
           teamId: options.teamId,
           playerId: options.playerId,
-        })
+          force: options.force,
+        }))
       )
     }
+    const summary = summarizeAssetSyncReports(options.scope, reports)
 
     return NextResponse.json(
       {
         ok: true,
+        ...summary,
         options,
-        results,
+        details: reports,
+        sideEffects,
       },
       {
         headers: {

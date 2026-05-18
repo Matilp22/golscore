@@ -1,5 +1,5 @@
-const STATIC_CACHE = 'hayfulbo-static-v1'
-const PAGE_CACHE = 'hayfulbo-pages-v1'
+const STATIC_CACHE = 'hayfulbo-static-assets-v2'
+const PAGE_CACHE = 'hayfulbo-pages-assets-v2'
 const STATIC_ASSETS = [
   '/manifest.json',
   '/favicon.svg',
@@ -14,6 +14,10 @@ function isDynamicRequest(url) {
     url.pathname.startsWith('/_next/data/') ||
     url.pathname === '/' ||
     url.pathname.startsWith('/partido/') ||
+    url.pathname.startsWith('/liga/') ||
+    url.pathname.startsWith('/equipo/') ||
+    url.pathname.startsWith('/jugador/') ||
+    url.pathname.startsWith('/seccion/') ||
     url.pathname.includes('/matches') ||
     url.pathname.includes('/fixtures') ||
     url.pathname.includes('/results') ||

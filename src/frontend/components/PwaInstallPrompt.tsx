@@ -31,9 +31,12 @@ export default function PwaInstallPrompt() {
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return
 
-    void navigator.serviceWorker.register('/sw.js').catch((error: unknown) => {
-      console.warn('[pwa] No se pudo registrar el service worker.', error)
-    })
+    void navigator.serviceWorker
+      .register('/sw.js')
+      .then((registration) => registration.update())
+      .catch((error: unknown) => {
+        console.warn('[pwa] No se pudo registrar el service worker.', error)
+      })
   }, [])
 
   useEffect(() => {

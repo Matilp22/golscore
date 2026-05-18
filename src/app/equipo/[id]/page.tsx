@@ -54,7 +54,8 @@ function PlayerCard({ player }: { player: TeamSquadPlayer }) {
     <div className="flex items-center gap-2.5 rounded-xl border border-white/6 bg-black/20 px-2.5 py-2 transition hover:bg-[#70ff9d]/10">
       <div className="flex h-12 w-12 items-center justify-center overflow-hidden">
         <PlayerPhoto
-          src={player.photo}
+          player={player}
+          src={player.photo_url ?? player.photo}
           alt={player.name || 'Jugador'}
           size={48}
           className="h-full w-full rounded-full object-cover"
@@ -125,7 +126,8 @@ export default async function EquipoPage({ params }: PageProps) {
             <div className="flex items-center gap-4">
               <div className="flex h-20 w-20 items-center justify-center overflow-hidden">
                 <TeamLogo
-                  src={team.logo}
+                  team={team}
+                  src={team.logo_url ?? team.logo}
                   alt={team.name}
                   size={80}
                   className="h-20 w-20 object-contain"

@@ -1,12 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
+import { requestFootballApi } from '@/server/integrations/football-api-client'
 import {
   getApiSportsPlayerPhotoUrl,
   getAssetHostname,
   getLeagueLogoOverrideUrl,
   isAllowedRemoteAssetHost,
   isLegacyApiFootballAssetUrl,
+  normalizeAssetUrl,
   pickLeagueLogoUrl,
   pickStableAssetUrl,
   pickTeamLogoUrl,
@@ -68,6 +70,27 @@ type AssetSyncStats = {
   skipped: number
 }
 
+export type VisualAssetScope = 'teams' | 'leagues' | 'players'
+
+export type VisualAssetSyncReport = {
+  scope: VisualAssetScope
+  checked: number
+  updated: number
+  skipped: number
+  missing: number
+  errors: Array<{
+    target: string
+    message: string
+  }>
+  sample: Array<{
+    externalId: string | null
+    name: string | null
+    before: string | null
+    after: string | null
+    source: string
+  }>
+}
+
 type TeamAssetInput = {
   externalId?: number | string | null
   name?: string | null
@@ -107,6 +130,59 @@ type LeagueAssetRow = {
 type PlayerAssetRow = {
   external_id: string | number | null
   photo_url: string | null
+}
+
+type ApiFootballLeagueRow = {
+  league?: {
+    id?: number
+    name?: string
+    logo?: string | null
+  }
+  country?: {
+    name?: string | null
+  }
+  seasons?: Array<{
+    year?: number | null
+    current?: boolean | null
+  }>
+}
+
+type ApiFootballTeamRow = {
+  team?: {
+    id?: number
+    name?: string
+    logo?: string | null
+  }
+}
+
+type ApiFootballPlayerRow = {
+  player?: {
+    id?: number
+    name?: string
+    photo?: string | null
+  }
+  statistics?: Array<{
+    team?: {
+      id?: number
+      name?: string
+      logo?: string | null
+    }
+  }>
+}
+
+type ApiFootballSquadRow = {
+  team?: {
+    id?: number
+    name?: string
+    logo?: string | null
+  }
+  players?: Array<{
+    id?: number
+    name?: string
+    number?: number | null
+    position?: string | null
+    photo?: string | null
+  }>
 }
 
 const SOURCE = 'api-football'
@@ -151,6 +227,99 @@ function chunkArray<T>(items: T[], size: number) {
   }
 
   return chunks
+}
+
+function createAssetSyncReport(scope: VisualAssetScope): VisualAssetSyncReport {
+  return {
+    scope,
+    checked: 0,
+    updated: 0,
+    skipped: 0,
+    missing: 0,
+    errors: [],
+    sample: [],
+  }
+}
+
+function addAssetSyncSample(
+  report: Pick<VisualAssetSyncReport, 'sample'>,
+  sample: VisualAssetSyncReport['sample'][number]
+) {
+  if (report.sample.length >= 12) return
+  report.sample.push(sample)
+}
+
+function addAssetSyncError(
+  report: VisualAssetSyncReport,
+  target: string,
+  error: unknown
+) {
+  report.errors.push({
+    target,
+    message: error instanceof Error ? error.message : String(error),
+  })
+}
+
+function mergeAssetSyncReport<
+  TTarget extends Pick<VisualAssetSyncReport, 'checked' | 'updated' | 'skipped' | 'missing' | 'errors' | 'sample'>,
+>(
+  target: TTarget,
+  source: Pick<VisualAssetSyncReport, 'checked' | 'updated' | 'skipped' | 'missing' | 'errors' | 'sample'>
+) {
+  target.checked += source.checked
+  target.updated += source.updated
+  target.skipped += source.skipped
+  target.missing += source.missing
+  target.errors.push(...source.errors)
+
+  for (const sample of source.sample) {
+    addAssetSyncSample(target, sample)
+  }
+
+  return target
+}
+
+export function summarizeAssetSyncReports(
+  scope: 'teams' | 'leagues' | 'players' | 'all',
+  reports: VisualAssetSyncReport[]
+) {
+  return reports.reduce(
+    (summary, report) => mergeAssetSyncReport(summary, report),
+    {
+      scope,
+      checked: 0,
+      updated: 0,
+      skipped: 0,
+      missing: 0,
+      errors: [] as VisualAssetSyncReport['errors'],
+      sample: [] as VisualAssetSyncReport['sample'],
+    }
+  )
+}
+
+function shouldReplacePersistedAsset(
+  currentUrl: string | null | undefined,
+  nextUrl: string | null | undefined,
+  force: boolean
+) {
+  const current = normalizeAssetUrl(currentUrl)
+  const next = normalizeAssetUrl(nextUrl)
+
+  if (!next) return false
+  if (!current) return true
+  if (force) return current !== next
+  if (isLegacyApiFootballAssetUrl(current)) return current !== next
+
+  return false
+}
+
+function getCurrentSeasonFromApiLeague(row: ApiFootballLeagueRow, fallbackSeason?: number | null) {
+  if (fallbackSeason) return fallbackSeason
+
+  const currentSeason = row.seasons?.find((season) => season.current)?.year
+  if (currentSeason) return currentSeason
+
+  return row.seasons?.[0]?.year ?? new Date().getFullYear()
 }
 
 async function fetchAllRows<T>(supabase: DbClient, table: string, columns: string) {
@@ -407,6 +576,423 @@ export async function upsertPlayerAssets(
   }
 
   return { processed: items.length, updated, skipped }
+}
+
+async function fetchLeagueIdByExternalId(
+  supabase: DbClient,
+  externalId: string | number | null | undefined
+) {
+  const normalizedExternalId = toExternalId(externalId)
+  if (!normalizedExternalId) return null
+
+  const { data, error } = await supabase
+    .from('leagues')
+    .select('id')
+    .eq('external_id', normalizedExternalId)
+    .order('season', { ascending: false })
+    .limit(1)
+
+  if (error) throw error
+
+  return data?.[0]?.id ? String(data[0].id) : null
+}
+
+export async function syncLeagueAssetsFromApiFootball(
+  supabase: DbClient,
+  options: {
+    leagueExternalId?: string | number | null
+    season?: number | null
+    limit?: number
+    force?: boolean
+  } = {}
+) {
+  const report = createAssetSyncReport('leagues')
+  const limit = Math.max(1, Math.min(options.limit ?? 500, 1000))
+  const force = Boolean(options.force)
+
+  try {
+    const params = options.leagueExternalId
+      ? {
+          id: options.leagueExternalId,
+          season: options.season ?? undefined,
+        }
+      : {
+          current: 'true',
+        }
+    const { payload } = await requestFootballApi<ApiFootballLeagueRow[]>(
+      '/leagues',
+      params,
+      { logContext: 'sync-assets:leagues' }
+    )
+    const apiRows = (payload.response ?? []).slice(0, limit)
+
+    for (const apiRow of apiRows) {
+      const league = apiRow.league
+      const externalId = toExternalId(league?.id)
+      if (!externalId) {
+        report.skipped += 1
+        continue
+      }
+
+      report.checked += 1
+
+      const overrideLogoUrl = getLeagueLogoOverrideUrl(externalId)
+      const desiredLogoUrl = pickLeagueLogoUrl(
+        force ? null : undefined,
+        externalId,
+        league?.logo
+      )
+
+      if (!desiredLogoUrl) {
+        report.missing += 1
+        continue
+      }
+
+      const { data: rows, error } = await supabase
+        .from('leagues')
+        .select('id, external_id, name, country, season, logo_url, logo_source')
+        .eq('external_id', externalId)
+
+      if (error) throw error
+
+      const leagueRows = (rows ?? []) as Array<{
+        id: string
+        external_id: string | number | null
+        name: string | null
+        country: string | null
+        season: number | null
+        logo_url: string | null
+        logo_source: string | null
+      }>
+
+      if (!leagueRows.length) {
+        if (!options.leagueExternalId) {
+          report.skipped += 1
+          continue
+        }
+
+        await upsertLeagueAssets(supabase, [
+          {
+            externalId,
+            name: league?.name,
+            country: apiRow.country?.name,
+            season: getCurrentSeasonFromApiLeague(apiRow, options.season),
+            logoUrl: league?.logo,
+          },
+        ])
+        report.updated += 1
+        addAssetSyncSample(report, {
+          externalId,
+          name: league?.name ?? null,
+          before: null,
+          after: desiredLogoUrl,
+          source: overrideLogoUrl ? 'manual-override-2026' : SOURCE,
+        })
+        continue
+      }
+
+      let changedAny = false
+
+      for (const row of leagueRows) {
+        const nextLogoUrl = force
+          ? desiredLogoUrl
+          : pickLeagueLogoUrl(row.logo_url, externalId, league?.logo)
+        const sourceNeedsUpdate = Boolean(overrideLogoUrl) && row.logo_source !== 'manual-override-2026'
+        const shouldUpdate =
+          sourceNeedsUpdate ||
+          shouldReplacePersistedAsset(row.logo_url, nextLogoUrl, force) ||
+          normalizeAssetUrl(row.logo_url) !== normalizeAssetUrl(nextLogoUrl)
+
+        if (!shouldUpdate) continue
+
+        const { error: updateError } = await supabase
+          .from('leagues')
+          .update({
+            name: row.name || league?.name || `Liga ${externalId}`,
+            country: row.country ?? apiRow.country?.name ?? null,
+            season: row.season ?? getCurrentSeasonFromApiLeague(apiRow, options.season),
+            logo_url: nextLogoUrl,
+            logo_source: overrideLogoUrl ? 'manual-override-2026' : SOURCE,
+            logo_last_synced_at: new Date().toISOString(),
+          })
+          .eq('id', row.id)
+
+        if (updateError) throw updateError
+        changedAny = true
+        addAssetSyncSample(report, {
+          externalId,
+          name: row.name ?? league?.name ?? null,
+          before: row.logo_url,
+          after: nextLogoUrl,
+          source: overrideLogoUrl ? 'manual-override-2026' : SOURCE,
+        })
+      }
+
+      if (changedAny) {
+        report.updated += 1
+      } else {
+        report.skipped += 1
+      }
+    }
+  } catch (error) {
+    addAssetSyncError(report, options.leagueExternalId ? String(options.leagueExternalId) : 'leagues', error)
+  }
+
+  return report
+}
+
+export async function syncTeamAssetsFromApiFootball(
+  supabase: DbClient,
+  options: {
+    leagueExternalId?: string | number | null
+    teamExternalId?: string | number | null
+    season?: number | null
+    limit?: number
+    force?: boolean
+  } = {}
+) {
+  const report = createAssetSyncReport('teams')
+  const limit = Math.max(1, Math.min(options.limit ?? 500, 1000))
+  const force = Boolean(options.force)
+
+  if (!options.teamExternalId && !options.leagueExternalId) return report
+
+  try {
+    const params = options.teamExternalId
+      ? {
+          id: options.teamExternalId,
+        }
+      : {
+          league: options.leagueExternalId ?? undefined,
+          season: options.season ?? new Date().getFullYear(),
+        }
+    const leagueId = await fetchLeagueIdByExternalId(supabase, options.leagueExternalId)
+    const { payload } = await requestFootballApi<ApiFootballTeamRow[]>(
+      '/teams',
+      params,
+      { logContext: 'sync-assets:teams' }
+    )
+    const apiRows = (payload.response ?? []).slice(0, limit)
+
+    for (const apiRow of apiRows) {
+      const team = apiRow.team
+      const externalId = toExternalId(team?.id)
+      if (!externalId) {
+        report.skipped += 1
+        continue
+      }
+
+      report.checked += 1
+      const desiredLogoUrl = force
+        ? pickTeamLogoUrl(null, externalId, team?.logo)
+        : pickTeamLogoUrl(undefined, externalId, team?.logo)
+
+      if (!desiredLogoUrl) {
+        report.missing += 1
+        continue
+      }
+
+      const { data: rows, error } = await supabase
+        .from('teams')
+        .select('id, external_id, name, logo_url, league_id')
+        .eq('external_id', externalId)
+
+      if (error) throw error
+
+      const teamRows = (rows ?? []) as Array<{
+        id: string
+        external_id: string | number | null
+        name: string | null
+        logo_url: string | null
+        league_id: string | null
+      }>
+
+      if (!teamRows.length) {
+        await upsertTeamAssets(supabase, [
+          {
+            externalId,
+            name: team?.name,
+            logoUrl: team?.logo,
+            leagueId,
+          },
+        ])
+        report.updated += 1
+        addAssetSyncSample(report, {
+          externalId,
+          name: team?.name ?? null,
+          before: null,
+          after: desiredLogoUrl,
+          source: SOURCE,
+        })
+        continue
+      }
+
+      let changedAny = false
+
+      for (const row of teamRows) {
+        const nextLogoUrl = force
+          ? desiredLogoUrl
+          : pickTeamLogoUrl(row.logo_url, externalId, team?.logo)
+        const shouldUpdate =
+          shouldReplacePersistedAsset(row.logo_url, nextLogoUrl, force) ||
+          Boolean(leagueId && !row.league_id)
+
+        if (!shouldUpdate) continue
+
+        const { error: updateError } = await supabase
+          .from('teams')
+          .update({
+            name: row.name || team?.name || `Equipo ${externalId}`,
+            league_id: row.league_id ?? leagueId,
+            logo_url: nextLogoUrl,
+            logo_source: SOURCE,
+            logo_last_synced_at: new Date().toISOString(),
+          })
+          .eq('id', row.id)
+
+        if (updateError) throw updateError
+        changedAny = true
+        addAssetSyncSample(report, {
+          externalId,
+          name: row.name ?? team?.name ?? null,
+          before: row.logo_url,
+          after: nextLogoUrl,
+          source: SOURCE,
+        })
+      }
+
+      if (changedAny) {
+        report.updated += 1
+      } else {
+        report.skipped += 1
+      }
+    }
+  } catch (error) {
+    addAssetSyncError(
+      report,
+      options.teamExternalId
+        ? String(options.teamExternalId)
+        : `league:${options.leagueExternalId ?? 'unknown'}`,
+      error
+    )
+  }
+
+  return report
+}
+
+export async function syncPlayerAssetsFromApiFootball(
+  supabase: DbClient,
+  options: {
+    leagueExternalId?: string | number | null
+    teamExternalId?: string | number | null
+    playerExternalId?: string | number | null
+    season?: number | null
+    limit?: number
+  } = {}
+) {
+  const report = createAssetSyncReport('players')
+  const limit = Math.max(1, Math.min(options.limit ?? 500, 1000))
+
+  try {
+    if (options.teamExternalId) {
+      const { payload } = await requestFootballApi<ApiFootballSquadRow[]>(
+        '/players/squads',
+        { team: options.teamExternalId },
+        { logContext: 'sync-assets:players-squad' }
+      )
+      const squads = payload.response ?? []
+      const inputs: PlayerAssetInput[] = []
+      const teamInputs: TeamAssetInput[] = []
+
+      for (const squad of squads) {
+        const teamExternalId = toExternalId(squad.team?.id) ?? toExternalId(options.teamExternalId)
+        teamInputs.push({
+          externalId: teamExternalId,
+          name: squad.team?.name,
+          logoUrl: squad.team?.logo,
+        })
+
+        for (const player of squad.players ?? []) {
+          if (inputs.length >= limit) break
+
+          inputs.push({
+            externalId: player.id,
+            name: player.name,
+            teamExternalId,
+            number: player.number ?? null,
+            position: player.position ?? null,
+            photoUrl: player.photo,
+          })
+        }
+      }
+
+      await upsertTeamAssets(supabase, teamInputs)
+      const result = await upsertPlayerAssets(supabase, inputs)
+      report.checked += result.processed
+      report.updated += result.updated
+      report.skipped += result.skipped
+      report.missing += inputs.filter((input) => !pickStableAssetUrl(null, input.photoUrl, getApiSportsPlayerPhotoUrl(input.externalId))).length
+
+      for (const input of inputs.slice(0, 12)) {
+        addAssetSyncSample(report, {
+          externalId: toExternalId(input.externalId),
+          name: input.name ?? null,
+          before: null,
+          after: pickStableAssetUrl(null, input.photoUrl, getApiSportsPlayerPhotoUrl(input.externalId)),
+          source: SOURCE,
+        })
+      }
+
+      return report
+    }
+
+    if (options.playerExternalId && options.season) {
+      const { payload } = await requestFootballApi<ApiFootballPlayerRow[]>(
+        '/players',
+        {
+          id: options.playerExternalId,
+          season: options.season,
+          league: options.leagueExternalId ?? undefined,
+        },
+        { logContext: 'sync-assets:player' }
+      )
+      const inputs = (payload.response ?? []).slice(0, limit).map((row) => {
+        const team = row.statistics?.find((stat) => stat.team?.id)?.team
+        return {
+          externalId: row.player?.id,
+          name: row.player?.name,
+          teamExternalId: team?.id,
+          photoUrl: row.player?.photo,
+        }
+      })
+      const result = await upsertPlayerAssets(supabase, inputs)
+      report.checked += result.processed
+      report.updated += result.updated
+      report.skipped += result.skipped
+
+      for (const input of inputs.slice(0, 12)) {
+        addAssetSyncSample(report, {
+          externalId: toExternalId(input.externalId),
+          name: input.name ?? null,
+          before: null,
+          after: pickStableAssetUrl(null, input.photoUrl, getApiSportsPlayerPhotoUrl(input.externalId)),
+          source: SOURCE,
+        })
+      }
+
+      return report
+    }
+  } catch (error) {
+    addAssetSyncError(
+      report,
+      options.playerExternalId
+        ? String(options.playerExternalId)
+        : `team:${options.teamExternalId ?? 'unknown'}`,
+      error
+    )
+  }
+
+  return report
 }
 
 function getLineupPlayers(lineups: MatchLineupLike[]) {
@@ -878,6 +1464,7 @@ export async function fillMissingAssetUrlsFromStaticSource(
     leagueExternalId?: string | number | null
     teamId?: string | number | null
     playerId?: string | number | null
+    force?: boolean
   } = {}
 ) {
   const syncedAt = new Date().toISOString()
@@ -908,7 +1495,7 @@ export async function fillMissingAssetUrlsFromStaticSource(
     let updated = 0
 
     for (const row of rows) {
-      const logoUrl = pickTeamLogoUrl(row.logo_url, row.external_id)
+      const logoUrl = pickTeamLogoUrl(filters.force ? null : row.logo_url, row.external_id)
       if (!logoUrl || logoUrl === row.logo_url) continue
 
       const { error: updateError } = await supabase
@@ -944,7 +1531,7 @@ export async function fillMissingAssetUrlsFromStaticSource(
 
     for (const row of rows) {
       const overrideLogoUrl = getLeagueLogoOverrideUrl(row.external_id)
-      const logoUrl = pickLeagueLogoUrl(row.logo_url, row.external_id)
+      const logoUrl = pickLeagueLogoUrl(filters.force ? null : row.logo_url, row.external_id)
       if (!logoUrl || logoUrl === row.logo_url) continue
 
       const { error: updateError } = await supabase
@@ -979,7 +1566,11 @@ export async function fillMissingAssetUrlsFromStaticSource(
   let updated = 0
 
   for (const row of rows) {
-    const photoUrl = pickStableAssetUrl(row.photo_url, null, getApiSportsPlayerPhotoUrl(row.external_id))
+    const photoUrl = pickStableAssetUrl(
+      filters.force ? null : row.photo_url,
+      null,
+      getApiSportsPlayerPhotoUrl(row.external_id)
+    )
     if (!photoUrl || photoUrl === row.photo_url) continue
 
     const { error: updateError } = await supabase
@@ -999,7 +1590,64 @@ export async function fillMissingAssetUrlsFromStaticSource(
   return { scope, processed: rows.length, updated }
 }
 
-export async function getAssetsAudit() {
+async function probeRemoteAssetUrls(
+  candidates: Array<{
+    kind: 'team' | 'league' | 'player'
+    id: string
+    external_id: string | number | null
+    name: string | null
+    url: string
+  }>,
+  limit: number
+) {
+  const uniqueByUrl = new Map<string, (typeof candidates)[number]>()
+
+  for (const candidate of candidates) {
+    if (!uniqueByUrl.has(candidate.url)) uniqueByUrl.set(candidate.url, candidate)
+    if (uniqueByUrl.size >= limit) break
+  }
+
+  const probes = await Promise.all(
+    [...uniqueByUrl.values()].map(async (candidate) => {
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 3500)
+
+      try {
+        const response = await fetch(candidate.url, {
+          method: 'HEAD',
+          cache: 'no-store',
+          signal: controller.signal,
+        })
+
+        if (response.status === 405) return null
+        if (response.ok) return null
+
+        return {
+          ...candidate,
+          reason: 'remote-status',
+          status: response.status,
+        }
+      } catch (error) {
+        return {
+          ...candidate,
+          reason: error instanceof Error && error.name === 'AbortError' ? 'remote-timeout' : 'remote-error',
+          status: null,
+        }
+      } finally {
+        clearTimeout(timeout)
+      }
+    })
+  )
+
+  return probes.filter((probe): probe is NonNullable<typeof probe> => Boolean(probe))
+}
+
+export async function getAssetsAudit(
+  options: {
+    checkRemote?: boolean
+    remoteLimit?: number
+  } = {}
+) {
   const supabase = getSupabaseAdminClient()
 
   type AuditTeamRow = {
@@ -1033,6 +1681,22 @@ export async function getAssetsAudit() {
   ])
   const domains = new Map<string, number>()
   const brokenRemoteDomains = new Set<string>()
+  const brokenUrls: Array<{
+    kind: 'team' | 'league' | 'player'
+    id: string
+    external_id: string | number | null
+    name: string | null
+    url: string
+    reason: string
+    status?: number | null
+  }> = []
+  const remoteProbeCandidates: Array<{
+    kind: 'team' | 'league' | 'player'
+    id: string
+    external_id: string | number | null
+    name: string | null
+    url: string
+  }> = []
   const hasAssetUrl = (value: string | null | undefined) => Boolean(value?.trim())
   const normalizeName = (value: string | null | undefined) =>
     (value ?? '')
@@ -1041,15 +1705,70 @@ export async function getAssetsAudit() {
       .trim()
       .toLowerCase()
 
-  for (const rows of [teamRows, playerRows, leagueRows]) {
+  const scanAssetRows = <
+    TRow extends {
+      id: string
+      external_id: string | number | null
+      name: string | null
+    },
+  >(
+    kind: 'team' | 'league' | 'player',
+    rows: TRow[],
+    getUrl: (row: TRow) => string | null
+  ) => {
     for (const row of rows) {
-      const url = 'photo_url' in row ? row.photo_url : row.logo_url
+      const url = getUrl(row)
+      if (url?.trim() && !normalizeAssetUrl(url)) {
+        brokenUrls.push({
+          kind,
+          id: row.id,
+          external_id: row.external_id,
+          name: row.name,
+          url,
+          reason: 'invalid-url',
+        })
+        continue
+      }
+
       const hostname = getAssetHostname(url)
       if (!hostname) continue
+      const normalizedUrl = normalizeAssetUrl(url)
+      if (!normalizedUrl) continue
 
       domains.set(hostname, (domains.get(hostname) ?? 0) + 1)
-      if (!isAllowedRemoteAssetHost(url)) brokenRemoteDomains.add(hostname)
+      remoteProbeCandidates.push({
+        kind,
+        id: row.id,
+        external_id: row.external_id,
+        name: row.name,
+        url: normalizedUrl,
+      })
+
+      if (!isAllowedRemoteAssetHost(url)) {
+        brokenRemoteDomains.add(hostname)
+        brokenUrls.push({
+          kind,
+          id: row.id,
+          external_id: row.external_id,
+          name: row.name,
+          url: normalizedUrl,
+          reason: 'blocked-domain',
+        })
+      }
     }
+  }
+
+  scanAssetRows('team', teamRows, (row) => row.logo_url)
+  scanAssetRows('league', leagueRows, (row) => row.logo_url)
+  scanAssetRows('player', playerRows, (row) => row.photo_url)
+
+  if (options.checkRemote) {
+    brokenUrls.push(
+      ...(await probeRemoteAssetUrls(
+        remoteProbeCandidates,
+        Math.max(1, Math.min(options.remoteLimit ?? 25, 150))
+      ))
+    )
   }
   const teamsWithLogo = teamRows.filter((row) => Boolean(row.logo_url?.trim())).length
   const playersWithPhoto = playerRows.filter((row) => Boolean(row.photo_url?.trim())).length
@@ -1099,75 +1818,101 @@ export async function getAssetsAudit() {
     }
   }
 
+  const teamMissingExamples = teamRows
+    .filter((row) => !hasAssetUrl(row.logo_url))
+    .slice(0, 10)
+    .map((row) => ({
+      id: row.id,
+      externalId: row.external_id ? String(row.external_id) : null,
+      name: row.name,
+    }))
+  const leagueMissingExamples = leagueRows
+    .filter((row) => !hasAssetUrl(row.logo_url))
+    .slice(0, 10)
+    .map((row) => ({
+      id: row.id,
+      externalId: row.external_id ? String(row.external_id) : null,
+      name: row.name,
+    }))
+  const playerMissingExamples = playerRows
+    .filter((row) => !hasAssetUrl(row.photo_url))
+    .slice(0, 10)
+    .map((row) => ({
+      id: row.id,
+      externalId: row.external_id ? String(row.external_id) : null,
+      teamExternalId: row.team_external_id ? String(row.team_external_id) : null,
+      name: row.name,
+    }))
+  const sortedDomains = [...domains.entries()]
+    .map(([domain, count]) => ({ domain, count }))
+    .sort((a, b) => b.count - a.count)
+  const knownAssets = {
+    ligaProfesionalArgentina: leagueAssetStatus('128', ['Liga Profesional Argentina']),
+    alwaysReady: teamAssetStatus('3700', ['Always Ready']),
+    lanus: teamAssetStatus('446', ['Lanus', 'Lanús']),
+    conmebolLibertadores: leagueAssetStatus('13', ['CONMEBOL Libertadores', 'Libertadores']),
+  }
+
   return {
     teams: {
       total: teamRows.length,
+      withLogo: teamsWithLogo,
+      missingLogo: teamRows.length - teamsWithLogo,
+      examplesMissing: teamMissingExamples,
+      legacyApiFootballHost: legacyTeamLogoRows.length,
+      legacyExamples: legacyTeamLogoRows.slice(0, 10).map((row) => ({
+        id: row.id,
+        externalId: row.external_id ? String(row.external_id) : null,
+        name: row.name,
+        logoUrl: row.logo_url,
+      })),
       with_logo_url: teamsWithLogo,
       missing_logo_url: teamRows.length - teamsWithLogo,
-      legacy_api_football_host: legacyTeamLogoRows.length,
-      legacy_examples: legacyTeamLogoRows.slice(0, 10).map((row) => ({
-        id: row.id,
-        external_id: row.external_id ? String(row.external_id) : null,
-        name: row.name,
-        logo_url: row.logo_url,
-      })),
-      missing_examples: teamRows
-        .filter((row) => !hasAssetUrl(row.logo_url))
-        .slice(0, 10)
-        .map((row) => ({
-          id: row.id,
-          external_id: row.external_id ? String(row.external_id) : null,
-          name: row.name,
-        })),
-    },
-    players: {
-      total: playerRows.length,
-      with_photo_url: playersWithPhoto,
-      missing_photo_url: playerRows.length - playersWithPhoto,
-      missing_examples: playerRows
-        .filter((row) => !hasAssetUrl(row.photo_url))
-        .slice(0, 10)
-        .map((row) => ({
-          id: row.id,
-          external_id: row.external_id ? String(row.external_id) : null,
-          team_external_id: row.team_external_id ? String(row.team_external_id) : null,
-          name: row.name,
-        })),
+      missing_examples: teamMissingExamples,
     },
     leagues: {
       total: leagueRows.length,
+      withLogo: leaguesWithLogo,
+      missingLogo: leagueRows.length - leaguesWithLogo,
+      examplesMissing: leagueMissingExamples,
+      legacyApiFootballHost: legacyLeagueLogoRows.length,
+      legacyExamples: legacyLeagueLogoRows.slice(0, 10).map((row) => ({
+        id: row.id,
+        externalId: row.external_id ? String(row.external_id) : null,
+        name: row.name,
+        logoUrl: row.logo_url,
+      })),
       with_logo_url: leaguesWithLogo,
       missing_logo_url: leagueRows.length - leaguesWithLogo,
-      legacy_api_football_host: legacyLeagueLogoRows.length,
-      legacy_examples: legacyLeagueLogoRows.slice(0, 10).map((row) => ({
-        id: row.id,
-        external_id: row.external_id ? String(row.external_id) : null,
-        name: row.name,
-        logo_url: row.logo_url,
-      })),
-      missing_examples: leagueRows
-        .filter((row) => !hasAssetUrl(row.logo_url))
-        .slice(0, 10)
-        .map((row) => ({
-          id: row.id,
-          external_id: row.external_id ? String(row.external_id) : null,
-          name: row.name,
-        })),
+      missing_examples: leagueMissingExamples,
     },
+    players: {
+      total: playerRows.length,
+      withPhoto: playersWithPhoto,
+      missingPhoto: playerRows.length - playersWithPhoto,
+      examplesMissing: playerMissingExamples,
+      with_photo_url: playersWithPhoto,
+      missing_photo_url: playerRows.length - playersWithPhoto,
+      missing_examples: playerMissingExamples,
+    },
+    brokenUrls,
+    domains: sortedDomains,
+    knownAssets,
     known_assets: {
-      liga_profesional_argentina: leagueAssetStatus('128', ['Liga Profesional Argentina']),
-      always_ready: teamAssetStatus('3700', ['Always Ready']),
-      lanus: teamAssetStatus('446', ['Lanus', 'Lanús']),
-      conmebol_libertadores: leagueAssetStatus('13', ['CONMEBOL Libertadores', 'Libertadores']),
+      liga_profesional_argentina: knownAssets.ligaProfesionalArgentina,
+      always_ready: knownAssets.alwaysReady,
+      lanus: knownAssets.lanus,
+      conmebol_libertadores: knownAssets.conmebolLibertadores,
     },
-    domains: [...domains.entries()]
-      .map(([domain, count]) => ({ domain, count }))
-      .sort((a, b) => b.count - a.count),
     broken_remote_domains_detected: [...brokenRemoteDomains],
     fallback_counts: {
       teams: teamRows.length - teamsWithLogo,
       players: playerRows.length - playersWithPhoto,
       leagues: leagueRows.length - leaguesWithLogo,
+    },
+    auditMode: {
+      remoteChecked: Boolean(options.checkRemote),
+      remoteLimit: Math.max(1, Math.min(options.remoteLimit ?? 25, 150)),
     },
   }
 }

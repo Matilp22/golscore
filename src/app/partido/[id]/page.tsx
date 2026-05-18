@@ -1439,7 +1439,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
           <div className="relative z-10 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-2 py-2.5 md:gap-4 md:px-4 md:py-5">
             <MatchTeamCard
               id={homeTeam.id}
-              logo={homeTeam.logo}
+              logo={homeTeam.logo_url ?? homeTeam.logo}
               name={homeTeam.name}
               role="Local"
               colors={homeColors}
@@ -1461,7 +1461,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
 
             <MatchTeamCard
               id={awayTeam.id}
-              logo={awayTeam.logo}
+              logo={awayTeam.logo_url ?? awayTeam.logo}
               name={awayTeam.name}
               role="Visitante"
               colors={awayColors}
@@ -1596,7 +1596,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                       {homeHasVisualFormation && homeLineup ? (
                         <FormationPitch
                           teamName={homeTeam.name}
-                          teamLogo={homeTeam.logo}
+                          teamLogo={homeTeam.logo_url ?? homeTeam.logo}
                           formation={homeLineup.formation}
                           lineup={homeLineup}
                           side="top"
@@ -1609,7 +1609,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                       {awayHasVisualFormation && awayLineup ? (
                         <FormationPitch
                           teamName={awayTeam.name}
-                          teamLogo={awayTeam.logo}
+                          teamLogo={awayTeam.logo_url ?? awayTeam.logo}
                           formation={awayLineup.formation}
                           lineup={awayLineup}
                           side="bottom"

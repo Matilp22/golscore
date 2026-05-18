@@ -5,7 +5,7 @@ export const YOUTUBE_IMAGE_HOST = 'img.youtube.com'
 export const YOUTUBE_IMAGE_ALT_HOST = 'i.ytimg.com'
 
 export const LIGA_PROFESIONAL_ARGENTINA_LOGO_URL =
-  `https://${WIKIMEDIA_UPLOAD_HOST}/wikipedia/commons/thumb/0/06/Logo_LPF_AFA_2026.svg/960px-Logo_LPF_AFA_2026.svg.png`
+  `https://${API_SPORTS_MEDIA_HOST}/football/leagues/128.png`
 
 const LEAGUE_LOGO_OVERRIDES: Record<string, string> = {
   '128': LIGA_PROFESIONAL_ARGENTINA_LOGO_URL,

@@ -60,6 +60,8 @@ type TeamInfo = {
   id?: number
   name: string
   logo?: string
+  logo_url?: string
+  logoUrl?: string
   colors?: {
     player?: {
       primary?: string
@@ -79,6 +81,8 @@ type LeagueInfo = {
   name: string
   country: string
   logo?: string
+  logo_url?: string
+  logoUrl?: string
   round?: string
   season?: number
 }
@@ -391,6 +395,8 @@ export type TeamSquadPlayer = {
   number?: number
   position?: string
   photo?: string
+  photo_url?: string
+  photoUrl?: string
 }
 
 export type TeamSquad = {
@@ -475,17 +481,23 @@ export type PlayerDetail = {
     weight?: string
     injured?: boolean
     photo?: string
+    photo_url?: string
+    photoUrl?: string
   }
   team?: {
     id?: number
     name?: string
     logo?: string
+    logo_url?: string
+    logoUrl?: string
   }
   league?: {
     id?: number
     name?: string
     country?: string
     logo?: string
+    logo_url?: string
+    logoUrl?: string
     season?: number
   }
   statistics: {
@@ -1862,6 +1874,17 @@ type StoredTeamRow = {
   country?: string | null
 }
 
+type StoredPlayerRow = {
+  id: number | string
+  external_id: number | string | null
+  name: string | null
+  team_id: number | string | null
+  team_external_id: number | string | null
+  number: number | null
+  position: string | null
+  photo_url: string | null
+}
+
 const KNOWN_TOURNAMENT_RESOLUTIONS: ResolvedTournament[] = [
   { leagueId: 128, season: 2026, name: 'Liga Profesional Argentina', country: 'Argentina' },
   { leagueId: 129, season: 2026, name: 'Primera Nacional', country: 'Argentina' },
@@ -2261,6 +2284,9 @@ function mapStoredMatchToFixture(
   const homeExternalId = toFiniteNumber(homeTeam.external_id)
   const awayExternalId = toFiniteNumber(awayTeam.external_id)
   const statusShort = normalizeStoredStatusShort(match.status)
+  const leagueLogoUrl = pickLeagueLogoUrl(league?.logo_url, leagueExternalId) ?? undefined
+  const homeLogoUrl = pickTeamLogoUrl(homeTeam.logo_url, homeExternalId) ?? undefined
+  const awayLogoUrl = pickTeamLogoUrl(awayTeam.logo_url, awayExternalId) ?? undefined
 
   return {
     fixture: {
@@ -2280,7 +2306,9 @@ function mapStoredMatchToFixture(
       id: leagueExternalId ?? undefined,
       name: league?.name || 'Torneo',
       country: league?.country || match.venue_country || '',
-      logo: pickLeagueLogoUrl(league?.logo_url, leagueExternalId) ?? undefined,
+      logo: leagueLogoUrl,
+      logo_url: leagueLogoUrl,
+      logoUrl: leagueLogoUrl,
       round: match.round ?? undefined,
       season: league?.season ?? undefined,
     },
@@ -2288,12 +2316,16 @@ function mapStoredMatchToFixture(
       home: {
         id: homeExternalId ?? undefined,
         name: homeTeam.name,
-        logo: pickTeamLogoUrl(homeTeam.logo_url, homeExternalId) ?? undefined,
+        logo: homeLogoUrl,
+        logo_url: homeLogoUrl,
+        logoUrl: homeLogoUrl,
       },
       away: {
         id: awayExternalId ?? undefined,
         name: awayTeam.name,
-        logo: pickTeamLogoUrl(awayTeam.logo_url, awayExternalId) ?? undefined,
+        logo: awayLogoUrl,
+        logo_url: awayLogoUrl,
+        logoUrl: awayLogoUrl,
       },
     },
     goals: {
@@ -2364,6 +2396,59 @@ export async function getMatchDetail(id: number) {
   }
 }
 
+async function fetchStoredPlayersByTeam(
+  supabase: ReturnType<typeof getSupabaseAdminClient>,
+  team: StoredTeamRow | null,
+  externalId: number
+) {
+  if (!team?.id && !externalId) return []
+
+  let query = supabase
+    .from('players')
+    .select('id, external_id, name, team_id, team_external_id, number, position, photo_url')
+    .order('position', { ascending: true, nullsFirst: false })
+    .order('number', { ascending: true, nullsFirst: false })
+    .order('name', { ascending: true })
+
+  if (team?.id) {
+    query = query.eq('team_id', String(team.id))
+  } else {
+    query = query.eq('team_external_id', String(externalId))
+  }
+
+  const response = await query.limit(80)
+
+  if (response.error) {
+    const message = response.error.message.toLowerCase()
+    const missingPlayersTable =
+      response.error.code === '42P01' ||
+      response.error.code === 'PGRST205' ||
+      response.error.code === '42703' ||
+      message.includes('players') ||
+      message.includes('schema cache')
+
+    if (missingPlayersTable) return []
+    throw response.error
+  }
+
+  const rows = (response.data ?? []) as StoredPlayerRow[]
+
+  if (rows.length || !team?.id) return rows
+
+  const fallback = await supabase
+    .from('players')
+    .select('id, external_id, name, team_id, team_external_id, number, position, photo_url')
+    .eq('team_external_id', String(externalId))
+    .order('position', { ascending: true, nullsFirst: false })
+    .order('number', { ascending: true, nullsFirst: false })
+    .order('name', { ascending: true })
+    .limit(80)
+
+  if (fallback.error) return []
+
+  return (fallback.data ?? []) as StoredPlayerRow[]
+}
+
 export async function getTeamDetail(id: number) {
   const supabase = getSupabaseAdminClient()
   let response = await supabase
@@ -2392,6 +2477,22 @@ export async function getTeamDetail(id: number) {
 
   const team = response.data as StoredTeamRow | null
   const externalId = toFiniteNumber(team?.external_id) ?? id
+  const logoUrl = pickTeamLogoUrl(team?.logo_url, externalId) ?? undefined
+  const players = await fetchStoredPlayersByTeam(supabase, team, externalId)
+  const squadPlayers = players.map((player): TeamSquadPlayer => {
+    const playerExternalId = toFiniteNumber(player.external_id) ?? undefined
+    const photoUrl = player.photo_url ?? undefined
+
+    return {
+      id: playerExternalId,
+      name: player.name ?? 'Jugador',
+      number: player.number ?? undefined,
+      position: player.position ?? undefined,
+      photo: photoUrl,
+      photo_url: photoUrl,
+      photoUrl,
+    }
+  })
 
   return {
     team: team
@@ -2399,12 +2500,25 @@ export async function getTeamDetail(id: number) {
           team: {
             id: externalId,
             name: team.name || 'Equipo',
-            logo: pickTeamLogoUrl(team.logo_url, externalId) ?? undefined,
+            logo: logoUrl,
+            logo_url: logoUrl,
+            logoUrl,
             country: team.country ?? undefined,
           },
         }
       : null,
-    squad: null as TeamSquad | null,
+    squad: team
+      ? {
+          team: {
+            id: externalId,
+            name: team.name || 'Equipo',
+            logo: logoUrl,
+            logo_url: logoUrl,
+            logoUrl,
+          },
+          players: squadPlayers,
+        }
+      : null,
   }
 }
 
@@ -2413,11 +2527,99 @@ export async function getPlayerDetail(
   season: number,
   leagueId?: number
 ): Promise<PlayerDetail | null> {
-  void id
   void season
-  void leagueId
 
-  return null
+  const supabase = getSupabaseAdminClient()
+  const response = await supabase
+    .from('players')
+    .select('id, external_id, name, team_id, team_external_id, number, position, photo_url')
+    .eq('external_id', String(id))
+    .maybeSingle()
+
+  if (response.error) {
+    const message = response.error.message.toLowerCase()
+    const missingPlayersTable =
+      response.error.code === '42P01' ||
+      response.error.code === 'PGRST205' ||
+      response.error.code === '42703' ||
+      message.includes('players') ||
+      message.includes('schema cache')
+
+    if (missingPlayersTable) return null
+    throw response.error
+  }
+
+  const player = response.data as StoredPlayerRow | null
+  if (!player) return null
+
+  const playerExternalId = toFiniteNumber(player.external_id) ?? id
+  const playerPhotoUrl = player.photo_url ?? undefined
+  const teamResponse = player.team_id
+    ? await supabase
+        .from('teams')
+        .select('id, external_id, name, logo_url')
+        .eq('id', String(player.team_id))
+        .maybeSingle()
+    : player.team_external_id
+      ? await supabase
+          .from('teams')
+          .select('id, external_id, name, logo_url')
+          .eq('external_id', String(player.team_external_id))
+          .maybeSingle()
+      : null
+  const storedTeam = teamResponse && !teamResponse.error
+    ? (teamResponse.data as StoredTeamRow | null)
+    : null
+  const teamExternalId = toFiniteNumber(storedTeam?.external_id ?? player.team_external_id)
+  const teamLogoUrl = pickTeamLogoUrl(storedTeam?.logo_url, teamExternalId) ?? undefined
+  const leagueRows = leagueId
+    ? await fetchStoredLeagueRowsByExternalId(leagueId, season).catch(() => [])
+    : []
+  const storedLeague = leagueRows[0] ?? null
+  const leagueLogoUrl = storedLeague
+    ? pickLeagueLogoUrl(storedLeague.logo_url, leagueId) ?? undefined
+    : undefined
+
+  return {
+    player: {
+      id: playerExternalId,
+      name: player.name || 'Jugador',
+      photo: playerPhotoUrl,
+      photo_url: playerPhotoUrl,
+      photoUrl: playerPhotoUrl,
+    },
+    team: storedTeam
+      ? {
+          id: teamExternalId ?? undefined,
+          name: storedTeam.name ?? undefined,
+          logo: teamLogoUrl,
+          logo_url: teamLogoUrl,
+          logoUrl: teamLogoUrl,
+        }
+      : undefined,
+    league: storedLeague
+      ? {
+          id: leagueId,
+          name: storedLeague.name ?? undefined,
+          country: storedLeague.country ?? undefined,
+          logo: leagueLogoUrl,
+          logo_url: leagueLogoUrl,
+          logoUrl: leagueLogoUrl,
+          season: storedLeague.season ?? season,
+        }
+      : undefined,
+    statistics: {
+      appearances: 0,
+      lineups: 0,
+      minutes: 0,
+      position: player.position,
+      rating: null,
+      goals: 0,
+      assists: 0,
+      yellowCards: 0,
+      redCards: 0,
+    },
+  }
 }
 
 export async function resolveTournament(

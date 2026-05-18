@@ -1,7 +1,6 @@
 'use client'
 
-import Image, { type ImageProps } from 'next/image'
-import { useEffect, useState } from 'react'
+import { type CSSProperties, type ImgHTMLAttributes, useEffect, useState } from 'react'
 import {
   getAssetHostname,
   isAllowedRemoteAssetHost,
@@ -9,11 +8,20 @@ import {
 
 type SafeImageType = 'team' | 'league' | 'player' | 'venue' | 'broadcast' | 'video'
 
-type SafeImageProps = Omit<ImageProps, 'src' | 'alt'> & {
+type SafeImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'alt' | 'height' | 'width'> & {
   src?: string | null
   alt: string
   imageType: SafeImageType
+  width?: number | string
+  height?: number | string
+  fill?: boolean
+  priority?: boolean
+  sizes?: string
+  unoptimized?: boolean
   fallbackClassName?: string
+  assetId?: string | number | null
+  expectedSrc?: string | null
+  receivedProps?: Record<string, unknown>
 }
 
 function TeamFallback({ className = '' }: { className?: string }) {
@@ -23,6 +31,19 @@ function TeamFallback({ className = '' }: { className?: string }) {
       className={`inline-block bg-[#7f8a98] ${className}`}
       style={{ clipPath: 'polygon(50% 0, 92% 16%, 84% 72%, 50% 100%, 16% 72%, 8% 16%)' }}
     />
+  )
+}
+
+function LeagueFallback({ className = '' }: { className?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`relative inline-flex items-center justify-center ${className}`}
+    >
+      <span className="absolute bottom-[10%] h-[14%] w-[58%] rounded-sm bg-[#7f8a98]" />
+      <span className="absolute bottom-[22%] h-[36%] w-[42%] rounded-b-md rounded-t-sm border-[2px] border-[#7f8a98]" />
+      <span className="absolute top-[12%] h-[22%] w-[24%] rounded-t-full border-[2px] border-b-0 border-[#7f8a98]" />
+    </span>
   )
 }
 
@@ -51,6 +72,7 @@ function Fallback({
   className?: string
 }) {
   if (imageType === 'player') return <PlayerFallback className={className} />
+  if (imageType === 'league') return <LeagueFallback className={className} />
   if (imageType === 'venue' || imageType === 'video') {
     return <VenueFallback className={className} />
   }
@@ -62,10 +84,20 @@ export default function SafeImage({
   src,
   alt,
   imageType,
+  fill,
+  priority,
+  sizes,
+  unoptimized,
+  style,
   fallbackClassName,
+  assetId,
+  expectedSrc,
+  receivedProps,
   onError,
   ...props
 }: SafeImageProps) {
+  void unoptimized
+
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
   const failed = Boolean(src && failedSrc === src)
 
@@ -73,31 +105,54 @@ export default function SafeImage({
     if (process.env.NODE_ENV !== 'development') return
     if (src && !failed) return
 
-    console.warn('[image-fallback]', {
+    console.warn('[asset-render-fallback]', {
       type: imageType,
       name: alt,
-      url: src ?? null,
+      src: src ?? null,
+      id: assetId ?? null,
+      expectedLogoUrl: expectedSrc ?? null,
+      props: receivedProps ?? null,
       host: getAssetHostname(src),
       blockedDomain: src ? !isAllowedRemoteAssetHost(src) : false,
       reason: src ? 'load-error' : 'missing-src',
     })
-  }, [alt, failed, imageType, src])
+  }, [alt, assetId, expectedSrc, failed, imageType, receivedProps, src])
 
   if (!src || failed) {
     return <Fallback imageType={imageType} className={fallbackClassName ?? props.className} />
   }
 
+  const fillStyle: CSSProperties | undefined = fill
+    ? {
+        position: 'absolute',
+        inset: 0,
+        width: '100%',
+        height: '100%',
+        ...style,
+      }
+    : style
+
   return (
-    <Image
+    // Escudos y fotos ya vienen normalizados desde Supabase. Usar img nativo evita
+    // falsos placeholders por el optimizer de Next o por caches de /_next/image.
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
       {...props}
       src={src}
       alt={alt}
+      style={fillStyle}
+      sizes={sizes}
+      loading={priority ? 'eager' : props.loading ?? 'lazy'}
+      decoding={props.decoding ?? 'async'}
       onError={(event) => {
         if (process.env.NODE_ENV === 'development') {
           console.warn('[image-error]', {
             type: imageType,
             name: alt,
-            url: src,
+            src,
+            id: assetId ?? null,
+            expectedLogoUrl: expectedSrc ?? null,
+            props: receivedProps ?? null,
             host: getAssetHostname(src),
             blockedDomain: !isAllowedRemoteAssetHost(src),
           })

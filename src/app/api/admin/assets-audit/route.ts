@@ -2,8 +2,10 @@ import { NextResponse } from 'next/server'
 
 import { getAssetsAudit } from '@/server/assets/image-assets'
 
+export const dynamic = 'force-dynamic'
+
 function isAuthorized(request: Request) {
-  const cronSecret = process.env.CRON_SECRET
+  const cronSecret = process.env.CRON_SECRET || process.env.ADMIN_CRON_SECRET
   if (!cronSecret) return false
 
   return request.headers.get('x-cron-secret') === cronSecret
@@ -15,7 +17,10 @@ export async function GET(request: Request) {
   }
 
   try {
-    const audit = await getAssetsAudit()
+    const { searchParams } = new URL(request.url)
+    const checkRemote = searchParams.get('checkRemote') !== 'false'
+    const remoteLimit = Number(searchParams.get('remoteLimit')) || 25
+    const audit = await getAssetsAudit({ checkRemote, remoteLimit })
 
     return NextResponse.json(
       {

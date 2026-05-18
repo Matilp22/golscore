@@ -155,7 +155,8 @@ export default async function JugadorPage({ params, searchParams }: PageProps) {
               <div className="flex items-center gap-4">
                 <div className="flex h-20 w-20 items-center justify-center overflow-hidden">
                   <PlayerPhoto
-                    src={player.photo}
+                    player={player}
+                    src={player.photo_url ?? player.photo}
                     alt={player.name}
                     size={80}
                     className="h-20 w-20 rounded-full object-cover"
