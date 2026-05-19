@@ -2640,7 +2640,7 @@ function getEventPersonKey(person?: { id?: number; name?: string }) {
 }
 
 function getEventTeamKey(team?: { id?: number; name?: string }) {
-  return team?.name || team?.id || ''
+  return team?.id || team?.name || ''
 }
 
 function getMatchEventMergeKey(event: MatchEvent) {

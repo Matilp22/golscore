@@ -203,6 +203,13 @@ function normalizeTeamRefName(value?: string | null) {
   return (value || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/&/g, ' and ')
+    .replace(/\bjrs\b/g, 'juniors')
+    .replace(/\bjunior\b/g, 'juniors')
+    .replace(/\bcordoba\b/g, 'cordoba')
+    .replace(/[^a-z0-9]+/gi, ' ')
+    .replace(/\b(ca|club|de|del|la|el|fc|ac)\b/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase()
 }
@@ -217,7 +224,13 @@ function isSameTeamRef(
   const candidateName = normalizeTeamRefName(candidate.name)
   const targetName = normalizeTeamRefName(target.name)
 
-  return Boolean(candidateName && targetName && candidateName === targetName)
+  if (!candidateName || !targetName) return false
+
+  return (
+    candidateName === targetName ||
+    candidateName.includes(targetName) ||
+    targetName.includes(candidateName)
+  )
 }
 
 function isHomeEvent(event: MatchEvent, homeTeam: MatchFixture['teams']['home']) {
@@ -275,6 +288,7 @@ function buildStatPairs(homeStats: MatchStatistic[], awayStats: MatchStatistic[]
 
 type EventKind =
   | 'goal'
+  | 'penalty'
   | 'penalty-goal'
   | 'penalty-missed'
   | 'yellow-card'
@@ -291,9 +305,17 @@ function getEventKind(event: MatchEvent): EventKind {
   const type = normalizeEventText(event.type)
   const detail = normalizeEventText(event.detail)
   const comments = normalizeEventText(event.comments)
+  const combined = [type, detail, comments].filter(Boolean).join(' ')
 
-  if (type.includes('var') || detail.includes('var') || comments.includes('var')) {
-    return 'var'
+  if (
+    type.includes('subst') ||
+    type.includes('substitution') ||
+    detail.includes('subst') ||
+    detail.includes('substitution') ||
+    comments.includes('substitution') ||
+    combined.includes('cambio')
+  ) {
+    return 'substitution'
   }
 
   if (detail.includes('missed penalty') || detail.includes('penalty missed')) {
@@ -302,6 +324,31 @@ function getEventKind(event: MatchEvent): EventKind {
 
   if (type.includes('goal') && detail.includes('penalty')) {
     return 'penalty-goal'
+  }
+
+  if (
+    type.includes('var') ||
+    detail.includes('var') ||
+    comments.includes('var') ||
+    detail.includes('confirmed') ||
+    detail.includes('cancelled') ||
+    detail.includes('canceled') ||
+    detail.includes('disallowed') ||
+    detail.includes('cancelled goal') ||
+    detail.includes('goal cancelled') ||
+    detail.includes('goal canceled')
+  ) {
+    return 'var'
+  }
+
+  if (
+    type.includes('penalty') ||
+    detail.includes('penalty') ||
+    comments.includes('penalty') ||
+    detail.includes('penal') ||
+    comments.includes('penal')
+  ) {
+    return 'penalty'
   }
 
   if (type.includes('goal')) {
@@ -314,10 +361,6 @@ function getEventKind(event: MatchEvent): EventKind {
 
   if (detail.includes('red')) {
     return 'red-card'
-  }
-
-  if (type.includes('subst')) {
-    return 'substitution'
   }
 
   return 'event'
@@ -362,6 +405,7 @@ function getEventPrimary(event: MatchEvent) {
   const kind = getEventKind(event)
 
   if (kind === 'var') return 'VAR'
+  if (kind === 'penalty') return 'Penal'
   if (kind === 'substitution') {
     return event.assist?.name || event.player?.name || 'Cambio'
   }
@@ -378,9 +422,13 @@ function getEventSecondary(event: MatchEvent) {
       : translateEventDetail(event)
   }
 
+  if (kind === 'penalty') {
+    return translateEventDetail(event)
+  }
+
   if (kind === 'substitution') {
     return event.player?.name
-      ? `por ${event.player.name}`
+      ? `Cambio: por ${event.player.name}`
       : translateEventDetail(event)
   }
 
@@ -403,6 +451,14 @@ function getEventTypeStyle(event: MatchEvent) {
       kind,
       accent: 'text-[#7ff0b2]',
       badge: 'border-[#25553d] bg-[#163828] text-[#7ff0b2]',
+    }
+  }
+
+  if (kind === 'penalty') {
+    return {
+      kind,
+      accent: 'text-[#f3d36c]',
+      badge: 'border-[#574b20] bg-[#3f3616] text-[#f3d36c]',
     }
   }
 
@@ -494,7 +550,7 @@ function EventIcon({
     return ballIcon
   }
 
-  if (kind === 'penalty-goal') {
+  if (kind === 'penalty' || kind === 'penalty-goal') {
     return (
       <span className="relative inline-flex h-4 w-5 items-center justify-center text-white">
         <span className="absolute inset-x-0 top-[1px] h-2.5 rounded-t-[2px] border-x border-t border-current" />
@@ -1866,6 +1922,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                   {timelineEvents.map((event, index) => {
                     const isHome = isHomeEvent(event, homeTeam)
                     const isAway = isAwayEvent(event, awayTeam)
+                    const renderOnHomeSide = isHome || !isAway
                     const minuteLabel = formatEventMinute(
                       event.time?.elapsed,
                       event.time?.extra
@@ -1876,9 +1933,9 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                       <div
                         key={`${event.time?.elapsed || 'x'}-${event.time?.extra || 0}-${index}`}
                         className="grid grid-cols-[1fr_56px_1fr] items-center border-b border-white/6 px-2 py-2 last:border-b-0 md:grid-cols-[1fr_72px_1fr] md:px-3"
-                      >
+                        >
                         <div className="min-w-0 pr-3">
-                          {isHome ? (
+                          {renderOnHomeSide ? (
                             <div className="flex items-center gap-2">
                               <span className={`inline-flex min-h-4 min-w-4 items-center justify-center ${style.accent}`}>
                                 <EventIcon kind={style.kind} />
