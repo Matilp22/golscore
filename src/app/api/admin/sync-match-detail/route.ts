@@ -45,6 +45,23 @@ export async function GET(request: Request) {
     return jsonNoStore({
       ok: result.errors.length === 0,
       mode: 'match-detail',
+      match: result.match,
+      eventsBefore: result.before.eventsCount,
+      eventsAfter: result.after.eventsCount,
+      lineupsBefore:
+        result.before.lineupsHomeCount +
+        result.before.lineupsAwayCount +
+        result.before.substitutesHomeCount +
+        result.before.substitutesAwayCount,
+      lineupsAfter:
+        result.after.lineupsHomeCount +
+        result.after.lineupsAwayCount +
+        result.after.substitutesHomeCount +
+        result.after.substitutesAwayCount,
+      statisticsBefore: result.before.statisticsCount,
+      statisticsAfter: result.after.statisticsCount,
+      missingSections: result.after.missingSections,
+      warnings: result.warnings,
       result,
     })
   } catch (error) {

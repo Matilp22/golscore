@@ -1,6 +1,3 @@
-'use client'
-
-import { useState } from 'react'
 import { formatEventMinute } from '@/shared/utils/event-minute'
 
 type TeamStyle = {
@@ -18,6 +15,7 @@ type PanelPlayer = {
   style: TeamStyle
   isCaptain?: boolean
   goals?: number
+  missedPenalties?: number
   yellowCards?: number
   redCards?: number
   replacedPlayerName?: string
@@ -62,14 +60,16 @@ function Shirt({ number, style }: { number?: number | string; style: TeamStyle }
 
 function TinyEventBadges({
   goals = 0,
+  missedPenalties = 0,
   yellowCards = 0,
   redCards = 0,
 }: {
   goals?: number
+  missedPenalties?: number
   yellowCards?: number
   redCards?: number
 }) {
-  if (!goals && !yellowCards && !redCards) return null
+  if (!goals && !missedPenalties && !yellowCards && !redCards) return null
 
   const ballIcon = (
     <svg viewBox="0 0 32 32" aria-hidden="true" className="h-[13px] w-[13px] overflow-visible">
@@ -100,6 +100,13 @@ function TinyEventBadges({
           {goals > 1 ? <span className="ml-0.5 text-[8px] font-bold">{goals}</span> : null}
         </span>
       ) : null}
+      {missedPenalties ? (
+        <span className="relative inline-flex h-4 w-5 items-center justify-center text-[#ffb3b3]" title="Penal errado">
+          <span className="absolute inset-x-0 top-[1px] h-2.5 rounded-t-[2px] border-x border-t border-current" />
+          <span className="absolute h-[1.5px] w-5 rotate-45 bg-[#ff5f5f]" />
+          <span className="absolute h-[1.5px] w-5 -rotate-45 bg-[#ff5f5f]" />
+        </span>
+      ) : null}
       {yellowCards ? (
         <span className="inline-block h-[13px] w-[9px] rounded-[2px] bg-[#f3d36c]" />
       ) : null}
@@ -128,38 +135,10 @@ export default function FormationTeamPanel({
   substitutes,
   align,
 }: FormationTeamPanelProps) {
-  const [tab, setTab] = useState<'starters' | 'substitutes'>('starters')
-  const players = tab === 'starters' ? starters : substitutes
-
   return (
     <div className="w-full rounded-2xl border border-white/8 bg-[#111418] p-2 sm:p-3 md:p-4">
       <div className={`${align === 'right' ? 'text-right' : 'text-left'}`}>
         <h4 className="text-sm font-bold uppercase tracking-[0.14em] text-[#f3f6fa]">{title}</h4>
-      </div>
-
-      <div className={`mt-3 flex gap-2 ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
-        <button
-          type="button"
-          onClick={() => setTab('starters')}
-          className={`rounded-lg border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] transition ${
-            tab === 'starters'
-              ? 'border-[#25553d] bg-[#163828] text-[#7ff0b2]'
-              : 'border-white/8 bg-[#161a20] text-[#a8b0bc] hover:bg-[#1b2128]'
-          }`}
-        >
-          Titulares
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('substitutes')}
-          className={`rounded-lg border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] transition ${
-            tab === 'substitutes'
-              ? 'border-[#25553d] bg-[#163828] text-[#7ff0b2]'
-              : 'border-white/8 bg-[#161a20] text-[#a8b0bc] hover:bg-[#1b2128]'
-          }`}
-        >
-          Suplentes
-        </button>
       </div>
 
       <div className="mt-2 rounded-xl border border-white/6 bg-[#161a20] px-2 py-2 md:mt-3 md:px-3">
@@ -169,65 +148,112 @@ export default function FormationTeamPanel({
         </p>
       </div>
 
-      <div className="mt-2 space-y-1.5 md:mt-3">
+      <div className="mt-3 space-y-3">
+        <PlayerSection
+          title="Titulares"
+          players={starters}
+          align={align}
+        />
+        <PlayerSection
+          title="Suplentes"
+          players={substitutes}
+          align={align}
+        />
+      </div>
+    </div>
+  )
+}
+
+function PlayerSection({
+  title,
+  players,
+  align,
+}: {
+  title: string
+  players: PanelPlayer[]
+  align: 'left' | 'right'
+}) {
+  return (
+    <section>
+      <div className={`mb-1.5 flex ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
+        <h5 className="rounded-lg border border-[#25553d] bg-[#163828] px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-[#7ff0b2]">
+          {title}
+        </h5>
+      </div>
+
+      <div className="space-y-1.5">
         {players.length ? (
           players.map((player) => (
-            <div
-              key={player.id}
-              className={`flex items-center gap-2 rounded-xl border border-white/6 bg-[#161a20] px-2 py-1.5 md:gap-2.5 md:px-3 ${
-                align === 'right' ? 'flex-row-reverse text-right' : ''
-              }`}
-            >
-              <div className="relative flex-shrink-0">
-                {player.isCaptain ? (
-                  <div className="absolute -left-1.5 top-1/2 z-10 -translate-y-1/2">
-                    <CaptainBadge />
-                  </div>
-                ) : null}
-                <Shirt number={player.number} style={player.style} />
-              </div>
-
-              <div className={`min-w-0 flex-1 ${align === 'right' ? 'text-right' : 'text-left'}`}>
-                <p className="truncate text-[13px] font-semibold text-white">
-                  {player.name}
-                </p>
-                {translatePosition(player.position) ? (
-                  <p className="mt-0.5 truncate text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8d98a7]">
-                    {translatePosition(player.position)}
-                  </p>
-                ) : null}
-                {player.replacedPlayerName && player.substitutionLabel ? (
-                  <div className="mt-0.5 leading-tight">
-                    <p
-                      className={`text-[10px] font-black ${
-                        player.substitutionDirection === 'in'
-                          ? 'text-[#7ff0b2]'
-                          : 'text-[#ff8f8f]'
-                      }`}
-                    >
-                      {player.substitutionDirection === 'in' ? <>&uarr;</> : <>&darr;</>}{' '}
-                      {player.substitutionMinute
-                        ? formatEventMinute(player.substitutionMinute, player.substitutionExtraMinute)
-                        : ''}
-                    </p>
-                    <p className="truncate text-[10px] text-[#9fb0c2]">
-                      {player.substitutionLabel} {player.replacedPlayerName}
-                    </p>
-                  </div>
-                ) : null}
-              </div>
-
-              <TinyEventBadges
-                goals={player.goals}
-                yellowCards={player.yellowCards}
-                redCards={player.redCards}
-              />
-            </div>
+            <PlayerRow key={player.id} player={player} align={align} />
           ))
         ) : (
-          <p className="text-sm text-[#8d98a7]">No hay jugadores disponibles.</p>
+          <p className="rounded-xl border border-white/6 bg-[#161a20] px-2 py-2 text-sm text-[#8d98a7]">
+            No hay jugadores disponibles.
+          </p>
         )}
       </div>
+    </section>
+  )
+}
+
+function PlayerRow({
+  player,
+  align,
+}: {
+  player: PanelPlayer
+  align: 'left' | 'right'
+}) {
+  return (
+    <div
+      className={`flex items-center gap-2 rounded-xl border border-white/6 bg-[#161a20] px-2 py-1.5 md:gap-2.5 md:px-3 ${
+        align === 'right' ? 'flex-row-reverse text-right' : ''
+      }`}
+    >
+      <div className="relative flex-shrink-0">
+        {player.isCaptain ? (
+          <div className="absolute -left-1.5 top-1/2 z-10 -translate-y-1/2">
+            <CaptainBadge />
+          </div>
+        ) : null}
+        <Shirt number={player.number} style={player.style} />
+      </div>
+
+      <div className={`min-w-0 flex-1 ${align === 'right' ? 'text-right' : 'text-left'}`}>
+        <p className="truncate text-[13px] font-semibold text-white">
+          {player.name}
+        </p>
+        {translatePosition(player.position) ? (
+          <p className="mt-0.5 truncate text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8d98a7]">
+            {translatePosition(player.position)}
+          </p>
+        ) : null}
+        {player.replacedPlayerName && player.substitutionLabel ? (
+          <div className="mt-0.5 leading-tight">
+            <p
+              className={`text-[10px] font-black ${
+                player.substitutionDirection === 'in'
+                  ? 'text-[#7ff0b2]'
+                  : 'text-[#ff8f8f]'
+              }`}
+            >
+              {player.substitutionDirection === 'in' ? <>&uarr;</> : <>&darr;</>}{' '}
+              {player.substitutionMinute
+                ? formatEventMinute(player.substitutionMinute, player.substitutionExtraMinute)
+                : ''}
+            </p>
+            <p className="truncate text-[10px] text-[#9fb0c2]">
+              {player.substitutionLabel} {player.replacedPlayerName}
+            </p>
+          </div>
+        ) : null}
+      </div>
+
+      <TinyEventBadges
+        goals={player.goals}
+        missedPenalties={player.missedPenalties}
+        yellowCards={player.yellowCards}
+        redCards={player.redCards}
+      />
     </div>
   )
 }

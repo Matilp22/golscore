@@ -14,7 +14,14 @@ import FormationTeamPanel from '@/frontend/components/FormationTeamPanel'
 import SafeImage from '@/frontend/components/SafeImage'
 import { formatMatchTimeArgentina } from '@/shared/utils/argentina-time'
 import { formatEventMinute } from '@/shared/utils/event-minute'
-import { translateMatchEventDetail } from '@/shared/utils/football-events'
+import {
+  getPlayerIncidentsForLineup,
+  isInjuryEvent,
+  isMissedPenaltyEvent,
+  isSubstitutionEvent,
+  isVarEvent,
+  translateMatchEventDetail,
+} from '@/shared/utils/football-events'
 import {
   formatMatchScoreWithPenalties,
   hasPenaltyShootoutScore,
@@ -295,6 +302,7 @@ type EventKind =
   | 'red-card'
   | 'substitution'
   | 'var'
+  | 'injury'
   | 'event'
 
 function normalizeEventText(value?: string | null) {
@@ -305,41 +313,17 @@ function getEventKind(event: MatchEvent): EventKind {
   const type = normalizeEventText(event.type)
   const detail = normalizeEventText(event.detail)
   const comments = normalizeEventText(event.comments)
-  const combined = [type, detail, comments].filter(Boolean).join(' ')
 
-  if (
-    type.includes('subst') ||
-    type.includes('substitution') ||
-    detail.includes('subst') ||
-    detail.includes('substitution') ||
-    comments.includes('substitution') ||
-    combined.includes('cambio')
-  ) {
-    return 'substitution'
-  }
+  if (isSubstitutionEvent(event)) return 'substitution'
 
-  if (detail.includes('missed penalty') || detail.includes('penalty missed')) {
-    return 'penalty-missed'
-  }
+  if (isMissedPenaltyEvent(event)) return 'penalty-missed'
 
   if (type.includes('goal') && detail.includes('penalty')) {
     return 'penalty-goal'
   }
 
-  if (
-    type.includes('var') ||
-    detail.includes('var') ||
-    comments.includes('var') ||
-    detail.includes('confirmed') ||
-    detail.includes('cancelled') ||
-    detail.includes('canceled') ||
-    detail.includes('disallowed') ||
-    detail.includes('cancelled goal') ||
-    detail.includes('goal cancelled') ||
-    detail.includes('goal canceled')
-  ) {
-    return 'var'
-  }
+  if (isVarEvent(event)) return 'var'
+  if (isInjuryEvent(event)) return 'injury'
 
   if (
     type.includes('penalty') ||
@@ -381,7 +365,7 @@ function translateEventDetail(event: MatchEvent) {
   if (normalizedDetail.includes('red')) return 'Tarjeta roja'
   if (normalizedDetail.includes('normal goal')) return 'Gol'
   if (normalizedDetail.includes('own goal')) return 'Gol en contra'
-  if (normalizedDetail.includes('missed penalty') || normalizedDetail.includes('penalty missed')) {
+  if (isMissedPenaltyEvent(event)) {
     return 'Penal errado'
   }
   if (normalizedDetail.includes('penalty')) return 'Penal'
@@ -389,6 +373,7 @@ function translateEventDetail(event: MatchEvent) {
   if (normalizedType.includes('var') || normalizedComments.includes('var')) {
     return 'Revisión VAR'
   }
+  if (isInjuryEvent(event)) return 'Lesión'
 
   const map: Record<string, string> = {
     Foul: 'Falta',
@@ -502,6 +487,14 @@ function getEventTypeStyle(event: MatchEvent) {
     }
   }
 
+  if (kind === 'injury') {
+    return {
+      kind,
+      accent: 'text-[#f3d36c]',
+      badge: 'border-[#574b20] bg-[#3f3616] text-[#f3d36c]',
+    }
+  }
+
   return {
     kind,
     accent: 'text-[#a8b0bc]',
@@ -587,6 +580,10 @@ function EventIcon({
         <span className="text-[#ff8f8f]">&darr;</span>
       </span>
     )
+  }
+
+  if (kind === 'injury') {
+    return <span className="text-sm font-black leading-none text-[#f3d36c]">+</span>
   }
 
   return <span className="text-xs font-black leading-none">EVT</span>
@@ -1284,6 +1281,7 @@ type PlayerFieldState = {
   substitutionExtraMinute?: number | null
   substitutionReplacementName?: string | null
   goals: number
+  missedPenalties: number
   yellowCards: number
   redCards: number
 }
@@ -1296,8 +1294,8 @@ function matchesPlayerEvent(
   if (!candidate) return false
   if (playerId && candidate.id && candidate.id === playerId) return true
 
-  const normalizedCandidate = (candidate.name || '').trim().toLowerCase()
-  const normalizedPlayer = (playerName || '').trim().toLowerCase()
+  const normalizedCandidate = normalizeTeamRefName(candidate.name)
+  const normalizedPlayer = normalizeTeamRefName(playerName)
 
   return Boolean(normalizedCandidate && normalizedPlayer && normalizedCandidate === normalizedPlayer)
 }
@@ -1318,21 +1316,9 @@ function getPlayerFieldState(
     )
   })
 
-  const matchesDisplayedPlayer = (event: MatchEvent) =>
-    matchesPlayerEvent(event.player, basePlayer.id, displayName) ||
-    matchesPlayerEvent(event.player, undefined, displayName)
-
-  const goalEvents = events.filter((event) => {
-    const kind = getEventKind(event)
-    return (kind === 'goal' || kind === 'penalty-goal') && matchesDisplayedPlayer(event)
-  })
-
-  const yellowCardEvents = events.filter((event) =>
-    getEventKind(event) === 'yellow-card' && matchesDisplayedPlayer(event)
-  )
-
-  const redCardEvents = events.filter((event) =>
-    getEventKind(event) === 'red-card' && matchesDisplayedPlayer(event)
+  const incidents = getPlayerIncidentsForLineup(
+    { id: basePlayer.id, name: displayName },
+    events
   )
 
   return {
@@ -1343,9 +1329,17 @@ function getPlayerFieldState(
     substitutionReplacementName: substitutionEvent?.assist?.name
       ? abbreviatePlayerName(substitutionEvent.assist.name)
       : null,
-    goals: goalEvents.length,
-    yellowCards: yellowCardEvents.length,
-    redCards: redCardEvents.length,
+    goals: incidents.filter((incident) => (
+      incident.kind === 'goal' ||
+      incident.kind === 'penalty-goal' ||
+      incident.kind === 'own-goal'
+    )).length,
+    missedPenalties: incidents.filter((incident) => incident.kind === 'penalty-missed').length,
+    yellowCards: incidents.filter((incident) => incident.kind === 'yellow-card').length,
+    redCards: incidents.filter((incident) => (
+      incident.kind === 'red-card' ||
+      incident.kind === 'second-yellow'
+    )).length,
   }
 }
 
@@ -1365,20 +1359,27 @@ function incidenceSlots(count: number) {
 
 function FieldSideIncidences({
   goals,
+  missedPenalties,
   yellowCards,
   redCards,
 }: {
   goals: number
+  missedPenalties: number
   yellowCards: number
   redCards: number
 }) {
-  if (!goals && !yellowCards && !redCards) return null
+  if (!goals && !missedPenalties && !yellowCards && !redCards) return null
 
   return (
     <div className="absolute left-[calc(50%+16px)] top-1/2 flex -translate-y-1/2 items-center gap-1 whitespace-nowrap text-left sm:left-[calc(50%+27px)] sm:gap-1.5">
       {incidenceSlots(goals).map((_, index) => (
         <span key={`goal-${index}`} className="inline-flex items-center gap-0.5 text-[9px] font-black text-white sm:text-[11px]">
           <EventIcon kind="goal" size="lg" />
+        </span>
+      ))}
+      {incidenceSlots(missedPenalties).map((_, index) => (
+        <span key={`missed-penalty-${index}`} className="inline-flex items-center gap-0.5 text-[9px] font-black text-[#ffb3b3] sm:text-[11px]">
+          <EventIcon kind="penalty-missed" />
         </span>
       ))}
       {incidenceSlots(yellowCards).map((_, index) => (
@@ -1480,6 +1481,7 @@ function PlayerOnField({
         <Shirt number={playerState.displayNumber ?? player.number} style={style} />
         <FieldSideIncidences
           goals={playerState.goals}
+          missedPenalties={playerState.missedPenalties}
           yellowCards={playerState.yellowCards}
           redCards={playerState.redCards}
         />
@@ -1607,6 +1609,9 @@ function buildPanelPlayers({
       const kind = getEventKind(event)
       return (kind === 'goal' || kind === 'penalty-goal') && matchesPlayerEvent(event.player, player.id, player.name)
     }).length
+    const missedPenalties = events.filter((event) =>
+      getEventKind(event) === 'penalty-missed' && matchesPlayerEvent(event.player, player.id, player.name)
+    ).length
     const yellowCards = events.filter((event) =>
       getEventKind(event) === 'yellow-card' && matchesPlayerEvent(event.player, player.id, player.name)
     ).length
@@ -1628,6 +1633,7 @@ function buildPanelPlayers({
       style: getStyleForPlayer(playerWrap, teamName, isHome, lineup),
       isCaptain,
       goals,
+      missedPenalties,
       yellowCards,
       redCards,
       replacedPlayerName:
