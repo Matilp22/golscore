@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server'
 
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
-import { auditMatchDetailCache } from '@/server/match-detail-cache'
+import {
+  auditMatchDetailCache,
+  auditMatchDetailsGeneral,
+} from '@/server/match-detail-cache'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -20,18 +23,51 @@ function readNumber(value: string | null) {
   return Number.isFinite(numberValue) ? numberValue : null
 }
 
+function readStatuses(value: string | null) {
+  return (value ?? '')
+    .split(',')
+    .map((status) => status.trim().toUpperCase())
+    .filter(Boolean)
+}
+
+function readBoolean(value: string | null) {
+  return ['1', 'true', 'yes', 'si', 'sí'].includes((value ?? '').trim().toLowerCase())
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const supabase = getSupabaseAdminClient()
-    const audit = await auditMatchDetailCache(supabase, {
-      fixtureExternalId: readNumber(searchParams.get('fixture')),
-      matchId: searchParams.get('matchId'),
+    const fixtureExternalId = readNumber(searchParams.get('fixture'))
+    const matchId = searchParams.get('matchId')
+
+    if (fixtureExternalId || matchId) {
+      const audit = await auditMatchDetailCache(supabase, {
+        fixtureExternalId,
+        matchId,
+      })
+
+      return jsonNoStore({
+        ok: true,
+        endpoint: 'match-detail-audit',
+        mode: 'single',
+        ...audit,
+      })
+    }
+
+    const audit = await auditMatchDetailsGeneral(supabase, {
+      limit: readNumber(searchParams.get('limit')),
+      leagueExternalId: readNumber(searchParams.get('leagueExternalId')),
+      dateFrom: searchParams.get('dateFrom'),
+      dateTo: searchParams.get('dateTo'),
+      statuses: readStatuses(searchParams.get('statuses')),
+      missingOnly: readBoolean(searchParams.get('missingOnly')),
     })
 
     return jsonNoStore({
       ok: true,
       endpoint: 'match-detail-audit',
+      mode: 'general',
       ...audit,
     })
   } catch (error) {
