@@ -698,6 +698,7 @@ type StoredMatchEventRow = {
   extra_minute: number | null
   type: string
   detail: string | null
+  comments?: string | null
 }
 
 type HomeMatchBroadcastRow = {
@@ -2347,12 +2348,33 @@ async function fetchStoredEventsByMatchId(matchId: string | number) {
   const supabase = getSupabaseAdminClient()
   const response = await supabase
     .from('match_events')
-    .select('id, external_event_id, match_id, team_id, player_name, assist_name, minute, extra_minute, type, detail')
+    .select('id, external_event_id, match_id, team_id, player_name, assist_name, minute, extra_minute, type, detail, comments')
     .eq('match_id', String(matchId))
     .order('minute', { ascending: true, nullsFirst: false })
     .order('extra_minute', { ascending: true, nullsFirst: false })
 
   if (response.error) {
+    if (
+      response.error.code === '42703' ||
+      response.error.code === 'PGRST204' ||
+      response.error.message.toLowerCase().includes('comments') ||
+      response.error.message.toLowerCase().includes('schema cache')
+    ) {
+      const fallbackResponse = await supabase
+        .from('match_events')
+        .select('id, external_event_id, match_id, team_id, player_name, assist_name, minute, extra_minute, type, detail')
+        .eq('match_id', String(matchId))
+        .order('minute', { ascending: true, nullsFirst: false })
+        .order('extra_minute', { ascending: true, nullsFirst: false })
+
+      if (fallbackResponse.error) {
+        if (isMissingOptionalStoredEvents(fallbackResponse.error)) return []
+        throw fallbackResponse.error
+      }
+
+      return (fallbackResponse.data ?? []) as StoredMatchEventRow[]
+    }
+
     if (isMissingOptionalStoredEvents(response.error)) return []
     throw response.error
   }
@@ -2616,7 +2638,7 @@ function mapStoredEventToMatchEvent(
     },
     type: row.type,
     detail: row.detail ?? undefined,
-    comments: null,
+    comments: row.comments ?? null,
   }
 }
 

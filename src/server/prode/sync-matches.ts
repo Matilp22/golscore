@@ -26,8 +26,10 @@ import {
 import { getHomeMatchVisibility } from '@/shared/utils/home-match-visibility'
 import {
   isCancelledEvent,
+  formatMatchEventStableKey,
   isImportantLiveEvent,
   isScoreboardGoalEvent,
+  isSubstitutionEvent,
   normalizeFootballEventText,
 } from '@/shared/utils/football-events'
 import { getCanonicalMatchStatusFromApi, isFinishedStatus } from '@/shared/utils/match-status'
@@ -133,6 +135,7 @@ type ApiFixtureEvent = {
   }
   type?: string
   detail?: string | null
+  comments?: string | null
 }
 
 type ApiLeague = {
@@ -2291,14 +2294,7 @@ async function upsertMatch(
 function getEventExternalId(fixture: ApiFixture, event: ApiFixtureEvent) {
   if (event.id !== undefined && event.id !== null) return String(event.id)
 
-  return [
-    fixture.fixture.id,
-    event.time?.elapsed ?? 'minute',
-    event.time?.extra ?? 'no-extra',
-    event.team?.id ?? 'team',
-    event.player?.name ?? 'player',
-    event.detail ?? 'detail',
-  ].join(':')
+  return formatMatchEventStableKey(event, fixture.fixture.id)
 }
 
 function isImportantMatchEventForHome(event: ApiFixtureEvent) {
@@ -2319,6 +2315,7 @@ function isImportantMatchEventForHome(event: ApiFixtureEvent) {
     (
       isScoreboardGoalEvent(event.type, event.detail) ||
       isCardEvent ||
+      isSubstitutionEvent(event) ||
       isImportantLiveEvent(event.type, event.detail) ||
       isReviewEvent
     ) &&
@@ -2400,7 +2397,6 @@ async function syncMatchEventsIfSupported(
     })
 
     const events = await fetchFixtureEvents(fixture.fixture.id)
-    const fallbackKeyOccurrences = new Map<string, number>()
     const eventRows = events
       .filter(isImportantMatchEventForHome)
       .map((event) => {
@@ -2416,14 +2412,7 @@ async function syncMatchEventsIfSupported(
         const hasApiEventId = event.id !== undefined && event.id !== null
         const externalEventId = hasApiEventId
           ? rawExternalEventId
-          : `${rawExternalEventId}:${fallbackKeyOccurrences.get(rawExternalEventId) ?? 0}`
-
-        if (!hasApiEventId) {
-          fallbackKeyOccurrences.set(
-            rawExternalEventId,
-            (fallbackKeyOccurrences.get(rawExternalEventId) ?? 0) + 1
-          )
-        }
+          : rawExternalEventId
 
         console.info('event time', {
           fixtureId: fixture.fixture.id,
@@ -2449,6 +2438,7 @@ async function syncMatchEventsIfSupported(
           extra_minute: storedExtraMinute,
           type: event.type as string,
           detail: event.detail ?? null,
+          comments: event.comments ?? null,
         }
       })
     const dedupedEventRows = [
@@ -2482,8 +2472,34 @@ async function syncMatchEventsIfSupported(
     )
 
     if (insertResponse.error) {
-      if (isMissingOptionalMatchEvents(insertResponse.error)) return emptyResult
-      throw insertResponse.error
+      if (
+        insertResponse.error.code === '42703' ||
+        insertResponse.error.code === 'PGRST204' ||
+        insertResponse.error.message.toLowerCase().includes('comments') ||
+        insertResponse.error.message.toLowerCase().includes('schema cache')
+      ) {
+        const fallbackRows = dedupedEventRows.map((row) => {
+          const rowWithoutComments: Record<string, unknown> = {}
+          for (const [key, value] of Object.entries(row)) {
+            if (key !== 'comments') rowWithoutComments[key] = value
+          }
+          return rowWithoutComments
+        })
+        const fallbackResponse = await withTimeout(
+          supabase
+            .from('match_events')
+            .upsert(fallbackRows, { onConflict: 'match_id,external_event_id' }),
+          `match_events upsert fallback ${fixture.fixture.id}`
+        )
+
+        if (fallbackResponse.error) {
+          if (isMissingOptionalMatchEvents(fallbackResponse.error)) return emptyResult
+          throw fallbackResponse.error
+        }
+      } else {
+        if (isMissingOptionalMatchEvents(insertResponse.error)) return emptyResult
+        throw insertResponse.error
+      }
     }
 
     logDebug(debug, 'match events synced', {

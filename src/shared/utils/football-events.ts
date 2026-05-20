@@ -24,10 +24,19 @@ export type FootballEventLike = {
     id?: number | null
     name?: string | null
   } | null
+  team?: {
+    id?: number | string | null
+    name?: string | null
+  } | null
   time?: {
     elapsed?: number | null
     extra?: number | null
   } | null
+}
+
+type PlayerRef = {
+  id?: number | null
+  name?: string | null
 }
 
 function getEventType(event: FootballEventLike) {
@@ -58,6 +67,18 @@ export function getEventAssistName(event: FootballEventLike) {
     event.assist?.name ??
     null
   )
+}
+
+function playerMatchesRef(player: PlayerRef | null | undefined, refs?: PlayerRef[]) {
+  if (!player || !refs?.length) return false
+  const playerId = player.id ? Number(player.id) : null
+  const playerName = normalizeFootballEventText(player.name)
+
+  return refs.some((ref) => {
+    if (playerId !== null && ref.id && Number(ref.id) === playerId) return true
+
+    return Boolean(playerName && normalizeFootballEventText(ref.name) === playerName)
+  })
 }
 
 function eventText(
@@ -166,6 +187,155 @@ export function isInjuryEvent(event: FootballEventLike) {
     combined.includes('lesion') ||
     combined.includes('lesionado')
   )
+}
+
+export function isPenaltyShootoutEvent(event: FootballEventLike) {
+  const combined = eventText(
+    getEventType(event),
+    getEventDetail(event),
+    getEventComments(event)
+  )
+
+  return (
+    combined.includes('penalty shootout') ||
+    combined.includes('shootout') ||
+    combined.includes('penales')
+  )
+}
+
+export function formatMatchEventStableKey(
+  event: FootballEventLike & {
+    team?: {
+      id?: number | string | null
+      name?: string | null
+    } | null
+  },
+  matchId?: string | number | null
+) {
+  return [
+    matchId ?? 'match',
+    getEventType(event) ?? 'type',
+    getEventDetail(event) ?? 'detail',
+    event.time?.elapsed ?? 'minute',
+    event.time?.extra ?? 'no-extra',
+    event.team?.id ?? event.team?.name ?? 'team',
+    getEventPlayerName(event) ?? 'player',
+    getEventAssistName(event) ?? 'assist',
+  ].map((part) =>
+    String(part)
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'none'
+  ).join(':')
+}
+
+function getEventSortValue(event: FootballEventLike) {
+  return (event.time?.elapsed ?? 0) * 100 + (event.time?.extra ?? 0)
+}
+
+export function getTimelineEvents<T extends FootballEventLike>(
+  events: T[],
+  options: {
+    excludePenaltyShootout?: boolean
+    descending?: boolean
+  } = {}
+) {
+  const excludePenaltyShootout = options.excludePenaltyShootout ?? true
+  const descending = options.descending ?? true
+  const merged = new Map<string, T>()
+
+  for (const event of events) {
+    if (excludePenaltyShootout && isPenaltyShootoutEvent(event)) continue
+
+    merged.set(formatMatchEventStableKey(event), event)
+  }
+
+  return [...merged.values()].sort((a, b) => {
+    const sort = getEventSortValue(a) - getEventSortValue(b)
+    return descending ? -sort : sort
+  })
+}
+
+export function normalizeSubstitutionEvent(
+  event: FootballEventLike,
+  context: {
+    starters?: PlayerRef[]
+    substitutes?: PlayerRef[]
+  } = {}
+) {
+  if (!isSubstitutionEvent(event)) return null
+
+  const player = event.player ?? null
+  const assist = event.assist ?? null
+  const playerLooksLikeSubstitute = playerMatchesRef(player, context.substitutes)
+  const assistLooksLikeStarter = playerMatchesRef(assist, context.starters)
+  const playerLooksLikeStarter = playerMatchesRef(player, context.starters)
+  const assistLooksLikeSubstitute = playerMatchesRef(assist, context.substitutes)
+  const apiLooksReversed = playerLooksLikeSubstitute && assistLooksLikeStarter
+  const apiLooksDefault = playerLooksLikeStarter && assistLooksLikeSubstitute
+  const playerInName = apiLooksReversed
+    ? player?.name ?? null
+    : apiLooksDefault
+      ? assist?.name ?? null
+      : assist?.name ?? null
+  const playerOutName = apiLooksReversed
+    ? assist?.name ?? null
+    : apiLooksDefault
+      ? player?.name ?? null
+      : player?.name ?? null
+
+  return {
+    type: 'substitution' as const,
+    minute: event.time?.elapsed ?? null,
+    extraMinute: event.time?.extra ?? null,
+    teamId: event.team?.id ?? null,
+    teamName: event.team?.name ?? null,
+    playerInName,
+    playerOutName,
+    label: 'Cambio',
+  }
+}
+
+export function getSubstitutionMap(
+  events: FootballEventLike[],
+  context: {
+    starters?: PlayerRef[]
+    substitutes?: PlayerRef[]
+  } = {}
+) {
+  const byPlayerOutName = new Map<string, ReturnType<typeof normalizeSubstitutionEvent> & { type: 'substitution' }>()
+  const byPlayerInName = new Map<string, ReturnType<typeof normalizeSubstitutionEvent> & { type: 'substitution' }>()
+  const byTeamId = new Map<string, Array<ReturnType<typeof normalizeSubstitutionEvent> & { type: 'substitution' }>>()
+
+  for (const event of events) {
+    const substitution = normalizeSubstitutionEvent(event, context)
+    if (!substitution) continue
+
+    if (substitution.playerOutName) {
+      byPlayerOutName.set(normalizeFootballEventText(substitution.playerOutName), substitution)
+    }
+
+    if (substitution.playerInName) {
+      byPlayerInName.set(normalizeFootballEventText(substitution.playerInName), substitution)
+    }
+
+    if (substitution.teamId !== null && substitution.teamId !== undefined) {
+      const teamKey = String(substitution.teamId)
+      const substitutions = byTeamId.get(teamKey) ?? []
+
+      substitutions.push(substitution)
+      byTeamId.set(teamKey, substitutions)
+    }
+  }
+
+  return {
+    byPlayerOutName,
+    byPlayerInName,
+    byTeamId,
+  }
 }
 
 export function isScoreboardGoalEvent(
@@ -362,10 +532,13 @@ export function translateMatchEventDetail(
   if (combined.includes('offside')) return 'Fuera de juego'
   if (combined.includes('substitution') || combined.includes('subst')) return 'Cambio'
   if (combined.includes('second yellow')) return 'Segunda amarilla'
+  if (combined.includes('red card')) return 'Roja'
+  if (combined.includes('yellow card')) return 'Amarilla'
   if (combined.includes('own goal')) return 'Gol en contra'
   if (combined.includes('normal goal')) return 'Gol'
   if (isMissedPenaltyEvent({ type, detail, comments })) return 'Penal errado'
-  if (combined.includes('injury')) return 'Lesion'
+  if (combined.includes('penalty')) return 'Penal'
+  if (combined.includes('injury')) return 'Lesión'
   if (normalizedType.includes('var') || normalizedDetail.includes('var') || normalizedComments.includes('var')) {
     return 'Revisión VAR'
   }

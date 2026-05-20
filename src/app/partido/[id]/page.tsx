@@ -4,7 +4,6 @@
   type MatchEvent,
   type MatchFixture,
   type MatchLineup,
-  type MatchStatistic,
   type MatchStatisticsTeam,
   type PlayerWrapper,
 } from '@/lib/api-football'
@@ -15,11 +14,15 @@ import SafeImage from '@/frontend/components/SafeImage'
 import { formatMatchTimeArgentina } from '@/shared/utils/argentina-time'
 import { formatEventMinute } from '@/shared/utils/event-minute'
 import {
+  getTimelineEvents,
   getPlayerIncidentsForLineup,
   isInjuryEvent,
   isMissedPenaltyEvent,
-  isSubstitutionEvent,
-  isVarEvent,
+  isPenaltyShootoutEvent,
+  getSubstitutionMap,
+  normalizeFootballEventText,
+  normalizeMatchEvent,
+  normalizeSubstitutionEvent,
   translateMatchEventDetail,
 } from '@/shared/utils/football-events'
 import {
@@ -28,6 +31,7 @@ import {
 } from '@/shared/utils/match-display'
 import { getEventElapsedMinute, getFixtureStatusElapsedMinute } from '@/shared/utils/match-minute'
 import { isFinishedStatus } from '@/shared/utils/match-status'
+import { normalizeMatchStatistics } from '@/shared/utils/match-statistics'
 import { getYouTubeThumbnailUrl } from '@/shared/utils/youtube'
 import Link from 'next/link'
 
@@ -252,16 +256,6 @@ function getEventSortValue(event: MatchEvent) {
   return (event.time?.elapsed ?? 0) * 100 + (event.time?.extra ?? 0)
 }
 
-function isPenaltyShootoutEvent(event: MatchEvent) {
-  const text = [
-    event.type,
-    event.detail,
-    event.comments,
-  ].join(' ').toLowerCase()
-
-  return text.includes('penalty shootout') || text.includes('shootout')
-}
-
 function didPenaltyShootoutEventScore(event: MatchEvent) {
   const text = [
     event.type,
@@ -272,82 +266,14 @@ function didPenaltyShootoutEventScore(event: MatchEvent) {
   return !(text.includes('missed') || text.includes('saved') || text.includes('failed'))
 }
 
-function getStatsForTeam(
-  stats: MatchStatisticsTeam[],
-  team: MatchFixture['teams']['home'] | MatchFixture['teams']['away'],
-  fallbackIndex: number
-) {
-  return stats.find((statTeam) => isSameTeamRef(statTeam.team, team)) ?? stats[fallbackIndex]
-}
-
-function buildStatPairs(homeStats: MatchStatistic[], awayStats: MatchStatistic[]) {
-  const statTypes = [
-    ...homeStats.map((stat) => stat.type),
-    ...awayStats.map((stat) => stat.type),
-  ].filter((type, index, allTypes) => Boolean(type) && allTypes.indexOf(type) === index)
-
-  return statTypes.map((type) => ({
-    type,
-    homeValue: homeStats.find((stat) => stat.type === type)?.value ?? null,
-    awayValue: awayStats.find((stat) => stat.type === type)?.value ?? null,
-  }))
-}
-
-type EventKind =
-  | 'goal'
-  | 'penalty'
-  | 'penalty-goal'
-  | 'penalty-missed'
-  | 'yellow-card'
-  | 'red-card'
-  | 'substitution'
-  | 'var'
-  | 'injury'
-  | 'event'
+type EventKind = ReturnType<typeof normalizeMatchEvent>['kind']
 
 function normalizeEventText(value?: string | null) {
   return (value || '').toLowerCase()
 }
 
 function getEventKind(event: MatchEvent): EventKind {
-  const type = normalizeEventText(event.type)
-  const detail = normalizeEventText(event.detail)
-  const comments = normalizeEventText(event.comments)
-
-  if (isSubstitutionEvent(event)) return 'substitution'
-
-  if (isMissedPenaltyEvent(event)) return 'penalty-missed'
-
-  if (type.includes('goal') && detail.includes('penalty')) {
-    return 'penalty-goal'
-  }
-
-  if (isVarEvent(event)) return 'var'
-  if (isInjuryEvent(event)) return 'injury'
-
-  if (
-    type.includes('penalty') ||
-    detail.includes('penalty') ||
-    comments.includes('penalty') ||
-    detail.includes('penal') ||
-    comments.includes('penal')
-  ) {
-    return 'penalty'
-  }
-
-  if (type.includes('goal')) {
-    return 'goal'
-  }
-
-  if (detail.includes('yellow')) {
-    return 'yellow-card'
-  }
-
-  if (detail.includes('red')) {
-    return 'red-card'
-  }
-
-  return 'event'
+  return normalizeMatchEvent(event).kind
 }
 
 function translateEventDetail(event: MatchEvent) {
@@ -392,7 +318,11 @@ function getEventPrimary(event: MatchEvent) {
   if (kind === 'var') return 'VAR'
   if (kind === 'penalty') return 'Penal'
   if (kind === 'substitution') {
-    return event.assist?.name || event.player?.name || 'Cambio'
+    const substitution = normalizeSubstitutionEvent(event)
+
+    return substitution?.playerInName
+      ? `Entra: ${substitution.playerInName}`
+      : event.assist?.name || event.player?.name || 'Cambio'
   }
 
   return event.player?.name || event.type || 'Evento'
@@ -412,8 +342,10 @@ function getEventSecondary(event: MatchEvent) {
   }
 
   if (kind === 'substitution') {
-    return event.player?.name
-      ? `Cambio: por ${event.player.name}`
+    const substitution = normalizeSubstitutionEvent(event)
+
+    return substitution?.playerOutName
+      ? `Sale: ${substitution.playerOutName}`
       : translateEventDetail(event)
   }
 
@@ -423,7 +355,7 @@ function getEventSecondary(event: MatchEvent) {
 function getEventTypeStyle(event: MatchEvent) {
   const kind = getEventKind(event)
 
-  if (kind === 'goal') {
+  if (kind === 'goal' || kind === 'own-goal') {
     return {
       kind,
       accent: 'text-[#7ff0b2]',
@@ -463,7 +395,7 @@ function getEventTypeStyle(event: MatchEvent) {
     }
   }
 
-  if (kind === 'red-card') {
+  if (kind === 'red-card' || kind === 'second-yellow') {
     return {
       kind,
       accent: 'text-[#ff8f8f]',
@@ -535,11 +467,11 @@ function EventIcon({
     return <span className="inline-block h-[14px] w-[11px] rounded-[1px] bg-[#f3d36c]" />
   }
 
-  if (kind === 'red-card') {
+  if (kind === 'red-card' || kind === 'second-yellow') {
     return <span className="inline-block h-[14px] w-[11px] rounded-[1px] bg-[#ef4444]" />
   }
 
-  if (kind === 'goal') {
+  if (kind === 'goal' || kind === 'own-goal') {
     return ballIcon
   }
 
@@ -1307,14 +1239,10 @@ function getPlayerFieldState(
   const basePlayer = playerWrap.player || {}
   const displayName = basePlayer.name || 'Jugador'
   const displayNumber = basePlayer.number
-
-  const substitutionEvent = events.find((event) => {
-    const kind = getEventKind(event)
-    return (
-      kind === 'substitution' &&
-      matchesPlayerEvent(event.player, basePlayer.id, basePlayer.name)
-    )
-  })
+  const substitutionMap = getSubstitutionMap(events)
+  const substitutionEvent = basePlayer.name
+    ? substitutionMap.byPlayerOutName.get(normalizeFootballEventText(basePlayer.name))
+    : null
 
   const incidents = getPlayerIncidentsForLineup(
     { id: basePlayer.id, name: displayName },
@@ -1324,10 +1252,10 @@ function getPlayerFieldState(
   return {
     displayName: abbreviatePlayerName(displayName),
     displayNumber,
-    substitutionMinute: substitutionEvent?.time?.elapsed ?? null,
-    substitutionExtraMinute: substitutionEvent?.time?.extra ?? null,
-    substitutionReplacementName: substitutionEvent?.assist?.name
-      ? abbreviatePlayerName(substitutionEvent.assist.name)
+    substitutionMinute: substitutionEvent?.minute ?? null,
+    substitutionExtraMinute: substitutionEvent?.extraMinute ?? null,
+    substitutionReplacementName: substitutionEvent?.playerInName
+      ? abbreviatePlayerName(substitutionEvent.playerInName)
       : null,
     goals: incidents.filter((incident) => (
       incident.kind === 'goal' ||
@@ -1584,6 +1512,18 @@ function buildPanelPlayers({
     name?: string
   }
 }) {
+  const substitutionContext = {
+    starters: (lineup?.startXI || []).map((entry) => ({
+      id: entry.player?.id ?? null,
+      name: entry.player?.name ?? null,
+    })),
+    substitutes: (lineup?.substitutes || []).map((entry) => ({
+      id: entry.player?.id ?? null,
+      name: entry.player?.name ?? null,
+    })),
+  }
+  const substitutionMap = getSubstitutionMap(events, substitutionContext)
+
   return players.map((playerWrap, index) => {
     const player = playerWrap.player || {}
     const isCaptain = Boolean(
@@ -1597,17 +1537,20 @@ function buildPanelPlayers({
         captainReference.name.trim().toLowerCase() === player.name.trim().toLowerCase()
       )
     )
-    const playerOutEvent = events.find((event) => {
-      const kind = getEventKind(event)
-      return kind === 'substitution' && matchesPlayerEvent(event.player, player.id, player.name)
-    })
-    const playerInEvent = events.find((event) => {
-      const kind = getEventKind(event)
-      return kind === 'substitution' && matchesPlayerEvent(event.assist, player.id, player.name)
-    })
+    const playerKey = normalizeFootballEventText(player.name)
+    const playerOutEvent = playerKey
+      ? substitutionMap.byPlayerOutName.get(playerKey)
+      : null
+    const playerInEvent = playerKey
+      ? substitutionMap.byPlayerInName.get(playerKey)
+      : null
     const goals = events.filter((event) => {
       const kind = getEventKind(event)
-      return (kind === 'goal' || kind === 'penalty-goal') && matchesPlayerEvent(event.player, player.id, player.name)
+      return (
+        kind === 'goal' ||
+        kind === 'penalty-goal' ||
+        kind === 'own-goal'
+      ) && matchesPlayerEvent(event.player, player.id, player.name)
     }).length
     const missedPenalties = events.filter((event) =>
       getEventKind(event) === 'penalty-missed' && matchesPlayerEvent(event.player, player.id, player.name)
@@ -1616,7 +1559,10 @@ function buildPanelPlayers({
       getEventKind(event) === 'yellow-card' && matchesPlayerEvent(event.player, player.id, player.name)
     ).length
     const redCards = events.filter((event) =>
-      getEventKind(event) === 'red-card' && matchesPlayerEvent(event.player, player.id, player.name)
+      (
+        getEventKind(event) === 'red-card' ||
+        getEventKind(event) === 'second-yellow'
+      ) && matchesPlayerEvent(event.player, player.id, player.name)
     ).length
     const substitutionDirection: 'in' | 'out' | undefined = playerOutEvent
       ? 'out'
@@ -1637,17 +1583,18 @@ function buildPanelPlayers({
       yellowCards,
       redCards,
       replacedPlayerName:
-        playerOutEvent?.assist?.name ||
-        playerInEvent?.player?.name,
+        playerOutEvent?.playerInName ||
+        playerInEvent?.playerOutName ||
+        undefined,
       substitutionLabel:
-        playerOutEvent?.assist?.name
+        playerOutEvent?.playerInName
           ? 'por'
-          : playerInEvent?.player?.name
+          : playerInEvent?.playerOutName
           ? 'por'
           : undefined,
       substitutionDirection,
-      substitutionMinute: playerOutEvent?.time?.elapsed ?? playerInEvent?.time?.elapsed ?? null,
-      substitutionExtraMinute: playerOutEvent?.time?.extra ?? playerInEvent?.time?.extra ?? null,
+      substitutionMinute: playerOutEvent?.minute ?? playerInEvent?.minute ?? null,
+      substitutionExtraMinute: playerOutEvent?.extraMinute ?? playerInEvent?.extraMinute ?? null,
     }
   })
 }
@@ -1720,18 +1667,11 @@ export default async function PartidoDetallePage({ params }: PageProps) {
   const stats: MatchStatisticsTeam[] = Array.isArray(data.statistics) ? data.statistics : []
   const events: MatchEvent[] = Array.isArray(data.events) ? data.events : []
   const lineups: MatchLineup[] = Array.isArray(data.lineups) ? data.lineups : []
-  const shouldSyncMissingDetail =
-    Boolean(fixture.fixture.id) &&
-    (!events.length || !stats.length || !lineups.length)
-
-  const homeStats: MatchStatistic[] = getStatsForTeam(stats, homeTeam, 0)?.statistics || []
-  const awayStats: MatchStatistic[] = getStatsForTeam(stats, awayTeam, 1)?.statistics || []
-  const statPairs = buildStatPairs(homeStats, awayStats)
+  const statPairs = normalizeMatchStatistics(stats, homeTeam, awayTeam, events)
   const penaltyShootoutEvents = events.filter(isPenaltyShootoutEvent)
   const hasPenaltyScore = hasPenaltyShootoutScore(penaltyScore.home, penaltyScore.away)
   const hasPenaltyShootout = hasPenaltyScore || penaltyShootoutEvents.length > 0
-  const regularEvents = events.filter((event) => !isPenaltyShootoutEvent(event))
-  const timelineEvents = [...regularEvents].sort((a, b) => getEventSortValue(b) - getEventSortValue(a))
+  const timelineEvents = getTimelineEvents(events)
 
   const homeLineup =
     lineups.find((lineup) => isSameTeamRef(lineup.team, homeTeam)) || lineups[0] || null
@@ -1748,8 +1688,8 @@ export default async function PartidoDetallePage({ params }: PageProps) {
     fixture.fixture.date
   )
   const headerStatusIsLive = isHeaderLiveStatus(status.short)
-  const homeTeamEvents = regularEvents.filter((event) => isHomeEvent(event, homeTeam))
-  const awayTeamEvents = regularEvents.filter((event) => isAwayEvent(event, awayTeam))
+  const homeTeamEvents = timelineEvents.filter((event) => isHomeEvent(event, homeTeam))
+  const awayTeamEvents = timelineEvents.filter((event) => isAwayEvent(event, awayTeam))
   const homeCaptainReference = getCaptainReference(homeLineup)
   const awayCaptainReference = getCaptainReference(awayLineup)
   const homeHasVisualFormation = hasVisualFormation(homeLineup)
@@ -1803,14 +1743,9 @@ export default async function PartidoDetallePage({ params }: PageProps) {
       <div className="w-full max-w-none px-0 py-3 lg:mx-auto lg:max-w-7xl lg:px-5 lg:py-6">
         <header className="hf-hero relative mb-4 w-full overflow-hidden rounded-3xl">
           <AutoRefresh
-            intervalMs={60000}
+            intervalMs={headerStatusIsLive ? 30000 : 60000}
             showButton
             className="absolute right-4 top-4 z-10"
-            syncBeforeRefreshUrl={
-              shouldSyncMissingDetail
-                ? `/api/match-detail/live-sync?fixture=${encodeURIComponent(String(fixture.fixture.id))}`
-                : null
-            }
           />
 
           <div className="relative z-10 border-b border-white/6 px-2 py-3 md:px-4">

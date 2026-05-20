@@ -1,3 +1,7 @@
+'use client'
+
+import { useState } from 'react'
+
 import { formatEventMinute } from '@/shared/utils/event-minute'
 
 type TeamStyle = {
@@ -135,6 +139,9 @@ export default function FormationTeamPanel({
   substitutes,
   align,
 }: FormationTeamPanelProps) {
+  const [activeTab, setActiveTab] = useState<'starters' | 'substitutes'>('starters')
+  const activePlayers = activeTab === 'starters' ? starters : substitutes
+
   return (
     <div className="w-full rounded-2xl border border-white/8 bg-[#111418] p-2 sm:p-3 md:p-4">
       <div className={`${align === 'right' ? 'text-right' : 'text-left'}`}>
@@ -148,15 +155,28 @@ export default function FormationTeamPanel({
         </p>
       </div>
 
-      <div className="mt-3 space-y-3">
+      <div className="mt-3">
+        <div
+          className={`mb-2 flex rounded-xl border border-white/6 bg-[#161a20] p-1 ${
+            align === 'right' ? 'justify-end' : 'justify-start'
+          }`}
+        >
+          <LineupTabButton
+            active={activeTab === 'starters'}
+            label="Titulares"
+            count={starters.length}
+            onClick={() => setActiveTab('starters')}
+          />
+          <LineupTabButton
+            active={activeTab === 'substitutes'}
+            label="Suplentes"
+            count={substitutes.length}
+            onClick={() => setActiveTab('substitutes')}
+          />
+        </div>
+
         <PlayerSection
-          title="Titulares"
-          players={starters}
-          align={align}
-        />
-        <PlayerSection
-          title="Suplentes"
-          players={substitutes}
+          players={activePlayers}
           align={align}
         />
       </div>
@@ -164,23 +184,43 @@ export default function FormationTeamPanel({
   )
 }
 
+function LineupTabButton({
+  active,
+  label,
+  count,
+  onClick,
+}: {
+  active: boolean
+  label: string
+  count: number
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`min-h-9 flex-1 rounded-lg px-2 py-1.5 text-[11px] font-black uppercase tracking-[0.1em] transition sm:px-3 ${
+        active
+          ? 'bg-[#163828] text-[#7ff0b2] shadow-[inset_0_0_0_1px_rgba(127,240,178,0.22)]'
+          : 'text-[#8d98a7] hover:bg-white/5 hover:text-white'
+      }`}
+      aria-pressed={active}
+    >
+      <span>{label}</span>
+      <span className="ml-1 text-[10px] opacity-75">({count})</span>
+    </button>
+  )
+}
+
 function PlayerSection({
-  title,
   players,
   align,
 }: {
-  title: string
   players: PanelPlayer[]
   align: 'left' | 'right'
 }) {
   return (
     <section>
-      <div className={`mb-1.5 flex ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
-        <h5 className="rounded-lg border border-[#25553d] bg-[#163828] px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-[#7ff0b2]">
-          {title}
-        </h5>
-      </div>
-
       <div className="space-y-1.5">
         {players.length ? (
           players.map((player) => (

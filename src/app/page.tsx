@@ -222,18 +222,6 @@ function shouldFastRefreshMatch(match: ApiMatch, now: number) {
   return startsSoonOrAlreadyStarted
 }
 
-function shouldCatchUpStaleRecentMatch(match: ApiMatch, now: number) {
-  if (!isUpcomingStatus(match.statusShort)) return false
-
-  const matchTimestamp = getArgentinaMatchTimestamp(match.date)
-  if (!Number.isFinite(matchTimestamp)) return false
-
-  return (
-    matchTimestamp <= now &&
-    matchTimestamp >= now - 36 * 60 * 60 * 1000
-  )
-}
-
 const SECTION_ORDER = [
   'argentina',
   'internacional',
@@ -1276,9 +1264,6 @@ export default async function HomePage({
   const hasFastRefreshMatches = dateMatches.some((match) =>
     shouldFastRefreshMatch(match, now)
   )
-  const hasStaleRecentMatches = dateMatches.some((match) =>
-    shouldCatchUpStaleRecentMatch(match, now)
-  )
   const hasLiveMatches = dateMatches.some((match) => isLiveStatus(match.statusShort))
   const liveEvents = visibleCompetitions.flatMap((competition) =>
     competition.matches.flatMap((match) => match.liveEvents || [])
@@ -1306,13 +1291,6 @@ export default async function HomePage({
               intervalMs={refreshIntervalMs}
               showButton
               initialUpdatedAt={renderedAt}
-              syncBeforeRefreshUrl={
-                hasFastRefreshMatches
-                  ? `/api/home/live-sync?date=${encodeURIComponent(selectedDate)}${
-                      hasStaleRecentMatches ? '&catchup=1' : ''
-                    }`
-                  : null
-              }
             />
           </div>
 

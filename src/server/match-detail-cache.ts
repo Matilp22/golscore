@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { requestFootballApi } from '@/server/integrations/football-api-client'
 import { getArgentinaDateISO } from '@/shared/utils/argentina-time'
 import {
+  formatMatchEventStableKey,
   normalizeFootballEventText,
   normalizeMatchEvent,
 } from '@/shared/utils/football-events'
@@ -75,6 +76,7 @@ type StoredMatchEventRow = {
   extra_minute: number | null
   type: string | null
   detail: string | null
+  comments?: string | null
 }
 
 type StoredLeagueRow = {
@@ -123,6 +125,8 @@ export type MatchDetailAuditSnapshot = {
   hasEvents: boolean
   eventsCount: number
   eventsByType: Record<string, number>
+  hasGoals: boolean
+  hasCards: boolean
   hasMissedPenalty: boolean
   missedPenaltyEvents: MatchDetailAuditEvent[]
   hasVarEvents: boolean
@@ -140,6 +144,7 @@ export type MatchDetailAuditSnapshot = {
   awaySubstitutesCount: number
   hasStatistics: boolean
   statisticsCount: number
+  statisticsNames: string[]
   hasCaptainData: boolean
   captains: MatchDetailAuditCaptain[]
   missingSections: string[]
@@ -413,25 +418,79 @@ async function fetchStoredLeagueById(
   return (response.data as StoredLeagueRow | null) ?? null
 }
 
-function getEventExternalId(fixtureExternalId: number, event: ApiFixtureEvent) {
+function getEventExternalId(
+  existingExternalId: string | null | undefined,
+  stableKey: string,
+  event: ApiFixtureEvent
+) {
+  if (existingExternalId) return existingExternalId
   if (event.id !== undefined && event.id !== null) return String(event.id)
 
-  return [
-    fixtureExternalId,
-    event.type ?? 'type',
-    event.detail ?? 'detail',
-    event.time?.elapsed ?? 'minute',
-    event.time?.extra ?? 'no-extra',
-    event.team?.id ?? event.team?.name ?? 'team',
-    event.player?.name ?? 'player',
-  ].map((part) =>
-    String(part)
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .trim()
-      .toLowerCase()
-      .replace(/\s+/g, '-')
-  ).join(':')
+  return stableKey
+}
+
+function getStoredMatchEventStableKey(row: StoredMatchEventRow) {
+  return formatMatchEventStableKey(
+    {
+      time: {
+        elapsed: row.minute,
+        extra: row.extra_minute,
+      },
+      team: row.team_id !== null && row.team_id !== undefined
+        ? {
+            id: row.team_id,
+          }
+        : null,
+      player: row.player_name
+        ? {
+            name: row.player_name,
+          }
+        : null,
+      assist: row.assist_name
+        ? {
+            name: row.assist_name,
+          }
+        : null,
+      type: row.type,
+      detail: row.detail,
+      comments: row.comments ?? null,
+    },
+    row.match_id
+  )
+}
+
+async function deleteDuplicateStoredMatchEvents(
+  supabase: SupabaseClient,
+  rows: StoredMatchEventRow[]
+) {
+  const rowsByKey = new Map<string, StoredMatchEventRow[]>()
+
+  for (const row of rows) {
+    const key = getStoredMatchEventStableKey(row)
+    const groupedRows = rowsByKey.get(key) ?? []
+
+    groupedRows.push(row)
+    rowsByKey.set(key, groupedRows)
+  }
+
+  const duplicateIds = [...rowsByKey.values()]
+    .flatMap((groupedRows) =>
+      groupedRows.slice(1).map((row) => row.id).filter((id): id is DbId => id !== null && id !== undefined)
+    )
+
+  if (!duplicateIds.length) return 0
+
+  const response = await supabase
+    .from('match_events')
+    .delete()
+    .in('id', duplicateIds.map(String))
+
+  if (response.error) {
+    if (isMissingOptionalTable(response.error, 'match_events')) return 0
+    throw response.error
+  }
+
+  return duplicateIds.length
 }
 
 async function upsertStoredMatchEvents(
@@ -454,14 +513,16 @@ async function upsertStoredMatchEvents(
   const homeExternalId = toNumber(homeTeam?.external_id)
   const awayExternalId = toNumber(awayTeam?.external_id)
 
-  const deleteResponse = await supabase
-    .from('match_events')
-    .delete()
-    .eq('match_id', String(input.match.id))
+  const existingRows = await fetchStoredMatchEventRows(supabase, input.match.id)
+  await deleteDuplicateStoredMatchEvents(supabase, existingRows)
+  const existingExternalIdByKey = new Map<string, string>()
 
-  if (deleteResponse.error) {
-    if (isMissingOptionalTable(deleteResponse.error, 'match_events')) return 0
-    throw deleteResponse.error
+  for (const row of existingRows) {
+    const stableKey = getStoredMatchEventStableKey(row)
+
+    if (row.external_event_id && !existingExternalIdByKey.has(stableKey)) {
+      existingExternalIdByKey.set(stableKey, row.external_event_id)
+    }
   }
 
   const rows = input.events
@@ -474,10 +535,30 @@ async function upsertStoredMatchEvents(
           : apiTeamId !== null && awayExternalId !== null && apiTeamId === awayExternalId
             ? input.match.away_team_id
             : null
+      const stableKey = formatMatchEventStableKey(
+        {
+          time: event.time ?? null,
+          team: teamId !== null && teamId !== undefined
+            ? {
+                id: teamId,
+              }
+            : null,
+          player: event.player,
+          assist: event.assist,
+          type: event.type,
+          detail: event.detail,
+          comments: event.comments,
+        },
+        input.match.id
+      )
 
       return {
         match_id: input.match.id,
-        external_event_id: getEventExternalId(input.fixtureExternalId, event),
+        external_event_id: getEventExternalId(
+          existingExternalIdByKey.get(stableKey),
+          stableKey,
+          event
+        ),
         team_id: teamId,
         player_name:
           event.player?.name?.trim() ||
@@ -490,16 +571,97 @@ async function upsertStoredMatchEvents(
         extra_minute: event.time?.extra ?? null,
         type: event.type ?? 'Event',
         detail: event.detail ?? null,
+        comments: event.comments ?? null,
       }
     })
 
   if (!rows.length) return 0
+
+  const existingNullIdsToDelete = existingRows
+    .filter((row) => !row.external_event_id)
+    .filter((row) => rows.some((nextRow) => (
+      getStoredMatchEventStableKey({
+        id: row.id,
+        external_event_id: row.external_event_id,
+        match_id: row.match_id,
+        team_id: row.team_id,
+        player_name: row.player_name,
+        assist_name: row.assist_name,
+        minute: row.minute,
+        extra_minute: row.extra_minute,
+        type: row.type,
+        detail: row.detail,
+      }) === formatMatchEventStableKey(
+        {
+          time: {
+            elapsed: nextRow.minute as number | null,
+            extra: nextRow.extra_minute as number | null,
+          },
+          team: nextRow.team_id !== null && nextRow.team_id !== undefined
+            ? {
+                id: nextRow.team_id as DbId,
+              }
+            : null,
+          player: nextRow.player_name
+            ? {
+                name: nextRow.player_name as string,
+              }
+            : null,
+          assist: nextRow.assist_name
+            ? {
+                name: nextRow.assist_name as string,
+              }
+            : null,
+          type: nextRow.type as string | null,
+          detail: nextRow.detail as string | null,
+        },
+        input.match.id
+      )
+    )))
+    .map((row) => row.id)
+    .filter((id): id is DbId => id !== null && id !== undefined)
+
+  if (existingNullIdsToDelete.length) {
+    const deleteNullResponse = await supabase
+      .from('match_events')
+      .delete()
+      .in('id', existingNullIdsToDelete.map(String))
+
+    if (deleteNullResponse.error && !isMissingOptionalTable(deleteNullResponse.error, 'match_events')) {
+      throw deleteNullResponse.error
+    }
+  }
 
   const response = await supabase
     .from('match_events')
     .upsert(rows, { onConflict: 'match_id,external_event_id' })
 
   if (response.error) {
+    if (
+      response.error.code === '42703' ||
+      response.error.code === 'PGRST204' ||
+      response.error.message.toLowerCase().includes('comments') ||
+      response.error.message.toLowerCase().includes('schema cache')
+    ) {
+      const fallbackRows = rows.map((row) => {
+        const rowWithoutComments: Record<string, unknown> = {}
+        for (const [key, value] of Object.entries(row)) {
+          if (key !== 'comments') rowWithoutComments[key] = value
+        }
+        return rowWithoutComments
+      })
+      const fallbackResponse = await supabase
+        .from('match_events')
+        .upsert(fallbackRows, { onConflict: 'match_id,external_event_id' })
+
+      if (fallbackResponse.error) {
+        if (isMissingOptionalTable(fallbackResponse.error, 'match_events')) return 0
+        throw fallbackResponse.error
+      }
+
+      return rows.length
+    }
+
     if (isMissingOptionalTable(response.error, 'match_events')) return 0
     throw response.error
   }
@@ -726,6 +888,23 @@ function buildEventsByType(events: unknown[]) {
   }, {})
 }
 
+function buildStatisticsNames(statistics: unknown[]) {
+  const names = new Set<string>()
+
+  for (const entry of statistics) {
+    const values = asRecord(entry)?.statistics
+
+    if (!Array.isArray(values)) continue
+
+    for (const value of values) {
+      const type = eventField(asRecord(value)?.type)
+      if (type) names.add(type)
+    }
+  }
+
+  return [...names]
+}
+
 function extractCaptains(lineups: unknown[]): MatchDetailAuditCaptain[] {
   return lineups.flatMap((lineup) => {
     const lineupRecord = asRecord(lineup)
@@ -800,17 +979,34 @@ function buildAuditSnapshot(
   const substitutionEvents = events
     .filter((event) => getAuditEventKind(event) === 'substitution')
     .map(toAuditEvent)
+  const eventKinds = events.map(getAuditEventKind)
   const captains = extractCaptains(lineups)
+  const statisticsNames = buildStatisticsNames(statistics)
+  const statisticsCount = statistics.reduce((sum, entry) => {
+    if (!entry || typeof entry !== 'object') return sum
+    const values = (entry as Record<string, unknown>).statistics
+    return sum + (Array.isArray(values) ? values.length : 0)
+  }, 0)
   const missingSections: string[] = []
 
   if (!events.length) missingSections.push('events')
   if (!lineups.length) missingSections.push('lineups')
-  if (!statistics.length) missingSections.push('statistics')
+  if (!statisticsCount) missingSections.push('statistics')
 
   return {
     hasEvents: events.length > 0,
     eventsCount: events.length,
     eventsByType: buildEventsByType(events),
+    hasGoals: eventKinds.some((kind) => (
+      kind === 'goal' ||
+      kind === 'penalty-goal' ||
+      kind === 'own-goal'
+    )),
+    hasCards: eventKinds.some((kind) => (
+      kind === 'yellow-card' ||
+      kind === 'red-card' ||
+      kind === 'second-yellow'
+    )),
     hasMissedPenalty: missedPenaltyEvents.length > 0,
     missedPenaltyEvents,
     hasVarEvents: varEvents.length > 0,
@@ -826,12 +1022,9 @@ function buildAuditSnapshot(
     substitutesAwayCount: countLineupPlayers(awayLineup, 'substitutes'),
     homeSubstitutesCount: countLineupPlayers(homeLineup, 'substitutes'),
     awaySubstitutesCount: countLineupPlayers(awayLineup, 'substitutes'),
-    hasStatistics: statistics.length > 0,
-    statisticsCount: statistics.reduce((sum, entry) => {
-      if (!entry || typeof entry !== 'object') return sum
-      const values = (entry as Record<string, unknown>).statistics
-      return sum + (Array.isArray(values) ? values.length : 0)
-    }, 0),
+    hasStatistics: statisticsCount > 0,
+    statisticsCount,
+    statisticsNames,
     hasCaptainData: lineups.some(hasCaptain),
     captains,
     missingSections,
@@ -978,12 +1171,33 @@ async function fetchStoredMatchEventRows(
 
   const response = await supabase
     .from('match_events')
-    .select('id, external_event_id, match_id, team_id, player_name, assist_name, minute, extra_minute, type, detail')
+    .select('id, external_event_id, match_id, team_id, player_name, assist_name, minute, extra_minute, type, detail, comments')
     .eq('match_id', String(matchId))
     .order('minute', { ascending: true })
     .order('extra_minute', { ascending: true })
 
   if (response.error) {
+    if (
+      response.error.code === '42703' ||
+      response.error.code === 'PGRST204' ||
+      response.error.message.toLowerCase().includes('comments') ||
+      response.error.message.toLowerCase().includes('schema cache')
+    ) {
+      const fallbackResponse = await supabase
+        .from('match_events')
+        .select('id, external_event_id, match_id, team_id, player_name, assist_name, minute, extra_minute, type, detail')
+        .eq('match_id', String(matchId))
+        .order('minute', { ascending: true })
+        .order('extra_minute', { ascending: true })
+
+      if (fallbackResponse.error) {
+        if (isMissingOptionalTable(fallbackResponse.error, 'match_events')) return []
+        throw fallbackResponse.error
+      }
+
+      return (fallbackResponse.data ?? []) as StoredMatchEventRow[]
+    }
+
     if (isMissingOptionalTable(response.error, 'match_events')) return []
     throw response.error
   }
@@ -1022,7 +1236,179 @@ function mapStoredAuditEvent(
     },
     type: row.type ?? 'Event',
     detail: row.detail,
-    comments: null,
+    comments: row.comments ?? null,
+  }
+}
+
+function getAuditTeamSide(
+  event: unknown,
+  match: StoredMatchRow | null,
+  teamsById: Map<string, StoredTeamRow>
+) {
+  if (!match) return null
+
+  const eventLike = toAuditEventLike(event)
+  const homeTeam = match.home_team_id !== null && match.home_team_id !== undefined
+    ? teamsById.get(String(match.home_team_id))
+    : null
+  const awayTeam = match.away_team_id !== null && match.away_team_id !== undefined
+    ? teamsById.get(String(match.away_team_id))
+    : null
+  const eventTeamId = numberField(eventLike.team?.id)
+  const eventTeamName = normalizeFootballEventText(eventLike.team?.name)
+  const homeExternalId = numberField(homeTeam?.external_id)
+  const awayExternalId = numberField(awayTeam?.external_id)
+  const homeName = normalizeFootballEventText(homeTeam?.name)
+  const awayName = normalizeFootballEventText(awayTeam?.name)
+
+  if (eventTeamId !== null && homeExternalId !== null && eventTeamId === homeExternalId) return 'home'
+  if (eventTeamId !== null && awayExternalId !== null && eventTeamId === awayExternalId) return 'away'
+  if (eventTeamName && homeName && (eventTeamName === homeName || eventTeamName.includes(homeName) || homeName.includes(eventTeamName))) {
+    return 'home'
+  }
+  if (eventTeamName && awayName && (eventTeamName === awayName || eventTeamName.includes(awayName) || awayName.includes(eventTeamName))) {
+    return 'away'
+  }
+
+  return null
+}
+
+function getOfficialDisciplineStats(statistics: unknown[]) {
+  const result = {
+    yellowCards: {
+      home: null as number | null,
+      away: null as number | null,
+    },
+    redCards: {
+      home: null as number | null,
+      away: null as number | null,
+    },
+  }
+
+  statistics.slice(0, 2).forEach((entry, index) => {
+    const side = index === 0 ? 'home' : 'away'
+    const values = asArray(asRecord(entry)?.statistics)
+
+    for (const value of values) {
+      const stat = asRecord(value)
+      const type = normalizeFootballEventText(eventField(stat?.type))
+      const numeric = numberField(stat?.value)
+
+      if (type === 'yellow cards') result.yellowCards[side] = numeric
+      if (type === 'red cards') result.redCards[side] = numeric
+    }
+  })
+
+  return result
+}
+
+function buildDetailedAuditSections(input: {
+  cache: DetailCacheRow | null
+  events: unknown[]
+  match: StoredMatchRow | null
+  teamsById: Map<string, StoredTeamRow>
+}) {
+  const statistics = asArray(input.cache?.statistics)
+  const lineups = asArray(input.cache?.lineups)
+  const eventSummary = {
+    total: input.events.length,
+    goals: 0,
+    cards: 0,
+    yellowCardsHome: 0,
+    yellowCardsAway: 0,
+    redCardsHome: 0,
+    redCardsAway: 0,
+    substitutions: 0,
+    varEvents: 0,
+    missedPenalties: 0,
+  }
+
+  for (const event of input.events) {
+    const kind = getAuditEventKind(event)
+    const side = getAuditTeamSide(event, input.match, input.teamsById)
+
+    if (kind === 'goal' || kind === 'penalty-goal' || kind === 'own-goal') {
+      eventSummary.goals += 1
+    }
+    if (kind === 'yellow-card') {
+      eventSummary.cards += 1
+      if (side === 'home') eventSummary.yellowCardsHome += 1
+      if (side === 'away') eventSummary.yellowCardsAway += 1
+    }
+    if (kind === 'red-card' || kind === 'second-yellow') {
+      eventSummary.cards += 1
+      if (side === 'home') eventSummary.redCardsHome += 1
+      if (side === 'away') eventSummary.redCardsAway += 1
+    }
+    if (kind === 'substitution') eventSummary.substitutions += 1
+    if (kind === 'var') eventSummary.varEvents += 1
+    if (kind === 'penalty-missed') eventSummary.missedPenalties += 1
+  }
+
+  const official = getOfficialDisciplineStats(statistics)
+  const mismatches = [
+    {
+      type: 'Yellow Cards',
+      official: official.yellowCards,
+      derivedFromEvents: {
+        home: eventSummary.yellowCardsHome,
+        away: eventSummary.yellowCardsAway,
+      },
+    },
+    {
+      type: 'Red Cards',
+      official: official.redCards,
+      derivedFromEvents: {
+        home: eventSummary.redCardsHome,
+        away: eventSummary.redCardsAway,
+      },
+    },
+  ].filter((item) =>
+    (item.official.home !== null && item.official.home !== item.derivedFromEvents.home) ||
+    (item.official.away !== null && item.official.away !== item.derivedFromEvents.away)
+  )
+
+  return {
+    events: eventSummary,
+    statistics: {
+      official: {
+        count: statistics.reduce((sum, entry) => {
+          const values = asArray(asRecord(entry)?.statistics)
+          return sum + values.length
+        }, 0),
+        names: buildStatisticsNames(statistics),
+        discipline: official,
+      },
+      derivedFromEvents: {
+        yellowCards: {
+          home: eventSummary.yellowCardsHome,
+          away: eventSummary.yellowCardsAway,
+        },
+        redCards: {
+          home: eventSummary.redCardsHome,
+          away: eventSummary.redCardsAway,
+        },
+      },
+      merged: {
+        yellowCards: {
+          home: eventSummary.yellowCardsHome,
+          away: eventSummary.yellowCardsAway,
+        },
+        redCards: {
+          home: eventSummary.redCardsHome,
+          away: eventSummary.redCardsAway,
+        },
+      },
+      mismatches,
+    },
+    lineups: {
+      hasLineups: lineups.length > 0,
+      homeStarters: countLineupPlayers(lineups[0], 'startXI'),
+      awayStarters: countLineupPlayers(lineups[1], 'startXI'),
+      homeSubstitutes: countLineupPlayers(lineups[0], 'substitutes'),
+      awaySubstitutes: countLineupPlayers(lineups[1], 'substitutes'),
+      captains: extractCaptains(lineups),
+    },
   }
 }
 
@@ -1080,6 +1466,12 @@ export async function auditMatchDetailCache(
   const storedEvents = storedEventRows.map((event) => mapStoredAuditEvent(event, teamsById))
   const mergedEvents = mergeAuditEvents(asArray(cache?.events), storedEvents)
   const storedEventsCount = storedEventRows.length
+  const detailedSections = buildDetailedAuditSections({
+    cache,
+    events: mergedEvents,
+    match,
+    teamsById,
+  })
 
   return {
     fixtureExternalId,
@@ -1089,6 +1481,7 @@ export async function auditMatchDetailCache(
       externalId: fixtureExternalId,
     },
     ...mergeStoredEventsIntoAudit(buildAuditSnapshot(cache, mergedEvents), storedEventsCount),
+    ...detailedSections,
   }
 }
 
@@ -1152,6 +1545,8 @@ export async function auditMatchDetailsGeneral(
       hasEvents: detailAudit.hasEvents,
       eventsCount: detailAudit.eventsCount,
       eventsByType: detailAudit.eventsByType,
+      hasGoals: detailAudit.hasGoals,
+      hasCards: detailAudit.hasCards,
       hasMissedPenalty: detailAudit.hasMissedPenalty,
       missedPenaltyEvents: detailAudit.missedPenaltyEvents,
       hasVarEvents: detailAudit.hasVarEvents,
@@ -1169,6 +1564,7 @@ export async function auditMatchDetailsGeneral(
       awaySubstitutesCount: detailAudit.awaySubstitutesCount,
       hasStatistics: detailAudit.hasStatistics,
       statisticsCount: detailAudit.statisticsCount,
+      statisticsNames: detailAudit.statisticsNames,
       hasCaptainData: detailAudit.hasCaptainData,
       captains: detailAudit.captains,
       missingSections: detailAudit.missingSections,
