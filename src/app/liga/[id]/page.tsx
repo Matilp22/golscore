@@ -18,6 +18,7 @@ import {
   getTournamentChampions,
   isChampionsHistoryTournamentKey,
 } from '@/server/tournament-champions'
+import { buildAnnualStandingGroupFromFixtures } from '@/server/liga-profesional/promedios'
 import {
   getLeagueFixtures,
   getLeagueLeaders,
@@ -2186,12 +2187,19 @@ export default async function LigaPage({ params }: PageProps) {
         const currentTournament = resolvedTournament
         const promedioSeasons = [resolvedTournament.season - 2, resolvedTournament.season - 1, resolvedTournament.season]
         const historicalResults = await Promise.allSettled(
-          promedioSeasons.map((season) =>
-            getLeagueStandings(currentTournament.leagueId, season).then((seasonStandings) => ({
+          promedioSeasons.map((season) => {
+            if (tournament.key === 'argentina-liga-profesional') {
+              return getLeagueFixtures(currentTournament.leagueId, season).then((seasonFixtures) => ({
+                season,
+                standings: [buildAnnualStandingGroupFromFixtures(seasonFixtures)],
+              }))
+            }
+
+            return getLeagueStandings(currentTournament.leagueId, season).then((seasonStandings) => ({
               season,
               standings: seasonStandings,
             }))
-          )
+          })
         )
 
         const successfulHistoricalStandings = historicalResults

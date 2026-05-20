@@ -6,6 +6,7 @@ import {
   isFinishedStatus,
   isLiveStatus,
   isPostponedStatus,
+  isUpcomingStatus,
 } from '@/shared/utils/match-status'
 import { getFixtureStatusElapsedMinute } from '@/shared/utils/match-minute'
 
@@ -214,6 +215,7 @@ const MATCH_CONTROL_SELECT = [
 
 const LIVE_SYNC_STATUSES = ['LIVE', '1H', '2H', 'HT', 'ET', 'BT', 'P', 'SUSP', 'INT']
 const FINISHED_SYNC_STATUSES = ['FT', 'AET', 'PEN']
+const STALE_UNRESOLVED_LOOKBACK_MINUTES = 72 * 60
 const HARD_FINAL_STATUSES = new Set(FINISHED_SYNC_STATUSES)
 const DETAILS_RELEVANT_STATUSES = new Set([
   ...LIVE_SYNC_STATUSES,
@@ -351,6 +353,7 @@ function shouldRefreshFixture(match: StoredLiveMatchRow, reasons: Set<string>, n
   if (reasons.has('api-live')) return false
   if (LIVE_SYNC_STATUSES.includes((status ?? '').toUpperCase())) return true
   if (reasons.has('starting-window')) return true
+  if (reasons.has('stale-unresolved')) return true
   if (reasons.has('recently-finished') && (!match.final_detail_synced_at || shouldFetchFinalFollowup(match, now))) {
     return true
   }
@@ -430,6 +433,7 @@ function mapFixturePatch(fixture: ApiFixture) {
   const patch: Record<string, unknown> = {
     status,
     elapsed: isFinalSyncStatus(status) ? null : elapsed,
+    match_date: fixture.fixture?.date ?? null,
     home_score: score.home,
     away_score: score.away,
     updated_at: new Date().toISOString(),
@@ -573,7 +577,14 @@ async function fetchLiveMatchCandidates(
   warnings: string[]
 ) {
   const candidates = new Map<string, MatchCandidate>()
-  const [storedLive, startingWindow, lineupWindow, recentlyFinished, liveFromApi] = await Promise.all([
+  const [
+    storedLive,
+    startingWindow,
+    lineupWindow,
+    recentlyFinished,
+    staleUnresolved,
+    liveFromApi,
+  ] = await Promise.all([
     fetchMatchesByStatuses(supabase, LIVE_SYNC_STATUSES, input.limit, warnings),
     fetchMatchesByDateWindow(
       supabase,
@@ -602,6 +613,22 @@ async function fetchLiveMatchCandidates(
       },
       warnings
     ).then((rows) => rows.filter((row) => isFinalSyncStatus(row.status))),
+    fetchMatchesByDateWindow(
+      supabase,
+      {
+        fromIso: toIsoAtOffset(input.now, -STALE_UNRESOLVED_LOOKBACK_MINUTES),
+        toIso: toIsoAtOffset(input.now, -45),
+        limit: input.limit,
+      },
+      warnings
+    ).then((rows) =>
+      rows.filter((row) =>
+        !isFinalSyncStatus(row.status) &&
+        !isLiveStatus(row.status) &&
+        !isPostponedStatus(row.status) &&
+        isUpcomingStatus(row.status)
+      )
+    ),
     fetchMatchesByExternalIds(supabase, input.liveFixtureIds, input.limit, warnings),
   ])
 
@@ -609,6 +636,7 @@ async function fetchLiveMatchCandidates(
   for (const match of startingWindow) addCandidate(candidates, match, 'starting-window')
   for (const match of lineupWindow) addCandidate(candidates, match, 'lineup-window')
   for (const match of recentlyFinished) addCandidate(candidates, match, 'recently-finished')
+  for (const match of staleUnresolved) addCandidate(candidates, match, 'stale-unresolved')
   for (const match of liveFromApi) addCandidate(candidates, match, 'api-live')
 
   return [...candidates.values()]
@@ -1387,13 +1415,16 @@ function estimateRequestBudget(input: {
   startingSoonCount: number
   recentlyFinishedCount: number
   lineupsWindowCount: number
+  staleUnresolvedCount?: number
 }) {
+  const staleUnresolvedCount = input.staleUnresolvedCount ?? 0
   const dailyBudget = 75_000
   const perRunNow = {
     globalLiveFixture: 1,
     fixtureRefreshes:
       input.startingSoonCount +
       input.recentlyFinishedCount +
+      staleUnresolvedCount +
       Math.max(input.liveMatchesCount - 1, 0),
     events: input.liveMatchesCount,
     statistics: Math.ceil(input.liveMatchesCount / 5),
@@ -1404,7 +1435,8 @@ function estimateRequestBudget(input: {
     input.liveMatchesCount * 1440 +
     input.liveMatchesCount * 288 +
     input.lineupsWindowCount * 4 +
-    input.recentlyFinishedCount * 2
+    input.recentlyFinishedCount * 2 +
+    staleUnresolvedCount * 2
 
   return {
     dailyBudget,
@@ -1427,7 +1459,13 @@ export async function auditLiveSync(
   const now = options.now ?? new Date()
   const limit = Math.min(Math.max(options.limit ?? 120, 1), 300)
   const warnings: string[] = []
-  const [liveMatches, startingSoonMatches, lineupWindowMatches, recentlyFinishedMatches] = await Promise.all([
+  const [
+    liveMatches,
+    startingSoonMatches,
+    lineupWindowMatches,
+    recentlyFinishedMatches,
+    staleUnresolvedMatches,
+  ] = await Promise.all([
     fetchMatchesByStatuses(supabase, LIVE_SYNC_STATUSES, limit, warnings),
     fetchMatchesByDateWindow(
       supabase,
@@ -1456,10 +1494,26 @@ export async function auditLiveSync(
       },
       warnings
     ).then((rows) => rows.filter((row) => isFinalSyncStatus(row.status))),
+    fetchMatchesByDateWindow(
+      supabase,
+      {
+        fromIso: toIsoAtOffset(now, -STALE_UNRESOLVED_LOOKBACK_MINUTES),
+        toIso: toIsoAtOffset(now, -45),
+        limit,
+      },
+      warnings
+    ).then((rows) =>
+      rows.filter((row) =>
+        !isFinalSyncStatus(row.status) &&
+        !isLiveStatus(row.status) &&
+        !isPostponedStatus(row.status) &&
+        isUpcomingStatus(row.status)
+      )
+    ),
   ])
   const candidateMap = new Map<string, StoredLiveMatchRow>()
 
-  for (const match of [...liveMatches, ...startingSoonMatches, ...recentlyFinishedMatches]) {
+  for (const match of [...liveMatches, ...startingSoonMatches, ...recentlyFinishedMatches, ...staleUnresolvedMatches]) {
     candidateMap.set(String(match.id), match)
   }
 
@@ -1487,6 +1541,7 @@ export async function auditLiveSync(
     now: now.toISOString(),
     liveMatches: liveMatches.map(serializeAuditMatch),
     recentlyFinishedMatches: recentlyFinishedMatches.map(serializeAuditMatch),
+    staleUnresolvedMatches: staleUnresolvedMatches.map(serializeAuditMatch),
     eventsSyncedRecently: eventsSyncedRecently.map(serializeAuditMatch),
     matchesMissingEvents: matchesMissingEvents.map((match) => ({
       ...serializeAuditMatch(match),
@@ -1498,6 +1553,7 @@ export async function auditLiveSync(
       startingSoonCount: startingSoonMatches.length,
       recentlyFinishedCount: recentlyFinishedMatches.length,
       lineupsWindowCount: lineupsDue.length,
+      staleUnresolvedCount: staleUnresolvedMatches.length,
     }),
     lastEventsSync: maxIso(liveMatches.map((match) => match.last_events_synced_at)),
     lastStatisticsSync: maxIso(liveMatches.map((match) => match.last_statistics_synced_at)),

@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
 
 import {
-  getLeagueStandings,
+  getLeagueFixtures,
   resolveTournament,
   type LeagueStandingGroup,
   type LeagueStandingRow,
 } from '@/lib/api-football'
+import { buildAnnualStandingGroupFromFixtures } from '@/server/liga-profesional/promedios'
 import { getTournamentConfig } from '@/lib/tournament-pages'
 
 export const dynamic = 'force-dynamic'
@@ -140,9 +141,9 @@ export async function GET(request: Request) {
     const seasons = [resolved.season - 2, resolved.season - 1, resolved.season]
     const standingsBySeason = await Promise.all(
       seasons.map((season) =>
-        getLeagueStandings(resolved.leagueId, season).then((standings) => ({
+        getLeagueFixtures(resolved.leagueId, season).then((fixtures) => ({
           season,
-          standings,
+          standings: [buildAnnualStandingGroupFromFixtures(fixtures)],
         }))
       )
     )
