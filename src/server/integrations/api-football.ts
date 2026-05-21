@@ -2231,8 +2231,13 @@ function findKnownTournament(searchTerms: string[], country?: string) {
   }) ?? null
 }
 
-async function fetchStoredLeagueRowsByExternalId(leagueId: number, season?: number) {
+async function fetchStoredLeagueRowsByExternalId(
+  leagueId: number,
+  season?: number,
+  options: { fallbackToAnySeason?: boolean } = {}
+) {
   const supabase = getSupabaseAdminClient()
+  const fallbackToAnySeason = options.fallbackToAnySeason ?? true
   let query = supabase
     .from('leagues')
     .select('id, external_id, name, country, season, logo_url')
@@ -2244,6 +2249,7 @@ async function fetchStoredLeagueRowsByExternalId(leagueId: number, season?: numb
   const response = await query
   if (response.error) throw response.error
   if (response.data?.length || !season) return (response.data ?? []) as StoredLeagueRow[]
+  if (!fallbackToAnySeason) return []
 
   const fallback = await supabase
     .from('leagues')
@@ -5020,28 +5026,37 @@ async function fetchCachedLeagueFixtures(
   leagueId: number,
   season: number
 ) {
-  const response = await supabase
-    .from('football_fixture_cache')
-    .select('date, normalized_payload')
-    .eq('league_external_id', String(leagueId))
-    .order('date', { ascending: true })
-    .order('fixture_external_id', { ascending: true })
-    .limit(1000)
+  const rows: CachedHomeFixtureRow[] = []
+  const pageSize = 1000
 
-  if (response.error) {
-    const message = response.error.message.toLowerCase()
-    const missingCacheTable =
-      response.error.code === '42P01' ||
-      response.error.code === 'PGRST205' ||
-      message.includes('football_fixture_cache') ||
-      message.includes('schema cache')
+  for (let from = 0; ; from += pageSize) {
+    const response = await supabase
+      .from('football_fixture_cache')
+      .select('date, normalized_payload')
+      .eq('league_external_id', String(leagueId))
+      .order('date', { ascending: true })
+      .order('fixture_external_id', { ascending: true })
+      .range(from, from + pageSize - 1)
 
-    if (missingCacheTable) return []
+    if (response.error) {
+      const message = response.error.message.toLowerCase()
+      const missingCacheTable =
+        response.error.code === '42P01' ||
+        response.error.code === 'PGRST205' ||
+        message.includes('football_fixture_cache') ||
+        message.includes('schema cache')
 
-    throw response.error
+      if (missingCacheTable) return []
+
+      throw response.error
+    }
+
+    rows.push(...((response.data ?? []) as CachedHomeFixtureRow[]))
+
+    if (!response.data || response.data.length < pageSize) break
   }
 
-  return ((response.data ?? []) as CachedHomeFixtureRow[])
+  return rows
     .map((row) => mapCachedLeagueFixturePayload(row.normalized_payload, {
       leagueId,
       season,
@@ -5119,7 +5134,9 @@ function mergeLeagueFixtureSources(
 
 export async function getLeagueFixtures(leagueId: number, season: number) {
   const supabase = getSupabaseAdminClient()
-  const leagueRows = await fetchStoredLeagueRowsByExternalId(leagueId, season)
+  const leagueRows = await fetchStoredLeagueRowsByExternalId(leagueId, season, {
+    fallbackToAnySeason: false,
+  })
   const leagueIds = leagueRows.map((league) => String(league.id))
   const storedMatches: StoredDetailMatchRow[] = []
   const cachedFixtures = await fetchCachedLeagueFixtures(supabase, leagueId, season)

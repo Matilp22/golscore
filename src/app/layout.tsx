@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next'
+import { Analytics } from '@vercel/analytics/next'
 import AppShell from '@/frontend/components/AppShell'
 import PwaInstallPrompt from '@/frontend/components/PwaInstallPrompt'
 import AuthStatus from '@/frontend/components/auth/AuthStatus'
@@ -53,6 +54,7 @@ export default function RootLayout({
           {children}
         </AppShell>
         <PwaInstallPrompt />
+        <Analytics />
       </body>
     </html>
   )

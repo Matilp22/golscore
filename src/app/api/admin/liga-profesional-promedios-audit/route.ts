@@ -6,7 +6,10 @@ import {
   type LeagueStandingGroup,
   type LeagueStandingRow,
 } from '@/lib/api-football'
-import { buildAnnualStandingGroupFromFixtures } from '@/server/liga-profesional/promedios'
+import {
+  buildLigaProfesionalPromediosStandingForSeason,
+  type LigaProfesionalPromedioSeasonStanding,
+} from '@/server/liga-profesional/promedios'
 import { getTournamentConfig } from '@/lib/tournament-pages'
 
 export const dynamic = 'force-dynamic'
@@ -81,9 +84,7 @@ function dedupeRows(rows: LeagueStandingRow[]) {
   return [...byTeam.values()]
 }
 
-function buildAuditTeams(
-  standingsBySeason: Array<{ season: number; standings: LeagueStandingGroup[] }>
-) {
+function buildAuditTeams(standingsBySeason: Array<{ season: number; standings: LeagueStandingGroup[] }>) {
   const teams = new Map<string, AuditTeam>()
 
   for (const seasonEntry of standingsBySeason) {
@@ -139,12 +140,13 @@ export async function GET(request: Request) {
     }
 
     const seasons = [resolved.season - 2, resolved.season - 1, resolved.season]
-    const standingsBySeason = await Promise.all(
+    const standingsBySeason: LigaProfesionalPromedioSeasonStanding[] = await Promise.all(
       seasons.map((season) =>
-        getLeagueFixtures(resolved.leagueId, season).then((fixtures) => ({
+        buildLigaProfesionalPromediosStandingForSeason(
           season,
-          standings: [buildAnnualStandingGroupFromFixtures(fixtures)],
-        }))
+          getLeagueFixtures,
+          resolved.leagueId
+        )
       )
     )
     const currentSeason = standingsBySeason.find((entry) => entry.season === resolved.season)
@@ -164,6 +166,11 @@ export async function GET(request: Request) {
           season: resolved.season,
         },
         seasons,
+        sourcesBySeason: standingsBySeason.map((entry) => ({
+          season: entry.season,
+          sources: entry.sources,
+          warnings: entry.warnings,
+        })),
         totals: {
           currentTeams: currentTeamKeys.size,
           historicalTeams: teams.length,

@@ -1,11 +1,31 @@
 import type { LeagueFixtureSummary, LeagueStandingGroup, LeagueStandingRow } from '@/lib/api-football'
 import {
+  LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID,
   getLeagueFinalPhaseKey,
   normalizeRoundText,
 } from '@/shared/utils/league-rounds'
 import { isFinishedStatus } from '@/shared/utils/match-status'
 
 type AnnualAccumulator = Omit<LeagueStandingRow, 'rank'>
+type FetchLeagueFixtures = (
+  leagueExternalId: number,
+  season: number
+) => Promise<LeagueFixtureSummary[]>
+
+export const COPA_DE_LA_LIGA_PROFESIONAL_EXTERNAL_ID = 1032
+
+export type LigaProfesionalPromedioSource = {
+  season: number
+  leagueExternalId: number
+  label: string
+}
+
+export type LigaProfesionalPromedioSeasonStanding = {
+  season: number
+  standings: LeagueStandingGroup[]
+  sources: Array<LigaProfesionalPromedioSource & { fixtures: number; annualFixtures: number }>
+  warnings: string[]
+}
 
 function normalizeTeamNameKey(value: string) {
   return value
@@ -23,7 +43,7 @@ function getTeamKey(teamId: number | undefined, teamName: string) {
     : `name:${normalizeTeamNameKey(teamName)}`
 }
 
-function isAnnualTableFixtureRound(round: string | null | undefined) {
+export function isAnnualTableFixtureRound(round: string | null | undefined) {
   const normalized = normalizeRoundText(round)
 
   if (!normalized) return true
@@ -33,6 +53,45 @@ function isAnnualTableFixtureRound(round: string | null | undefined) {
     /\b(playoff|play-off|play offs|play-offs|reducido|liguilla|promotion|promocion)\b/.test(normalized) ||
     /\b(round of 16|8th finals?|16th finals?|32nd finals?|octavos?|cuartos?|quarter finals?|semi finals?|semifinal(?:es)?|final)\b/.test(normalized)
   )
+}
+
+function getFixtureDedupeKey(fixture: LeagueFixtureSummary) {
+  if (fixture.id !== undefined && fixture.id !== null && String(fixture.id).trim()) {
+    return `id:${fixture.id}`
+  }
+
+  return [
+    fixture.date ?? '',
+    getTeamKey(fixture.homeId, fixture.home),
+    getTeamKey(fixture.awayId, fixture.away),
+    normalizeRoundText(fixture.round),
+  ].join('|')
+}
+
+function getFixtureDataScore(fixture: LeagueFixtureSummary) {
+  let score = 0
+
+  if (isFinishedStatus(fixture.statusShort)) score += 10
+  if (fixture.goalsHome !== null && fixture.goalsAway !== null) score += 5
+  if (fixture.homeLogo) score += 1
+  if (fixture.awayLogo) score += 1
+
+  return score
+}
+
+function dedupeFixtures(fixtures: LeagueFixtureSummary[]) {
+  const byKey = new Map<string, LeagueFixtureSummary>()
+
+  for (const fixture of fixtures) {
+    const key = getFixtureDedupeKey(fixture)
+    const current = byKey.get(key)
+
+    if (!current || getFixtureDataScore(fixture) >= getFixtureDataScore(current)) {
+      byKey.set(key, fixture)
+    }
+  }
+
+  return [...byKey.values()]
 }
 
 function getAccumulator(
@@ -105,7 +164,7 @@ function applyFixtureResult(
 export function buildAnnualRowsFromFixtures(fixtures: LeagueFixtureSummary[]) {
   const table = new Map<string, AnnualAccumulator>()
 
-  for (const fixture of fixtures) {
+  for (const fixture of dedupeFixtures(fixtures)) {
     if (!isAnnualTableFixtureRound(fixture.round)) continue
     if (!isFinishedStatus(fixture.statusShort)) continue
     if (fixture.goalsHome === null || fixture.goalsAway === null) continue
@@ -134,5 +193,83 @@ export function buildAnnualStandingGroupFromFixtures(fixtures: LeagueFixtureSumm
   return {
     name: 'Tabla anual',
     rows: buildAnnualRowsFromFixtures(fixtures),
+  }
+}
+
+export function getLigaProfesionalPromedioSources(
+  season: number,
+  primaryLeagueExternalId = LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID
+): LigaProfesionalPromedioSource[] {
+  if (season === 2024) {
+    return [
+      {
+        season,
+        leagueExternalId: COPA_DE_LA_LIGA_PROFESIONAL_EXTERNAL_ID,
+        label: 'Copa de la Liga Profesional 2024',
+      },
+      {
+        season,
+        leagueExternalId: primaryLeagueExternalId,
+        label: 'Liga Profesional 2024',
+      },
+    ]
+  }
+
+  return [
+    {
+      season,
+      leagueExternalId: primaryLeagueExternalId,
+      label: `Liga Profesional ${season}`,
+    },
+  ]
+}
+
+export async function buildLigaProfesionalPromediosStandingForSeason(
+  season: number,
+  fetchLeagueFixtures: FetchLeagueFixtures,
+  primaryLeagueExternalId = LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID
+): Promise<LigaProfesionalPromedioSeasonStanding> {
+  const sourceDefinitions = getLigaProfesionalPromedioSources(season, primaryLeagueExternalId)
+  const sourceResults = await Promise.allSettled(
+    sourceDefinitions.map(async (source) => ({
+      ...source,
+      fixtures: await fetchLeagueFixtures(source.leagueExternalId, source.season),
+    }))
+  )
+  const fixtures: LeagueFixtureSummary[] = []
+  const warnings: string[] = []
+  const sources: LigaProfesionalPromedioSeasonStanding['sources'] = []
+
+  sourceResults.forEach((result, index) => {
+    const source = sourceDefinitions[index]
+
+    if (result.status === 'rejected') {
+      warnings.push(
+        `${source.label} (${source.leagueExternalId}) no se pudo leer: ${
+          result.reason instanceof Error ? result.reason.message : String(result.reason)
+        }`
+      )
+      sources.push({ ...source, fixtures: 0, annualFixtures: 0 })
+      return
+    }
+
+    const sourceFixtures = result.value.fixtures
+    const annualFixtures = sourceFixtures.filter((fixture) =>
+      isAnnualTableFixtureRound(fixture.round)
+    ).length
+
+    fixtures.push(...sourceFixtures)
+    sources.push({
+      ...source,
+      fixtures: sourceFixtures.length,
+      annualFixtures,
+    })
+  })
+
+  return {
+    season,
+    standings: [buildAnnualStandingGroupFromFixtures(fixtures)],
+    sources,
+    warnings,
   }
 }
