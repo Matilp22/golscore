@@ -11,7 +11,10 @@ import AutoRefresh from '@/frontend/components/AutoRefresh'
 import { TeamLogo as AssetTeamLogo } from '@/frontend/components/AssetImage'
 import FormationTeamPanel from '@/frontend/components/FormationTeamPanel'
 import SafeImage from '@/frontend/components/SafeImage'
-import { formatMatchTimeArgentina } from '@/shared/utils/argentina-time'
+import {
+  formatMatchDateTimeArgentina,
+  formatMatchTimeArgentina,
+} from '@/shared/utils/argentina-time'
 import { formatEventMinute } from '@/shared/utils/event-minute'
 import {
   getTimelineEvents,
@@ -175,7 +178,12 @@ function translateStatType(type: string) {
     expected_goals: 'Goles esperados',
     'Expected Goals': 'Goles esperados',
     'Expected goals': 'Goles esperados',
+    'Expected Goals (xG)': 'Goles esperados',
+    xG: 'Goles esperados',
+    'Attacks': 'Ataques',
+    'Dangerous Attacks': 'Ataques peligrosos',
     Saves: 'Atajadas',
+    'Goals Prevented': 'Goles evitados',
   }
 
   return map[type] || type
@@ -208,6 +216,12 @@ function formatReferee(referee?: string | null) {
 
   const [name, ...nationalityParts] = parts
   return `${name} (${nationalityParts.join(', ')})`
+}
+
+function formatVenue(venue?: { name?: string; city?: string } | null) {
+  if (!venue?.name && !venue?.city) return 'No disponible'
+  if (venue.name && venue.city) return `${venue.name} (${venue.city})`
+  return venue.name || venue.city || 'No disponible'
 }
 
 function normalizeTeamRefName(value?: string | null) {
@@ -1757,6 +1771,9 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                 <h1 className="mt-1 text-base font-bold text-white md:text-xl">
                   {translateLeagueName(fixture.league.name)}
                 </h1>
+                <p className="mt-1 text-xs font-semibold text-[#c8d0da]">
+                  {formatMatchDateTimeArgentina(fixture.fixture.date)}
+                </p>
               </div>
             </div>
           </div>
@@ -1803,7 +1820,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
             <div>
               <span className="text-[#8d98a7]">Estadio</span>
               <p className="mt-1 font-medium text-white">
-                {fixture.fixture.venue?.name || 'Estadio no disponible'}
+                {formatVenue(fixture.fixture.venue)}
               </p>
             </div>
             <div>

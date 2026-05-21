@@ -63,7 +63,10 @@ export async function GET(request: Request) {
         result.after.substitutesAwayCount,
       statisticsBefore: result.before.statisticsCount,
       statisticsAfter: result.after.statisticsCount,
+      updatedSections: result.updatedSections,
+      missingFromApi: result.missingFromApi,
       missingSections: result.after.missingSections,
+      matchUpdated: result.matchUpdated,
       warnings: result.warnings,
       result,
     })

@@ -435,6 +435,18 @@ export function isRedCardEvent(event: FootballEventLike) {
   )
 }
 
+export function isGoalEvent(event: FootballEventLike) {
+  const kind = normalizeMatchEvent(event).kind
+
+  return kind === 'goal' || kind === 'penalty-goal' || kind === 'own-goal'
+}
+
+export function isCardEvent(event: FootballEventLike) {
+  const kind = normalizeMatchEvent(event).kind
+
+  return kind === 'yellow-card' || kind === 'red-card' || kind === 'second-yellow'
+}
+
 export type ImportantLiveEventKind = 'goal' | 'penalty' | 'red-card'
 
 export function getImportantLiveEventKind(

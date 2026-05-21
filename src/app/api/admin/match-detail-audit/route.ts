@@ -15,6 +15,18 @@ function jsonNoStore(body: unknown, init?: ResponseInit) {
   return response
 }
 
+function isAuthorized(request: Request) {
+  const cronSecret = process.env.CRON_SECRET || process.env.ADMIN_CRON_SECRET
+  const isProduction = process.env.NODE_ENV === 'production'
+  const authorization = request.headers.get('authorization') ?? ''
+  const bearerMatch = authorization.match(/^Bearer\s+(.+)$/i)
+  const token = bearerMatch?.[1] ?? request.headers.get('x-cron-secret')
+
+  if (!isProduction && !cronSecret) return true
+
+  return Boolean(cronSecret && token === cronSecret)
+}
+
 function readNumber(value: string | null) {
   if (value === null || value.trim() === '') return null
 
@@ -35,6 +47,10 @@ function readBoolean(value: string | null) {
 }
 
 export async function GET(request: Request) {
+  if (!isAuthorized(request)) {
+    return jsonNoStore({ ok: false, error: 'No autorizado' }, { status: 401 })
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const supabase = getSupabaseAdminClient()

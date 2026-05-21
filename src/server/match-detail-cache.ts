@@ -1,12 +1,24 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { requestFootballApi } from '@/server/integrations/football-api-client'
-import { getArgentinaDateISO } from '@/shared/utils/argentina-time'
+import {
+  addDaysToISO,
+  getArgentinaDateISO,
+  getArgentinaDayUtcRange,
+} from '@/shared/utils/argentina-time'
 import {
   formatMatchEventStableKey,
   normalizeFootballEventText,
   normalizeMatchEvent,
 } from '@/shared/utils/football-events'
+import { getFixtureStatusElapsedMinute } from '@/shared/utils/match-minute'
+import {
+  getCanonicalMatchStatusFromApi,
+  isFinishedStatus,
+  isLiveStatus,
+  isUpcomingStatus,
+} from '@/shared/utils/match-status'
+import { normalizeMatchStatistics } from '@/shared/utils/match-statistics'
 
 type DbId = string | number
 
@@ -14,11 +26,43 @@ type ApiFixtureDetail = {
   fixture?: {
     id?: number
     date?: string
+    referee?: string | null
+    status?: {
+      short?: string | null
+      long?: string | null
+      elapsed?: number | null
+      extra?: number | null
+    } | null
+    venue?: {
+      name?: string | null
+      city?: string | null
+      country?: string | null
+    } | null
   }
   league?: {
     id?: number
+    name?: string | null
+    country?: string | null
     season?: number
   }
+  goals?: {
+    home?: number | null
+    away?: number | null
+  } | null
+  score?: {
+    halftime?: {
+      home?: number | null
+      away?: number | null
+    } | null
+    fulltime?: {
+      home?: number | null
+      away?: number | null
+    } | null
+    penalty?: {
+      home?: number | null
+      away?: number | null
+    } | null
+  } | null
 }
 
 type ApiFixtureEvent = {
@@ -55,8 +99,25 @@ type StoredMatchRow = {
 type StoredMatchAuditRow = StoredMatchRow & {
   match_date: string | null
   status: string | null
+  elapsed?: number | null
+  final_elapsed?: number | null
   home_score?: number | null
   away_score?: number | null
+  venue_name?: string | null
+  venue_city?: string | null
+  venue_country?: string | null
+  broadcast_channel?: string | null
+  broadcast_logo_url?: string | null
+  highlights_url?: string | null
+  highlights_title?: string | null
+  referee?: string | null
+  detail_last_synced_at?: string | null
+  final_detail_synced_at?: string | null
+}
+
+type StoredMatchBulkRow = StoredMatchAuditRow & {
+  detail_last_synced_at?: string | null
+  final_detail_synced_at?: string | null
 }
 
 type StoredTeamRow = {
@@ -86,7 +147,14 @@ type StoredLeagueRow = {
   season: number | null
 }
 
+type StoredMatchBroadcasterRow = {
+  broadcaster_name?: string | null
+  broadcaster_logo_url?: string | null
+  country?: string | null
+}
+
 type DetailCacheRow = {
+  fixture_payload?: unknown
   events: unknown
   lineups: unknown
   statistics: unknown
@@ -116,9 +184,19 @@ export type SyncMatchDetailResult = {
     statistics: number
   }
   cacheUpserted: boolean
+  matchUpdated: boolean
   matchEventsUpserted: number
+  updatedSections: string[]
+  missingFromApi: string[]
   warnings: string[]
   errors: string[]
+}
+
+type SyncMatchDetailSections = {
+  fixture?: boolean
+  events?: boolean
+  lineups?: boolean
+  statistics?: boolean
 }
 
 export type MatchDetailAuditSnapshot = {
@@ -189,6 +267,23 @@ export type MatchDetailGeneralAuditItem = {
     away: number | null
   }
   audit: MatchDetailAuditSnapshot
+  hasEvents: boolean
+  eventsCount: number
+  hasSubstitutions: boolean
+  substitutionsCount: number
+  hasVarEvents: boolean
+  hasMissedPenalty: boolean
+  hasLineups: boolean
+  homeStartersCount: number
+  awayStartersCount: number
+  homeSubstitutesCount: number
+  awaySubstitutesCount: number
+  hasCaptainData: boolean
+  hasStatistics: boolean
+  statisticsCount: number
+  statisticsMismatches: unknown[]
+  missingSections: string[]
+  warnings: string[]
   completenessScore: number
   missingRequiredSections: string[]
   syncRecommended: boolean
@@ -215,6 +310,78 @@ export type MatchDetailGeneralAuditResult = {
   }
   examplesMissing: MatchDetailGeneralAuditItem[]
   items: MatchDetailGeneralAuditItem[]
+  warnings: string[]
+}
+
+export type SyncMatchDetailsBulkOptions = {
+  date?: string | null
+  dateFrom?: string | null
+  dateTo?: string | null
+  leagueExternalId?: number | null
+  statuses?: string[]
+  liveOnly?: boolean
+  recentFinishedOnly?: boolean
+  missingDetailsOnly?: boolean
+  futureDays?: number | null
+  limit?: number | null
+  force?: boolean
+}
+
+export type SyncMatchDetailsBulkItem = {
+  matchId: DbId
+  fixtureExternalId: number
+  matchDate: string | null
+  status: string | null
+  reasons: string[]
+  plan: {
+    fixture: boolean
+    events: boolean
+    lineups: boolean
+    statistics: boolean
+  }
+  skipped: boolean
+  skipReason: string | null
+  ok: boolean
+  eventsBefore?: number
+  eventsAfter?: number
+  lineupsBefore?: number
+  lineupsAfter?: number
+  statisticsBefore?: number
+  statisticsAfter?: number
+  warnings: string[]
+  errors: string[]
+}
+
+export type SyncMatchDetailsBulkResult = {
+  ok: boolean
+  selected: number
+  processed: number
+  skipped: number
+  failed: number
+  limit: number
+  filters: {
+    date: string | null
+    dateFrom: string | null
+    dateTo: string | null
+    leagueExternalId: number | null
+    statuses: string[]
+    liveOnly: boolean
+    recentFinishedOnly: boolean
+    missingDetailsOnly: boolean
+    futureDays: number | null
+    force: boolean
+  }
+  estimatedApiRequests: number
+  requestPolicy: {
+    defaultLimit: number
+    maxLimit: number
+    fixture: string
+    events: string
+    statistics: string
+    lineups: string
+    finalSkip: string
+  }
+  items: SyncMatchDetailsBulkItem[]
   warnings: string[]
 }
 
@@ -261,10 +428,26 @@ function mergeDetailCacheRows(
   if (!fallback) return primary
 
   return {
+    fixture_payload: hasDetailRecord(primary.fixture_payload)
+      ? primary.fixture_payload
+      : fallback.fixture_payload,
     events: hasDetailItems(primary.events) ? primary.events : fallback.events,
     lineups: hasDetailItems(primary.lineups) ? primary.lineups : fallback.lineups,
     statistics: hasDetailItems(primary.statistics) ? primary.statistics : fallback.statistics,
   }
+}
+
+function hasDetailRecord(value: unknown) {
+  return Boolean(asRecord(value))
+}
+
+function isMissingDetailFixturePayloadColumn(error: { code?: string; message?: string } | null | undefined) {
+  const message = (error?.message ?? '').toLowerCase()
+
+  return (
+    (error?.code === '42703' || error?.code === 'PGRST204') &&
+    message.includes('fixture_payload')
+  )
 }
 
 async function fetchApiArray<T>(
@@ -675,11 +858,31 @@ async function readDetailCacheByFixture(
 ) {
   const response = await supabase
     .from('football_match_detail_cache')
-    .select('events, lineups, statistics')
+    .select('fixture_payload, events, lineups, statistics')
     .eq('fixture_external_id', String(fixtureExternalId))
     .maybeSingle()
 
   if (response.error) {
+    if (isMissingDetailFixturePayloadColumn(response.error)) {
+      const legacyResponse = await supabase
+        .from('football_match_detail_cache')
+        .select('events, lineups, statistics')
+        .eq('fixture_external_id', String(fixtureExternalId))
+        .maybeSingle()
+
+      if (legacyResponse.error) {
+        if (isMissingOptionalTable(legacyResponse.error, 'football_match_detail_cache')) {
+          return readFixtureCacheDetailByFixture(supabase, fixtureExternalId)
+        }
+        throw legacyResponse.error
+      }
+
+      const primary = (legacyResponse.data as DetailCacheRow | null) ?? null
+      const fallback = await readFixtureCacheDetailByFixture(supabase, fixtureExternalId)
+
+      return mergeDetailCacheRows(primary, fallback)
+    }
+
     if (isMissingOptionalTable(response.error, 'football_match_detail_cache')) {
       return readFixtureCacheDetailByFixture(supabase, fixtureExternalId)
     }
@@ -699,6 +902,7 @@ function extractMatchDetailFromFixtureCache(row: FixtureCacheDetailRow | null) {
   if (!detail) return null
 
   return {
+    fixture_payload: detail.fixture,
     events: detail.events,
     lineups: detail.lineups,
     statistics: detail.statistics,
@@ -793,6 +997,152 @@ async function upsertFixtureCacheDetailFallback(
   }
 
   return true
+}
+
+function getFixtureDetailScore(fixturePayload: ApiFixtureDetail | null | undefined) {
+  const home =
+    toNumber(fixturePayload?.goals?.home) ??
+    toNumber(fixturePayload?.score?.fulltime?.home)
+  const away =
+    toNumber(fixturePayload?.goals?.away) ??
+    toNumber(fixturePayload?.score?.fulltime?.away)
+
+  return {
+    home,
+    away,
+    halftimeHome: toNumber(fixturePayload?.score?.halftime?.home),
+    halftimeAway: toNumber(fixturePayload?.score?.halftime?.away),
+    penaltyHome: toNumber(fixturePayload?.score?.penalty?.home),
+    penaltyAway: toNumber(fixturePayload?.score?.penalty?.away),
+  }
+}
+
+function cleanPatchText(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function buildMatchPatchFromFixtureDetail(fixturePayload: ApiFixtureDetail | null) {
+  if (!fixturePayload?.fixture) return {}
+
+  const status = getCanonicalMatchStatusFromApi(fixturePayload.fixture.status ?? null)
+  const elapsed = getFixtureStatusElapsedMinute(fixturePayload.fixture.status ?? null)
+  const score = getFixtureDetailScore(fixturePayload)
+  const patch: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  }
+
+  if (fixturePayload.fixture.date) patch.match_date = fixturePayload.fixture.date
+  if (status) patch.status = status
+  if (elapsed !== null) patch.elapsed = elapsed
+  if (isFinishedStatus(status) && elapsed !== null) patch.final_elapsed = elapsed
+  if (score.home !== null) patch.home_score = score.home
+  if (score.away !== null) patch.away_score = score.away
+  if (score.penaltyHome !== null) patch.home_penalty_score = score.penaltyHome
+  if (score.penaltyAway !== null) patch.away_penalty_score = score.penaltyAway
+
+  const venueName = cleanPatchText(fixturePayload.fixture.venue?.name)
+  const venueCity = cleanPatchText(fixturePayload.fixture.venue?.city)
+  const venueCountry =
+    cleanPatchText(fixturePayload.fixture.venue?.country) ??
+    cleanPatchText(fixturePayload.league?.country)
+  const referee = cleanPatchText(fixturePayload.fixture.referee)
+
+  if (venueName) patch.venue_name = venueName
+  if (venueCity) patch.venue_city = venueCity
+  if (venueCountry) patch.venue_country = venueCountry
+  if (referee) patch.referee = referee
+
+  return patch
+}
+
+function findMissingPatchColumn(
+  error: { code?: string; message?: string } | null | undefined,
+  patch: Record<string, unknown>
+) {
+  const message = (error?.message ?? '').toLowerCase()
+
+  if (!(error?.code === '42703' || error?.code === 'PGRST204' || message.includes('schema cache'))) {
+    return null
+  }
+
+  return Object.keys(patch).find((key) => message.includes(key.toLowerCase())) ?? null
+}
+
+async function updateStoredMatchFromFixtureDetail(
+  supabase: SupabaseClient,
+  match: StoredMatchRow | null,
+  fixturePayload: ApiFixtureDetail | null,
+  warnings: string[],
+  sections: SyncMatchDetailSections = {}
+) {
+  if (!match?.id) return false
+
+  const patch = buildMatchPatchFromFixtureDetail(fixturePayload)
+  const nowIso = new Date().toISOString()
+  patch.detail_last_synced_at = nowIso
+
+  if (
+    fixturePayload?.fixture?.status &&
+    isFinishedStatus(getCanonicalMatchStatusFromApi(fixturePayload.fixture.status))
+  ) {
+    patch.final_detail_synced_at = nowIso
+  }
+
+  if (sections.events) patch.last_events_synced_at = nowIso
+  if (sections.statistics) patch.last_statistics_synced_at = nowIso
+  if (sections.lineups) patch.last_lineups_synced_at = nowIso
+
+  const optionalColumns = new Set([
+    'final_elapsed',
+    'home_penalty_score',
+    'away_penalty_score',
+    'venue_name',
+    'venue_city',
+    'venue_country',
+    'referee',
+    'detail_last_synced_at',
+    'last_events_synced_at',
+    'last_statistics_synced_at',
+    'last_lineups_synced_at',
+    'final_detail_synced_at',
+  ])
+  const currentPatch = { ...patch }
+
+  while (Object.keys(currentPatch).length > 0) {
+    const response = await supabase
+      .from('matches')
+      .update(currentPatch)
+      .eq('id', String(match.id))
+
+    if (!response.error) return true
+
+    const missingColumn = findMissingPatchColumn(response.error, currentPatch)
+
+    if (missingColumn && optionalColumns.has(missingColumn)) {
+      delete currentPatch[missingColumn]
+      warnings.push(`La columna opcional matches.${missingColumn} no existe; se omitio al actualizar el detalle.`)
+      continue
+    }
+
+    const removableOptionalColumns = Object.keys(currentPatch).filter((key) => optionalColumns.has(key))
+
+    if (
+      removableOptionalColumns.length &&
+      (
+        response.error.code === '42703' ||
+        response.error.code === 'PGRST204' ||
+        response.error.message.toLowerCase().includes('schema cache')
+      )
+    ) {
+      for (const key of removableOptionalColumns) delete currentPatch[key]
+      warnings.push('Se omitieron columnas opcionales de matches que no estan disponibles en Supabase.')
+      continue
+    }
+
+    throw response.error
+  }
+
+  return false
 }
 
 function countLineupPlayers(lineup: unknown, key: 'startXI' | 'substitutes') {
@@ -1205,6 +1555,63 @@ async function fetchStoredMatchEventRows(
   return (response.data ?? []) as StoredMatchEventRow[]
 }
 
+async function fetchStoredMatchInfoRow(
+  supabase: SupabaseClient,
+  matchId: DbId | null | undefined
+) {
+  if (matchId === null || matchId === undefined) return null
+
+  const selectBase =
+    'id, external_id, league_id, home_team_id, away_team_id, match_date, status, elapsed, home_score, away_score'
+  const selectOptional =
+    `${selectBase}, final_elapsed, venue_name, venue_city, venue_country, broadcast_channel, broadcast_logo_url, highlights_url, highlights_title, referee`
+
+  let response = await supabase
+    .from('matches')
+    .select(selectOptional)
+    .eq('id', String(matchId))
+    .maybeSingle()
+
+  if (
+    response.error &&
+    (
+      response.error.code === '42703' ||
+      response.error.code === 'PGRST204' ||
+      response.error.message.toLowerCase().includes('schema cache')
+    )
+  ) {
+    response = await supabase
+      .from('matches')
+      .select(selectBase)
+      .eq('id', String(matchId))
+      .maybeSingle()
+  }
+
+  if (response.error) throw response.error
+
+  return (response.data as StoredMatchAuditRow | null) ?? null
+}
+
+async function fetchAuditBroadcasters(
+  supabase: SupabaseClient,
+  matchId: DbId | null | undefined
+) {
+  if (matchId === null || matchId === undefined) return []
+
+  const response = await supabase
+    .from('match_broadcasts')
+    .select('broadcaster_name, broadcaster_logo_url, country')
+    .eq('match_id', String(matchId))
+    .order('broadcaster_name', { ascending: true })
+
+  if (response.error) {
+    if (isMissingOptionalTable(response.error, 'match_broadcasts')) return []
+    throw response.error
+  }
+
+  return (response.data ?? []) as StoredMatchBroadcasterRow[]
+}
+
 function mapStoredAuditEvent(
   row: StoredMatchEventRow,
   teamsById: Map<string, StoredTeamRow>
@@ -1302,6 +1709,226 @@ function getOfficialDisciplineStats(statistics: unknown[]) {
   return result
 }
 
+function buildEventsByRawType(events: unknown[]) {
+  return events.reduce<Record<string, number>>((accumulator, event) => {
+    const eventLike = toAuditEventLike(event)
+    const key = [
+      eventLike.type || 'Event',
+      eventLike.detail || null,
+    ].filter(Boolean).join(' / ')
+
+    accumulator[key] = (accumulator[key] ?? 0) + 1
+    return accumulator
+  }, {})
+}
+
+function countEventsByKind(events: unknown[]) {
+  const summary = {
+    total: events.length,
+    byType: buildEventsByRawType(events),
+    goals: 0,
+    cards: 0,
+    penalties: 0,
+    missedPenalties: 0,
+    ownGoals: 0,
+    yellowCards: 0,
+    redCards: 0,
+    secondYellowCards: 0,
+    substitutions: 0,
+    varEvents: 0,
+    cancelledGoals: 0,
+    cancelledCards: 0,
+    injuries: 0,
+    yellowCardsHome: 0,
+    yellowCardsAway: 0,
+    redCardsHome: 0,
+    redCardsAway: 0,
+    rawSamples: events.slice(0, 8).map(toAuditEvent),
+  }
+
+  return summary
+}
+
+function isCancelledGoalAuditKind(event: unknown) {
+  const eventLike = toAuditEventLike(event)
+  const text = normalizeFootballEventText([
+    eventLike.type,
+    eventLike.detail,
+    eventLike.comments,
+  ].join(' '))
+
+  return (
+    text.includes('goal cancelled') ||
+    text.includes('goal canceled') ||
+    text.includes('goal disallowed') ||
+    text.includes('disallowed goal')
+  )
+}
+
+function isCancelledCardAuditKind(event: unknown) {
+  const eventLike = toAuditEventLike(event)
+  const text = normalizeFootballEventText([
+    eventLike.type,
+    eventLike.detail,
+    eventLike.comments,
+  ].join(' '))
+
+  return (
+    text.includes('card cancelled') ||
+    text.includes('card canceled') ||
+    text.includes('red card cancelled') ||
+    text.includes('yellow card cancelled')
+  )
+}
+
+function buildMergedStatisticsAudit(input: {
+  statistics: unknown[]
+  events: unknown[]
+  match: StoredMatchRow | null
+  teamsById: Map<string, StoredTeamRow>
+}) {
+  const homeTeam = input.match?.home_team_id !== null && input.match?.home_team_id !== undefined
+    ? input.teamsById.get(String(input.match.home_team_id))
+    : null
+  const awayTeam = input.match?.away_team_id !== null && input.match?.away_team_id !== undefined
+    ? input.teamsById.get(String(input.match.away_team_id))
+    : null
+
+  if (!homeTeam || !awayTeam) return []
+
+  return normalizeMatchStatistics(
+    input.statistics as Array<{
+      team?: { id?: number | string | null; name?: string | null } | null
+      statistics?: Array<{ type?: string | null; value?: string | number | null }> | null
+    }>,
+    {
+      id: homeTeam.external_id ?? homeTeam.id,
+      name: homeTeam.name,
+    },
+    {
+      id: awayTeam.external_id ?? awayTeam.id,
+      name: awayTeam.name,
+    },
+    input.events as Array<{
+      team?: { id?: number | string | null; name?: string | null } | null
+      type?: string | null
+      detail?: string | null
+      comments?: string | null
+    }>
+  )
+}
+
+function buildMissingExpectedStats(statisticsNames: string[]) {
+  const normalizedNames = new Set(statisticsNames.map(normalizeFootballEventText))
+  const expected = [
+    'Ball Possession',
+    'Total Shots',
+    'Shots on Goal',
+    'Shots off Goal',
+    'Corner Kicks',
+    'Fouls',
+    'Offsides',
+    'Yellow Cards',
+    'Red Cards',
+  ]
+
+  return expected.filter((name) => !normalizedNames.has(normalizeFootballEventText(name)))
+}
+
+function readCachedFixturePayload(cache: DetailCacheRow | null) {
+  return asRecord(cache?.fixture_payload) as ApiFixtureDetail | null
+}
+
+function buildMatchAuditInfo(input: {
+  match: StoredMatchRow | null
+  matchInfo: StoredMatchAuditRow | null
+  league: StoredLeagueRow | null
+  teamsById: Map<string, StoredTeamRow>
+  fixturePayload: ApiFixtureDetail | null
+}) {
+  const homeTeam = input.match?.home_team_id !== null && input.match?.home_team_id !== undefined
+    ? input.teamsById.get(String(input.match.home_team_id))
+    : null
+  const awayTeam = input.match?.away_team_id !== null && input.match?.away_team_id !== undefined
+    ? input.teamsById.get(String(input.match.away_team_id))
+    : null
+  const fixture = input.fixturePayload?.fixture
+  const status = fixture?.status ?? null
+
+  return {
+    id: input.match?.id ?? null,
+    external_id:
+      input.match?.external_id ??
+      input.fixturePayload?.fixture?.id ??
+      null,
+    league: {
+      id: input.league?.id ?? input.match?.league_id ?? null,
+      external_id: input.league?.external_id ?? input.fixturePayload?.league?.id ?? null,
+      name: input.league?.name ?? input.fixturePayload?.league?.name ?? null,
+      country: input.fixturePayload?.league?.country ?? null,
+      season: input.league?.season ?? input.fixturePayload?.league?.season ?? null,
+    },
+    home: {
+      id: input.match?.home_team_id ?? null,
+      external_id: homeTeam?.external_id ?? null,
+      name: homeTeam?.name ?? null,
+    },
+    away: {
+      id: input.match?.away_team_id ?? null,
+      external_id: awayTeam?.external_id ?? null,
+      name: awayTeam?.name ?? null,
+    },
+    status: status?.short ?? input.matchInfo?.status ?? null,
+    statusLong: status?.long ?? null,
+    elapsed:
+      getFixtureStatusElapsedMinute(status) ??
+      input.matchInfo?.elapsed ??
+      null,
+    final_elapsed: input.matchInfo?.final_elapsed ?? null,
+    match_date: fixture?.date ?? input.matchInfo?.match_date ?? null,
+    stadium:
+      cleanPatchText(fixture?.venue?.name) ??
+      cleanPatchText(input.matchInfo?.venue_name),
+    venueCity:
+      cleanPatchText(fixture?.venue?.city) ??
+      cleanPatchText(input.matchInfo?.venue_city),
+    venueCountry:
+      cleanPatchText(fixture?.venue?.country) ??
+      cleanPatchText(input.matchInfo?.venue_country),
+    referee:
+      cleanPatchText(fixture?.referee) ??
+      cleanPatchText(input.matchInfo?.referee),
+  }
+}
+
+function buildRenderReadiness(input: {
+  snapshot: MatchDetailAuditSnapshot
+  matchInfo: ReturnType<typeof buildMatchAuditInfo>
+  broadcasters: StoredMatchBroadcasterRow[]
+  cache: DetailCacheRow | null
+}) {
+  const statistics = asArray(input.cache?.statistics)
+  const lineups = asArray(input.cache?.lineups)
+
+  return {
+    canRenderTimeline: input.snapshot.hasEvents,
+    canRenderStats: input.snapshot.hasStatistics,
+    canRenderPitch: lineups.some((lineup) => countLineupPlayers(lineup, 'startXI') > 0),
+    canRenderLineupLists: lineups.some((lineup) => (
+      countLineupPlayers(lineup, 'startXI') > 0 ||
+      countLineupPlayers(lineup, 'substitutes') > 0
+    )),
+    canRenderMatchInfo: Boolean(
+      input.matchInfo.match_date ||
+      input.matchInfo.status ||
+      input.matchInfo.stadium ||
+      input.matchInfo.referee ||
+      input.broadcasters.length
+    ),
+    canRenderPartialStats: statistics.length > 0,
+  }
+}
+
 function buildDetailedAuditSections(input: {
   cache: DetailCacheRow | null
   events: unknown[]
@@ -1310,18 +1937,7 @@ function buildDetailedAuditSections(input: {
 }) {
   const statistics = asArray(input.cache?.statistics)
   const lineups = asArray(input.cache?.lineups)
-  const eventSummary = {
-    total: input.events.length,
-    goals: 0,
-    cards: 0,
-    yellowCardsHome: 0,
-    yellowCardsAway: 0,
-    redCardsHome: 0,
-    redCardsAway: 0,
-    substitutions: 0,
-    varEvents: 0,
-    missedPenalties: 0,
-  }
+  const eventSummary = countEventsByKind(input.events)
 
   for (const event of input.events) {
     const kind = getAuditEventKind(event)
@@ -1330,22 +1946,37 @@ function buildDetailedAuditSections(input: {
     if (kind === 'goal' || kind === 'penalty-goal' || kind === 'own-goal') {
       eventSummary.goals += 1
     }
+    if (kind === 'penalty' || kind === 'penalty-goal') eventSummary.penalties += 1
+    if (kind === 'own-goal') eventSummary.ownGoals += 1
     if (kind === 'yellow-card') {
       eventSummary.cards += 1
+      eventSummary.yellowCards += 1
       if (side === 'home') eventSummary.yellowCardsHome += 1
       if (side === 'away') eventSummary.yellowCardsAway += 1
     }
     if (kind === 'red-card' || kind === 'second-yellow') {
       eventSummary.cards += 1
+      if (kind === 'second-yellow') eventSummary.secondYellowCards += 1
+      else eventSummary.redCards += 1
       if (side === 'home') eventSummary.redCardsHome += 1
       if (side === 'away') eventSummary.redCardsAway += 1
     }
     if (kind === 'substitution') eventSummary.substitutions += 1
     if (kind === 'var') eventSummary.varEvents += 1
     if (kind === 'penalty-missed') eventSummary.missedPenalties += 1
+    if (kind === 'injury') eventSummary.injuries += 1
+    if (isCancelledGoalAuditKind(event)) eventSummary.cancelledGoals += 1
+    if (isCancelledCardAuditKind(event)) eventSummary.cancelledCards += 1
   }
 
   const official = getOfficialDisciplineStats(statistics)
+  const statisticsNames = buildStatisticsNames(statistics)
+  const mergedStats = buildMergedStatisticsAudit({
+    statistics,
+    events: input.events,
+    match: input.match,
+    teamsById: input.teamsById,
+  })
   const mismatches = [
     {
       type: 'Yellow Cards',
@@ -1376,9 +2007,15 @@ function buildDetailedAuditSections(input: {
           const values = asArray(asRecord(entry)?.statistics)
           return sum + values.length
         }, 0),
-        names: buildStatisticsNames(statistics),
+        names: statisticsNames,
         discipline: official,
       },
+      hasOfficialStats: statistics.length > 0,
+      officialStatsCount: statistics.reduce((sum, entry) => {
+        const values = asArray(asRecord(entry)?.statistics)
+        return sum + values.length
+      }, 0),
+      officialStatsNames: statisticsNames,
       derivedFromEvents: {
         yellowCards: {
           home: eventSummary.yellowCardsHome,
@@ -1399,7 +2036,9 @@ function buildDetailedAuditSections(input: {
           away: eventSummary.redCardsAway,
         },
       },
+      mergedStats,
       mismatches,
+      missingExpectedStats: buildMissingExpectedStats(statisticsNames),
     },
     lineups: {
       hasLineups: lineups.length > 0,
@@ -1456,12 +2095,15 @@ export async function auditMatchDetailCache(
     }
   }
 
-  const [cache, storedEventRows, teamsById] = await Promise.all([
+  const [cache, storedEventRows, teamsById, matchInfo, league, broadcasters] = await Promise.all([
     readDetailCacheByFixture(supabase, fixtureExternalId),
     fetchStoredMatchEventRows(supabase, match?.id),
     match
       ? fetchStoredTeamsByIds(supabase, [match.home_team_id, match.away_team_id])
       : Promise.resolve(new Map<string, StoredTeamRow>()),
+    fetchStoredMatchInfoRow(supabase, match?.id),
+    fetchStoredLeagueById(supabase, match?.league_id),
+    fetchAuditBroadcasters(supabase, match?.id),
   ])
   const storedEvents = storedEventRows.map((event) => mapStoredAuditEvent(event, teamsById))
   const mergedEvents = mergeAuditEvents(asArray(cache?.events), storedEvents)
@@ -1472,16 +2114,66 @@ export async function auditMatchDetailCache(
     match,
     teamsById,
   })
+  const snapshot = mergeStoredEventsIntoAudit(buildAuditSnapshot(cache, mergedEvents), storedEventsCount)
+  const fixturePayload = readCachedFixturePayload(cache)
+  const matchAuditInfo = buildMatchAuditInfo({
+    match,
+    matchInfo,
+    league,
+    teamsById,
+    fixturePayload,
+  })
+  const highlightUrl =
+    cleanPatchText(matchInfo?.highlights_url) ??
+    cleanPatchText(asRecord(cache?.fixture_payload)?.highlights_url)
+  const highlightTitle =
+    cleanPatchText(matchInfo?.highlights_title) ??
+    cleanPatchText(asRecord(cache?.fixture_payload)?.highlights_title)
+  const missingSections = [...snapshot.missingSections]
+
+  if (!matchAuditInfo.stadium) missingSections.push('stadium')
+  if (!matchAuditInfo.referee) missingSections.push('referee')
+  if (!broadcasters.length && !matchInfo?.broadcast_channel) missingSections.push('tv')
 
   return {
     fixtureExternalId,
     matchId: match?.id ?? null,
-    match: {
-      id: match?.id ?? null,
-      externalId: fixtureExternalId,
-    },
-    ...mergeStoredEventsIntoAudit(buildAuditSnapshot(cache, mergedEvents), storedEventsCount),
+    match: matchAuditInfo,
+    ...snapshot,
     ...detailedSections,
+    broadcasts: {
+      hasTv: broadcasters.length > 0 || Boolean(matchInfo?.broadcast_channel),
+      broadcasters: broadcasters.length
+        ? broadcasters.map((broadcaster) => ({
+            name: broadcaster.broadcaster_name ?? null,
+            logoUrl: broadcaster.broadcaster_logo_url ?? null,
+            country: broadcaster.country ?? null,
+          }))
+        : matchInfo?.broadcast_channel
+          ? [{
+              name: matchInfo.broadcast_channel,
+              logoUrl: matchInfo.broadcast_logo_url ?? null,
+              country: null,
+            }]
+          : [],
+    },
+    highlights: {
+      hasHighlights: Boolean(highlightUrl),
+      url: highlightUrl,
+      title: highlightTitle,
+    },
+    renderReadiness: buildRenderReadiness({
+      snapshot,
+      matchInfo: matchAuditInfo,
+      broadcasters,
+      cache,
+    }),
+    missingSections: [...new Set(missingSections)],
+    warnings: [
+      ...snapshot.warnings,
+      ...(!matchAuditInfo.stadium ? ['No hay estadio disponible para renderizar.'] : []),
+      ...(!matchAuditInfo.referee ? ['No hay arbitro disponible para renderizar.'] : []),
+    ],
   }
 }
 
@@ -1572,6 +2264,11 @@ export async function auditMatchDetailsGeneral(
     }
     const missingRequiredSections = getMissingRequiredSections(snapshot, requiresDetail)
     const syncRecommended = missingRequiredSections.length > 0
+    const detailAuditRecord = detailAudit as Record<string, unknown>
+    const detailedEvents = asRecord(detailAuditRecord.events)
+    const detailedStatistics = asRecord(detailAuditRecord.statistics)
+    const substitutionsCount = toNumber(detailedEvents?.substitutions) ?? 0
+    const statisticsMismatches = asArray(detailedStatistics?.mismatches)
     const item: MatchDetailGeneralAuditItem = {
       fixtureExternalId,
       matchId: match.id,
@@ -1592,6 +2289,23 @@ export async function auditMatchDetailsGeneral(
         away: match.away_score ?? null,
       },
       audit: snapshot,
+      hasEvents: snapshot.hasEvents,
+      eventsCount: snapshot.eventsCount,
+      hasSubstitutions: snapshot.hasSubstitutions || substitutionsCount > 0,
+      substitutionsCount,
+      hasVarEvents: snapshot.hasVarEvents,
+      hasMissedPenalty: snapshot.hasMissedPenalty,
+      hasLineups: snapshot.hasLineups,
+      homeStartersCount: snapshot.homeStartersCount,
+      awayStartersCount: snapshot.awayStartersCount,
+      homeSubstitutesCount: snapshot.homeSubstitutesCount,
+      awaySubstitutesCount: snapshot.awaySubstitutesCount,
+      hasCaptainData: snapshot.hasCaptainData,
+      hasStatistics: snapshot.hasStatistics,
+      statisticsCount: snapshot.statisticsCount,
+      statisticsMismatches,
+      missingSections: snapshot.missingSections,
+      warnings: snapshot.warnings,
       completenessScore: getCompletenessScore(snapshot, requiresDetail),
       missingRequiredSections,
       syncRecommended,
@@ -1600,7 +2314,11 @@ export async function auditMatchDetailsGeneral(
         : null,
     }
 
-    if (!input.missingOnly || item.missingRequiredSections.length > 0) {
+    if (
+      !input.missingOnly ||
+      item.missingRequiredSections.length > 0 ||
+      item.statisticsMismatches.length > 0
+    ) {
       items.push(item)
     }
   }
@@ -1653,12 +2371,446 @@ export async function auditMatchDetailsGeneral(
   }
 }
 
+const BULK_SYNC_DEFAULT_LIMIT = 25
+const BULK_SYNC_MAX_LIMIT = 100
+const BULK_LIVE_STATUSES = ['LIVE', '1H', 'HT', '2H', 'ET', 'BT', 'P', 'IN_PLAY']
+const BULK_FINISHED_STATUSES = ['FT', 'AET', 'PEN', 'Finished', 'Match Finished']
+
+function clampBulkLimit(limit: number | null | undefined) {
+  if (!Number.isFinite(limit ?? NaN) || !limit || limit <= 0) return BULK_SYNC_DEFAULT_LIMIT
+
+  return Math.min(Math.floor(limit), BULK_SYNC_MAX_LIMIT)
+}
+
+function normalizeBulkStatuses(input?: string[] | null) {
+  return (input ?? [])
+    .flatMap((status) => String(status).split(','))
+    .map((status) => status.trim())
+    .filter(Boolean)
+}
+
+function buildBulkDateRange(input: SyncMatchDetailsBulkOptions, now: Date) {
+  if (input.date) {
+    const range = getArgentinaDayUtcRange(input.date)
+    return {
+      dateFrom: range.startUtc,
+      dateTo: range.endUtc,
+    }
+  }
+
+  if (input.dateFrom || input.dateTo) {
+    const fromRange = input.dateFrom ? getArgentinaDayUtcRange(input.dateFrom) : null
+    const toRange = input.dateTo ? getArgentinaDayUtcRange(input.dateTo) : null
+
+    return {
+      dateFrom: fromRange?.startUtc ?? null,
+      dateTo: toRange?.endUtc ?? null,
+    }
+  }
+
+  if (input.recentFinishedOnly) {
+    return {
+      dateFrom: new Date(now.getTime() - 3 * 60 * 60 * 1000).toISOString(),
+      dateTo: now.toISOString(),
+    }
+  }
+
+  if (input.futureDays !== null && input.futureDays !== undefined) {
+    const days = Math.min(Math.max(Math.floor(input.futureDays), 0), 30)
+    return {
+      dateFrom: now.toISOString(),
+      dateTo: new Date(now.getTime() + days * 24 * 60 * 60 * 1000).toISOString(),
+    }
+  }
+
+  if (input.liveOnly) {
+    return {
+      dateFrom: null,
+      dateTo: null,
+    }
+  }
+
+  const today = getArgentinaDateISO(now)
+  const yesterday = addDaysToISO(today, -1)
+  const tomorrow = addDaysToISO(today, 1)
+
+  return {
+    dateFrom: getArgentinaDayUtcRange(yesterday).startUtc,
+    dateTo: getArgentinaDayUtcRange(tomorrow).endUtc,
+  }
+}
+
+function getBulkStatuses(input: SyncMatchDetailsBulkOptions) {
+  const explicit = normalizeBulkStatuses(input.statuses)
+  if (explicit.length) return explicit
+  if (input.liveOnly) return BULK_LIVE_STATUSES
+  if (input.recentFinishedOnly) return BULK_FINISHED_STATUSES
+
+  return []
+}
+
+async function fetchBulkMatchCandidates(
+  supabase: SupabaseClient,
+  input: SyncMatchDetailsBulkOptions,
+  now: Date,
+  limit: number
+) {
+  const range = buildBulkDateRange(input, now)
+  const statuses = getBulkStatuses(input)
+  const requestedLimit = input.missingDetailsOnly ? Math.min(limit * 4, 300) : limit
+  const selectBase =
+    'id, external_id, league_id, home_team_id, away_team_id, match_date, status, elapsed, home_score, away_score'
+  const selectOptional =
+    `${selectBase}, detail_last_synced_at, final_detail_synced_at`
+
+  let query = supabase
+    .from('matches')
+    .select(selectOptional)
+    .not('external_id', 'is', null)
+    .order('match_date', { ascending: true, nullsFirst: false })
+    .limit(requestedLimit)
+
+  if (range.dateFrom) query = query.gte('match_date', range.dateFrom)
+  if (range.dateTo) query = query.lte('match_date', range.dateTo)
+  if (statuses.length) query = query.in('status', statuses)
+
+  if (input.leagueExternalId) {
+    const leagueIds = await fetchAuditLeagueRowsByExternalId(supabase, input.leagueExternalId)
+    if (!leagueIds.length) return { rows: [], range, statuses }
+    query = query.in('league_id', leagueIds)
+  }
+
+  let response: {
+    data: unknown
+    error: { code?: string; message: string } | null
+  } = await query
+
+  if (
+    response.error &&
+    (
+      response.error.code === '42703' ||
+      response.error.code === 'PGRST204' ||
+      response.error.message.toLowerCase().includes('schema cache')
+    )
+  ) {
+    let fallbackQuery = supabase
+      .from('matches')
+      .select(selectBase)
+      .not('external_id', 'is', null)
+      .order('match_date', { ascending: true, nullsFirst: false })
+      .limit(requestedLimit)
+
+    if (range.dateFrom) fallbackQuery = fallbackQuery.gte('match_date', range.dateFrom)
+    if (range.dateTo) fallbackQuery = fallbackQuery.lte('match_date', range.dateTo)
+    if (statuses.length) fallbackQuery = fallbackQuery.in('status', statuses)
+
+    if (input.leagueExternalId) {
+      const leagueIds = await fetchAuditLeagueRowsByExternalId(supabase, input.leagueExternalId)
+      if (!leagueIds.length) return { rows: [], range, statuses }
+      fallbackQuery = fallbackQuery.in('league_id', leagueIds)
+    }
+
+    response = await fallbackQuery
+  }
+
+  if (response.error) throw response.error
+
+  return {
+    rows: (response.data ?? []) as StoredMatchBulkRow[],
+    range,
+    statuses,
+  }
+}
+
+function minutesUntilBulk(matchDate: string | null | undefined, now: Date) {
+  if (!matchDate) return null
+  const timestamp = new Date(matchDate).getTime()
+  if (!Number.isFinite(timestamp)) return null
+
+  return Math.round((timestamp - now.getTime()) / 60_000)
+}
+
+function isRecentlyFinishedCandidate(match: StoredMatchBulkRow, now: Date) {
+  if (!isFinishedStatus(match.status)) return false
+  if (!match.match_date) return false
+
+  const timestamp = new Date(match.match_date).getTime()
+  if (!Number.isFinite(timestamp)) return false
+
+  return now.getTime() - timestamp <= 3 * 60 * 60 * 1000
+}
+
+function getBulkSyncReasons(match: StoredMatchBulkRow, input: SyncMatchDetailsBulkOptions, now: Date) {
+  const reasons = new Set<string>()
+  if (input.force) reasons.add('force')
+  if (input.missingDetailsOnly) reasons.add('missing-details')
+  if (isLiveStatus(match.status)) reasons.add('live')
+  if (isRecentlyFinishedCandidate(match, now)) reasons.add('recently-finished')
+  if (isFinishedStatus(match.status)) reasons.add('finished')
+  if (isUpcomingStatus(match.status)) reasons.add('future')
+  if (input.date || input.dateFrom || input.dateTo) reasons.add('date-range')
+  if (input.leagueExternalId) reasons.add('league')
+
+  const kickoff = minutesUntilBulk(match.match_date, now)
+  if (kickoff !== null && kickoff <= 90 && kickoff >= -10) reasons.add('lineup-window')
+
+  return [...reasons]
+}
+
+function getBulkSyncPlan(match: StoredMatchBulkRow, input: SyncMatchDetailsBulkOptions, now: Date) {
+  const force = Boolean(input.force)
+  const status = match.status
+  const kickoff = minutesUntilBulk(match.match_date, now)
+  const started = isLiveStatus(status) || isFinishedStatus(status)
+  const nearKickoff = kickoff !== null && kickoff <= 90 && kickoff >= -10
+  const finalAlreadySynced = Boolean(match.final_detail_synced_at) && isFinishedStatus(status)
+
+  if (!force && finalAlreadySynced && !input.missingDetailsOnly) {
+    return {
+      skipReason: 'final_detail_synced',
+      plan: {
+        fixture: false,
+        events: false,
+        lineups: false,
+        statistics: false,
+      },
+    }
+  }
+
+  if (!force && !started && !nearKickoff) {
+    return {
+      skipReason: null,
+      plan: {
+        fixture: true,
+        events: false,
+        lineups: false,
+        statistics: false,
+      },
+    }
+  }
+
+  return {
+    skipReason: null,
+    plan: {
+      fixture: true,
+      events: started || force,
+      lineups: started || nearKickoff || force,
+      statistics: started || force,
+    },
+  }
+}
+
+function countPlannedRequests(plan: SyncMatchDetailsBulkItem['plan']) {
+  return Number(plan.fixture) + Number(plan.events) + Number(plan.lineups) + Number(plan.statistics)
+}
+
+function getLineupPlayersCount(snapshot: MatchDetailAuditSnapshot) {
+  return (
+    snapshot.lineupsHomeCount +
+    snapshot.lineupsAwayCount +
+    snapshot.substitutesHomeCount +
+    snapshot.substitutesAwayCount
+  )
+}
+
+function isAuditProblem(audit: Awaited<ReturnType<typeof auditMatchDetailCache>>) {
+  const auditRecord = audit as Record<string, unknown>
+  const detailedEvents = asRecord(auditRecord.events)
+  const substitutions = toNumber(detailedEvents?.substitutions) ?? 0
+  const statistics = asRecord(auditRecord.statistics)
+  const mismatches = asArray(statistics?.mismatches)
+  const match = asRecord(auditRecord.match)
+  const status = eventField(match?.status)
+
+  return (
+    audit.missingSections.length > 0 ||
+    !audit.hasEvents ||
+    !audit.hasStatistics ||
+    !audit.hasLineups ||
+    (audit.hasLineups && (!audit.homeStartersCount || !audit.awayStartersCount)) ||
+    (audit.hasEvents && !substitutions && isFinishedStatus(status)) ||
+    mismatches.length > 0
+  )
+}
+
+export async function syncMatchDetailsBulk(
+  supabase: SupabaseClient,
+  input: SyncMatchDetailsBulkOptions = {}
+): Promise<SyncMatchDetailsBulkResult> {
+  const now = new Date()
+  const limit = clampBulkLimit(input.limit)
+  const warnings: string[] = []
+  const { rows, range, statuses } = await fetchBulkMatchCandidates(supabase, input, now, limit)
+  const filteredRows: StoredMatchBulkRow[] = []
+
+  for (const row of rows) {
+    if (!input.missingDetailsOnly) {
+      filteredRows.push(row)
+      continue
+    }
+
+    const fixtureExternalId = toNumber(row.external_id)
+    if (!fixtureExternalId) continue
+
+    const audit = await auditMatchDetailCache(supabase, {
+      fixtureExternalId,
+      matchId: String(row.id),
+    })
+
+    if (isAuditProblem(audit)) filteredRows.push(row)
+    if (filteredRows.length >= limit) break
+  }
+
+  const selectedRows = filteredRows.slice(0, limit)
+  const items: SyncMatchDetailsBulkItem[] = []
+  let estimatedApiRequests = 0
+
+  for (const match of selectedRows) {
+    const fixtureExternalId = toNumber(match.external_id)
+    const reasons = getBulkSyncReasons(match, input, now)
+
+    if (!fixtureExternalId) {
+      items.push({
+        matchId: match.id,
+        fixtureExternalId: 0,
+        matchDate: match.match_date,
+        status: match.status,
+        reasons,
+        plan: {
+          fixture: false,
+          events: false,
+          lineups: false,
+          statistics: false,
+        },
+        skipped: true,
+        skipReason: 'missing_external_id',
+        ok: false,
+        warnings: [],
+        errors: ['El match no tiene external_id numerico.'],
+      })
+      continue
+    }
+
+    const { plan, skipReason } = getBulkSyncPlan(match, input, now)
+    estimatedApiRequests += countPlannedRequests(plan)
+
+    if (skipReason) {
+      items.push({
+        matchId: match.id,
+        fixtureExternalId,
+        matchDate: match.match_date,
+        status: match.status,
+        reasons,
+        plan,
+        skipped: true,
+        skipReason,
+        ok: true,
+        warnings: [],
+        errors: [],
+      })
+      continue
+    }
+
+    try {
+      const result = await syncMatchDetail(supabase, {
+        fixtureExternalId,
+        matchId: String(match.id),
+        sections: plan,
+      })
+
+      items.push({
+        matchId: match.id,
+        fixtureExternalId,
+        matchDate: match.match_date,
+        status: match.status,
+        reasons,
+        plan,
+        skipped: false,
+        skipReason: null,
+        ok: result.errors.length === 0,
+        eventsBefore: result.before.eventsCount,
+        eventsAfter: result.after.eventsCount,
+        lineupsBefore: getLineupPlayersCount(result.before),
+        lineupsAfter: getLineupPlayersCount(result.after),
+        statisticsBefore: result.before.statisticsCount,
+        statisticsAfter: result.after.statisticsCount,
+        warnings: result.warnings,
+        errors: result.errors,
+      })
+    } catch (error) {
+      items.push({
+        matchId: match.id,
+        fixtureExternalId,
+        matchDate: match.match_date,
+        status: match.status,
+        reasons,
+        plan,
+        skipped: false,
+        skipReason: null,
+        ok: false,
+        warnings: [],
+        errors: [error instanceof Error ? error.message : String(error)],
+      })
+    }
+  }
+
+  const failed = items.filter((item) => !item.ok).length
+  const skipped = items.filter((item) => item.skipped).length
+
+  if (input.missingDetailsOnly && rows.length > selectedRows.length) {
+    warnings.push('Se revisaron mas partidos que los sincronizados para priorizar los que tenian detalle incompleto.')
+  }
+
+  return {
+    ok: failed === 0,
+    selected: selectedRows.length,
+    processed: items.filter((item) => !item.skipped).length,
+    skipped,
+    failed,
+    limit,
+    filters: {
+      date: input.date ?? null,
+      dateFrom: range.dateFrom,
+      dateTo: range.dateTo,
+      leagueExternalId: input.leagueExternalId ?? null,
+      statuses,
+      liveOnly: Boolean(input.liveOnly),
+      recentFinishedOnly: Boolean(input.recentFinishedOnly),
+      missingDetailsOnly: Boolean(input.missingDetailsOnly),
+      futureDays: input.futureDays ?? null,
+      force: Boolean(input.force),
+    },
+    estimatedApiRequests,
+    requestPolicy: {
+      defaultLimit: BULK_SYNC_DEFAULT_LIMIT,
+      maxLimit: BULK_SYNC_MAX_LIMIT,
+      fixture: '1 request por partido seleccionado para actualizar estado, minuto, marcador, penales, estadio y arbitro.',
+      events: 'Solo partidos vivos/finalizados o force=true.',
+      statistics: 'Solo partidos vivos/finalizados o force=true; futuros no iniciados no gastan statistics.',
+      lineups: 'Partidos vivos/finalizados, force=true o ventana T-90 a inicio.',
+      finalSkip: 'Si final_detail_synced_at existe y force=false, se salta salvo missingDetailsOnly=true.',
+    },
+    items,
+    warnings,
+  }
+}
+
 export async function syncMatchDetail(
   supabase: SupabaseClient,
-  input: { fixtureExternalId?: number | null; matchId?: string | null }
+  input: {
+    fixtureExternalId?: number | null
+    matchId?: string | null
+    sections?: SyncMatchDetailSections
+  }
 ): Promise<SyncMatchDetailResult> {
   const warnings: string[] = []
   const errors: string[] = []
+  const sections = {
+    fixture: input.sections?.fixture ?? true,
+    events: input.sections?.events ?? true,
+    lineups: input.sections?.lineups ?? true,
+    statistics: input.sections?.statistics ?? true,
+  }
   const match = await resolveStoredMatch(supabase, input)
   const fixtureExternalId =
     input.fixtureExternalId ??
@@ -1672,22 +2824,30 @@ export async function syncMatchDetail(
   const beforeCache = await readDetailCacheByFixture(supabase, fixtureExternalId)
   const before = buildAuditSnapshot(beforeCache)
   const [fixturePayload, events, lineups, statistics] = await Promise.all([
-    fetchFixtureDetail(fixtureExternalId),
-    fetchApiArray<ApiFixtureEvent>(
-      '/fixtures/events',
-      { fixture: fixtureExternalId },
-      `sync-match-detail:${fixtureExternalId}:events`
-    ),
-    fetchApiArray<unknown>(
-      '/fixtures/lineups',
-      { fixture: fixtureExternalId },
-      `sync-match-detail:${fixtureExternalId}:lineups`
-    ),
-    fetchApiArray<unknown>(
-      '/fixtures/statistics',
-      { fixture: fixtureExternalId },
-      `sync-match-detail:${fixtureExternalId}:statistics`
-    ),
+    sections.fixture
+      ? fetchFixtureDetail(fixtureExternalId)
+      : Promise.resolve(null),
+    sections.events
+      ? fetchApiArray<ApiFixtureEvent>(
+          '/fixtures/events',
+          { fixture: fixtureExternalId },
+          `sync-match-detail:${fixtureExternalId}:events`
+        )
+      : Promise.resolve([]),
+    sections.lineups
+      ? fetchApiArray<unknown>(
+          '/fixtures/lineups',
+          { fixture: fixtureExternalId },
+          `sync-match-detail:${fixtureExternalId}:lineups`
+        )
+      : Promise.resolve([]),
+    sections.statistics
+      ? fetchApiArray<unknown>(
+          '/fixtures/statistics',
+          { fixture: fixtureExternalId },
+          `sync-match-detail:${fixtureExternalId}:statistics`
+        )
+      : Promise.resolve([]),
   ])
 
   const resolvedLeague = match
@@ -1703,14 +2863,24 @@ export async function syncMatchDetail(
   const eventsForCache = events.length ? events : asArray(beforeCache?.events)
   const lineupsForCache = lineups.length ? lineups : asArray(beforeCache?.lineups)
   const statisticsForCache = statistics.length ? statistics : asArray(beforeCache?.statistics)
+  const fixturePayloadForCache =
+    fixturePayload ??
+    (asRecord(beforeCache?.fixture_payload) as ApiFixtureDetail | null) ??
+    null
+  const missingFromApi = [
+    sections.fixture && !fixturePayload ? 'fixture' : null,
+    sections.events && !events.length ? 'events' : null,
+    sections.lineups && !lineups.length ? 'lineups' : null,
+    sections.statistics && !statistics.length ? 'statistics' : null,
+  ].filter((section): section is string => Boolean(section))
 
-  if (!events.length && before.hasEvents) {
+  if (sections.events && !events.length && before.hasEvents) {
     warnings.push('API-Football no devolvio eventos; se conservaron los eventos cacheados.')
   }
-  if (!lineups.length && before.hasLineups) {
+  if (sections.lineups && !lineups.length && before.hasLineups) {
     warnings.push('API-Football no devolvio alineaciones; se conservaron las alineaciones cacheadas.')
   }
-  if (!statistics.length && before.hasStatistics) {
+  if (sections.statistics && !statistics.length && before.hasStatistics) {
     warnings.push('API-Football no devolvio estadisticas; se conservaron las estadisticas cacheadas.')
   }
 
@@ -1722,7 +2892,7 @@ export async function syncMatchDetail(
         match_id: match?.id !== undefined && match?.id !== null ? String(match.id) : null,
         league_external_id: leagueExternalId !== null ? String(leagueExternalId) : null,
         season,
-        fixture_payload: fixturePayload,
+        fixture_payload: fixturePayloadForCache,
         events: eventsForCache,
         lineups: lineupsForCache,
         statistics: statisticsForCache,
@@ -1735,7 +2905,7 @@ export async function syncMatchDetail(
     if (isMissingOptionalTable(cacheResponse.error, 'football_match_detail_cache')) {
       const fallbackCached = await upsertFixtureCacheDetailFallback(supabase, {
         fixtureExternalId,
-        fixturePayload,
+        fixturePayload: fixturePayloadForCache,
         events: eventsForCache,
         lineups: lineupsForCache,
         statistics: statisticsForCache,
@@ -1753,20 +2923,35 @@ export async function syncMatchDetail(
   }
 
   let matchEventsUpserted = 0
+  let matchUpdated = false
 
   if (match) {
+    try {
+      matchUpdated = await updateStoredMatchFromFixtureDetail(
+        supabase,
+        match,
+        fixturePayload,
+        warnings,
+        sections
+      )
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error))
+    }
+
     const teamsById = await fetchStoredTeamsByIds(supabase, [
       match.home_team_id,
       match.away_team_id,
     ])
 
     try {
-      matchEventsUpserted = await upsertStoredMatchEvents(supabase, {
-        fixtureExternalId,
-        match,
-        events,
-        teamsById,
-      })
+      if (sections.events) {
+        matchEventsUpserted = await upsertStoredMatchEvents(supabase, {
+          fixtureExternalId,
+          match,
+          events,
+          teamsById,
+        })
+      }
     } catch (error) {
       errors.push(error instanceof Error ? error.message : String(error))
     }
@@ -1775,6 +2960,14 @@ export async function syncMatchDetail(
   }
 
   const after = buildAuditSnapshot(await readDetailCacheByFixture(supabase, fixtureExternalId))
+  const updatedSections = [
+    matchUpdated ? 'match' : null,
+    cacheUpserted ? 'detail_cache' : null,
+    events.length ? 'events' : null,
+    lineups.length ? 'lineups' : null,
+    statistics.length ? 'statistics' : null,
+    matchEventsUpserted ? 'match_events' : null,
+  ].filter((section): section is string => Boolean(section))
 
   return {
     fixtureExternalId,
@@ -1792,7 +2985,10 @@ export async function syncMatchDetail(
       statistics: statistics.length,
     },
     cacheUpserted,
+    matchUpdated,
     matchEventsUpserted,
+    updatedSections,
+    missingFromApi,
     warnings,
     errors,
   }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
+import { syncMatchDetailsBulk } from '@/server/match-detail-cache'
 import { generateLigaProfesionalPlayoffs } from '@/server/liga-profesional/playoffs'
 import { syncHomeScoreboardMatches } from '@/server/prode/sync-matches'
 import { getAllowedTournamentByExternalId } from '@/shared/config/prode-leagues'
@@ -60,6 +61,19 @@ async function getSyncOptions(request: Request) {
     dateTo:
       searchParams.get('dateTo') ?? (typeof body?.dateTo === 'string' ? body.dateTo : null),
     leagueExternalId,
+    futureDays:
+      Number.isFinite(Number(searchParams.get('futureDays') ?? body?.futureDays)) &&
+      Number(searchParams.get('futureDays') ?? body?.futureDays) >= 0
+        ? Number(searchParams.get('futureDays') ?? body?.futureDays)
+        : null,
+    includeDetails: parseBoolean(
+      searchParams.get('includeDetails') ??
+        (typeof body?.includeDetails === 'string'
+          ? body.includeDetails
+          : body?.includeDetails === true
+            ? 'true'
+            : null)
+    ),
     limit: Number.isFinite(Number(limitValue)) && Number(limitValue) > 0 ? Number(limitValue) : null,
     debug: parseBoolean(
       searchParams.get('debug') ??
@@ -89,6 +103,19 @@ export async function GET(request: Request) {
     const supabase = getSupabaseAdminClient()
     const options = await getSyncOptions(request)
     const homeScoreboard = await syncHomeScoreboardMatches(supabase, options)
+    const matchDetails = options.includeDetails
+      ? await syncMatchDetailsBulk(supabase, {
+          date: options.date,
+          dateFrom: options.dateFrom,
+          dateTo: options.dateTo,
+          leagueExternalId: Number.isFinite(Number(options.leagueExternalId))
+            ? Number(options.leagueExternalId)
+            : null,
+          futureDays: options.futureDays,
+          limit: options.limit,
+          missingDetailsOnly: true,
+        })
+      : null
     let ligaProfesionalPlayoffs: Awaited<ReturnType<typeof generateLigaProfesionalPlayoffs>> | null = null
 
     if (shouldGenerateLigaProfesionalPlayoffs(options.leagueExternalId)) {
@@ -109,6 +136,7 @@ export async function GET(request: Request) {
       errors: homeScoreboard.sampleErrors,
       dates: homeScoreboard.dates,
       homeScoreboard,
+      matchDetails,
       ligaProfesionalPlayoffs,
     })
   } catch (error) {

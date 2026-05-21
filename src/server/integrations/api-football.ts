@@ -2032,6 +2032,7 @@ type StoredDetailMatchRow = {
   venue_name?: string | null
   venue_city?: string | null
   venue_country?: string | null
+  referee?: string | null
   broadcast_channel?: string | null
   broadcast_logo_url?: string | null
   highlights_url?: string | null
@@ -2279,7 +2280,7 @@ async function fetchStoredLeagueRowById(leagueId: string | number | null | undef
 async function fetchStoredDetailMatchRowByExternalId(externalId: number) {
   const supabase = getSupabaseAdminClient()
   const selectWithOptional =
-    'id, external_id, league_id, round, match_date, status, elapsed, home_team_id, away_team_id, home_score, away_score, home_penalty_score, away_penalty_score, venue_name, venue_city, venue_country, broadcast_channel, broadcast_logo_url, highlights_url, highlights_title'
+    'id, external_id, league_id, round, match_date, status, elapsed, home_team_id, away_team_id, home_score, away_score, home_penalty_score, away_penalty_score, venue_name, venue_city, venue_country, referee, broadcast_channel, broadcast_logo_url, highlights_url, highlights_title'
   const selectBase =
     'id, external_id, league_id, round, match_date, status, home_team_id, away_team_id, home_score, away_score'
   const candidates = [externalId, String(externalId)]
@@ -2777,6 +2778,7 @@ function mapStoredMatchToFixture(
     getStringFromCachedValue(cachedFixture?.fixture?.venue?.city) ??
     undefined
   const referee = getStringFromCachedValue(cachedFixture?.fixture?.referee) ?? undefined
+  const matchReferee = getStringFromCachedValue(match.referee) ?? undefined
 
   return {
     fixture: {
@@ -2798,7 +2800,7 @@ function mapStoredMatchToFixture(
         name: venueName,
         city: venueCity,
       },
-      referee,
+      referee: matchReferee ?? referee,
     },
     league: {
       id: leagueExternalId ?? undefined,

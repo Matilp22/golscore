@@ -239,3 +239,12 @@ export function normalizeMatchStatistics(
     away: discipline.redCards.away,
   })
 }
+
+export function mergeOfficialAndDerivedStats(
+  officialStats: RawMatchStatisticsTeam[],
+  events: FootballEventLike[],
+  homeTeam: StatTeamRef,
+  awayTeam: StatTeamRef
+) {
+  return normalizeMatchStatistics(officialStats, homeTeam, awayTeam, events)
+}

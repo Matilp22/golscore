@@ -9,6 +9,7 @@ import {
   isUpcomingStatus,
 } from '@/shared/utils/match-status'
 import { getFixtureStatusElapsedMinute } from '@/shared/utils/match-minute'
+import { formatMatchEventStableKey } from '@/shared/utils/football-events'
 
 type DbId = string | number
 
@@ -365,18 +366,6 @@ function cleanString(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
 }
 
-function stablePart(value: unknown) {
-  const raw = value === null || value === undefined || value === '' ? 'none' : String(value)
-
-  return raw
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'none'
-}
-
 function getEventSemanticKey(input: {
   matchId: DbId
   type: string | null | undefined
@@ -387,16 +376,26 @@ function getEventSemanticKey(input: {
   playerName: string | null | undefined
   assistName?: string | null | undefined
 }) {
-  return [
-    input.matchId,
-    input.type ?? 'Event',
-    input.detail ?? 'detail',
-    input.minute ?? 0,
-    input.extraMinute ?? 'no-extra',
-    input.teamId ?? 'no-team',
-    input.playerName ?? 'Evento',
-    input.assistName ?? 'Sin asistencia',
-  ].map(stablePart).join(':')
+  return formatMatchEventStableKey(
+    {
+      type: input.type,
+      detail: input.detail,
+      time: {
+        elapsed: input.minute,
+        extra: input.extraMinute,
+      },
+      team: {
+        id: input.teamId,
+      },
+      player: {
+        name: input.playerName,
+      },
+      assist: {
+        name: input.assistName,
+      },
+    },
+    input.matchId
+  )
 }
 
 function asArray(value: unknown) {
