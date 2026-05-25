@@ -1,8 +1,11 @@
 export function getYouTubeVideoId(value?: string | null) {
-  if (!value) return null
+  const trimmed = value?.trim()
+  if (!trimmed) return null
+
+  if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) return trimmed
 
   try {
-    const url = new URL(value)
+    const url = new URL(trimmed)
     const hostname = url.hostname.replace(/^www\./, '')
     const pathSegments = url.pathname.split('/').filter(Boolean)
 
@@ -19,6 +22,10 @@ export function getYouTubeVideoId(value?: string | null) {
   }
 
   return null
+}
+
+export function isValidYouTubeUrl(value?: string | null) {
+  return Boolean(getYouTubeVideoId(value))
 }
 
 export function getYouTubeWatchUrl(videoId: string) {

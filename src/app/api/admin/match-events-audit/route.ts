@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import { getMatchesByDate } from '@/lib/api-football'
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
+import { serializeError } from '@/server/match-detail-cache'
 import { syncFixtureById, syncHomeScoreboardMatches } from '@/server/prode/sync-matches'
 import { formatEventMinute } from '@/shared/utils/event-minute'
-import { isScoreboardGoalEvent } from '@/shared/utils/football-events'
+import { formatMatchEventStableKey, isScoreboardGoalEvent } from '@/shared/utils/football-events'
 import { isFinishedStatus } from '@/shared/utils/match-status'
 
 type DbId = string | number
@@ -25,10 +26,13 @@ type MatchEventRow = {
   match_id: DbId
   team_id: DbId | null
   player_name: string | null
+  assist_name?: string | null
   minute: number | null
   extra_minute: number | null
   type: string | null
   detail: string | null
+  comments?: string | null
+  external_event_id?: string | null
 }
 
 type TeamRow = {
@@ -73,6 +77,41 @@ function parsePositiveInteger(value: string | null, fallback: number) {
   const parsed = Number(value)
 
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback
+}
+
+function getEventDedupeKey(event: MatchEventRow) {
+  return formatMatchEventStableKey(
+    {
+      time: {
+        elapsed: event.minute,
+        extra: event.extra_minute,
+      },
+      team: event.team_id !== null && event.team_id !== undefined
+        ? { id: event.team_id }
+        : null,
+      player: event.player_name ? { name: event.player_name } : null,
+      assist: event.assist_name ? { name: event.assist_name } : null,
+      type: event.type,
+      detail: event.detail,
+      comments: event.comments ?? null,
+    },
+    event.match_id
+  )
+}
+
+function getDuplicateEventGroups(events: MatchEventRow[]) {
+  const grouped = new Map<string, MatchEventRow[]>()
+
+  for (const event of events) {
+    const key = getEventDedupeKey(event)
+    const group = grouped.get(key) ?? []
+    group.push(event)
+    grouped.set(key, group)
+  }
+
+  return [...grouped.entries()]
+    .filter(([, group]) => group.length > 1)
+    .map(([key, group]) => ({ key, events: group }))
 }
 
 async function fetchRowsByIds<T>(
@@ -212,10 +251,20 @@ async function auditMatchEvents(request: Request) {
   for (const chunk of chunkArray(matchIds, 100)) {
     const response = await supabase
       .from('match_events')
-      .select('id, match_id, team_id, player_name, minute, extra_minute, type, detail')
+      .select('id, external_event_id, match_id, team_id, player_name, assist_name, minute, extra_minute, type, detail, comments')
       .in('match_id', chunk)
 
-    if (response.error) throw response.error
+    if (response.error) {
+      const fallbackResponse = await supabase
+        .from('match_events')
+        .select('id, match_id, team_id, player_name, minute, extra_minute, type, detail')
+        .in('match_id', chunk)
+
+      if (fallbackResponse.error) throw fallbackResponse.error
+      events.push(...((fallbackResponse.data ?? []) as MatchEventRow[]))
+      continue
+    }
+
     events.push(...((response.data ?? []) as MatchEventRow[]))
   }
 
@@ -254,6 +303,9 @@ async function auditMatchEvents(request: Request) {
       return accumulator
     }, new Map())
   const auditedMatches = matches.map((match) => {
+    const matchEvents = events.filter((event) => String(event.match_id) === String(match.id))
+    const duplicateGroups = getDuplicateEventGroups(matchEvents)
+    const duplicateEvents = duplicateGroups.reduce((sum, group) => sum + group.events.length - 1, 0)
     const externalKey = match.external_id === null ? null : String(match.external_id)
     const apiScore = externalKey ? apiScoresByExternalId.get(externalKey) ?? null : null
     const expectedHomeScore = apiScore?.home ?? match.home_score
@@ -292,6 +344,32 @@ async function auditMatchEvents(request: Request) {
       goal_events: goalEvents.length,
       missing_events: missingGoalEvents,
       invalid_team_events: invalidTeamEvents.length,
+      events_count: matchEvents.length,
+      unique_events_count: matchEvents.length - duplicateEvents,
+      duplicate_events: duplicateEvents,
+      duplicate_groups: duplicateGroups.length,
+      duplicates_by_type: duplicateGroups.reduce<Record<string, number>>((accumulator, group) => {
+        const type = group.events[0]?.type ?? 'Event'
+        accumulator[type] = (accumulator[type] ?? 0) + group.events.length - 1
+        return accumulator
+      }, {}),
+      duplicates_by_player: duplicateGroups.reduce<Record<string, number>>((accumulator, group) => {
+        const player = group.events[0]?.player_name ?? 'Sin jugador'
+        accumulator[player] = (accumulator[player] ?? 0) + group.events.length - 1
+        return accumulator
+      }, {}),
+      duplicate_samples: duplicateGroups.slice(0, 5).map((group) => ({
+        key: group.key,
+        events: group.events.map((event) => ({
+          id: event.id,
+          external_event_id: event.external_event_id ?? null,
+          minute: formatEventMinute(event.minute, event.extra_minute),
+          player: event.player_name,
+          assist: event.assist_name ?? null,
+          type: event.type,
+          detail: event.detail,
+        })),
+      })),
       events: goalEvents
         .sort((a, b) => (a.minute ?? 0) - (b.minute ?? 0) || (a.extra_minute ?? 0) - (b.extra_minute ?? 0))
         .map((event) => ({
@@ -320,6 +398,9 @@ async function auditMatchEvents(request: Request) {
     match.missing_events !== null && match.missing_events < 0
   )
   const invalidTeam = auditedMatches.filter((match) => match.invalid_team_events > 0)
+  const duplicateMatches = auditedMatches.filter((match) => match.duplicate_events > 0)
+  const totalEvents = auditedMatches.reduce((sum, match) => sum + match.events_count, 0)
+  const duplicateEvents = auditedMatches.reduce((sum, match) => sum + match.duplicate_events, 0)
   const eventsByLeague = [
     ...auditedMatches
       .reduce<Map<string, {
@@ -362,6 +443,14 @@ async function auditMatchEvents(request: Request) {
     repaired: shouldRepair,
     repairResults,
     totalMatchEvents: totalMatchEventsResponse.count ?? 0,
+    matchesChecked: auditedMatches.length,
+    totalEvents,
+    uniqueEvents: totalEvents - duplicateEvents,
+    duplicateEvents,
+    duplicateGroups: duplicateMatches.reduce((sum, match) => sum + match.duplicate_groups, 0),
+    duplicateMatches: duplicateMatches.length,
+    duplicates: duplicateMatches.slice(0, 30),
+    examples: duplicateMatches.slice(0, 10),
     totalGoalEventsInAudit: auditedMatches.reduce((sum, match) => sum + match.goal_events, 0),
     eventsByLeague,
     totalAudited: auditedMatches.length,
@@ -397,12 +486,17 @@ export async function GET(request: Request) {
   try {
     return NextResponse.json(await auditMatchEvents(request))
   } catch (error) {
-    console.error('[match-events-audit] Error completo', error)
+    const serialized = serializeError(error, 'unknown')
+    console.error('[match-events-audit] Error completo', serialized)
 
     return NextResponse.json(
       {
         ok: false,
-        error: error instanceof Error ? error.message : 'No se pudo auditar match_events.',
+        error: serialized.message,
+        code: serialized.code,
+        detail: serialized.detail,
+        hint: serialized.hint,
+        source: serialized.source,
       },
       { status: 500 }
     )

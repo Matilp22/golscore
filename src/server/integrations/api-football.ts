@@ -2314,6 +2314,39 @@ async function fetchStoredDetailMatchRowByExternalId(externalId: number) {
   return null
 }
 
+async function fetchStoredDetailMatchRowById(matchId: number | string) {
+  const supabase = getSupabaseAdminClient()
+  const selectWithOptional =
+    'id, external_id, league_id, round, match_date, status, elapsed, home_team_id, away_team_id, home_score, away_score, home_penalty_score, away_penalty_score, venue_name, venue_city, venue_country, referee, broadcast_channel, broadcast_logo_url, highlights_url, highlights_title'
+  const selectBase =
+    'id, external_id, league_id, round, match_date, status, home_team_id, away_team_id, home_score, away_score'
+
+  let response = await supabase
+    .from('matches')
+    .select(selectWithOptional)
+    .eq('id', String(matchId))
+    .maybeSingle()
+
+  if (
+    response.error &&
+    (
+      response.error.code === '42703' ||
+      response.error.code === 'PGRST204' ||
+      response.error.message.toLowerCase().includes('schema cache')
+    )
+  ) {
+    response = await supabase
+      .from('matches')
+      .select(selectBase)
+      .eq('id', String(matchId))
+      .maybeSingle()
+  }
+
+  if (response.error) throw response.error
+
+  return (response.data as StoredDetailMatchRow | null) ?? null
+}
+
 async function fetchStoredTeamsByIds(teamIds: Array<string | number | null | undefined>) {
   const supabase = getSupabaseAdminClient()
   const ids = [...new Set(teamIds.filter((id): id is string | number => id !== null && id !== undefined).map(String))]
@@ -2443,6 +2476,37 @@ function hasCachedDetailItems(value: unknown) {
   return Array.isArray(value) && value.length > 0
 }
 
+function countCachedLineupPlayers(value: unknown) {
+  if (!Array.isArray(value)) return 0
+
+  return value.reduce((total, lineup) => {
+    const record = readRecord(lineup)
+    const startXI = Array.isArray(record?.startXI) ? record.startXI.length : 0
+    const substitutes = Array.isArray(record?.substitutes) ? record.substitutes.length : 0
+
+    return total + startXI + substitutes
+  }, 0)
+}
+
+function countCachedStatisticsValues(value: unknown) {
+  if (!Array.isArray(value)) return 0
+
+  return value.reduce((total, entry) => {
+    const record = readRecord(entry)
+    const statistics = Array.isArray(record?.statistics) ? record.statistics.length : 0
+
+    return total + statistics
+  }, 0)
+}
+
+function hasCachedLineupPlayers(value: unknown) {
+  return countCachedLineupPlayers(value) > 0
+}
+
+function hasCachedStatisticsValues(value: unknown) {
+  return countCachedStatisticsValues(value) > 0
+}
+
 function hasCachedDetailRecord(value: unknown) {
   return Boolean(readRecord(value))
 }
@@ -2459,10 +2523,20 @@ function mergeStoredMatchDetailCacheRows(
       ? primary.fixture_payload
       : fallback.fixture_payload,
     events: hasCachedDetailItems(primary.events) ? primary.events : fallback.events,
-    lineups: hasCachedDetailItems(primary.lineups) ? primary.lineups : fallback.lineups,
-    statistics: hasCachedDetailItems(primary.statistics)
+    lineups: hasCachedLineupPlayers(primary.lineups)
+      ? primary.lineups
+      : hasCachedLineupPlayers(fallback.lineups)
+        ? fallback.lineups
+        : hasCachedDetailItems(primary.lineups)
+          ? primary.lineups
+          : fallback.lineups,
+    statistics: hasCachedStatisticsValues(primary.statistics)
       ? primary.statistics
-      : fallback.statistics,
+      : hasCachedStatisticsValues(fallback.statistics)
+        ? fallback.statistics
+        : hasCachedDetailItems(primary.statistics)
+          ? primary.statistics
+          : fallback.statistics,
   }
 }
 
@@ -2850,7 +2924,9 @@ function mapStoredMatchToFixture(
 }
 
 export async function getMatchDetail(id: number) {
-  const match = await fetchStoredDetailMatchRowByExternalId(id)
+  const match =
+    await fetchStoredDetailMatchRowByExternalId(id) ??
+    await fetchStoredDetailMatchRowById(id)
 
   if (!match) {
     return {
@@ -2866,17 +2942,18 @@ export async function getMatchDetail(id: number) {
     }
   }
 
+  const fixtureExternalId = toFiniteNumber(match.external_id) ?? id
   const [league, teamsById, events, detailCache, fixtureSummary, broadcast, highlights] = await Promise.all([
     fetchStoredLeagueRowById(match.league_id).catch(() => null),
     fetchStoredTeamsByIds([match.home_team_id, match.away_team_id]),
     fetchStoredEventsByMatchId(match.id),
-    fetchStoredMatchDetailCacheByExternalId(id),
-    fetchCachedFixtureSummaryByExternalId(id),
-    getMatchBroadcastByExternalId(id),
-    getMatchHighlightsByExternalId(id),
+    fetchStoredMatchDetailCacheByExternalId(fixtureExternalId),
+    fetchCachedFixtureSummaryByExternalId(fixtureExternalId),
+    getMatchBroadcastByExternalId(fixtureExternalId),
+    getMatchHighlightsByExternalId(fixtureExternalId),
   ])
   const cachedFixture = readCachedFixturePayload(detailCache?.fixture_payload)
-  const fixture = mapStoredMatchToFixture(match, league, teamsById, id, fixtureSummary, cachedFixture)
+  const fixture = mapStoredMatchToFixture(match, league, teamsById, fixtureExternalId, fixtureSummary, cachedFixture)
   const ruleBroadcast =
     fixture && !broadcast.channel && !broadcast.broadcasters.length
       ? await getMatchBroadcastFromRules(fixture)
@@ -2892,6 +2969,7 @@ export async function getMatchDetail(id: number) {
   if (process.env.NODE_ENV === 'development') {
     console.info('[match-detail-data]', {
       fixtureId: id,
+      fixtureExternalId,
       storedEvents: storedEvents.length,
       cachedEvents: cachedEvents.length,
       renderedEvents: mergedEvents.length,

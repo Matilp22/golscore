@@ -8,6 +8,7 @@ import {
 } from '@/shared/utils/argentina-time'
 import {
   formatMatchEventStableKey,
+  getTimelineEvents,
   normalizeFootballEventText,
   normalizeMatchEvent,
 } from '@/shared/utils/football-events'
@@ -168,6 +169,35 @@ type FixtureCacheDetailRow = {
   normalized_payload: unknown
 }
 
+export type SerializedSyncError = {
+  message: string
+  code: string | null
+  detail: string | null
+  hint: string | null
+  source: 'api-football' | 'supabase' | 'validation' | 'unknown'
+}
+
+export type MatchDetailCounts = {
+  events: number
+  lineups: number
+  statistics: number
+}
+
+export type MatchDetailRenderCounts = {
+  timelineEvents: number
+  formationPlayers: number
+  statisticsRows: number
+  startersCount: number
+  substitutesCount: number
+}
+
+export type MatchDetailRenderStatus =
+  | 'ready'
+  | 'partial'
+  | 'render-problem'
+  | 'not-renderable'
+  | 'future-no-details-yet'
+
 export type SyncMatchDetailResult = {
   fixtureExternalId: number
   match: {
@@ -186,10 +216,29 @@ export type SyncMatchDetailResult = {
   cacheUpserted: boolean
   matchUpdated: boolean
   matchEventsUpserted: number
+  persistence: SyncMatchDetailPersistenceInfo
   updatedSections: string[]
   missingFromApi: string[]
+  renderCounts: MatchDetailRenderCounts
+  renderStatus: MatchDetailRenderStatus
   warnings: string[]
-  errors: string[]
+  errors: SerializedSyncError[]
+}
+
+export type SyncMatchDetailPersistenceInfo = {
+  detailTable: 'football_match_detail_cache' | 'football_fixture_cache' | null
+  matchEventsTable: 'match_events' | null
+  cacheUpserted: boolean
+  usedFixtureCacheFallback: boolean
+  matchEventsUpserted: number
+  received: {
+    events: number
+    lineupTeams: number
+    lineupPlayers: number
+    statisticsTeams: number
+    statisticsValues: number
+  }
+  stored: MatchDetailCounts
 }
 
 type SyncMatchDetailSections = {
@@ -282,6 +331,10 @@ export type MatchDetailGeneralAuditItem = {
   hasStatistics: boolean
   statisticsCount: number
   statisticsMismatches: unknown[]
+  providerCounts: MatchDetailCounts | null
+  dbCounts: MatchDetailCounts
+  renderCounts: MatchDetailRenderCounts
+  renderStatus: MatchDetailRenderStatus
   missingSections: string[]
   warnings: string[]
   completenessScore: number
@@ -299,6 +352,7 @@ export type MatchDetailGeneralAuditResult = {
     dateTo: string | null
     statuses: string[]
     missingOnly: boolean
+    includeProvider?: boolean
   }
   summary: {
     complete: number
@@ -327,11 +381,46 @@ export type SyncMatchDetailsBulkOptions = {
   force?: boolean
 }
 
+type SyncMatchDetailsBulkStatus =
+  | 'complete'
+  | 'updated'
+  | 'unchanged'
+  | 'skipped'
+  | 'fixture-updated'
+  | 'future-no-details-yet'
+  | 'provider-no-lineups'
+  | 'provider-no-statistics'
+  | 'provider-no-detail-data'
+  | 'render-problem'
+  | 'partial'
+  | 'failed'
+
+type SyncMatchDetailsDataStatus =
+  | 'complete'
+  | 'partial'
+  | 'missing'
+  | 'future-no-details-yet'
+
+type SyncMatchDetailsProviderStatus =
+  | 'complete'
+  | 'provider-no-lineups'
+  | 'provider-no-statistics'
+  | 'provider-no-events'
+  | 'provider-no-detail-data'
+  | 'not-requested'
+  | 'unknown'
+  | 'error'
+
+type SyncMatchDetailsCounts = MatchDetailCounts
+
 export type SyncMatchDetailsBulkItem = {
   matchId: DbId
   fixtureExternalId: number
   matchDate: string | null
-  status: string | null
+  status: SyncMatchDetailsBulkStatus
+  dataStatus: SyncMatchDetailsDataStatus
+  providerStatus: SyncMatchDetailsProviderStatus
+  matchStatus: string | null
   reasons: string[]
   plan: {
     fixture: boolean
@@ -348,15 +437,30 @@ export type SyncMatchDetailsBulkItem = {
   lineupsAfter?: number
   statisticsBefore?: number
   statisticsAfter?: number
+  providerCounts: SyncMatchDetailsCounts
+  dbCountsBefore: SyncMatchDetailsCounts
+  dbCountsAfter: SyncMatchDetailsCounts
+  renderCounts: MatchDetailRenderCounts
+  renderStatus: MatchDetailRenderStatus
+  persistence: SyncMatchDetailPersistenceInfo | null
   warnings: string[]
-  errors: string[]
+  errors: SerializedSyncError[]
 }
 
 export type SyncMatchDetailsBulkResult = {
   ok: boolean
   selected: number
   processed: number
+  updated: number
+  fixtureUpdated: number
+  unchanged: number
   skipped: number
+  futureNoDetailsYet: number
+  complete: number
+  partial: number
+  providerNoLineups: number
+  providerNoStatistics: number
+  renderProblems: number
   failed: number
   limit: number
   filters: {
@@ -406,6 +510,57 @@ function isMissingOptionalTable(error: { code?: string; message?: string } | nul
   )
 }
 
+function readErrorField(error: unknown, field: string) {
+  if (typeof error !== 'object' || error === null) return null
+  const value = (error as Record<string, unknown>)[field]
+
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+export function serializeError(
+  error: unknown,
+  source: SerializedSyncError['source'] = 'unknown'
+): SerializedSyncError {
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      code: readErrorField(error, 'code'),
+      detail: readErrorField(error, 'detail') ?? readErrorField(error, 'details'),
+      hint: readErrorField(error, 'hint'),
+      source,
+    }
+  }
+
+  if (typeof error === 'object' && error !== null) {
+    let jsonMessage = 'Error desconocido'
+    try {
+      jsonMessage = JSON.stringify(error)
+    } catch {
+      jsonMessage = Object.prototype.toString.call(error)
+    }
+    const message =
+      readErrorField(error, 'message') ??
+      readErrorField(error, 'error') ??
+      jsonMessage
+
+    return {
+      message,
+      code: readErrorField(error, 'code'),
+      detail: readErrorField(error, 'detail') ?? readErrorField(error, 'details'),
+      hint: readErrorField(error, 'hint'),
+      source,
+    }
+  }
+
+  return {
+    message: String(error ?? 'Error desconocido'),
+    code: null,
+    detail: null,
+    hint: null,
+    source,
+  }
+}
+
 function asArray(value: unknown) {
   return Array.isArray(value) ? value : []
 }
@@ -420,6 +575,14 @@ function hasDetailItems(value: unknown) {
   return Array.isArray(value) && value.length > 0
 }
 
+function hasDetailLineupPlayers(value: unknown) {
+  return countApiLineupPlayers(asArray(value)) > 0
+}
+
+function hasDetailStatisticsValues(value: unknown) {
+  return countApiStatisticsValues(asArray(value)) > 0
+}
+
 function mergeDetailCacheRows(
   primary: DetailCacheRow | null,
   fallback: DetailCacheRow | null
@@ -432,8 +595,20 @@ function mergeDetailCacheRows(
       ? primary.fixture_payload
       : fallback.fixture_payload,
     events: hasDetailItems(primary.events) ? primary.events : fallback.events,
-    lineups: hasDetailItems(primary.lineups) ? primary.lineups : fallback.lineups,
-    statistics: hasDetailItems(primary.statistics) ? primary.statistics : fallback.statistics,
+    lineups: hasDetailLineupPlayers(primary.lineups)
+      ? primary.lineups
+      : hasDetailLineupPlayers(fallback.lineups)
+        ? fallback.lineups
+        : hasDetailItems(primary.lineups)
+          ? primary.lineups
+          : fallback.lineups,
+    statistics: hasDetailStatisticsValues(primary.statistics)
+      ? primary.statistics
+      : hasDetailStatisticsValues(fallback.statistics)
+        ? fallback.statistics
+        : hasDetailItems(primary.statistics)
+          ? primary.statistics
+          : fallback.statistics,
   }
 }
 
@@ -474,6 +649,50 @@ async function fetchFixtureDetail(fixtureExternalId: number) {
   )
 
   return fixtures[0] ?? null
+}
+
+export async function fetchMatchDetailProviderCounts(
+  fixtureExternalId: number,
+  sections: {
+    events?: boolean
+    lineups?: boolean
+    statistics?: boolean
+  } = {}
+): Promise<MatchDetailCounts> {
+  const shouldFetch = {
+    events: sections.events ?? true,
+    lineups: sections.lineups ?? true,
+    statistics: sections.statistics ?? true,
+  }
+  const [events, lineups, statistics] = await Promise.all([
+    shouldFetch.events
+      ? fetchApiArray<ApiFixtureEvent>(
+          '/fixtures/events',
+          { fixture: fixtureExternalId },
+          `match-detail-provider-counts:${fixtureExternalId}:events`
+        )
+      : Promise.resolve([]),
+    shouldFetch.lineups
+      ? fetchApiArray<unknown>(
+          '/fixtures/lineups',
+          { fixture: fixtureExternalId },
+          `match-detail-provider-counts:${fixtureExternalId}:lineups`
+        )
+      : Promise.resolve([]),
+    shouldFetch.statistics
+      ? fetchApiArray<unknown>(
+          '/fixtures/statistics',
+          { fixture: fixtureExternalId },
+          `match-detail-provider-counts:${fixtureExternalId}:statistics`
+        )
+      : Promise.resolve([]),
+  ])
+
+  return {
+    events: events.length,
+    lineups: countApiLineupPlayers(lineups),
+    statistics: countApiStatisticsValues(statistics),
+  }
 }
 
 async function fetchStoredMatchByFixture(supabase: SupabaseClient, fixtureExternalId: number) {
@@ -708,7 +927,7 @@ async function upsertStoredMatchEvents(
     }
   }
 
-  const rows = input.events
+  const mappedRows = input.events
     .filter((event) => event.time?.elapsed !== null && event.time?.elapsed !== undefined)
     .map((event) => {
       const apiTeamId = toNumber(event.team?.id)
@@ -757,6 +976,56 @@ async function upsertStoredMatchEvents(
         comments: event.comments ?? null,
       }
     })
+  const rowsByKey = new Map<string, (typeof mappedRows)[number]>()
+
+  for (const row of mappedRows) {
+    const key = formatMatchEventStableKey(
+      {
+        time: {
+          elapsed: row.minute as number | null,
+          extra: row.extra_minute as number | null,
+        },
+        team: row.team_id !== null && row.team_id !== undefined
+          ? {
+              id: row.team_id as DbId,
+            }
+          : null,
+        player: row.player_name
+          ? {
+              name: row.player_name as string,
+            }
+          : null,
+        assist: row.assist_name
+          ? {
+              name: row.assist_name as string,
+            }
+          : null,
+        type: row.type as string | null,
+        detail: row.detail as string | null,
+        comments: row.comments as string | null,
+      },
+      input.match.id
+    )
+    const current = rowsByKey.get(key)
+
+    if (!current) {
+      rowsByKey.set(key, row)
+      continue
+    }
+
+    const currentHasRealExternalId =
+      current.external_event_id &&
+      !String(current.external_event_id).startsWith(String(input.match.id))
+    const rowHasRealExternalId =
+      row.external_event_id &&
+      !String(row.external_event_id).startsWith(String(input.match.id))
+
+    if (!currentHasRealExternalId && rowHasRealExternalId) {
+      rowsByKey.set(key, row)
+    }
+  }
+
+  const rows = [...rowsByKey.values()]
 
   if (!rows.length) return 0
 
@@ -1027,9 +1296,7 @@ function buildMatchPatchFromFixtureDetail(fixturePayload: ApiFixtureDetail | nul
   const status = getCanonicalMatchStatusFromApi(fixturePayload.fixture.status ?? null)
   const elapsed = getFixtureStatusElapsedMinute(fixturePayload.fixture.status ?? null)
   const score = getFixtureDetailScore(fixturePayload)
-  const patch: Record<string, unknown> = {
-    updated_at: new Date().toISOString(),
-  }
+  const patch: Record<string, unknown> = {}
 
   if (fixturePayload.fixture.date) patch.match_date = fixturePayload.fixture.date
   if (status) patch.status = status
@@ -1072,8 +1339,8 @@ async function updateStoredMatchFromFixtureDetail(
   supabase: SupabaseClient,
   match: StoredMatchRow | null,
   fixturePayload: ApiFixtureDetail | null,
-  warnings: string[],
-  sections: SyncMatchDetailSections = {}
+  sections: SyncMatchDetailSections = {},
+  controlColumns?: MatchDetailControlColumnStatus
 ) {
   if (!match?.id) return false
 
@@ -1108,6 +1375,12 @@ async function updateStoredMatchFromFixtureDetail(
   ])
   const currentPatch = { ...patch }
 
+  if (controlColumns) {
+    for (const column of controlColumns.missing) {
+      delete currentPatch[column]
+    }
+  }
+
   while (Object.keys(currentPatch).length > 0) {
     const response = await supabase
       .from('matches')
@@ -1120,7 +1393,6 @@ async function updateStoredMatchFromFixtureDetail(
 
     if (missingColumn && optionalColumns.has(missingColumn)) {
       delete currentPatch[missingColumn]
-      warnings.push(`La columna opcional matches.${missingColumn} no existe; se omitio al actualizar el detalle.`)
       continue
     }
 
@@ -1135,7 +1407,6 @@ async function updateStoredMatchFromFixtureDetail(
       )
     ) {
       for (const key of removableOptionalColumns) delete currentPatch[key]
-      warnings.push('Se omitieron columnas opcionales de matches que no estan disponibles en Supabase.')
       continue
     }
 
@@ -1150,6 +1421,25 @@ function countLineupPlayers(lineup: unknown, key: 'startXI' | 'substitutes') {
   const players = (lineup as Record<string, unknown>)[key]
 
   return Array.isArray(players) ? players.length : 0
+}
+
+function countApiLineupPlayers(lineups: unknown[]): number {
+  return lineups.reduce<number>(
+    (sum, lineup) =>
+      sum +
+      countLineupPlayers(lineup, 'startXI') +
+      countLineupPlayers(lineup, 'substitutes'),
+    0
+  )
+}
+
+function countApiStatisticsValues(statistics: unknown[]): number {
+  return statistics.reduce<number>((sum, entry) => {
+    const record = asRecord(entry)
+    const values = asArray(record?.statistics)
+
+    return sum + values.length
+  }, 0)
 }
 
 function hasCaptain(lineup: unknown) {
@@ -2108,6 +2398,18 @@ export async function auditMatchDetailCache(
   const storedEvents = storedEventRows.map((event) => mapStoredAuditEvent(event, teamsById))
   const mergedEvents = mergeAuditEvents(asArray(cache?.events), storedEvents)
   const storedEventsCount = storedEventRows.length
+  const dbCounts = getCacheDetailCounts(cache, mergedEvents)
+  const renderCounts = buildRenderCounts({
+    cache,
+    events: mergedEvents,
+    match,
+    teamsById,
+  })
+  const renderStatus = getRenderStatus({
+    matchStatus: matchInfo?.status ?? null,
+    dbCounts,
+    renderCounts,
+  })
   const detailedSections = buildDetailedAuditSections({
     cache,
     events: mergedEvents,
@@ -2162,6 +2464,9 @@ export async function auditMatchDetailCache(
       url: highlightUrl,
       title: highlightTitle,
     },
+    dbCounts,
+    renderCounts,
+    renderStatus,
     renderReadiness: buildRenderReadiness({
       snapshot,
       matchInfo: matchAuditInfo,
@@ -2186,6 +2491,7 @@ export async function auditMatchDetailsGeneral(
     dateTo?: string | null
     statuses?: string[]
     missingOnly?: boolean
+    includeProvider?: boolean
   } = {}
 ): Promise<MatchDetailGeneralAuditResult> {
   const limit = Math.min(Math.max(input.limit ?? 100, 1), 500)
@@ -2232,6 +2538,17 @@ export async function auditMatchDetailsGeneral(
       fixtureExternalId,
       matchId: String(match.id),
     })
+    let providerCounts: MatchDetailCounts | null = null
+    if (input.includeProvider && isDetailRequiredForStatus(match.status)) {
+      try {
+        providerCounts = await fetchMatchDetailProviderCounts(fixtureExternalId)
+      } catch (error) {
+        const serialized = serializeError(error, 'api-football')
+        warnings.push(
+          `No se pudo consultar provider para fixture ${fixtureExternalId}: ${serialized.message}`
+        )
+      }
+    }
     const requiresDetail = isDetailRequiredForStatus(match.status)
     const snapshot = {
       hasEvents: detailAudit.hasEvents,
@@ -2304,6 +2621,14 @@ export async function auditMatchDetailsGeneral(
       hasStatistics: snapshot.hasStatistics,
       statisticsCount: snapshot.statisticsCount,
       statisticsMismatches,
+      providerCounts,
+      dbCounts: (detailAudit as { dbCounts?: MatchDetailCounts }).dbCounts ?? getDetailCounts(snapshot),
+      renderCounts:
+        (detailAudit as { renderCounts?: MatchDetailRenderCounts }).renderCounts ??
+        getEmptyRenderCounts(),
+      renderStatus:
+        (detailAudit as { renderStatus?: MatchDetailRenderStatus }).renderStatus ??
+        'not-renderable',
       missingSections: snapshot.missingSections,
       warnings: snapshot.warnings,
       completenessScore: getCompletenessScore(snapshot, requiresDetail),
@@ -2361,6 +2686,7 @@ export async function auditMatchDetailsGeneral(
       dateTo,
       statuses,
       missingOnly: Boolean(input.missingOnly),
+      includeProvider: Boolean(input.includeProvider),
     },
     summary,
     examplesMissing: items
@@ -2375,6 +2701,54 @@ const BULK_SYNC_DEFAULT_LIMIT = 25
 const BULK_SYNC_MAX_LIMIT = 100
 const BULK_LIVE_STATUSES = ['LIVE', '1H', 'HT', '2H', 'ET', 'BT', 'P', 'IN_PLAY']
 const BULK_FINISHED_STATUSES = ['FT', 'AET', 'PEN', 'Finished', 'Match Finished']
+const MATCH_DETAIL_CONTROL_COLUMNS = [
+  'last_events_synced_at',
+  'last_statistics_synced_at',
+  'last_lineups_synced_at',
+  'detail_last_synced_at',
+  'final_detail_synced_at',
+] as const
+
+type MatchDetailControlColumn = (typeof MATCH_DETAIL_CONTROL_COLUMNS)[number]
+type MatchDetailControlColumnStatus = {
+  available: Set<string>
+  missing: MatchDetailControlColumn[]
+}
+
+function isMissingColumnSchemaError(error: { code?: string; message?: string } | null | undefined) {
+  const message = (error?.message ?? '').toLowerCase()
+
+  return (
+    error?.code === '42703' ||
+    error?.code === 'PGRST204' ||
+    message.includes('schema cache') ||
+    message.includes('column')
+  )
+}
+
+async function detectMatchDetailControlColumns(
+  supabase: SupabaseClient
+): Promise<MatchDetailControlColumnStatus> {
+  const available = new Set<string>(MATCH_DETAIL_CONTROL_COLUMNS)
+  const response = await supabase
+    .from('matches')
+    .select(MATCH_DETAIL_CONTROL_COLUMNS.join(', '))
+    .limit(1)
+
+  if (!response.error) {
+    return { available, missing: [] }
+  }
+
+  if (isMissingColumnSchemaError(response.error)) {
+    // These columns are added by migrations and are only used as sync metadata.
+    // When PostgREST has stale schema cache it can report them as unavailable even
+    // though they already exist in Postgres. Keep the endpoint optimistic and let
+    // the update path retry without optional columns if the REST API rejects them.
+    return { available, missing: [] }
+  }
+
+  throw response.error
+}
 
 function clampBulkLimit(limit: number | null | undefined) {
   if (!Number.isFinite(limit ?? NaN) || !limit || limit <= 0) return BULK_SYNC_DEFAULT_LIMIT
@@ -2453,15 +2827,17 @@ async function fetchBulkMatchCandidates(
   supabase: SupabaseClient,
   input: SyncMatchDetailsBulkOptions,
   now: Date,
-  limit: number
+  limit: number,
+  controlColumns?: MatchDetailControlColumnStatus
 ) {
   const range = buildBulkDateRange(input, now)
   const statuses = getBulkStatuses(input)
   const requestedLimit = input.missingDetailsOnly ? Math.min(limit * 4, 300) : limit
   const selectBase =
     'id, external_id, league_id, home_team_id, away_team_id, match_date, status, elapsed, home_score, away_score'
-  const selectOptional =
-    `${selectBase}, detail_last_synced_at, final_detail_synced_at`
+  const optionalSelectColumns = ['detail_last_synced_at', 'final_detail_synced_at']
+    .filter((column) => !controlColumns || controlColumns.available.has(column))
+  const selectOptional = [selectBase, ...optionalSelectColumns].join(', ')
 
   let query = supabase
     .from('matches')
@@ -2613,24 +2989,410 @@ function getLineupPlayersCount(snapshot: MatchDetailAuditSnapshot) {
   )
 }
 
-function isAuditProblem(audit: Awaited<ReturnType<typeof auditMatchDetailCache>>) {
+function getDetailCounts(snapshot: MatchDetailAuditSnapshot): SyncMatchDetailsCounts {
+  return {
+    events: snapshot.eventsCount,
+    lineups: getLineupPlayersCount(snapshot),
+    statistics: snapshot.statisticsCount,
+  }
+}
+
+function getCacheDetailCounts(cache: DetailCacheRow | null, events: unknown[] = asArray(cache?.events)): MatchDetailCounts {
+  const lineups = asArray(cache?.lineups)
+
+  return {
+    events: events.length,
+    lineups: countApiLineupPlayers(lineups),
+    statistics: countApiStatisticsValues(asArray(cache?.statistics)),
+  }
+}
+
+function getRenderTeamRef(
+  teamsById: Map<string, StoredTeamRow>,
+  teamId: DbId | null | undefined
+) {
+  const team = teamId !== null && teamId !== undefined ? teamsById.get(String(teamId)) : null
+
+  return {
+    id: team?.external_id ?? teamId ?? null,
+    name: team?.name ?? null,
+  }
+}
+
+function buildRenderCounts(input: {
+  cache: DetailCacheRow | null
+  events: unknown[]
+  match: StoredMatchRow | null
+  teamsById: Map<string, StoredTeamRow>
+}): MatchDetailRenderCounts {
+  const lineups = asArray(input.cache?.lineups)
+  const startersCount = lineups.reduce(
+    (sum, lineup) => sum + countLineupPlayers(lineup, 'startXI'),
+    0
+  )
+  const substitutesCount = lineups.reduce(
+    (sum, lineup) => sum + countLineupPlayers(lineup, 'substitutes'),
+    0
+  )
+  const homeTeam = getRenderTeamRef(input.teamsById, input.match?.home_team_id)
+  const awayTeam = getRenderTeamRef(input.teamsById, input.match?.away_team_id)
+  const statisticsRows =
+    input.match && homeTeam.name && awayTeam.name
+      ? normalizeMatchStatistics(
+          asArray(input.cache?.statistics) as Parameters<typeof normalizeMatchStatistics>[0],
+          homeTeam,
+          awayTeam,
+          input.events as Parameters<typeof normalizeMatchStatistics>[3]
+        ).length
+      : countApiStatisticsValues(asArray(input.cache?.statistics))
+
+  return {
+    timelineEvents: getTimelineEvents(input.events as Parameters<typeof getTimelineEvents>[0]).length,
+    formationPlayers: startersCount,
+    statisticsRows,
+    startersCount,
+    substitutesCount,
+  }
+}
+
+function getRenderStatus(input: {
+  matchStatus?: string | null
+  dbCounts: MatchDetailCounts
+  renderCounts: MatchDetailRenderCounts
+}): MatchDetailRenderStatus {
+  const { matchStatus, dbCounts, renderCounts } = input
+  const fixtureOnlyFuture =
+    isUpcomingStatus(matchStatus) &&
+    dbCounts.events === 0 &&
+    dbCounts.lineups === 0 &&
+    dbCounts.statistics === 0
+
+  if (fixtureOnlyFuture) return 'future-no-details-yet'
+
+  const hasRenderProblem =
+    (dbCounts.events > 0 && renderCounts.timelineEvents === 0) ||
+    (dbCounts.lineups > 0 && renderCounts.formationPlayers === 0) ||
+    (dbCounts.statistics > 0 && renderCounts.statisticsRows === 0)
+
+  if (hasRenderProblem) return 'render-problem'
+
+  if (
+    dbCounts.events > 0 &&
+    dbCounts.lineups > 0 &&
+    dbCounts.statistics > 0 &&
+    renderCounts.timelineEvents > 0 &&
+    renderCounts.formationPlayers > 0 &&
+    renderCounts.statisticsRows > 0
+  ) {
+    return 'ready'
+  }
+
+  if (
+    renderCounts.timelineEvents > 0 ||
+    renderCounts.formationPlayers > 0 ||
+    renderCounts.statisticsRows > 0
+  ) {
+    return 'partial'
+  }
+
+  return 'not-renderable'
+}
+
+function getRenderProblemWarnings(
+  dbCounts: MatchDetailCounts,
+  renderCounts: MatchDetailRenderCounts
+) {
+  return [
+    dbCounts.events > 0 && renderCounts.timelineEvents === 0
+      ? 'DB tiene eventos pero el mapper de cronologia devuelve 0.'
+      : null,
+    dbCounts.lineups > 0 && renderCounts.formationPlayers === 0
+      ? 'DB tiene formaciones pero el mapper de cancha/listas devuelve 0 jugadores.'
+      : null,
+    dbCounts.statistics > 0 && renderCounts.statisticsRows === 0
+      ? 'DB tiene estadisticas pero el normalizador devuelve 0 filas.'
+      : null,
+  ].filter((warning): warning is string => Boolean(warning))
+}
+
+function getEmptyDetailCounts(): SyncMatchDetailsCounts {
+  return {
+    events: 0,
+    lineups: 0,
+    statistics: 0,
+  }
+}
+
+function getEmptyRenderCounts(): MatchDetailRenderCounts {
+  return {
+    timelineEvents: 0,
+    formationPlayers: 0,
+    statisticsRows: 0,
+    startersCount: 0,
+    substitutesCount: 0,
+  }
+}
+
+function getProviderCounts(result: SyncMatchDetailResult): SyncMatchDetailsCounts {
+  return {
+    events: result.fetched.events,
+    lineups: result.fetched.lineups,
+    statistics: result.fetched.statistics,
+  }
+}
+
+function hasUsableProviderLineups(count: number) {
+  // API-Football can return two team-level lineup shells with no players.
+  // Those are not renderable lineups and must not become persistence failures.
+  return count > 2
+}
+
+function hasUsableProviderStatistics(count: number) {
+  // Same idea as lineups: two team shells with empty statistics are not usable data.
+  return count > 2
+}
+
+function getBulkDataStatus(input: {
+  match: StoredMatchBulkRow
+  plan: SyncMatchDetailsBulkItem['plan']
+  after: SyncMatchDetailsCounts
+}): SyncMatchDetailsDataStatus {
+  const { match, plan, after } = input
+  const started = isLiveStatus(match.status) || isFinishedStatus(match.status)
+  const fixtureOnly = plan.fixture && !plan.events && !plan.lineups && !plan.statistics
+
+  if (!started && fixtureOnly) return 'future-no-details-yet'
+  if (after.events > 0 && after.lineups > 0 && after.statistics > 0) return 'complete'
+  if (after.events > 0 || after.lineups > 0 || after.statistics > 0) return 'partial'
+
+  return 'missing'
+}
+
+function getProviderStatus(input: {
+  plan: SyncMatchDetailsBulkItem['plan']
+  providerCounts: SyncMatchDetailsCounts
+  dbCountsAfter: SyncMatchDetailsCounts
+  hasErrors: boolean
+}): SyncMatchDetailsProviderStatus {
+  const { plan, providerCounts, dbCountsAfter, hasErrors } = input
+  if (hasErrors) return 'error'
+
+  const requestedDetails = plan.events || plan.lineups || plan.statistics
+  if (!requestedDetails) return 'not-requested'
+
+  const missing: Array<keyof SyncMatchDetailsCounts> = []
+  if (plan.events && providerCounts.events === 0 && dbCountsAfter.events === 0) missing.push('events')
+  if (plan.lineups && !hasUsableProviderLineups(providerCounts.lineups) && dbCountsAfter.lineups === 0) {
+    missing.push('lineups')
+  }
+  if (plan.statistics && !hasUsableProviderStatistics(providerCounts.statistics) && dbCountsAfter.statistics === 0) {
+    missing.push('statistics')
+  }
+
+  if (!missing.length) return 'complete'
+  if (missing.length > 1) return 'provider-no-detail-data'
+  if (missing[0] === 'events') return 'provider-no-events'
+  if (missing[0] === 'lineups') return 'provider-no-lineups'
+  if (missing[0] === 'statistics') return 'provider-no-statistics'
+
+  return 'unknown'
+}
+
+function getPersistedProviderDataErrors(input: {
+  plan: SyncMatchDetailsBulkItem['plan']
+  providerCounts: SyncMatchDetailsCounts
+  dbCountsAfter: SyncMatchDetailsCounts
+}): SerializedSyncError[] {
+  const { plan, providerCounts, dbCountsAfter } = input
+  const errors: SerializedSyncError[] = []
+
+  if (plan.events && providerCounts.events > 0 && dbCountsAfter.events === 0) {
+    errors.push({
+      message: 'API-Football devolvio eventos, pero no quedaron persistidos.',
+      code: 'provider_events_not_persisted',
+      detail: `provider=${providerCounts.events}; dbAfter=${dbCountsAfter.events}`,
+      hint: 'Revisar upsert de football_match_detail_cache o fallback football_fixture_cache.',
+      source: 'validation',
+    })
+  }
+
+  if (plan.lineups && hasUsableProviderLineups(providerCounts.lineups) && dbCountsAfter.lineups === 0) {
+    errors.push({
+      message: 'API-Football devolvio alineaciones, pero no quedaron persistidas.',
+      code: 'provider_lineups_not_persisted',
+      detail: `provider=${providerCounts.lineups}; dbAfter=${dbCountsAfter.lineups}`,
+      hint: 'Revisar upsert de lineups en el cache de detalle.',
+      source: 'validation',
+    })
+  }
+
+  if (plan.statistics && hasUsableProviderStatistics(providerCounts.statistics) && dbCountsAfter.statistics === 0) {
+    errors.push({
+      message: 'API-Football devolvio estadisticas, pero no quedaron persistidas.',
+      code: 'provider_statistics_not_persisted',
+      detail: `provider=${providerCounts.statistics}; dbAfter=${dbCountsAfter.statistics}`,
+      hint: 'Revisar upsert de statistics en el cache de detalle.',
+      source: 'validation',
+    })
+  }
+
+  return errors
+}
+
+function isAuditProblem(
+  audit: Awaited<ReturnType<typeof auditMatchDetailCache>>,
+  match: StoredMatchBulkRow,
+  input: SyncMatchDetailsBulkOptions,
+  now: Date,
+  controlColumns: MatchDetailControlColumnStatus
+) {
   const auditRecord = audit as Record<string, unknown>
-  const detailedEvents = asRecord(auditRecord.events)
-  const substitutions = toNumber(detailedEvents?.substitutions) ?? 0
   const statistics = asRecord(auditRecord.statistics)
   const mismatches = asArray(statistics?.mismatches)
-  const match = asRecord(auditRecord.match)
-  const status = eventField(match?.status)
+  const auditMatch = asRecord(auditRecord.match)
+  const status = eventField(auditMatch?.status) ?? match.status
+  const upcoming = isUpcomingStatus(status)
+  const started = isLiveStatus(status) || isFinishedStatus(status)
+  const kickoff = minutesUntilBulk(match.match_date, now)
+  const nearKickoff = kickoff !== null && kickoff <= 90 && kickoff >= -10
+
+  if (upcoming && !input.force) {
+    return nearKickoff && !audit.hasLineups
+  }
+
+  if (!started && !input.force) return false
+
+  const scoreTotal = (match.home_score ?? 0) + (match.away_score ?? 0)
+  const markerHasGoalsWithoutGoalEvents = scoreTotal > 0 && audit.hasEvents && !audit.hasGoals
+  const lineupsIncomplete =
+    audit.hasLineups && (!audit.homeStartersCount || !audit.awayStartersCount)
+  const rowIncludesFinalDetailSyncedAt =
+    Object.prototype.hasOwnProperty.call(match, 'final_detail_synced_at')
+  const finalSyncMissing =
+    rowIncludesFinalDetailSyncedAt &&
+    controlColumns.available.has('final_detail_synced_at') &&
+    isFinishedStatus(status) &&
+    !match.final_detail_synced_at
 
   return (
-    audit.missingSections.length > 0 ||
     !audit.hasEvents ||
     !audit.hasStatistics ||
     !audit.hasLineups ||
-    (audit.hasLineups && (!audit.homeStartersCount || !audit.awayStartersCount)) ||
-    (audit.hasEvents && !substitutions && isFinishedStatus(status)) ||
-    mismatches.length > 0
+    lineupsIncomplete ||
+    markerHasGoalsWithoutGoalEvents ||
+    mismatches.length > 0 ||
+    finalSyncMissing
   )
+}
+
+function classifyBulkSyncItem(input: {
+  match: StoredMatchBulkRow
+  plan: SyncMatchDetailsBulkItem['plan']
+  result: SyncMatchDetailResult
+  errors: SerializedSyncError[]
+}): {
+  status: SyncMatchDetailsBulkStatus
+  dataStatus: SyncMatchDetailsDataStatus
+  providerStatus: SyncMatchDetailsProviderStatus
+} {
+  const { match, plan, result, errors } = input
+  const dbCountsBefore = getDetailCounts(result.before)
+  const dbCountsAfter = getDetailCounts(result.after)
+  const providerCounts = getProviderCounts(result)
+  const hasErrors = errors.length > 0
+  const dataStatus = getBulkDataStatus({ match, plan, after: dbCountsAfter })
+  const providerStatus = getProviderStatus({
+    plan,
+    providerCounts,
+    dbCountsAfter,
+    hasErrors,
+  })
+
+  const started = isLiveStatus(match.status) || isFinishedStatus(match.status)
+  const fixtureOnly = plan.fixture && !plan.events && !plan.lineups && !plan.statistics
+
+  if (hasErrors) {
+    return {
+      status: 'failed',
+      dataStatus,
+      providerStatus,
+    }
+  }
+
+  if (!started && fixtureOnly) {
+    return {
+      status: result.matchUpdated ? 'fixture-updated' : 'future-no-details-yet',
+      dataStatus: 'future-no-details-yet',
+      providerStatus: 'not-requested',
+    }
+  }
+
+  if (result.renderStatus === 'render-problem') {
+    return {
+      status: 'render-problem',
+      dataStatus,
+      providerStatus,
+    }
+  }
+
+  const countsChanged =
+    dbCountsAfter.events > dbCountsBefore.events ||
+    dbCountsAfter.lineups > dbCountsBefore.lineups ||
+    dbCountsAfter.statistics > dbCountsBefore.statistics
+
+  if (countsChanged) {
+    return {
+      status: 'updated',
+      dataStatus,
+      providerStatus,
+    }
+  }
+
+  if (dataStatus === 'complete') {
+    return {
+      status: 'complete',
+      dataStatus,
+      providerStatus,
+    }
+  }
+
+  if (providerStatus === 'provider-no-lineups') {
+    return {
+      status: 'provider-no-lineups',
+      dataStatus,
+      providerStatus,
+    }
+  }
+
+  if (providerStatus === 'provider-no-statistics') {
+    return {
+      status: 'provider-no-statistics',
+      dataStatus,
+      providerStatus,
+    }
+  }
+
+  if (providerStatus === 'provider-no-detail-data' && dataStatus === 'missing') {
+    return {
+      status: 'provider-no-detail-data',
+      dataStatus,
+      providerStatus,
+    }
+  }
+
+  if (dataStatus === 'partial' || providerStatus === 'provider-no-detail-data') {
+    return {
+      status: 'partial',
+      dataStatus,
+      providerStatus,
+    }
+  }
+
+  return {
+    status: 'unchanged',
+    dataStatus,
+    providerStatus,
+  }
 }
 
 export async function syncMatchDetailsBulk(
@@ -2640,7 +3402,19 @@ export async function syncMatchDetailsBulk(
   const now = new Date()
   const limit = clampBulkLimit(input.limit)
   const warnings: string[] = []
-  const { rows, range, statuses } = await fetchBulkMatchCandidates(supabase, input, now, limit)
+  const controlColumns = await detectMatchDetailControlColumns(supabase)
+  if (controlColumns.missing.length) {
+    warnings.push(
+      `Faltan columnas opcionales de control en matches: ${controlColumns.missing.join(', ')}. Se omiten sin marcar partidos como failed.`
+    )
+  }
+  const { rows, range, statuses } = await fetchBulkMatchCandidates(
+    supabase,
+    input,
+    now,
+    limit,
+    controlColumns
+  )
   const filteredRows: StoredMatchBulkRow[] = []
 
   for (const row of rows) {
@@ -2657,7 +3431,7 @@ export async function syncMatchDetailsBulk(
       matchId: String(row.id),
     })
 
-    if (isAuditProblem(audit)) filteredRows.push(row)
+    if (isAuditProblem(audit, row, input, now, controlColumns)) filteredRows.push(row)
     if (filteredRows.length >= limit) break
   }
 
@@ -2674,7 +3448,10 @@ export async function syncMatchDetailsBulk(
         matchId: match.id,
         fixtureExternalId: 0,
         matchDate: match.match_date,
-        status: match.status,
+        status: 'failed',
+        dataStatus: 'missing',
+        providerStatus: 'unknown',
+        matchStatus: match.status,
         reasons,
         plan: {
           fixture: false,
@@ -2685,8 +3462,22 @@ export async function syncMatchDetailsBulk(
         skipped: true,
         skipReason: 'missing_external_id',
         ok: false,
+        providerCounts: getEmptyDetailCounts(),
+        dbCountsBefore: getEmptyDetailCounts(),
+        dbCountsAfter: getEmptyDetailCounts(),
+        renderCounts: getEmptyRenderCounts(),
+        renderStatus: 'not-renderable',
+        persistence: null,
         warnings: [],
-        errors: ['El match no tiene external_id numerico.'],
+        errors: [
+          {
+            message: 'El match no tiene external_id numerico.',
+            code: 'missing_external_id',
+            detail: null,
+            hint: null,
+            source: 'validation',
+          },
+        ],
       })
       continue
     }
@@ -2699,12 +3490,21 @@ export async function syncMatchDetailsBulk(
         matchId: match.id,
         fixtureExternalId,
         matchDate: match.match_date,
-        status: match.status,
+        status: 'skipped',
+        dataStatus: 'missing',
+        providerStatus: 'not-requested',
+        matchStatus: match.status,
         reasons,
         plan,
         skipped: true,
         skipReason,
         ok: true,
+        providerCounts: getEmptyDetailCounts(),
+        dbCountsBefore: getEmptyDetailCounts(),
+        dbCountsAfter: getEmptyDetailCounts(),
+        renderCounts: getEmptyRenderCounts(),
+        renderStatus: 'not-renderable',
+        persistence: null,
         warnings: [],
         errors: [],
       })
@@ -2716,46 +3516,95 @@ export async function syncMatchDetailsBulk(
         fixtureExternalId,
         matchId: String(match.id),
         sections: plan,
+        controlColumns,
       })
+      const dbCountsBefore = getDetailCounts(result.before)
+      const dbCountsAfter = getDetailCounts(result.after)
+      const providerCounts = getProviderCounts(result)
+      const errors = [
+        ...result.errors,
+        ...getPersistedProviderDataErrors({ plan, providerCounts, dbCountsAfter }),
+      ]
+      const classification = classifyBulkSyncItem({ match, plan, result, errors })
 
       items.push({
         matchId: match.id,
         fixtureExternalId,
         matchDate: match.match_date,
-        status: match.status,
+        status: classification.status,
+        dataStatus: classification.dataStatus,
+        providerStatus: classification.providerStatus,
+        matchStatus: match.status,
         reasons,
         plan,
         skipped: false,
         skipReason: null,
-        ok: result.errors.length === 0,
-        eventsBefore: result.before.eventsCount,
-        eventsAfter: result.after.eventsCount,
-        lineupsBefore: getLineupPlayersCount(result.before),
-        lineupsAfter: getLineupPlayersCount(result.after),
-        statisticsBefore: result.before.statisticsCount,
-        statisticsAfter: result.after.statisticsCount,
-        warnings: result.warnings,
-        errors: result.errors,
+        ok: classification.status !== 'failed',
+        eventsBefore: dbCountsBefore.events,
+        eventsAfter: dbCountsAfter.events,
+        lineupsBefore: dbCountsBefore.lineups,
+        lineupsAfter: dbCountsAfter.lineups,
+        statisticsBefore: dbCountsBefore.statistics,
+        statisticsAfter: dbCountsAfter.statistics,
+        providerCounts,
+        dbCountsBefore,
+        dbCountsAfter,
+        renderCounts: result.renderCounts,
+        renderStatus: result.renderStatus,
+        persistence: result.persistence,
+        warnings: [
+          ...result.warnings,
+          ...getRenderProblemWarnings(dbCountsAfter, result.renderCounts),
+        ],
+        errors,
       })
     } catch (error) {
       items.push({
         matchId: match.id,
         fixtureExternalId,
         matchDate: match.match_date,
-        status: match.status,
+        status: 'failed',
+        dataStatus: 'missing',
+        providerStatus: 'error',
+        matchStatus: match.status,
         reasons,
         plan,
         skipped: false,
         skipReason: null,
         ok: false,
+        providerCounts: getEmptyDetailCounts(),
+        dbCountsBefore: getEmptyDetailCounts(),
+        dbCountsAfter: getEmptyDetailCounts(),
+        renderCounts: getEmptyRenderCounts(),
+        renderStatus: 'not-renderable',
+        persistence: null,
         warnings: [],
-        errors: [error instanceof Error ? error.message : String(error)],
+        errors: [serializeError(error, 'unknown')],
       })
     }
   }
 
-  const failed = items.filter((item) => !item.ok).length
-  const skipped = items.filter((item) => item.skipped).length
+  const failed = items.filter((item) => item.status === 'failed').length
+  const skipped = items.filter((item) => item.status === 'skipped').length
+  const fixtureUpdated = items.filter((item) => item.status === 'fixture-updated').length
+  const updated = items.filter((item) => item.status === 'updated' || item.status === 'fixture-updated').length
+  const unchanged = items.filter((item) => item.status === 'unchanged').length
+  const futureNoDetailsYet = items.filter((item) => item.status === 'future-no-details-yet').length
+  const complete = items.filter((item) => item.status === 'complete' || item.dataStatus === 'complete').length
+  const partial = items.filter((item) => item.status === 'partial' || item.dataStatus === 'partial').length
+  const providerNoLineups = items.filter(
+    (item) =>
+      item.status === 'provider-no-lineups' ||
+      item.providerStatus === 'provider-no-lineups' ||
+      item.providerStatus === 'provider-no-detail-data'
+  ).length
+  const providerNoStatistics = items.filter(
+    (item) =>
+      item.status === 'provider-no-statistics' ||
+      item.providerStatus === 'provider-no-statistics' ||
+      item.providerStatus === 'provider-no-detail-data'
+  ).length
+  const renderProblems = items.filter((item) => item.renderStatus === 'render-problem').length
 
   if (input.missingDetailsOnly && rows.length > selectedRows.length) {
     warnings.push('Se revisaron mas partidos que los sincronizados para priorizar los que tenian detalle incompleto.')
@@ -2765,7 +3614,16 @@ export async function syncMatchDetailsBulk(
     ok: failed === 0,
     selected: selectedRows.length,
     processed: items.filter((item) => !item.skipped).length,
+    updated,
+    fixtureUpdated,
+    unchanged,
     skipped,
+    futureNoDetailsYet,
+    complete,
+    partial,
+    providerNoLineups,
+    providerNoStatistics,
+    renderProblems,
     failed,
     limit,
     filters: {
@@ -2801,10 +3659,11 @@ export async function syncMatchDetail(
     fixtureExternalId?: number | null
     matchId?: string | null
     sections?: SyncMatchDetailSections
+    controlColumns?: MatchDetailControlColumnStatus
   }
 ): Promise<SyncMatchDetailResult> {
   const warnings: string[] = []
-  const errors: string[] = []
+  const errors: SerializedSyncError[] = []
   const sections = {
     fixture: input.sections?.fixture ?? true,
     events: input.sections?.events ?? true,
@@ -2860,9 +3719,15 @@ export async function syncMatchDetail(
     resolvedLeague?.season ??
     toNumber(fixturePayload?.league?.season)
 
+  const fetchedLineupPlayers = countApiLineupPlayers(lineups)
+  const fetchedStatisticsValues = countApiStatisticsValues(statistics)
+  const usableLineups = fetchedLineupPlayers > 0 ? lineups : []
+  const usableStatistics = fetchedStatisticsValues > 0 ? statistics : []
   const eventsForCache = events.length ? events : asArray(beforeCache?.events)
-  const lineupsForCache = lineups.length ? lineups : asArray(beforeCache?.lineups)
-  const statisticsForCache = statistics.length ? statistics : asArray(beforeCache?.statistics)
+  const lineupsForCache = usableLineups.length ? usableLineups : asArray(beforeCache?.lineups)
+  const statisticsForCache = usableStatistics.length
+    ? usableStatistics
+    : asArray(beforeCache?.statistics)
   const fixturePayloadForCache =
     fixturePayload ??
     (asRecord(beforeCache?.fixture_payload) as ApiFixtureDetail | null) ??
@@ -2870,17 +3735,17 @@ export async function syncMatchDetail(
   const missingFromApi = [
     sections.fixture && !fixturePayload ? 'fixture' : null,
     sections.events && !events.length ? 'events' : null,
-    sections.lineups && !lineups.length ? 'lineups' : null,
-    sections.statistics && !statistics.length ? 'statistics' : null,
+    sections.lineups && !fetchedLineupPlayers ? 'lineups' : null,
+    sections.statistics && !fetchedStatisticsValues ? 'statistics' : null,
   ].filter((section): section is string => Boolean(section))
 
   if (sections.events && !events.length && before.hasEvents) {
     warnings.push('API-Football no devolvio eventos; se conservaron los eventos cacheados.')
   }
-  if (sections.lineups && !lineups.length && before.hasLineups) {
+  if (sections.lineups && !fetchedLineupPlayers && before.hasLineups) {
     warnings.push('API-Football no devolvio alineaciones; se conservaron las alineaciones cacheadas.')
   }
-  if (sections.statistics && !statistics.length && before.hasStatistics) {
+  if (sections.statistics && !fetchedStatisticsValues && before.hasStatistics) {
     warnings.push('API-Football no devolvio estadisticas; se conservaron las estadisticas cacheadas.')
   }
 
@@ -2900,6 +3765,9 @@ export async function syncMatchDetail(
       { onConflict: 'fixture_external_id' }
     )
   let cacheUpserted = !cacheResponse.error
+  let detailTable: SyncMatchDetailPersistenceInfo['detailTable'] = cacheUpserted
+    ? 'football_match_detail_cache'
+    : null
 
   if (cacheResponse.error) {
     if (isMissingOptionalTable(cacheResponse.error, 'football_match_detail_cache')) {
@@ -2913,8 +3781,10 @@ export async function syncMatchDetail(
 
       if (fallbackCached) {
         cacheUpserted = true
+        detailTable = 'football_fixture_cache'
         warnings.push('football_match_detail_cache no existe; se uso football_fixture_cache como fallback.')
       } else {
+        detailTable = null
         warnings.push('football_match_detail_cache no existe y no se pudo usar football_fixture_cache como fallback.')
       }
     } else {
@@ -2924,6 +3794,7 @@ export async function syncMatchDetail(
 
   let matchEventsUpserted = 0
   let matchUpdated = false
+  let teamsById = new Map<string, StoredTeamRow>()
 
   if (match) {
     try {
@@ -2931,14 +3802,14 @@ export async function syncMatchDetail(
         supabase,
         match,
         fixturePayload,
-        warnings,
-        sections
+        sections,
+        input.controlColumns
       )
     } catch (error) {
-      errors.push(error instanceof Error ? error.message : String(error))
+      errors.push(serializeError(error, 'supabase'))
     }
 
-    const teamsById = await fetchStoredTeamsByIds(supabase, [
+    teamsById = await fetchStoredTeamsByIds(supabase, [
       match.home_team_id,
       match.away_team_id,
     ])
@@ -2953,19 +3824,32 @@ export async function syncMatchDetail(
         })
       }
     } catch (error) {
-      errors.push(error instanceof Error ? error.message : String(error))
+      errors.push(serializeError(error, 'supabase'))
     }
   } else {
     warnings.push('El fixture existe en API-Football pero no esta sincronizado en matches.')
   }
 
-  const after = buildAuditSnapshot(await readDetailCacheByFixture(supabase, fixtureExternalId))
+  const afterCache = await readDetailCacheByFixture(supabase, fixtureExternalId)
+  const storedCounts = getCacheDetailCounts(afterCache)
+  const after = buildAuditSnapshot(afterCache)
+  const renderCounts = buildRenderCounts({
+    cache: afterCache,
+    events: asArray(afterCache?.events),
+    match,
+    teamsById,
+  })
+  const renderStatus = getRenderStatus({
+    matchStatus: fixturePayload?.fixture?.status?.short ?? fixturePayload?.fixture?.status?.long ?? null,
+    dbCounts: getCacheDetailCounts(afterCache),
+    renderCounts,
+  })
   const updatedSections = [
     matchUpdated ? 'match' : null,
     cacheUpserted ? 'detail_cache' : null,
     events.length ? 'events' : null,
-    lineups.length ? 'lineups' : null,
-    statistics.length ? 'statistics' : null,
+    fetchedLineupPlayers ? 'lineups' : null,
+    fetchedStatisticsValues ? 'statistics' : null,
     matchEventsUpserted ? 'match_events' : null,
   ].filter((section): section is string => Boolean(section))
 
@@ -2981,14 +3865,31 @@ export async function syncMatchDetail(
     fetched: {
       fixture: Boolean(fixturePayload),
       events: events.length,
-      lineups: lineups.length,
-      statistics: statistics.length,
+      lineups: fetchedLineupPlayers,
+      statistics: fetchedStatisticsValues,
     },
     cacheUpserted,
     matchUpdated,
     matchEventsUpserted,
+    persistence: {
+      detailTable,
+      matchEventsTable: match ? 'match_events' : null,
+      cacheUpserted,
+      usedFixtureCacheFallback: detailTable === 'football_fixture_cache',
+      matchEventsUpserted,
+      received: {
+        events: events.length,
+        lineupTeams: lineups.length,
+        lineupPlayers: fetchedLineupPlayers,
+        statisticsTeams: statistics.length,
+        statisticsValues: fetchedStatisticsValues,
+      },
+      stored: storedCounts,
+    },
     updatedSections,
     missingFromApi,
+    renderCounts,
+    renderStatus,
     warnings,
     errors,
   }

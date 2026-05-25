@@ -81,6 +81,14 @@ function playerMatchesRef(player: PlayerRef | null | undefined, refs?: PlayerRef
   })
 }
 
+function formatEventKeyExtra(value: unknown) {
+  if (value === null || value === undefined || value === 0 || value === '0') {
+    return 'no-extra'
+  }
+
+  return value
+}
+
 function eventText(
   type?: string | null,
   detail?: string | null,
@@ -195,11 +203,14 @@ export function isPenaltyShootoutEvent(event: FootballEventLike) {
     getEventDetail(event),
     getEventComments(event)
   )
+  const elapsed = event.time?.elapsed ?? 0
+  const extra = event.time?.extra ?? 0
 
   return (
     combined.includes('penalty shootout') ||
     combined.includes('shootout') ||
-    combined.includes('penales')
+    combined.includes('penales') ||
+    (elapsed >= 120 && extra > 0 && combined.includes('penalty'))
   )
 }
 
@@ -217,8 +228,30 @@ export function formatMatchEventStableKey(
     getEventType(event) ?? 'type',
     getEventDetail(event) ?? 'detail',
     event.time?.elapsed ?? 'minute',
-    event.time?.extra ?? 'no-extra',
+    formatEventKeyExtra(event.time?.extra),
     event.team?.id ?? event.team?.name ?? 'team',
+    getEventPlayerName(event) ?? 'player',
+    getEventAssistName(event) ?? 'assist',
+  ].map((part) =>
+    String(part)
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'none'
+  ).join(':')
+}
+
+export const getMatchEventDedupeKey = formatMatchEventStableKey
+
+function formatMatchEventDisplayKey(event: FootballEventLike, matchId?: string | number | null) {
+  return [
+    matchId ?? 'match',
+    getEventType(event) ?? 'type',
+    getEventDetail(event) ?? 'detail',
+    event.time?.elapsed ?? 'minute',
+    formatEventKeyExtra(event.time?.extra),
     getEventPlayerName(event) ?? 'player',
     getEventAssistName(event) ?? 'assist',
   ].map((part) =>
@@ -236,27 +269,46 @@ function getEventSortValue(event: FootballEventLike) {
   return (event.time?.elapsed ?? 0) * 100 + (event.time?.extra ?? 0)
 }
 
-export function getTimelineEvents<T extends FootballEventLike>(
+export function dedupeTimelineEvents<T extends FootballEventLike>(
   events: T[],
   options: {
     excludePenaltyShootout?: boolean
     descending?: boolean
+    matchId?: string | number | null
   } = {}
 ) {
   const excludePenaltyShootout = options.excludePenaltyShootout ?? true
   const descending = options.descending ?? true
   const merged = new Map<string, T>()
+  const seenDisplayKeys = new Set<string>()
 
   for (const event of events) {
     if (excludePenaltyShootout && isPenaltyShootoutEvent(event)) continue
 
-    merged.set(formatMatchEventStableKey(event), event)
+    const key = formatMatchEventStableKey(event, options.matchId)
+    const displayKey = formatMatchEventDisplayKey(event, options.matchId)
+
+    if (merged.has(key) || seenDisplayKeys.has(displayKey)) continue
+
+    merged.set(key, event)
+    seenDisplayKeys.add(displayKey)
   }
 
   return [...merged.values()].sort((a, b) => {
     const sort = getEventSortValue(a) - getEventSortValue(b)
     return descending ? -sort : sort
   })
+}
+
+export function getTimelineEvents<T extends FootballEventLike>(
+  events: T[],
+  options: {
+    excludePenaltyShootout?: boolean
+    descending?: boolean
+    matchId?: string | number | null
+  } = {}
+) {
+  return dedupeTimelineEvents(events, options)
 }
 
 export function normalizeSubstitutionEvent(
@@ -310,7 +362,10 @@ export function getSubstitutionMap(
   const byPlayerInName = new Map<string, ReturnType<typeof normalizeSubstitutionEvent> & { type: 'substitution' }>()
   const byTeamId = new Map<string, Array<ReturnType<typeof normalizeSubstitutionEvent> & { type: 'substitution' }>>()
 
-  for (const event of events) {
+  for (const event of dedupeTimelineEvents(events, {
+    excludePenaltyShootout: false,
+    descending: false,
+  })) {
     const substitution = normalizeSubstitutionEvent(event, context)
     if (!substitution) continue
 
@@ -623,13 +678,48 @@ function normalizePlayerRef(value?: string | null) {
   return normalizeFootballEventText(value)
 }
 
+export function dedupePlayerIncidents<
+  T extends {
+    kind?: string
+    label?: string
+    playerName?: string | null
+    assistName?: string | null
+    minute?: number | null
+    extraMinute?: number | null
+  }
+>(incidents: T[]) {
+  const seen = new Set<string>()
+  const deduped: T[] = []
+
+  for (const incident of incidents) {
+    const key = [
+      incident.kind ?? 'event',
+      incident.label ?? 'label',
+      incident.minute ?? 'minute',
+      incident.extraMinute ?? 'no-extra',
+      normalizeFootballEventText(incident.playerName),
+      normalizeFootballEventText(incident.assistName),
+    ].join(':')
+
+    if (seen.has(key)) continue
+
+    seen.add(key)
+    deduped.push(incident)
+  }
+
+  return deduped
+}
+
 export function getPlayerIncidentsForLineup(
   player: { id?: number | null; name?: string | null },
   events: FootballEventLike[]
 ) {
   const playerName = normalizePlayerRef(player.name)
 
-  return events
+  const incidents = dedupeTimelineEvents(events, {
+    excludePenaltyShootout: false,
+    descending: false,
+  })
     .filter((event) => {
       const eventPlayerId = event.player?.id
       if (player.id && eventPlayerId && Number(player.id) === Number(eventPlayerId)) return true
@@ -643,4 +733,6 @@ export function getPlayerIncidentsForLineup(
       )
     })
     .map(normalizeMatchEvent)
+
+  return dedupePlayerIncidents(incidents)
 }

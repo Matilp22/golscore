@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
-import { syncMatchDetail } from '@/server/match-detail-cache'
+import { serializeError, syncMatchDetail } from '@/server/match-detail-cache'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -71,15 +71,17 @@ export async function GET(request: Request) {
       result,
     })
   } catch (error) {
-    console.error('[sync-match-detail] Error completo', error)
+    const serialized = serializeError(error, 'unknown')
+    console.error('[sync-match-detail] Error completo', serialized)
 
     return jsonNoStore(
       {
         ok: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : 'No se pudo sincronizar el detalle del partido.',
+        error: serialized.message,
+        code: serialized.code,
+        detail: serialized.detail,
+        hint: serialized.hint,
+        source: serialized.source,
       },
       { status: 500 }
     )

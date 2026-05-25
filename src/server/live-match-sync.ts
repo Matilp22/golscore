@@ -140,6 +140,13 @@ type DetailCacheRow = {
   statistics?: unknown
 }
 
+type DetailCacheUpsertResult = {
+  ok: boolean
+  eventsCount: number
+  lineupsCount: number
+  statisticsCount: number
+}
+
 type MatchCandidate = {
   match: StoredLiveMatchRow
   reasons: Set<string>
@@ -1006,11 +1013,23 @@ async function upsertDetailCache(
     )
 
   if (response.error) {
-    if (isMissingOptionalTable(response.error, 'football_match_detail_cache')) return false
+    if (isMissingOptionalTable(response.error, 'football_match_detail_cache')) {
+      return {
+        ok: false,
+        eventsCount: events.length,
+        lineupsCount: lineups.length,
+        statisticsCount: statistics.length,
+      }
+    }
     throw response.error
   }
 
-  return true
+  return {
+    ok: true,
+    eventsCount: events.length,
+    lineupsCount: lineups.length,
+    statisticsCount: statistics.length,
+  }
 }
 
 async function updateMatchPatch(
@@ -1075,13 +1094,17 @@ function getScoreAfterRefresh(match: StoredLiveMatchRow, fixturePayload: ApiFixt
 
 function shouldMarkFinalDetailSynced(input: {
   status: string | null | undefined
-  eventsFetched: boolean
-  statisticsFetched: boolean
-  lineupsFetched: boolean
+  persistedEventsCount: number
+  persistedStatisticsCount: number
+  persistedLineupsCount: number
 }) {
   return (
     isFinalSyncStatus(input.status) &&
-    (input.eventsFetched || input.statisticsFetched || input.lineupsFetched)
+    (
+      input.persistedEventsCount > 0 ||
+      input.persistedStatisticsCount > 0 ||
+      input.persistedLineupsCount > 0
+    )
   )
 }
 
@@ -1194,8 +1217,15 @@ async function syncSingleLiveMatch(
         duplicatesRemoved: 0,
       }
 
+  let detailCacheResult: DetailCacheUpsertResult = {
+    ok: false,
+    eventsCount: 0,
+    lineupsCount: 0,
+    statisticsCount: 0,
+  }
+
   if (fixturePayload || eventDue || statisticsDue || lineupsDue) {
-    await upsertDetailCache(supabase, {
+    detailCacheResult = await upsertDetailCache(supabase, {
       fixtureExternalId,
       match,
       fixturePayload,
@@ -1203,6 +1233,12 @@ async function syncSingleLiveMatch(
       statistics: statisticsDue ? statistics : null,
       lineups: lineupsDue ? lineups : null,
     })
+
+    if (!detailCacheResult.ok) {
+      warnings.push(
+        'No se pudo persistir football_match_detail_cache; el sync continuo sin marcar el detalle final como completo.'
+      )
+    }
   }
 
   const nowIso = input.now.toISOString()
@@ -1218,9 +1254,9 @@ async function syncSingleLiveMatch(
 
   const finalDetailSynced = shouldMarkFinalDetailSynced({
     status: statusAfter,
-    eventsFetched: eventDue,
-    statisticsFetched: statisticsDue,
-    lineupsFetched: lineupsDue,
+    persistedEventsCount: detailCacheResult.eventsCount,
+    persistedStatisticsCount: detailCacheResult.statisticsCount,
+    persistedLineupsCount: detailCacheResult.lineupsCount,
   })
   const finalFollowupSynced = shouldFetchFinalFollowup(match, input.now)
 

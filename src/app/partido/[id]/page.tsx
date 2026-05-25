@@ -34,8 +34,11 @@ import {
 } from '@/shared/utils/match-display'
 import { getEventElapsedMinute, getFixtureStatusElapsedMinute } from '@/shared/utils/match-minute'
 import { isFinishedStatus } from '@/shared/utils/match-status'
-import { normalizeMatchStatistics } from '@/shared/utils/match-statistics'
-import { getYouTubeThumbnailUrl } from '@/shared/utils/youtube'
+import {
+  buildDisciplineStatisticsFromEvents,
+  normalizeMatchStatistics,
+} from '@/shared/utils/match-statistics'
+import { getYouTubeThumbnailUrl, isValidYouTubeUrl } from '@/shared/utils/youtube'
 import Link from 'next/link'
 
 type PageProps = {
@@ -278,6 +281,24 @@ function didPenaltyShootoutEventScore(event: MatchEvent) {
   ].join(' ').toLowerCase()
 
   return !(text.includes('missed') || text.includes('saved') || text.includes('failed'))
+}
+
+function isLikelyPenaltyShootoutAttempt(event: MatchEvent, hasPenaltyScore: boolean) {
+  if (!hasPenaltyScore) return false
+
+  const elapsed = event.time?.elapsed ?? 0
+  const extra = event.time?.extra ?? 0
+  const text = [
+    event.type,
+    event.detail,
+    event.comments,
+  ].join(' ').toLowerCase()
+
+  return (
+    elapsed >= 120 &&
+    extra > 0 &&
+    text.includes('penalty')
+  )
 }
 
 type EventKind = ReturnType<typeof normalizeMatchEvent>['kind']
@@ -1119,7 +1140,7 @@ function MatchSummaryCard({
 }) {
   const thumbnailUrl = getYouTubeThumbnailUrl(url)
 
-  if (!url || !thumbnailUrl) {
+  if (!url || !thumbnailUrl || !isValidYouTubeUrl(url)) {
     return (
       <div className="flex aspect-video flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/10 bg-[#13181d] px-4 text-center">
         <div className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-[#8d98a7]">
@@ -1682,10 +1703,21 @@ export default async function PartidoDetallePage({ params }: PageProps) {
   const events: MatchEvent[] = Array.isArray(data.events) ? data.events : []
   const lineups: MatchLineup[] = Array.isArray(data.lineups) ? data.lineups : []
   const statPairs = normalizeMatchStatistics(stats, homeTeam, awayTeam, events)
-  const penaltyShootoutEvents = events.filter(isPenaltyShootoutEvent)
+  const disciplinePairs = statPairs.length
+    ? []
+    : buildDisciplineStatisticsFromEvents(events, homeTeam, awayTeam)
   const hasPenaltyScore = hasPenaltyShootoutScore(penaltyScore.home, penaltyScore.away)
+  const penaltyShootoutEvents = events.filter((event) =>
+    isPenaltyShootoutEvent(event) ||
+    isLikelyPenaltyShootoutAttempt(event, hasPenaltyScore)
+  )
   const hasPenaltyShootout = hasPenaltyScore || penaltyShootoutEvents.length > 0
-  const timelineEvents = getTimelineEvents(events)
+  const timelineEvents = getTimelineEvents(
+    events.filter((event) =>
+      !isPenaltyShootoutEvent(event) &&
+      !isLikelyPenaltyShootoutAttempt(event, hasPenaltyScore)
+    )
+  )
 
   const homeLineup =
     lineups.find((lineup) => isSameTeamRef(lineup.team, homeTeam)) || lineups[0] || null
@@ -1746,6 +1778,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
       events: events.length,
       statisticsTeams: stats.length,
       statisticsCount: statPairs.length,
+      disciplineCount: disciplinePairs.length,
       lineups: lineups.length,
       homeLineupPlayers: (homeLineup?.startXI?.length ?? 0) + (homeLineup?.substitutes?.length ?? 0),
       awayLineupPlayers: (awayLineup?.startXI?.length ?? 0) + (awayLineup?.substitutes?.length ?? 0),
@@ -2081,8 +2114,34 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                   })}
                 </div>
               ) : (
-                <div className="px-2 py-5 text-sm text-[#8d98a7] md:px-4">
-                  Estadísticas no disponibles para este partido.
+                <div className="space-y-3 px-2 py-5 text-sm text-[#8d98a7] md:px-4">
+                  <p>Estadísticas no disponibles para este partido.</p>
+
+                  {disciplinePairs.length ? (
+                    <div className="rounded-xl border border-white/6 bg-[#13181d] p-3">
+                      <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[#8d98a7]">
+                        Disciplina
+                      </div>
+                      <div className="space-y-2">
+                        {disciplinePairs.map((stat, index) => (
+                          <div
+                            key={`${stat.type}-${index}`}
+                            className="flex items-center justify-between gap-3 text-xs"
+                          >
+                            <span className="font-extrabold text-white">
+                              {formatStatValue(stat.homeValue)}
+                            </span>
+                            <span className="text-center font-bold uppercase tracking-[0.08em] text-[#8d98a7]">
+                              {translateStatType(stat.type)}
+                            </span>
+                            <span className="font-extrabold text-white">
+                              {formatStatValue(stat.awayValue)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               )}
             </div>

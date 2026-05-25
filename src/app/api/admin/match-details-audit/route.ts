@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
-import { auditMatchDetailsGeneral } from '@/server/match-detail-cache'
+import { auditMatchDetailsGeneral, serializeError } from '@/server/match-detail-cache'
 import { getArgentinaDayUtcRange } from '@/shared/utils/argentina-time'
 
 export const dynamic = 'force-dynamic'
@@ -74,6 +74,7 @@ export async function GET(request: Request) {
       dateFrom: range.dateFrom,
       dateTo: range.dateTo,
       missingOnly: readBoolean(searchParams.get('onlyProblems')),
+      includeProvider: readBoolean(searchParams.get('includeProvider')),
     })
 
     return jsonNoStore({
@@ -82,15 +83,17 @@ export async function GET(request: Request) {
       ...audit,
     })
   } catch (error) {
-    console.error('[match-details-audit] Error completo', error)
+    const serialized = serializeError(error, 'unknown')
+    console.error('[match-details-audit] Error completo', serialized)
 
     return jsonNoStore(
       {
         ok: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : 'No se pudo auditar detalles de partidos.',
+        error: serialized.message,
+        code: serialized.code,
+        detail: serialized.detail,
+        hint: serialized.hint,
+        source: serialized.source,
       },
       { status: 500 }
     )

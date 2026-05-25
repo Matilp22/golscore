@@ -15,9 +15,19 @@ const JSON_HEADERS = {
 }
 
 function isAuthorized(request: Request) {
-  const cronSecret = process.env.CRON_SECRET
+  const cronSecret = process.env.CRON_SECRET || process.env.ADMIN_CRON_SECRET
+  const isProduction = process.env.NODE_ENV === 'production'
 
-  return Boolean(cronSecret && request.headers.get('x-cron-secret') === cronSecret)
+  if (!cronSecret) return !isProduction
+
+  return getAuthorizationToken(request) === cronSecret
+}
+
+function getAuthorizationToken(request: Request) {
+  const authorization = request.headers.get('authorization') ?? ''
+  const bearerMatch = authorization.match(/^Bearer\s+(.+)$/i)
+
+  return bearerMatch?.[1] ?? request.headers.get('x-cron-secret')
 }
 
 function readBoolean(value: unknown) {
@@ -49,11 +59,21 @@ async function readOptions(request: Request): Promise<HighlightSyncOptions> {
       searchParams.get('match_id') ??
       readString(bodyRecord.matchId) ??
       readString(bodyRecord.match_id),
+    fixture:
+      searchParams.get('fixture') ??
+      searchParams.get('fixtureExternalId') ??
+      searchParams.get('fixture_external_id') ??
+      readString(bodyRecord.fixture) ??
+      readString(bodyRecord.fixtureExternalId) ??
+      readString(bodyRecord.fixture_external_id),
     leagueExternalId:
       searchParams.get('leagueExternalId') ??
       searchParams.get('league_external_id') ??
       readString(bodyRecord.leagueExternalId) ??
       readString(bodyRecord.league_external_id),
+    date:
+      searchParams.get('date') ??
+      readString(bodyRecord.date),
     dateFrom:
       searchParams.get('dateFrom') ??
       searchParams.get('date_from') ??
@@ -65,6 +85,12 @@ async function readOptions(request: Request): Promise<HighlightSyncOptions> {
       readString(bodyRecord.dateTo) ??
       readString(bodyRecord.date_to),
     limit: readNumber(searchParams.get('limit')) ?? readNumber(bodyRecord.limit),
+    recentFinishedOnly: readBoolean(
+      searchParams.get('recentFinishedOnly') ??
+        searchParams.get('recent_finished_only') ??
+        bodyRecord.recentFinishedOnly ??
+        bodyRecord.recent_finished_only
+    ),
     force: readBoolean(searchParams.get('force') ?? bodyRecord.force),
   }
 }
@@ -110,11 +136,13 @@ function errorJson(error: unknown) {
   return NextResponse.json(
     {
       ok: false,
-      error: serialized.message,
+      error: serialized.code,
       message: serialized.message,
       code: serialized.code,
       detail: serialized.detail,
       source: serialized.source,
+      status: serialized.status,
+      missingColumns: serialized.missingColumns,
     },
     {
       status: 500,
@@ -134,7 +162,7 @@ export async function GET(request: Request) {
     if (!process.env.YOUTUBE_API_KEY) {
       return errorJson({
         message: 'Falta YOUTUBE_API_KEY',
-        code: 'MISSING_YOUTUBE_API_KEY',
+        code: 'missing_youtube_api_key',
         detail: 'Configura YOUTUBE_API_KEY en variables de entorno server-side.',
       })
     }

@@ -1,7 +1,17 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import {
+  ALLOWED_REMOTE_ASSET_HOSTS,
+  YOUTUBE_IMAGE_ALT_HOST,
+  YOUTUBE_IMAGE_HOST,
+} from '@/shared/utils/asset-urls'
+import { getArgentinaDayUtcRange } from '@/shared/utils/argentina-time'
 import { isFinishedStatus } from '@/shared/utils/match-status'
-import { getYouTubeVideoId, getYouTubeWatchUrl } from '@/shared/utils/youtube'
+import {
+  getYouTubeVideoId,
+  getYouTubeWatchUrl,
+  isValidYouTubeUrl,
+} from '@/shared/utils/youtube'
 
 type DbClient = SupabaseClient
 
@@ -62,28 +72,44 @@ type YouTubeSearchResponse = {
 
 export type HighlightSyncOptions = {
   matchId?: string | null
+  fixture?: string | null
   leagueExternalId?: string | null
+  date?: string | null
   dateFrom?: string | null
   dateTo?: string | null
+  recentFinishedOnly?: boolean
   limit?: number | null
   force?: boolean
 }
 
 export type HighlightAuditOptions = {
   leagueExternalId?: string | null
+  date?: string | null
+  dateFrom?: string | null
+  dateTo?: string | null
   limit?: number | null
 }
 
 type HighlightResult = {
   matchId: string
+  fixtureExternalId: string | number | null
   externalId: string | number | null
   home: string | null
   away: string | null
   league: string | null
   matchDate: string | null
   query?: string
-  status: 'updated' | 'skipped' | 'error'
+  queries?: string[]
+  status: 'updated' | 'skipped' | 'no_reliable_video' | 'error'
+  skipReason?: string
   reason?: string
+  selectedVideo?: {
+    title: string
+    url: string
+    channelTitle: string | null
+    publishedAt: string | null
+    score: number
+  }
   selected?: {
     title: string
     url: string
@@ -91,13 +117,17 @@ type HighlightResult = {
     publishedAt: string | null
     score: number
   }
+  highlightsUrl?: string
+  highlightsTitle?: string
   candidates?: Array<{
     title: string
     channelTitle: string | null
     publishedAt: string | null
     score: number
     reasons: string[]
+    query?: string
   }>
+  errors?: ErrorPayload[]
   error?: ErrorPayload
 }
 
@@ -106,33 +136,41 @@ type ErrorPayload = {
   code: string
   detail: string | null
   source: 'youtube' | 'supabase' | 'config' | 'unknown'
+  status?: number | null
+  missingColumns?: string[]
 }
 
 class SerializableError extends Error {
   code: string
   detail: string | null
   source: ErrorPayload['source']
+  status: number | null
+  missingColumns?: string[]
 
   constructor(
     message: string,
     code: string,
     detail: string | null,
-    source: ErrorPayload['source']
+    source: ErrorPayload['source'],
+    options: { status?: number | null; missingColumns?: string[] } = {}
   ) {
     super(message)
     this.name = 'SerializableError'
     this.code = code
     this.detail = detail
     this.source = source
+    this.status = options.status ?? null
+    this.missingColumns = options.missingColumns
   }
 }
 
-const DEFAULT_SYNC_LIMIT = 1
-const MAX_SYNC_LIMIT = 10
+const DEFAULT_SYNC_LIMIT = 10
+const MAX_SYNC_LIMIT = 50
 const DEFAULT_AUDIT_LIMIT = 30
 const MAX_AUDIT_LIMIT = 100
 const YOUTUBE_SEARCH_URL = 'https://www.googleapis.com/youtube/v3/search'
 const YOUTUBE_FETCH_TIMEOUT_MS = 8000
+const FINISHED_QUERY_STATUSES = ['FT', 'AET', 'PEN', 'Final', 'Finalizado', 'Finished', 'Match Finished']
 
 const SUMMARY_KEYWORDS = ['resumen', 'highlights', 'goles', 'goals', 'full highlights']
 const NEGATIVE_PATTERNS = [
@@ -164,7 +202,6 @@ const KNOWN_CHANNELS = [
 const STOPWORDS = new Set([
   'club',
   'atletico',
-  'atlético',
   'de',
   'del',
   'la',
@@ -198,6 +235,17 @@ function clampLimit(value: number | null | undefined, defaultValue: number, maxV
   return Math.max(1, Math.min(maxValue, Math.floor(value)))
 }
 
+function readErrorMessage(error: unknown) {
+  if (typeof error !== 'object' || error === null) return ''
+
+  const record = error as Record<string, unknown>
+  return [
+    typeof record.message === 'string' ? record.message : '',
+    typeof record.details === 'string' ? record.details : '',
+    typeof record.hint === 'string' ? record.hint : '',
+  ].join(' ').toLowerCase()
+}
+
 function isSupabaseErrorLike(error: unknown) {
   if (typeof error !== 'object' || error === null) return false
 
@@ -212,6 +260,34 @@ function isSupabaseErrorLike(error: unknown) {
   )
 }
 
+function getMissingHighlightColumnsFromError(error: unknown) {
+  const message = readErrorMessage(error)
+  const missing = new Set<string>()
+
+  if (message.includes('highlights_url')) missing.add('highlights_url')
+  if (message.includes('highlights_title')) missing.add('highlights_title')
+  if (message.includes('schema cache') && !missing.size) {
+    missing.add('highlights_url')
+    missing.add('highlights_title')
+  }
+
+  return [...missing]
+}
+
+function isMissingColumnError(error: unknown) {
+  if (typeof error !== 'object' || error === null) return false
+  const record = error as Record<string, unknown>
+  const code = typeof record.code === 'string' ? record.code : ''
+  const message = readErrorMessage(error)
+
+  return (
+    code === '42703' ||
+    code === 'PGRST204' ||
+    message.includes('schema cache') ||
+    message.includes('column')
+  )
+}
+
 export function serializeHighlightError(
   error: unknown,
   fallbackSource: ErrorPayload['source'] = 'unknown'
@@ -222,6 +298,8 @@ export function serializeHighlightError(
       code: error.code,
       detail: error.detail,
       source: error.source,
+      status: error.status,
+      missingColumns: error.missingColumns,
     }
   }
 
@@ -245,12 +323,15 @@ export function serializeHighlightError(
           : typeof record.hint === 'string'
             ? record.hint
             : null
+    const status = typeof record.status === 'number' ? record.status : null
 
     return {
       message,
       code,
       detail,
       source: fallbackSource,
+      status,
+      missingColumns: getMissingHighlightColumnsFromError(error),
     }
   }
 
@@ -259,18 +340,39 @@ export function serializeHighlightError(
     code: 'UNKNOWN_ERROR',
     detail: null,
     source: fallbackSource,
+    status: null,
   }
 }
 
-function normalizeDateBoundary(value: string | null | undefined, endOfDay = false) {
-  if (!value) return null
-  const trimmed = value.trim()
-  if (!trimmed) return null
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-    return `${trimmed}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}Z`
+function resolveDateRange(options: {
+  date?: string | null
+  dateFrom?: string | null
+  dateTo?: string | null
+  recentFinishedOnly?: boolean
+}) {
+  if (options.date) {
+    const range = getArgentinaDayUtcRange(options.date)
+    return { dateFrom: range.startUtc, dateTo: range.endUtc }
   }
 
-  return trimmed
+  if (options.dateFrom || options.dateTo) {
+    const fromRange = options.dateFrom ? getArgentinaDayUtcRange(options.dateFrom) : null
+    const toRange = options.dateTo ? getArgentinaDayUtcRange(options.dateTo) : null
+
+    return {
+      dateFrom: fromRange?.startUtc ?? null,
+      dateTo: toRange?.endUtc ?? null,
+    }
+  }
+
+  if (options.recentFinishedOnly) {
+    return {
+      dateFrom: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+      dateTo: new Date().toISOString(),
+    }
+  }
+
+  return { dateFrom: null, dateTo: null }
 }
 
 function getSignificantTokens(value: string | null | undefined) {
@@ -324,19 +426,31 @@ function getPublishedDistanceDays(matchDate: string | null, publishedAt: string 
   return Math.abs(publishedTimestamp - matchTimestamp) / (24 * 60 * 60 * 1000)
 }
 
-export function buildYouTubeHighlightQuery(match: HighlightMatch) {
+export function buildYouTubeHighlightQueries(match: HighlightMatch) {
+  if (!match.homeName || !match.awayName) return []
+
   const year = match.match_date ? new Date(match.match_date).getFullYear() : null
-  return compactSpaces(
-    [
-      match.homeName,
-      match.awayName,
-      'resumen goles highlights',
-      year && Number.isFinite(year) ? String(year) : null,
-      match.leagueName,
-    ]
-      .filter(Boolean)
-      .join(' ')
+  const yearText = year && Number.isFinite(year) ? String(year) : null
+  const pairs = [
+    [match.homeName, match.awayName],
+    [match.awayName, match.homeName],
+  ]
+  const suffixes = [
+    ['resumen', 'goles', yearText, match.leagueName],
+    ['highlights', yearText, match.leagueName],
+    ['full highlights', yearText],
+  ]
+  const queries = pairs.flatMap(([home, away]) =>
+    suffixes.map((suffix) =>
+      compactSpaces([home, away, ...suffix].filter(Boolean).join(' '))
+    )
   )
+
+  return [...new Set(queries)].filter((query) => query.length >= 12).slice(0, 4)
+}
+
+export function buildYouTubeHighlightQuery(match: HighlightMatch) {
+  return buildYouTubeHighlightQueries(match)[0] ?? ''
 }
 
 export function scoreYouTubeHighlightResult(match: HighlightMatch, result: YouTubeSearchItem) {
@@ -463,9 +577,49 @@ async function getLeagueIdByExternalId(supabase: DbClient, leagueExternalId?: st
   return data?.id ? String(data.id) : null
 }
 
+export async function getHighlightsColumnStatus(supabase: DbClient) {
+  const { error } = await supabase
+    .from('matches')
+    .select('highlights_url, highlights_title')
+    .limit(1)
+
+  if (!error) {
+    return {
+      hasHighlightsUrlColumn: true,
+      hasHighlightsTitleColumn: true,
+      missingColumns: [] as string[],
+    }
+  }
+
+  if (!isMissingColumnError(error)) throw error
+
+  const missing = getMissingHighlightColumnsFromError(error)
+  const missingColumns = missing.length ? missing : ['highlights_url', 'highlights_title']
+
+  return {
+    hasHighlightsUrlColumn: !missingColumns.includes('highlights_url'),
+    hasHighlightsTitleColumn: !missingColumns.includes('highlights_title'),
+    missingColumns,
+  }
+}
+
+async function assertHighlightColumns(supabase: DbClient) {
+  const status = await getHighlightsColumnStatus(supabase)
+  if (!status.missingColumns.length) return status
+
+  throw new SerializableError(
+    'Faltan columnas de highlights en public.matches.',
+    'missing_database_columns',
+    'Aplicar la migracion que agrega matches.highlights_url y matches.highlights_title.',
+    'supabase',
+    { missingColumns: status.missingColumns }
+  )
+}
+
 async function fetchMatches(supabase: DbClient, options: HighlightSyncOptions) {
   const limit = clampLimit(options.limit, DEFAULT_SYNC_LIMIT, MAX_SYNC_LIMIT)
-  const rowsLimit = options.matchId ? 1 : limit * 5
+  const isSingleMatch = Boolean(options.matchId || options.fixture)
+  const rowsLimit = isSingleMatch ? 1 : Math.min(limit * 10, 500)
   let query = supabase
     .from('matches')
     .select(
@@ -483,20 +637,30 @@ async function fetchMatches(supabase: DbClient, options: HighlightSyncOptions) {
     }
   }
 
+  if (options.fixture) query = query.eq('external_id', options.fixture.trim())
+
   const leagueId = await getLeagueIdByExternalId(supabase, options.leagueExternalId)
   if (options.leagueExternalId && !leagueId) return []
   if (leagueId) query = query.eq('league_id', leagueId)
 
-  const dateFrom = normalizeDateBoundary(options.dateFrom)
-  const dateTo = normalizeDateBoundary(options.dateTo, true)
-  if (dateFrom) query = query.gte('match_date', dateFrom)
-  if (dateTo) query = query.lte('match_date', dateTo)
+  const range = resolveDateRange(options)
+  if (range.dateFrom) query = query.gte('match_date', range.dateFrom)
+  if (range.dateTo) query = query.lte('match_date', range.dateTo)
   if (!options.force) query = query.is('highlights_url', null)
 
   const { data, error } = await query
   if (error) throw error
 
-  return (data ?? []) as MatchRow[]
+  const rows = (data ?? []) as MatchRow[]
+
+  if (!options.recentFinishedOnly) return rows
+
+  const since = Date.now() - 3 * 60 * 60 * 1000
+  return rows.filter((match) => {
+    const timestamp = match.match_date ? new Date(match.match_date).getTime() : NaN
+
+    return isFinishedStatus(match.status) && Number.isFinite(timestamp) && timestamp >= since
+  })
 }
 
 async function enrichMatches(supabase: DbClient, rows: MatchRow[]) {
@@ -578,12 +742,14 @@ async function searchYouTubeHighlights(query: string, apiKey: string) {
 
   const payload = (await response.json().catch(() => ({}))) as YouTubeSearchResponse
 
-  console.info('[sync-match-highlights] youtube-response', {
-    query,
-    status: response.status,
-    ok: response.ok,
-    results: payload.items?.length ?? 0,
-  })
+  if (process.env.NODE_ENV !== 'production') {
+    console.info('[sync-match-highlights] youtube-response', {
+      query,
+      status: response.status,
+      ok: response.ok,
+      results: payload.items?.length ?? 0,
+    })
+  }
 
   if (!response.ok) {
     const firstError = payload.error?.errors?.[0]
@@ -591,7 +757,8 @@ async function searchYouTubeHighlights(query: string, apiKey: string) {
       payload.error?.message || `YouTube devolvio ${response.status}`,
       firstError?.reason || `YOUTUBE_${response.status}`,
       firstError?.message || payload.error?.message || null,
-      'youtube'
+      'youtube',
+      { status: response.status }
     )
   }
 
@@ -601,6 +768,7 @@ async function searchYouTubeHighlights(query: string, apiKey: string) {
 function toResultBase(match: HighlightMatch) {
   return {
     matchId: match.id,
+    fixtureExternalId: match.external_id,
     externalId: match.external_id,
     home: match.homeName,
     away: match.awayName,
@@ -609,16 +777,32 @@ function toResultBase(match: HighlightMatch) {
   }
 }
 
+function toCandidate(item: YouTubeSearchItem, match: HighlightMatch, query: string) {
+  const videoId = item.id?.videoId ? getYouTubeVideoId(getYouTubeWatchUrl(item.id.videoId)) : null
+
+  return {
+    item,
+    videoId,
+    title: item.snippet?.title ?? '',
+    channelTitle: item.snippet?.channelTitle ?? null,
+    publishedAt: item.snippet?.publishedAt ?? null,
+    query,
+    ...scoreYouTubeHighlightResult(match, item),
+  }
+}
+
 export async function syncMatchHighlights(supabase: DbClient, options: HighlightSyncOptions) {
   const apiKey = process.env.YOUTUBE_API_KEY
   if (!apiKey) {
     throw new SerializableError(
       'Falta YOUTUBE_API_KEY',
-      'MISSING_YOUTUBE_API_KEY',
+      'missing_youtube_api_key',
       'Configura YOUTUBE_API_KEY en variables de entorno server-side.',
       'config'
     )
   }
+
+  await assertHighlightColumns(supabase)
 
   const limit = clampLimit(options.limit, DEFAULT_SYNC_LIMIT, MAX_SYNC_LIMIT)
   const rows = await fetchMatches(supabase, { ...options, limit })
@@ -627,78 +811,68 @@ export async function syncMatchHighlights(supabase: DbClient, options: Highlight
   let searched = 0
   let updated = 0
 
-  console.info('[sync-match-highlights] start', {
-    matchesChecked: matches.length,
-    limit,
-    force: Boolean(options.force),
-    matchId: options.matchId ?? null,
-    leagueExternalId: options.leagueExternalId ?? null,
-  })
-
-  for (const match of matches) {
+  for (const match of matches.slice(0, limit)) {
     const skipReason = getPreSearchSkipReason(match, options.force)
     if (skipReason) {
-      console.info('[sync-match-highlights] skipped', {
-        matchId: match.id,
-        externalId: match.external_id,
-        reason: skipReason,
-      })
-
       results.push({
         ...toResultBase(match),
         status: 'skipped',
+        skipReason,
         reason: skipReason,
       })
       continue
     }
 
-    if (searched >= limit) break
+    const queries = buildYouTubeHighlightQueries(match)
+    if (!queries.length) {
+      results.push({
+        ...toResultBase(match),
+        status: 'skipped',
+        skipReason: 'missing_search_query',
+        reason: 'missing_search_query',
+      })
+      continue
+    }
 
-    const query = buildYouTubeHighlightQuery(match)
-    searched += 1
-
-    console.info('[sync-match-highlights] search', {
-      matchId: match.id,
-      externalId: match.external_id,
-      query,
-    })
+    const allCandidates: ReturnType<typeof toCandidate>[] = []
 
     try {
-      const items = await searchYouTubeHighlights(query, apiKey)
-      const scored = items
-        .map((item) => ({
-          item,
-          videoId: item.id?.videoId ? getYouTubeVideoId(getYouTubeWatchUrl(item.id.videoId)) : null,
-          title: item.snippet?.title ?? '',
-          channelTitle: item.snippet?.channelTitle ?? null,
-          publishedAt: item.snippet?.publishedAt ?? null,
-          ...scoreYouTubeHighlightResult(match, item),
-        }))
+      for (const query of queries) {
+        searched += 1
+        const items = await searchYouTubeHighlights(query, apiKey)
+        const scored = items
+          .map((item) => toCandidate(item, match, query))
+          .filter((item) => item.videoId)
+          .sort((a, b) => b.score - a.score)
+
+        allCandidates.push(...scored)
+        if (scored.some((item) => item.accepted)) break
+      }
+
+      const selected = allCandidates
         .filter((item) => item.videoId)
         .sort((a, b) => b.score - a.score)
+        .find((item) => item.accepted)
 
-      const selected = scored.find((item) => item.accepted)
       if (!selected?.videoId) {
-        console.info('[sync-match-highlights] skipped', {
-          matchId: match.id,
-          externalId: match.external_id,
-          reason: 'no_reliable_video',
-          query,
-          topScore: scored[0]?.score ?? null,
-        })
-
         results.push({
           ...toResultBase(match),
-          query,
-          status: 'skipped',
+          query: queries[0],
+          queries,
+          status: 'no_reliable_video',
+          skipReason: 'no_reliable_video',
           reason: 'no_reliable_video',
-          candidates: scored.map((item) => ({
-            title: item.title,
-            channelTitle: item.channelTitle,
-            publishedAt: item.publishedAt,
-            score: item.score,
-            reasons: item.reasons,
-          })),
+          candidates: allCandidates
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 8)
+            .map((item) => ({
+              title: item.title,
+              channelTitle: item.channelTitle,
+              publishedAt: item.publishedAt,
+              score: item.score,
+              reasons: item.reasons,
+              query: item.query,
+            })),
         })
         continue
       }
@@ -715,127 +889,183 @@ export async function syncMatchHighlights(supabase: DbClient, options: Highlight
       if (error) throw error
 
       updated += 1
-      console.info('[sync-match-highlights] updated', {
-        matchId: match.id,
-        externalId: match.external_id,
-        query,
-        video: highlightsUrl,
+      const selectedVideo = {
         title: selected.title,
+        url: highlightsUrl,
+        channelTitle: selected.channelTitle,
+        publishedAt: selected.publishedAt,
         score: selected.score,
-      })
+      }
 
       results.push({
         ...toResultBase(match),
-        query,
+        query: selected.query,
+        queries,
         status: 'updated',
-        selected: {
-          title: selected.title,
-          url: highlightsUrl,
-          channelTitle: selected.channelTitle,
-          publishedAt: selected.publishedAt,
-          score: selected.score,
-        },
+        selectedVideo,
+        selected: selectedVideo,
+        highlightsUrl,
+        highlightsTitle: selected.title,
       })
     } catch (error) {
       const serialized = serializeHighlightError(
         error,
         isSupabaseErrorLike(error) ? 'supabase' : 'youtube'
       )
-      console.warn('[sync-match-highlights] error', {
-        matchId: match.id,
-        externalId: match.external_id,
-        query,
-        ...serialized,
-      })
 
       results.push({
         ...toResultBase(match),
-        query,
+        query: queries[0],
+        queries,
         status: 'error',
+        skipReason: serialized.message,
         reason: serialized.message,
+        errors: [serialized],
         error: serialized,
       })
     }
   }
 
-  const skipped = results.filter((result) => result.status === 'skipped').length
-  const errors = results.filter((result) => result.status === 'error').length
-
-  console.info('[sync-match-highlights] done', {
-    matchesChecked: matches.length,
-    searched,
-    updated,
-    skipped,
-    errors,
-  })
+  const failed = results.filter((result) => result.status === 'error').length
+  const skipped = results.filter((result) => result.status === 'skipped' || result.status === 'no_reliable_video').length
 
   return {
-    ok: true,
+    ok: failed === 0,
     checked: matches.length,
-    matchesChecked: matches.length,
     searched,
     updated,
     skipped,
-    errors,
+    failed,
+    errors: failed,
+    items: results,
     results,
+  }
+}
+
+async function countFinishedMatches(
+  supabase: DbClient,
+  options: HighlightAuditOptions & { withoutHighlights?: boolean; withHighlights?: boolean; recentOnly?: boolean }
+) {
+  let query = supabase
+    .from('matches')
+    .select('id', { count: 'exact', head: true })
+    .in('status', FINISHED_QUERY_STATUSES)
+
+  const leagueId = await getLeagueIdByExternalId(supabase, options.leagueExternalId)
+  if (options.leagueExternalId && !leagueId) return 0
+  if (leagueId) query = query.eq('league_id', leagueId)
+
+  const range = options.recentOnly
+    ? { dateFrom: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(), dateTo: new Date().toISOString() }
+    : resolveDateRange(options)
+  if (range.dateFrom) query = query.gte('match_date', range.dateFrom)
+  if (range.dateTo) query = query.lte('match_date', range.dateTo)
+  if (options.withHighlights) query = query.not('highlights_url', 'is', null)
+  if (options.withoutHighlights) query = query.is('highlights_url', null)
+
+  const { count, error } = await query
+  if (error) throw error
+
+  return count ?? 0
+}
+
+function serializeSample(match: HighlightMatch) {
+  return {
+    id: match.id,
+    externalId: match.external_id,
+    league: match.leagueName,
+    home: match.homeName,
+    away: match.awayName,
+    matchDate: match.match_date,
+    status: match.status,
+    title: match.highlights_title,
+    url: match.highlights_url,
+    isValidYouTubeUrl: match.highlights_url ? isValidYouTubeUrl(match.highlights_url) : false,
   }
 }
 
 export async function getHighlightsAudit(supabase: DbClient, options: HighlightAuditOptions) {
   const limit = clampLimit(options.limit, DEFAULT_AUDIT_LIMIT, MAX_AUDIT_LIMIT)
+  const warnings: string[] = []
+  const columnStatus = await getHighlightsColumnStatus(supabase)
+  const render = {
+    thumbnailDomainsConfigured:
+      ALLOWED_REMOTE_ASSET_HOSTS.includes(YOUTUBE_IMAGE_HOST) &&
+      ALLOWED_REMOTE_ASSET_HOSTS.includes(YOUTUBE_IMAGE_ALT_HOST),
+    allowedImageDomains: ALLOWED_REMOTE_ASSET_HOSTS,
+  }
+
+  if (!process.env.YOUTUBE_API_KEY) warnings.push('missing_youtube_api_key')
+  if (!(process.env.CRON_SECRET || process.env.ADMIN_CRON_SECRET)) warnings.push('missing_cron_secret')
+  if (columnStatus.missingColumns.length) {
+    warnings.push(`missing_database_columns:${columnStatus.missingColumns.join(',')}`)
+
+    return {
+      ok: false,
+      env: {
+        hasYoutubeApiKey: Boolean(process.env.YOUTUBE_API_KEY),
+        hasCronSecret: Boolean(process.env.CRON_SECRET || process.env.ADMIN_CRON_SECRET),
+      },
+      db: columnStatus,
+      totals: {
+        finishedMatches: 0,
+        matchesWithHighlights: 0,
+        matchesWithoutHighlights: 0,
+        recentFinishedWithoutHighlights: 0,
+      },
+      samples: {
+        withHighlights: [],
+        withoutHighlights: [],
+      },
+      render,
+      warnings,
+    }
+  }
+
+  const [finishedMatches, matchesWithHighlights, matchesWithoutHighlights, recentFinishedWithoutHighlights] =
+    await Promise.all([
+      countFinishedMatches(supabase, options),
+      countFinishedMatches(supabase, { ...options, withHighlights: true }),
+      countFinishedMatches(supabase, { ...options, withoutHighlights: true }),
+      countFinishedMatches(supabase, { ...options, withoutHighlights: true, recentOnly: true }),
+    ])
   const rows = await fetchMatches(supabase, {
-    leagueExternalId: options.leagueExternalId,
-    limit,
+    ...options,
     force: true,
+    limit,
   })
   const matches = await enrichMatches(supabase, rows)
   const finished = matches.filter((match) => isFinishedStatus(match.status))
   const withHighlights = finished.filter((match) => Boolean(match.highlights_url))
   const withoutHighlights = finished.filter((match) => !match.highlights_url)
-  const byLeague = finished.reduce<Map<string, { league: string; withHighlights: number; withoutHighlights: number }>>(
-    (map, match) => {
-      const key = match.leagueExternalId ?? match.leagueName ?? 'unknown'
-      const current = map.get(key) ?? {
-        league: match.leagueName ?? 'Sin liga',
-        withHighlights: 0,
-        withoutHighlights: 0,
-      }
 
-      if (match.highlights_url) current.withHighlights += 1
-      else current.withoutHighlights += 1
-      map.set(key, current)
-
-      return map
-    },
-    new Map()
-  )
+  if (!render.thumbnailDomainsConfigured) warnings.push('youtube_thumbnail_domains_not_configured')
 
   return {
     ok: true,
+    env: {
+      hasYoutubeApiKey: Boolean(process.env.YOUTUBE_API_KEY),
+      hasCronSecret: Boolean(process.env.CRON_SECRET || process.env.ADMIN_CRON_SECRET),
+    },
+    db: columnStatus,
+    totals: {
+      finishedMatches,
+      matchesWithHighlights,
+      matchesWithoutHighlights,
+      recentFinishedWithoutHighlights,
+    },
+    samples: {
+      withHighlights: withHighlights.slice(0, limit).map(serializeSample),
+      withoutHighlights: withoutHighlights.slice(0, limit).map(serializeSample),
+    },
+    render,
+    warnings,
     checked: matches.length,
-    finishedMatches: finished.length,
-    withHighlights: withHighlights.length,
-    withoutHighlights: withoutHighlights.length,
-    byLeague: [...byLeague.values()],
-    finishedWithoutHighlights: withoutHighlights.slice(0, limit).map((match) => ({
-      id: match.id,
-      externalId: match.external_id,
-      league: match.leagueName,
-      home: match.homeName,
-      away: match.awayName,
-      matchDate: match.match_date,
-      status: match.status,
-    })),
-    latestHighlights: withHighlights.slice(0, limit).map((match) => ({
-      id: match.id,
-      externalId: match.external_id,
-      league: match.leagueName,
-      home: match.homeName,
-      away: match.awayName,
-      matchDate: match.match_date,
-      title: match.highlights_title,
-      url: match.highlights_url,
-    })),
+    finishedMatches,
+    withHighlights: matchesWithHighlights,
+    withoutHighlights: matchesWithoutHighlights,
+    latestHighlights: withHighlights.slice(0, limit).map(serializeSample),
+    finishedWithoutHighlights: withoutHighlights.slice(0, limit).map(serializeSample),
     recentErrors: [],
   }
 }

@@ -1,4 +1,5 @@
 import {
+  dedupeTimelineEvents,
   isRedCardEvent,
   isYellowCardEvent,
   normalizeFootballEventText,
@@ -134,7 +135,10 @@ export function deriveDisciplineStatsFromEvents(
     },
   }
 
-  for (const event of events) {
+  for (const event of dedupeTimelineEvents(events, {
+    excludePenaltyShootout: false,
+    descending: false,
+  })) {
     const side = getEventTeamSide(event, homeTeam, awayTeam)
     if (!side) continue
 
@@ -191,12 +195,11 @@ function upsertDisciplineStat(
   return [...pairs, nextPair]
 }
 
-export function normalizeMatchStatistics(
+function buildOfficialStatisticPairs(
   stats: RawMatchStatisticsTeam[],
   homeTeam: StatTeamRef,
-  awayTeam: StatTeamRef,
-  events: FootballEventLike[] = []
-): NormalizedMatchStatisticPair[] {
+  awayTeam: StatTeamRef
+) {
   const homeStats = getStatsForTeam(stats, homeTeam, 0)?.statistics ?? []
   const awayStats = getStatsForTeam(stats, awayTeam, 1)?.statistics ?? []
   const statTypes = [
@@ -206,7 +209,7 @@ export function normalizeMatchStatistics(
     .map((type) => (typeof type === 'string' ? type.trim() : ''))
     .filter((type, index, allTypes) => Boolean(type) && allTypes.indexOf(type) === index)
 
-  const officialPairs = statTypes.flatMap((type) => {
+  return statTypes.flatMap((type) => {
     const homeValue = normalizeStatValue(
       homeStats.find((stat) => stat.type === type)?.value
     )
@@ -223,8 +226,46 @@ export function normalizeMatchStatistics(
       source: 'official' as const,
     }]
   })
+}
+
+export function hasOfficialMatchStatistics(
+  stats: RawMatchStatisticsTeam[],
+  homeTeam: StatTeamRef,
+  awayTeam: StatTeamRef
+) {
+  return buildOfficialStatisticPairs(stats, homeTeam, awayTeam).length > 0
+}
+
+export function buildDisciplineStatisticsFromEvents(
+  events: FootballEventLike[],
+  homeTeam: StatTeamRef,
+  awayTeam: StatTeamRef
+): NormalizedMatchStatisticPair[] {
+  const discipline = deriveDisciplineStatsFromEvents(events, homeTeam, awayTeam)
+  const pairs: NormalizedMatchStatisticPair[] = []
+  const withYellows = upsertDisciplineStat(pairs, {
+    type: 'Yellow Cards',
+    home: discipline.yellowCards.home,
+    away: discipline.yellowCards.away,
+  })
+
+  return upsertDisciplineStat(withYellows, {
+    type: 'Red Cards',
+    home: discipline.redCards.home,
+    away: discipline.redCards.away,
+  }).filter((pair) => Boolean(parseNumber(pair.homeValue) || parseNumber(pair.awayValue)))
+}
+
+export function normalizeMatchStatistics(
+  stats: RawMatchStatisticsTeam[],
+  homeTeam: StatTeamRef,
+  awayTeam: StatTeamRef,
+  events: FootballEventLike[] = []
+): NormalizedMatchStatisticPair[] {
+  const officialPairs = buildOfficialStatisticPairs(stats, homeTeam, awayTeam)
 
   if (!events.length) return officialPairs
+  if (!officialPairs.length) return []
 
   const discipline = deriveDisciplineStatsFromEvents(events, homeTeam, awayTeam)
   const withYellows = upsertDisciplineStat(officialPairs, {
