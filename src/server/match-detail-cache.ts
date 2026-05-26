@@ -27,6 +27,7 @@ type ApiFixtureDetail = {
   fixture?: {
     id?: number
     date?: string
+    timezone?: string | null
     referee?: string | null
     status?: {
       short?: string | null
@@ -35,6 +36,7 @@ type ApiFixtureDetail = {
       extra?: number | null
     } | null
     venue?: {
+      id?: number | string | null
       name?: string | null
       city?: string | null
       country?: string | null
@@ -105,8 +107,10 @@ type StoredMatchAuditRow = StoredMatchRow & {
   home_score?: number | null
   away_score?: number | null
   venue_name?: string | null
+  venue_id?: string | number | null
   venue_city?: string | null
   venue_country?: string | null
+  timezone?: string | null
   broadcast_channel?: string | null
   broadcast_logo_url?: string | null
   highlights_url?: string | null
@@ -692,6 +696,36 @@ export async function fetchMatchDetailProviderCounts(
     events: events.length,
     lineups: countApiLineupPlayers(lineups),
     statistics: countApiStatisticsValues(statistics),
+  }
+}
+
+export async function fetchMatchInfoProviderSnapshot(fixtureExternalId: number) {
+  const [fixturePayload, counts] = await Promise.all([
+    fetchFixtureDetail(fixtureExternalId),
+    fetchMatchDetailProviderCounts(fixtureExternalId, {
+      events: false,
+      lineups: true,
+      statistics: true,
+    }),
+  ])
+  const fixture = fixturePayload?.fixture ?? null
+  const venue = fixture?.venue ?? null
+
+  return {
+    stadium: cleanPatchText(venue?.name),
+    venue: cleanPatchText(venue?.name),
+    venueId:
+      venue?.id !== null && venue?.id !== undefined && String(venue.id).trim()
+        ? String(venue.id)
+        : null,
+    city: cleanPatchText(venue?.city),
+    country: cleanPatchText(venue?.country) ?? cleanPatchText(fixturePayload?.league?.country),
+    referee: cleanPatchText(fixture?.referee),
+    timezone: cleanPatchText(fixture?.timezone),
+    hasLineups: counts.lineups > 0,
+    lineupsCount: counts.lineups,
+    hasStatistics: counts.statistics > 0,
+    statisticsCount: counts.statistics,
   }
 }
 
@@ -1308,16 +1342,22 @@ function buildMatchPatchFromFixtureDetail(fixturePayload: ApiFixtureDetail | nul
   if (score.penaltyAway !== null) patch.away_penalty_score = score.penaltyAway
 
   const venueName = cleanPatchText(fixturePayload.fixture.venue?.name)
+  const venueId = fixturePayload.fixture.venue?.id
   const venueCity = cleanPatchText(fixturePayload.fixture.venue?.city)
   const venueCountry =
     cleanPatchText(fixturePayload.fixture.venue?.country) ??
     cleanPatchText(fixturePayload.league?.country)
   const referee = cleanPatchText(fixturePayload.fixture.referee)
+  const timezone = cleanPatchText(fixturePayload.fixture.timezone)
 
   if (venueName) patch.venue_name = venueName
+  if (venueId !== null && venueId !== undefined && String(venueId).trim()) {
+    patch.venue_id = String(venueId)
+  }
   if (venueCity) patch.venue_city = venueCity
   if (venueCountry) patch.venue_country = venueCountry
   if (referee) patch.referee = referee
+  if (timezone) patch.timezone = timezone
 
   return patch
 }
@@ -1364,8 +1404,10 @@ async function updateStoredMatchFromFixtureDetail(
     'home_penalty_score',
     'away_penalty_score',
     'venue_name',
+    'venue_id',
     'venue_city',
     'venue_country',
+    'timezone',
     'referee',
     'detail_last_synced_at',
     'last_events_synced_at',
@@ -1854,7 +1896,7 @@ async function fetchStoredMatchInfoRow(
   const selectBase =
     'id, external_id, league_id, home_team_id, away_team_id, match_date, status, elapsed, home_score, away_score'
   const selectOptional =
-    `${selectBase}, final_elapsed, venue_name, venue_city, venue_country, broadcast_channel, broadcast_logo_url, highlights_url, highlights_title, referee`
+    `${selectBase}, final_elapsed, venue_name, venue_id, venue_city, venue_country, timezone, broadcast_channel, broadcast_logo_url, highlights_url, highlights_title, referee`
 
   let response = await supabase
     .from('matches')
@@ -2179,12 +2221,19 @@ function buildMatchAuditInfo(input: {
     stadium:
       cleanPatchText(fixture?.venue?.name) ??
       cleanPatchText(input.matchInfo?.venue_name),
+    venueId:
+      fixture?.venue?.id !== null && fixture?.venue?.id !== undefined && String(fixture.venue.id).trim()
+        ? String(fixture.venue.id)
+        : cleanPatchText(input.matchInfo?.venue_id),
     venueCity:
       cleanPatchText(fixture?.venue?.city) ??
       cleanPatchText(input.matchInfo?.venue_city),
     venueCountry:
       cleanPatchText(fixture?.venue?.country) ??
       cleanPatchText(input.matchInfo?.venue_country),
+    timezone:
+      cleanPatchText(fixture?.timezone) ??
+      cleanPatchText(input.matchInfo?.timezone),
     referee:
       cleanPatchText(fixture?.referee) ??
       cleanPatchText(input.matchInfo?.referee),

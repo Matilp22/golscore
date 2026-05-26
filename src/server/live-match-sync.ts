@@ -22,11 +22,19 @@ type ApiFixture = {
   fixture?: {
     id?: number | null
     date?: string | null
+    timezone?: string | null
+    referee?: string | null
     status?: {
       long?: string | null
       short?: string | null
       elapsed?: number | null
       extra?: number | null
+    } | null
+    venue?: {
+      id?: number | string | null
+      name?: string | null
+      city?: string | null
+      country?: string | null
     } | null
   } | null
   league?: {
@@ -261,6 +269,10 @@ function toNumber(value: unknown) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+function cleanPatchText(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
 function toIsoAtOffset(now: Date, minutes: number) {
   return new Date(now.getTime() + minutes * 60_000).toISOString()
 }
@@ -453,6 +465,23 @@ function mapFixturePatch(fixture: ApiFixture) {
     patch.home_penalty_score = score.homePenalty
     patch.away_penalty_score = score.awayPenalty
   }
+
+  const venue = fixture.fixture?.venue ?? null
+  const venueId = venue?.id
+  const venueName = cleanPatchText(venue?.name)
+  const venueCity = cleanPatchText(venue?.city)
+  const venueCountry = cleanPatchText(venue?.country)
+  const referee = cleanPatchText(fixture.fixture?.referee)
+  const timezone = cleanPatchText(fixture.fixture?.timezone)
+
+  if (venueId !== null && venueId !== undefined && String(venueId).trim()) {
+    patch.venue_id = String(venueId)
+  }
+  if (venueName) patch.venue_name = venueName
+  if (venueCity) patch.venue_city = venueCity
+  if (venueCountry) patch.venue_country = venueCountry
+  if (referee) patch.referee = referee
+  if (timezone) patch.timezone = timezone
 
   return patch
 }
@@ -1052,6 +1081,12 @@ async function updateMatchPatch(
   delete fallbackPatch.final_elapsed
   delete fallbackPatch.home_penalty_score
   delete fallbackPatch.away_penalty_score
+  delete fallbackPatch.venue_id
+  delete fallbackPatch.venue_name
+  delete fallbackPatch.venue_city
+  delete fallbackPatch.venue_country
+  delete fallbackPatch.referee
+  delete fallbackPatch.timezone
   delete fallbackPatch.last_events_synced_at
   delete fallbackPatch.last_statistics_synced_at
   delete fallbackPatch.last_lineups_synced_at

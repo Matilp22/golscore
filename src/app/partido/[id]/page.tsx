@@ -1741,6 +1741,14 @@ export default async function PartidoDetallePage({ params }: PageProps) {
   const homeHasVisualFormation = hasVisualFormation(homeLineup)
   const awayHasVisualFormation = hasVisualFormation(awayLineup)
   const hasAnyVisualFormation = homeHasVisualFormation || awayHasVisualFormation
+  const confirmedLineupPlayers =
+    (homeLineup?.startXI?.length ?? 0) +
+    (homeLineup?.substitutes?.length ?? 0) +
+    (awayLineup?.startXI?.length ?? 0) +
+    (awayLineup?.substitutes?.length ?? 0)
+  const lineupStatusLabel = confirmedLineupPlayers > 0
+    ? 'Alineación confirmada'
+    : 'Alineación no confirmada'
   const homeStarterPlayers = buildPanelPlayers({
     players: homeLineup?.startXI || [],
     events: homeTeamEvents,
@@ -1984,8 +1992,11 @@ export default async function PartidoDetallePage({ params }: PageProps) {
             </div>
 
             <div className="hf-card w-full overflow-hidden rounded-2xl">
-              <div className="hf-section-head px-2 py-3 md:px-4">
+              <div className="hf-section-head flex items-center justify-between gap-3 px-2 py-3 md:px-4">
                 <h2 className="text-base font-bold text-white">Formación</h2>
+                <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-black uppercase tracking-[0.03em] text-[#b8f7d2]">
+                  {lineupStatusLabel}
+                </span>
               </div>
 
               {homeLineup || awayLineup ? (
@@ -2020,7 +2031,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-white/8 bg-[#12171c] px-2 py-3 text-sm text-[#8d98a7] md:px-4 md:py-4">
-                      Este partido no tiene una formación real cargada por la fuente de datos.
+                      Alineación confirmada sin formación táctica disponible.
                     </div>
                   )}
 
@@ -2044,7 +2055,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                 </div>
               ) : (
                 <div className="px-2 py-5 text-sm text-[#8d98a7] md:px-4">
-                  No hay alineaciones disponibles.
+                  Alineación no confirmada.
                 </div>
               )}
             </div>
