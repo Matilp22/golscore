@@ -2,6 +2,7 @@ import Link from 'next/link'
 import type { CSSProperties, ReactNode } from 'react'
 
 import CurrentRoundNavigator from '@/frontend/components/CurrentRoundNavigator'
+import ChampionsEntrySoundControl from '@/frontend/components/ChampionsEntrySoundControl'
 import CopaArgentinaChampions from '@/frontend/components/CopaArgentinaChampions'
 import CopaArgentinaMatchList from '@/frontend/components/CopaArgentinaMatchList'
 import GroupStageGrid from '@/frontend/components/GroupStage'
@@ -2404,6 +2405,12 @@ export default async function LigaPage({ params }: PageProps) {
                     competitionName={visibleTournamentTitle}
                     champions={tournamentChampions}
                   />
+                </div>
+              ) : null}
+
+              {tournament.key === 'internacional-champions' ? (
+                <div className="flex justify-start md:justify-end">
+                  <ChampionsEntrySoundControl />
                 </div>
               ) : null}
             </div>

@@ -3,6 +3,7 @@ export const fetchCache = 'force-no-store'
 
 import AutoRefresh from '@/frontend/components/AutoRefresh'
 import BrandMark from '@/frontend/components/BrandMark'
+import ChampionsEntrySoundLink from '@/frontend/components/ChampionsEntrySoundLink'
 import { LeagueLogo } from '@/frontend/components/AssetImage'
 import LiveEventToasts from '@/frontend/components/LiveEventToasts'
 import MatchRow from '@/frontend/components/MatchRow'
@@ -1332,10 +1333,30 @@ export default async function HomePage({
                       <div className="hf-section-head px-2.5 py-1.5 sm:px-3">
                         <div className="flex min-w-0 items-center justify-between gap-2">
                           {competition.href ? (
-                            <Link
-                              href={competition.href}
-                              className="inline-flex min-w-0 items-center gap-2 text-sm font-black text-[#f3f6fa] no-underline transition hover:text-[#7ff0b2] hover:no-underline md:text-base"
-                            >
+                            competition.key === 'internacional-champions' ? (
+                              <ChampionsEntrySoundLink
+                                href={competition.href}
+                                tournamentKey={competition.key}
+                                className="inline-flex min-w-0 items-center gap-2 text-sm font-black text-[#f3f6fa] no-underline transition hover:text-[#7ff0b2] hover:no-underline md:text-base"
+                              >
+                                {competition.logo ? (
+                                  <span className="flex h-6 w-6 shrink-0 items-center justify-center">
+                                    <LeagueLogo
+                                      src={competition.logo}
+                                      alt={competition.title}
+                                      size={20}
+                                      className="h-5 w-5 object-contain"
+                                      fallbackClassName="h-4 w-3"
+                                    />
+                                  </span>
+                                ) : null}
+                                <span className="break-words">{competition.title}</span>
+                              </ChampionsEntrySoundLink>
+                            ) : (
+                              <Link
+                                href={competition.href}
+                                className="inline-flex min-w-0 items-center gap-2 text-sm font-black text-[#f3f6fa] no-underline transition hover:text-[#7ff0b2] hover:no-underline md:text-base"
+                              >
                               {competition.logo ? (
                                 <span className="flex h-6 w-6 shrink-0 items-center justify-center">
                                   <LeagueLogo
@@ -1348,7 +1369,8 @@ export default async function HomePage({
                                 </span>
                               ) : null}
                               <span className="break-words">{competition.title}</span>
-                            </Link>
+                              </Link>
+                            )
                           ) : (
                             <h2 className="inline-flex min-w-0 items-center gap-2 text-sm font-black text-[#f3f6fa] md:text-base">
                               {competition.logo ? (
