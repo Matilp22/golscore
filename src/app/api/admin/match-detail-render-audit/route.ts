@@ -1,19 +1,8 @@
 import { NextResponse } from 'next/server'
 
-import {
-  getMatchDetail,
-  type MatchEvent,
-  type MatchFixture,
-  type MatchLineup,
-  type MatchStatisticsTeam,
-} from '@/lib/api-football'
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { auditMatchDetailCache, serializeError } from '@/server/match-detail-cache'
-import { getTimelineEvents } from '@/shared/utils/football-events'
-import {
-  buildDisciplineStatisticsFromEvents,
-  normalizeMatchStatistics,
-} from '@/shared/utils/match-statistics'
+import { buildMatchDetailViewModel } from '@/server/match-detail-view-model'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -53,65 +42,6 @@ function asRecord(value: unknown) {
     : null
 }
 
-function normalizeTeamName(value?: string | null) {
-  return (value || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/&/g, ' and ')
-    .replace(/[^a-z0-9]+/gi, ' ')
-    .replace(/\b(ca|club|de|del|la|el|fc|ac)\b/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase()
-}
-
-function isSameTeamRef(
-  candidate: { id?: number; name?: string } | undefined,
-  target: { id?: number; name?: string }
-) {
-  if (!candidate || !target) return false
-  if (candidate.id && target.id && Number(candidate.id) === Number(target.id)) return true
-
-  const candidateName = normalizeTeamName(candidate.name)
-  const targetName = normalizeTeamName(target.name)
-
-  return Boolean(
-    candidateName &&
-    targetName &&
-    (
-      candidateName === targetName ||
-      candidateName.includes(targetName) ||
-      targetName.includes(candidateName)
-    )
-  )
-}
-
-function countPlayers(lineup: MatchLineup | null | undefined, key: 'startXI' | 'substitutes') {
-  const players = lineup?.[key]
-
-  return Array.isArray(players) ? players.length : 0
-}
-
-function getLineupsForFixture(lineups: MatchLineup[], fixture: MatchFixture | null) {
-  if (!fixture) {
-    return {
-      homeLineup: lineups[0] ?? null,
-      awayLineup: lineups[1] ?? null,
-    }
-  }
-
-  return {
-    homeLineup:
-      lineups.find((lineup) => isSameTeamRef(lineup.team, fixture.teams.home)) ??
-      lineups[0] ??
-      null,
-    awayLineup:
-      lineups.find((lineup) => isSameTeamRef(lineup.team, fixture.teams.away)) ??
-      lineups[1] ??
-      null,
-  }
-}
-
 export async function GET(request: Request) {
   if (!isAuthorized(request)) {
     return jsonNoStore({ ok: false, error: 'No autorizado' }, { status: 401 })
@@ -141,6 +71,22 @@ export async function GET(request: Request) {
     const fixtureExternalId = audit.fixtureExternalId
 
     if (!fixtureExternalId) {
+      const frontBlockers = {
+        hiddenByStatus: false,
+        hiddenByEmptyFormationString: false,
+        hiddenByMissingOfficialStats: false,
+        hiddenByCssClass: false,
+        hiddenByTabState: false,
+        hiddenByWrongDataSource: true,
+        hiddenByMobileBreakpoint: false,
+      }
+      const componentReadiness = {
+        timelineShouldRender: false,
+        formationShouldRender: false,
+        statisticsShouldRender: false,
+        lineupTabsShouldRender: false,
+      }
+
       return jsonNoStore({
         ok: false,
         error: 'missing_fixture_external_id',
@@ -169,6 +115,8 @@ export async function GET(request: Request) {
           startersTabCount: 0,
           substitutesTabCount: 0,
         },
+        componentReadiness,
+        frontBlockers,
         renderReadiness: {
           canRenderTimeline: false,
           canRenderFormation: false,
@@ -180,38 +128,43 @@ export async function GET(request: Request) {
       })
     }
 
-    const detail = await getMatchDetail(fixtureExternalId)
-    const fixtureData = detail.fixture as MatchFixture | null
-    const events: MatchEvent[] = Array.isArray(detail.events) ? detail.events : []
-    const lineups: MatchLineup[] = Array.isArray(detail.lineups) ? detail.lineups : []
-    const statistics: MatchStatisticsTeam[] = Array.isArray(detail.statistics)
-      ? detail.statistics
-      : []
-    const timelineEvents = getTimelineEvents(events)
-    const statPairs = fixtureData
-      ? normalizeMatchStatistics(
-          statistics,
-          fixtureData.teams.home,
-          fixtureData.teams.away,
-          events
-        )
-      : []
-    const disciplinePairs = fixtureData && !statPairs.length
-      ? buildDisciplineStatisticsFromEvents(events, fixtureData.teams.home, fixtureData.teams.away)
-      : []
-    const { homeLineup, awayLineup } = getLineupsForFixture(lineups, fixtureData)
-    const homeStartersCount = countPlayers(homeLineup, 'startXI')
-    const awayStartersCount = countPlayers(awayLineup, 'startXI')
-    const homeSubsCount = countPlayers(homeLineup, 'substitutes')
-    const awaySubsCount = countPlayers(awayLineup, 'substitutes')
-    const formationPlayersCount = homeStartersCount + awayStartersCount
-    const startersTabCount = formationPlayersCount
-    const substitutesTabCount = homeSubsCount + awaySubsCount
+    const viewModel = await buildMatchDetailViewModel({
+      fixtureExternalId,
+      matchId,
+    })
+    const events = viewModel.sourceEvents
+    const lineups = viewModel.lineups
+    const statistics = Array.isArray(viewModel.statistics) ? viewModel.statistics : []
+    const timelineEvents = viewModel.timelineEvents
+    const statPairs = viewModel.statisticsRows
+    const disciplinePairs = viewModel.disciplineRows
+    const formationPlayersCount = viewModel.renderCounts.formationPlayers
+    const startersTabCount = viewModel.renderCounts.startersCount
+    const substitutesTabCount = viewModel.renderCounts.substitutesCount
     const dbLineupsCount =
       audit.lineupsHomeCount +
       audit.lineupsAwayCount +
       audit.substitutesHomeCount +
       audit.substitutesAwayCount
+    const componentReadiness = {
+      timelineShouldRender: viewModel.renderReadiness.canRenderTimeline,
+      formationShouldRender: viewModel.renderReadiness.canRenderFormation,
+      statisticsShouldRender: viewModel.renderReadiness.canRenderStatistics,
+      lineupTabsShouldRender: viewModel.renderReadiness.canRenderLineupTabs,
+    }
+    const hiddenByWrongDataSource =
+      (audit.eventsCount > 0 && events.length === 0) ||
+      (dbLineupsCount > 0 && lineups.length === 0) ||
+      (audit.statisticsCount > 0 && statistics.length === 0)
+    const frontBlockers = {
+      hiddenByStatus: false,
+      hiddenByEmptyFormationString: false,
+      hiddenByMissingOfficialStats: audit.statisticsCount > 0 && statPairs.length === 0,
+      hiddenByCssClass: false,
+      hiddenByTabState: false,
+      hiddenByWrongDataSource,
+      hiddenByMobileBreakpoint: false,
+    }
     const missingBecause = [
       events.length > 0 && timelineEvents.length === 0
         ? 'events_exist_but_timeline_mapper_returned_empty'
@@ -222,7 +175,7 @@ export async function GET(request: Request) {
       audit.statisticsCount > 0 && statPairs.length === 0
         ? 'statistics_exist_but_normalizer_returned_empty'
         : null,
-      !fixtureData ? 'fixture_not_resolved_for_render' : null,
+      !viewModel.fixture ? 'fixture_not_resolved_for_render' : null,
       lineups.length > 0 && formationPlayersCount === 0
         ? 'lineups_array_present_without_resolved_start_xi'
         : null,
@@ -234,15 +187,21 @@ export async function GET(request: Request) {
     return jsonNoStore({
       ok: true,
       match: audit.match,
+      renderStatus: audit.renderStatus,
       db: {
-        eventsCount: events.length,
-        rawAuditEventsCount: audit.eventsCount,
+        eventsCount: audit.eventsCount,
+        renderSourceEventsCount: events.length,
         lineupsCount: dbLineupsCount,
         statisticsCount: audit.statisticsCount,
         homeStartersCount: audit.homeStartersCount,
         awayStartersCount: audit.awayStartersCount,
         homeSubsCount: audit.homeSubstitutesCount,
         awaySubsCount: audit.awaySubstitutesCount,
+      },
+      dbCounts: {
+        events: audit.eventsCount,
+        lineups: dbLineupsCount,
+        statistics: audit.statisticsCount,
       },
       mapped: {
         timelineEventsCount: timelineEvents.length,
@@ -254,17 +213,27 @@ export async function GET(request: Request) {
         startersTabCount,
         substitutesTabCount,
       },
-      renderReadiness: {
-        canRenderTimeline: timelineEvents.length > 0,
-        canRenderFormation: formationPlayersCount > 0,
-        canRenderStatistics: statPairs.length > 0,
-        canRenderLineupTabs: startersTabCount > 0 || substitutesTabCount > 0,
+      renderCounts: {
+        timelineEvents: timelineEvents.length,
+        formationPlayers: formationPlayersCount,
+        statisticsRows: statPairs.length,
+        startersCount: startersTabCount,
+        substitutesCount: substitutesTabCount,
       },
+      componentReadiness,
+      frontBlockers,
+      renderReadiness: viewModel.renderReadiness,
       missingBecause,
       warnings: [
         ...audit.warnings,
         audit.eventsCount > events.length
           ? `match_events contiene ${audit.eventsCount} filas crudas y el render recibe ${events.length} eventos unicos tras desduplicar cache/stored events.`
+          : null,
+        viewModel.formationStringsMissing
+          ? 'Falta formation string en al menos un equipo, pero el front actual no bloquea la cancha por eso y usa posiciones por grid, posicion o fallback.'
+          : null,
+        hiddenByWrongDataSource
+          ? 'Hay datos en audit/DB que no llegaron al objeto de render; revisar fuente getMatchDetail/cache.'
           : null,
       ].filter((warning): warning is string => Boolean(warning)),
     })

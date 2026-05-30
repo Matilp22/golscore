@@ -104,6 +104,12 @@ function chunkArray<T>(items: T[], size: number) {
 function getEventDedupeKey(event: MatchEventRow) {
   return formatMatchEventStableKey(
     {
+      id: event.id,
+      external_event_id: event.external_event_id,
+      match_id: event.match_id,
+      team_id: event.team_id,
+      player_name: event.player_name,
+      assist_name: event.assist_name,
       time: {
         elapsed: event.minute,
         extra: event.extra_minute,

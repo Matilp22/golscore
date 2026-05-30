@@ -156,6 +156,9 @@ type StoredMatchBroadcasterRow = {
   broadcaster_name?: string | null
   broadcaster_logo_url?: string | null
   country?: string | null
+  source?: string | null
+  confidence?: string | null
+  verified?: boolean | null
 }
 
 type DetailCacheRow = {
@@ -381,6 +384,7 @@ export type SyncMatchDetailsBulkOptions = {
   recentFinishedOnly?: boolean
   missingDetailsOnly?: boolean
   futureDays?: number | null
+  lookbackDays?: number | null
   limit?: number | null
   force?: boolean
 }
@@ -477,6 +481,7 @@ export type SyncMatchDetailsBulkResult = {
     recentFinishedOnly: boolean
     missingDetailsOnly: boolean
     futureDays: number | null
+    lookbackDays: number | null
     force: boolean
   }
   estimatedApiRequests: number
@@ -506,11 +511,15 @@ function isMissingOptionalTable(error: { code?: string; message?: string } | nul
 
   return (
     error?.code === '42P01' ||
-    error?.code === '42703' ||
-    error?.code === 'PGRST204' ||
     error?.code === 'PGRST205' ||
-    message.includes(table) ||
-    message.includes('schema cache')
+    (
+      message.includes(table) &&
+      (
+        message.includes('does not exist') ||
+        message.includes('could not find the table') ||
+        message.includes('not found')
+      )
+    )
   )
 }
 
@@ -1324,6 +1333,28 @@ function cleanPatchText(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null
 }
 
+function getStoredStatusLong(status?: string | null) {
+  const short = getCanonicalMatchStatusFromApi({ short: status ?? null }) ?? status
+
+  if (short === 'NS') return 'Not Started'
+  if (short === 'TBD') return 'Time to be defined'
+  if (short === '1H') return 'First Half'
+  if (short === 'HT') return 'Halftime'
+  if (short === '2H') return 'Second Half'
+  if (short === 'ET') return 'Extra Time'
+  if (short === 'BT') return 'Break Time'
+  if (short === 'P') return 'Penalty In Progress'
+  if (short === 'FT') return 'Match Finished'
+  if (short === 'AET') return 'Match Finished'
+  if (short === 'PEN') return 'Match Finished'
+  if (short === 'PST') return 'Match Postponed'
+  if (short === 'CANC') return 'Match Cancelled'
+  if (short === 'SUSP') return 'Match Suspended'
+  if (short === 'INT') return 'Interrupted'
+
+  return status ?? null
+}
+
 function buildMatchPatchFromFixtureDetail(fixturePayload: ApiFixtureDetail | null) {
   if (!fixturePayload?.fixture) return {}
 
@@ -1380,7 +1411,8 @@ async function updateStoredMatchFromFixtureDetail(
   match: StoredMatchRow | null,
   fixturePayload: ApiFixtureDetail | null,
   sections: SyncMatchDetailSections = {},
-  controlColumns?: MatchDetailControlColumnStatus
+  controlColumns?: MatchDetailControlColumnStatus,
+  options: { markFinalDetailSynced?: boolean } = {}
 ) {
   if (!match?.id) return false
 
@@ -1388,10 +1420,7 @@ async function updateStoredMatchFromFixtureDetail(
   const nowIso = new Date().toISOString()
   patch.detail_last_synced_at = nowIso
 
-  if (
-    fixturePayload?.fixture?.status &&
-    isFinishedStatus(getCanonicalMatchStatusFromApi(fixturePayload.fixture.status))
-  ) {
+  if (options.markFinalDetailSynced) {
     patch.final_detail_synced_at = nowIso
   }
 
@@ -1504,6 +1533,24 @@ function hasCaptain(lineup: unknown) {
 
 function eventField(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function normalizeBroadcastTrustText(value?: string | number | null) {
+  return String(value ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+}
+
+function isTrustedStoredBroadcaster(row: StoredMatchBroadcasterRow) {
+  return (
+    row.verified === true &&
+    (
+      ['manual', 'verified_rule', 'official', 'provider', 'provider_suggestion_approved'].includes(normalizeBroadcastTrustText(row.source)) ||
+      normalizeBroadcastTrustText(row.confidence) === 'high'
+    )
+  )
 }
 
 function numberField(value: unknown) {
@@ -1932,16 +1979,40 @@ async function fetchAuditBroadcasters(
 
   const response = await supabase
     .from('match_broadcasts')
-    .select('broadcaster_name, broadcaster_logo_url, country')
+    .select('broadcaster_name, broadcaster_logo_url, country, source, confidence, verified')
     .eq('match_id', String(matchId))
     .order('broadcaster_name', { ascending: true })
 
   if (response.error) {
+    const message = response.error.message?.toLowerCase() ?? ''
+    const isMissingTrustColumns =
+      response.error.code === '42703' ||
+      response.error.code === 'PGRST204' ||
+      message.includes('source') ||
+      message.includes('confidence') ||
+      message.includes('verified') ||
+      message.includes('schema cache')
+
+    if (isMissingTrustColumns) {
+      const fallback = await supabase
+        .from('match_broadcasts')
+        .select('broadcaster_name, broadcaster_logo_url, country')
+        .eq('match_id', String(matchId))
+        .order('broadcaster_name', { ascending: true })
+
+      if (fallback.error) {
+        if (isMissingOptionalTable(fallback.error, 'match_broadcasts')) return []
+        throw fallback.error
+      }
+
+      return ((fallback.data ?? []) as StoredMatchBroadcasterRow[]).filter(isTrustedStoredBroadcaster)
+    }
+
     if (isMissingOptionalTable(response.error, 'match_broadcasts')) return []
     throw response.error
   }
 
-  return (response.data ?? []) as StoredMatchBroadcasterRow[]
+  return ((response.data ?? []) as StoredMatchBroadcasterRow[]).filter(isTrustedStoredBroadcaster)
 }
 
 function mapStoredAuditEvent(
@@ -2186,6 +2257,7 @@ function buildMatchAuditInfo(input: {
     : null
   const fixture = input.fixturePayload?.fixture
   const status = fixture?.status ?? null
+  const storedStatus = input.matchInfo?.status ?? null
 
   return {
     id: input.match?.id ?? null,
@@ -2210,11 +2282,15 @@ function buildMatchAuditInfo(input: {
       external_id: awayTeam?.external_id ?? null,
       name: awayTeam?.name ?? null,
     },
-    status: status?.short ?? input.matchInfo?.status ?? null,
-    statusLong: status?.long ?? null,
+    status: storedStatus ?? status?.short ?? null,
+    statusLong:
+      (storedStatus ? getStoredStatusLong(storedStatus) : null) ??
+      status?.long ??
+      null,
     elapsed:
-      getFixtureStatusElapsedMinute(status) ??
+      input.matchInfo?.final_elapsed ??
       input.matchInfo?.elapsed ??
+      getFixtureStatusElapsedMinute(status) ??
       null,
     final_elapsed: input.matchInfo?.final_elapsed ?? null,
     match_date: fixture?.date ?? input.matchInfo?.match_date ?? null,
@@ -2484,7 +2560,7 @@ export async function auditMatchDetailCache(
 
   if (!matchAuditInfo.stadium) missingSections.push('stadium')
   if (!matchAuditInfo.referee) missingSections.push('referee')
-  if (!broadcasters.length && !matchInfo?.broadcast_channel) missingSections.push('tv')
+  if (!broadcasters.length) missingSections.push('tv')
 
   return {
     fixtureExternalId,
@@ -2493,20 +2569,15 @@ export async function auditMatchDetailCache(
     ...snapshot,
     ...detailedSections,
     broadcasts: {
-      hasTv: broadcasters.length > 0 || Boolean(matchInfo?.broadcast_channel),
-      broadcasters: broadcasters.length
-        ? broadcasters.map((broadcaster) => ({
-            name: broadcaster.broadcaster_name ?? null,
-            logoUrl: broadcaster.broadcaster_logo_url ?? null,
-            country: broadcaster.country ?? null,
-          }))
-        : matchInfo?.broadcast_channel
-          ? [{
-              name: matchInfo.broadcast_channel,
-              logoUrl: matchInfo.broadcast_logo_url ?? null,
-              country: null,
-            }]
-          : [],
+      hasTv: broadcasters.length > 0,
+      broadcasters: broadcasters.map((broadcaster) => ({
+        name: broadcaster.broadcaster_name ?? null,
+        logoUrl: broadcaster.broadcaster_logo_url ?? null,
+        country: broadcaster.country ?? null,
+        source: broadcaster.source ?? null,
+        confidence: broadcaster.confidence ?? null,
+        verified: broadcaster.verified ?? null,
+      })),
     },
     highlights: {
       hasHighlights: Boolean(highlightUrl),
@@ -2805,6 +2876,12 @@ function clampBulkLimit(limit: number | null | undefined) {
   return Math.min(Math.floor(limit), BULK_SYNC_MAX_LIMIT)
 }
 
+function clampBulkLookbackDays(days: number | null | undefined) {
+  if (!Number.isFinite(days ?? NaN) || days === null || days === undefined || days < 0) return null
+
+  return Math.min(Math.floor(days), 365)
+}
+
 function normalizeBulkStatuses(input?: string[] | null) {
   return (input ?? [])
     .flatMap((status) => String(status).split(','))
@@ -2846,6 +2923,18 @@ function buildBulkDateRange(input: SyncMatchDetailsBulkOptions, now: Date) {
     }
   }
 
+  const lookbackDays = clampBulkLookbackDays(input.lookbackDays)
+  if (lookbackDays !== null) {
+    const today = getArgentinaDateISO(now)
+    const dateFrom = addDaysToISO(today, -lookbackDays)
+    const tomorrow = addDaysToISO(today, 1)
+
+    return {
+      dateFrom: getArgentinaDayUtcRange(dateFrom).startUtc,
+      dateTo: getArgentinaDayUtcRange(tomorrow).endUtc,
+    }
+  }
+
   if (input.liveOnly) {
     return {
       dateFrom: null,
@@ -2881,7 +2970,8 @@ async function fetchBulkMatchCandidates(
 ) {
   const range = buildBulkDateRange(input, now)
   const statuses = getBulkStatuses(input)
-  const requestedLimit = input.missingDetailsOnly ? Math.min(limit * 4, 300) : limit
+  const requestedLimit = input.missingDetailsOnly ? Math.min(Math.max(limit * 10, 500), 1_000) : limit
+  const orderAscending = Boolean(input.futureDays !== null && input.futureDays !== undefined)
   const selectBase =
     'id, external_id, league_id, home_team_id, away_team_id, match_date, status, elapsed, home_score, away_score'
   const optionalSelectColumns = ['detail_last_synced_at', 'final_detail_synced_at']
@@ -2892,7 +2982,7 @@ async function fetchBulkMatchCandidates(
     .from('matches')
     .select(selectOptional)
     .not('external_id', 'is', null)
-    .order('match_date', { ascending: true, nullsFirst: false })
+    .order('match_date', { ascending: orderAscending, nullsFirst: false })
     .limit(requestedLimit)
 
   if (range.dateFrom) query = query.gte('match_date', range.dateFrom)
@@ -2922,7 +3012,7 @@ async function fetchBulkMatchCandidates(
       .from('matches')
       .select(selectBase)
       .not('external_id', 'is', null)
-      .order('match_date', { ascending: true, nullsFirst: false })
+      .order('match_date', { ascending: orderAscending, nullsFirst: false })
       .limit(requestedLimit)
 
     if (range.dateFrom) fallbackQuery = fallbackQuery.gte('match_date', range.dateFrom)
@@ -3292,12 +3382,9 @@ function isAuditProblem(
   audit: Awaited<ReturnType<typeof auditMatchDetailCache>>,
   match: StoredMatchBulkRow,
   input: SyncMatchDetailsBulkOptions,
-  now: Date,
-  controlColumns: MatchDetailControlColumnStatus
+  now: Date
 ) {
   const auditRecord = audit as Record<string, unknown>
-  const statistics = asRecord(auditRecord.statistics)
-  const mismatches = asArray(statistics?.mismatches)
   const auditMatch = asRecord(auditRecord.match)
   const status = eventField(auditMatch?.status) ?? match.status
   const upcoming = isUpcomingStatus(status)
@@ -3315,22 +3402,12 @@ function isAuditProblem(
   const markerHasGoalsWithoutGoalEvents = scoreTotal > 0 && audit.hasEvents && !audit.hasGoals
   const lineupsIncomplete =
     audit.hasLineups && (!audit.homeStartersCount || !audit.awayStartersCount)
-  const rowIncludesFinalDetailSyncedAt =
-    Object.prototype.hasOwnProperty.call(match, 'final_detail_synced_at')
-  const finalSyncMissing =
-    rowIncludesFinalDetailSyncedAt &&
-    controlColumns.available.has('final_detail_synced_at') &&
-    isFinishedStatus(status) &&
-    !match.final_detail_synced_at
-
   return (
     !audit.hasEvents ||
     !audit.hasStatistics ||
     !audit.hasLineups ||
     lineupsIncomplete ||
-    markerHasGoalsWithoutGoalEvents ||
-    mismatches.length > 0 ||
-    finalSyncMissing
+    markerHasGoalsWithoutGoalEvents
   )
 }
 
@@ -3480,7 +3557,7 @@ export async function syncMatchDetailsBulk(
       matchId: String(row.id),
     })
 
-    if (isAuditProblem(audit, row, input, now, controlColumns)) filteredRows.push(row)
+    if (isAuditProblem(audit, row, input, now)) filteredRows.push(row)
     if (filteredRows.length >= limit) break
   }
 
@@ -3685,6 +3762,7 @@ export async function syncMatchDetailsBulk(
       recentFinishedOnly: Boolean(input.recentFinishedOnly),
       missingDetailsOnly: Boolean(input.missingDetailsOnly),
       futureDays: input.futureDays ?? null,
+      lookbackDays: clampBulkLookbackDays(input.lookbackDays),
       force: Boolean(input.force),
     },
     estimatedApiRequests,
@@ -3781,6 +3859,12 @@ export async function syncMatchDetail(
     fixturePayload ??
     (asRecord(beforeCache?.fixture_payload) as ApiFixtureDetail | null) ??
     null
+  const shouldMarkFinalDetailSynced =
+    Boolean(fixturePayload?.fixture?.status) &&
+    isFinishedStatus(getCanonicalMatchStatusFromApi(fixturePayload?.fixture?.status)) &&
+    eventsForCache.length > 0 &&
+    countApiLineupPlayers(lineupsForCache) > 0 &&
+    countApiStatisticsValues(statisticsForCache) > 0
   const missingFromApi = [
     sections.fixture && !fixturePayload ? 'fixture' : null,
     sections.events && !events.length ? 'events' : null,
@@ -3813,6 +3897,8 @@ export async function syncMatchDetail(
       },
       { onConflict: 'fixture_external_id' }
     )
+    .select('fixture_payload, events, lineups, statistics')
+    .maybeSingle()
   let cacheUpserted = !cacheResponse.error
   let detailTable: SyncMatchDetailPersistenceInfo['detailTable'] = cacheUpserted
     ? 'football_match_detail_cache'
@@ -3852,7 +3938,8 @@ export async function syncMatchDetail(
         match,
         fixturePayload,
         sections,
-        input.controlColumns
+        input.controlColumns,
+        { markFinalDetailSynced: shouldMarkFinalDetailSynced }
       )
     } catch (error) {
       errors.push(serializeError(error, 'supabase'))
@@ -3879,8 +3966,30 @@ export async function syncMatchDetail(
     warnings.push('El fixture existe en API-Football pero no esta sincronizado en matches.')
   }
 
-  const afterCache = await readDetailCacheByFixture(supabase, fixtureExternalId)
+  const selectedCache = (cacheResponse.data as DetailCacheRow | null) ?? null
+  const afterCache = mergeDetailCacheRows(
+    await readDetailCacheByFixture(supabase, fixtureExternalId),
+    selectedCache
+  )
   const storedCounts = getCacheDetailCounts(afterCache)
+  if (sections.lineups && fetchedLineupPlayers > 0 && storedCounts.lineups === 0) {
+    errors.push({
+      message: 'API-Football devolvio alineaciones, pero el cache de detalle quedo sin jugadores.',
+      code: 'detail_cache_lineups_write_verification_failed',
+      detail: `provider=${fetchedLineupPlayers}; stored=${storedCounts.lineups}; table=${detailTable ?? 'none'}`,
+      hint: 'Verificar football_match_detail_cache.lineups, unique fixture_external_id y permisos de service_role.',
+      source: 'validation',
+    })
+  }
+  if (sections.statistics && fetchedStatisticsValues > 0 && storedCounts.statistics === 0) {
+    errors.push({
+      message: 'API-Football devolvio estadisticas, pero el cache de detalle quedo sin statistics.',
+      code: 'detail_cache_statistics_write_verification_failed',
+      detail: `provider=${fetchedStatisticsValues}; stored=${storedCounts.statistics}; table=${detailTable ?? 'none'}`,
+      hint: 'Verificar football_match_detail_cache.statistics, unique fixture_external_id y permisos de service_role.',
+      source: 'validation',
+    })
+  }
   const after = buildAuditSnapshot(afterCache)
   const renderCounts = buildRenderCounts({
     cache: afterCache,

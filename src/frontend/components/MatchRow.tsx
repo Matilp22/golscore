@@ -157,8 +157,6 @@ export default function MatchRow({
   status,
   goalScorers,
   broadcasters,
-  broadcastChannel,
-  broadcastLogoUrl,
 }: MatchRowProps) {
   const normalizedStatus = status.toLowerCase()
   const isLive = normalizedStatus.includes('en vivo') || normalizedStatus === 'entretiempo'
@@ -170,12 +168,7 @@ export default function MatchRow({
       ? 'vs'
       : score
   const centerStatus = isTimeStatus ? '' : formatCenterStatus(status, String(centerLabel))
-  const allBroadcasters =
-    broadcasters?.length
-      ? broadcasters
-      : broadcastChannel
-        ? [{ name: broadcastChannel, logoUrl: broadcastLogoUrl, country: null }]
-        : []
+  const allBroadcasters = broadcasters?.length ? broadcasters : []
   const broadcastText = allBroadcasters.map((broadcaster) => broadcaster.name).join(' / ')
 
   return (

@@ -8,6 +8,10 @@ import GroupStageGrid from '@/frontend/components/GroupStage'
 import LeaderListInteractive from '@/frontend/components/LeaderListInteractive'
 import TournamentChampionsButton from '@/frontend/components/TournamentChampionsButton'
 import {
+  ConmebolFixtureAgenda,
+  ConmebolKnockoutBracket,
+} from '@/frontend/components/ConmebolTournamentStage'
+import {
   UefaKnockoutBracket,
   UefaMatchPhaseNavigator,
 } from '@/frontend/components/UefaTournamentStage'
@@ -21,6 +25,10 @@ import {
 import {
   buildLigaProfesionalPromediosStandingForSeason,
 } from '@/server/liga-profesional/promedios'
+import {
+  buildConmebolBracketViewModel,
+  type ConmebolBracketViewModel,
+} from '@/server/conmebol-bracket'
 import {
   getLeagueFixtures,
   getLeagueLeaders,
@@ -70,6 +78,7 @@ import {
 import {
   formatMatchScoreWithPenalties,
 } from '@/shared/utils/match-display'
+import type { ConmebolCompetitionType } from '@/shared/utils/conmebol-rounds'
 
 type PageProps = {
   params: Promise<{ id: string }>
@@ -773,6 +782,13 @@ const CONMEBOL_GROUP_STAGE_TOURNAMENT_KEYS = new Set([
 
 function isConmebolGroupStage(key: string) {
   return CONMEBOL_GROUP_STAGE_TOURNAMENT_KEYS.has(key)
+}
+
+function getConmebolCompetitionType(key: string): ConmebolCompetitionType | null {
+  if (key === 'internacional-libertadores') return 'libertadores'
+  if (key === 'internacional-sudamericana') return 'sudamericana'
+
+  return null
 }
 
 function usesGroupStageCards(key: string) {
@@ -2130,7 +2146,9 @@ export default async function LigaPage({ params }: PageProps) {
   let redCards: TopPlayerRow[] = []
   let fixtures: LeagueFixtureSummary[] = []
   let promedioTable: PromedioRow[] = []
+  let conmebolViewModel: ConmebolBracketViewModel | null = null
   const displayOptions = getTournamentDisplayOptions(tournament)
+  const conmebolCompetitionType = getConmebolCompetitionType(tournament.key)
   const copaArgentinaChampions =
     tournament.key === 'argentina-copa-argentina'
       ? await getCopaArgentinaChampions()
@@ -2234,6 +2252,14 @@ export default async function LigaPage({ params }: PageProps) {
     }
   } catch {
     errorMessage = 'Datos temporalmente no disponibles. Intentá nuevamente en unos minutos.'
+  }
+
+  if (conmebolCompetitionType && resolvedTournament) {
+    conmebolViewModel = await buildConmebolBracketViewModel({
+      competition: conmebolCompetitionType,
+      leagueExternalId: resolvedTournament.leagueId,
+      season: resolvedTournament.season,
+    }).catch(() => null)
   }
 
   const { primaryGroups, secondaryGroups } = splitPrimaryGroups(
@@ -2437,6 +2463,71 @@ export default async function LigaPage({ params }: PageProps) {
             </>
           ) : null}
 
+          {showConmebolGroupStage && conmebolCompetitionType ? (
+            <>
+              <ConmebolKnockoutBracket
+                competitionType={conmebolCompetitionType}
+                season={resolvedTournament?.season ?? 2026}
+                phases={conmebolViewModel?.bracket.phases}
+                matches={fixtures}
+                series={conmebolViewModel?.bracket.series ?? []}
+                placeholders={conmebolViewModel?.bracket.placeholders}
+              />
+
+              <ConmebolFixtureAgenda
+                competitionType={conmebolCompetitionType}
+                matches={fixtures}
+                series={conmebolViewModel?.bracket.series ?? []}
+                placeholders={conmebolViewModel?.bracket.placeholders}
+              />
+
+              {shouldRenderStandings && displayPrimaryGroups.length ? (
+                <GroupStageGrid
+                  groups={displayPrimaryGroups.map((group, index) => {
+                    const groupId = getGroupId(group)
+                    const tableLegendItems = getTableLegendItems(
+                      group.rows,
+                      displayOptions.rule,
+                      displayOptions.protected
+                    )
+
+                    return {
+                      id: `${groupId}-${index}`,
+                      title: getDisplayGroupName(group.name),
+                      table: (
+                        <>
+                          <StandingsTable
+                            rows={group.rows}
+                            compact
+                            fitNarrow
+                            rule={displayOptions.rule}
+                            allowLegacyFallback={false}
+                            preferConfiguredRules
+                          />
+                          {tableLegendItems.length ? (
+                            <TableLegend items={tableLegendItems} />
+                          ) : null}
+                        </>
+                      ),
+                      fixtures: (
+                        <GroupFixtures fixtures={fixturesByGroup.get(groupId) || []} />
+                      ),
+                    }
+                  })}
+                />
+              ) : shouldRenderStandings && !displayOptions.hideEmptyStandings ? (
+                <SectionCard
+                  title="Grupos"
+                  subtitle="Fase de grupos"
+                >
+                  <p className="text-sm text-[#8d98a7]">
+                    No hay grupos disponibles para este torneo.
+                  </p>
+                </SectionCard>
+              ) : null}
+            </>
+          ) : null}
+
           {!isUefaLeaguePhaseTournament && !showGroupStageCards && knockoutRounds.length ? (
             <BracketView
               rounds={knockoutRounds}
@@ -2467,7 +2558,7 @@ export default async function LigaPage({ params }: PageProps) {
             />
           ) : null}
 
-          {!isUefaLeaguePhaseTournament && shouldRenderStandings && displayPrimaryGroups.length ? (
+          {!isUefaLeaguePhaseTournament && !showConmebolGroupStage && shouldRenderStandings && displayPrimaryGroups.length ? (
             showGroupStageCards ? (
               <>
                 <GroupStageGrid
@@ -2537,7 +2628,7 @@ export default async function LigaPage({ params }: PageProps) {
                 })}
               </div>
             )
-          ) : !isUefaLeaguePhaseTournament && shouldRenderStandings && !displayOptions.hideEmptyStandings ? (
+          ) : !isUefaLeaguePhaseTournament && !showConmebolGroupStage && shouldRenderStandings && !displayOptions.hideEmptyStandings ? (
             <SectionCard
               title="Tabla de posiciones"
               subtitle="Algunos torneos de copa no publican tabla tradicional."

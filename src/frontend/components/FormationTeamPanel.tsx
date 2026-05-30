@@ -10,7 +10,9 @@ type TeamStyle = {
   border: string
 }
 
-type PanelPlayer = {
+export type LineupPanelTab = 'starters' | 'substitutes'
+
+export type FormationPanelPlayer = {
   id: string
   name: string
   number?: number
@@ -19,6 +21,8 @@ type PanelPlayer = {
   style: TeamStyle
   isCaptain?: boolean
   goals?: number
+  penaltyGoals?: number
+  ownGoals?: number
   missedPenalties?: number
   yellowCards?: number
   redCards?: number
@@ -32,9 +36,12 @@ type PanelPlayer = {
 type FormationTeamPanelProps = {
   title: string
   coachName?: string
-  starters: PanelPlayer[]
-  substitutes: PanelPlayer[]
+  starters: FormationPanelPlayer[]
+  substitutes: FormationPanelPlayer[]
   align: 'left' | 'right'
+  activeTab?: LineupPanelTab
+  onActiveTabChange?: (tab: LineupPanelTab) => void
+  showTabs?: boolean
 }
 
 function CaptainBadge() {
@@ -64,16 +71,22 @@ function Shirt({ number, style }: { number?: number | string; style: TeamStyle }
 
 function TinyEventBadges({
   goals = 0,
+  penaltyGoals = 0,
+  ownGoals = 0,
   missedPenalties = 0,
   yellowCards = 0,
   redCards = 0,
 }: {
   goals?: number
+  penaltyGoals?: number
+  ownGoals?: number
   missedPenalties?: number
   yellowCards?: number
   redCards?: number
 }) {
-  if (!goals && !missedPenalties && !yellowCards && !redCards) return null
+  if (!goals && !penaltyGoals && !ownGoals && !missedPenalties && !yellowCards && !redCards) {
+    return null
+  }
 
   const ballIcon = (
     <svg viewBox="0 0 32 32" aria-hidden="true" className="h-[13px] w-[13px] overflow-visible">
@@ -102,6 +115,20 @@ function TinyEventBadges({
         <span className="inline-flex min-h-3.5 min-w-3.5 items-center justify-center text-[#7ff0b2]">
           {ballIcon}
           {goals > 1 ? <span className="ml-0.5 text-[8px] font-bold">{goals}</span> : null}
+        </span>
+      ) : null}
+      {penaltyGoals ? (
+        <span className="inline-flex items-center gap-0.5 text-[9px] font-black text-[#7ff0b2]" title="Gol de penal">
+          <span className="relative inline-flex h-4 w-5 items-center justify-center text-white">
+            <span className="absolute inset-x-0 top-[1px] h-2.5 rounded-t-[2px] border-x border-t border-current" />
+            <span className="relative scale-[0.62]">{ballIcon}</span>
+          </span>
+          {penaltyGoals > 1 ? <span>{penaltyGoals}</span> : null}
+        </span>
+      ) : null}
+      {ownGoals ? (
+        <span className="inline-flex rounded bg-[#3b1919] px-1 py-0.5 text-[8px] font-black uppercase leading-none text-[#ffb3b3]" title="Gol en contra">
+          e/c{ownGoals > 1 ? ` ${ownGoals}` : ''}
         </span>
       ) : null}
       {missedPenalties ? (
@@ -138,9 +165,15 @@ export default function FormationTeamPanel({
   starters,
   substitutes,
   align,
+  activeTab,
+  onActiveTabChange,
+  showTabs = true,
 }: FormationTeamPanelProps) {
-  const [activeTab, setActiveTab] = useState<'starters' | 'substitutes'>('starters')
-  const activePlayers = activeTab === 'starters' ? starters : substitutes
+  const defaultTab = starters.length ? 'starters' : 'substitutes'
+  const [internalActiveTab, setInternalActiveTab] = useState<LineupPanelTab>(defaultTab)
+  const selectedTab = activeTab ?? internalActiveTab
+  const activePlayers = selectedTab === 'starters' ? starters : substitutes
+  const setSelectedTab = onActiveTabChange ?? setInternalActiveTab
 
   return (
     <div className="w-full rounded-2xl border border-white/8 bg-[#111418] p-2 sm:p-3 md:p-4">
@@ -156,24 +189,26 @@ export default function FormationTeamPanel({
       </div>
 
       <div className="mt-3">
-        <div
-          className={`mb-2 flex rounded-xl border border-white/6 bg-[#161a20] p-1 ${
-            align === 'right' ? 'justify-end' : 'justify-start'
-          }`}
-        >
-          <LineupTabButton
-            active={activeTab === 'starters'}
-            label="Titulares"
-            count={starters.length}
-            onClick={() => setActiveTab('starters')}
-          />
-          <LineupTabButton
-            active={activeTab === 'substitutes'}
-            label="Suplentes"
-            count={substitutes.length}
-            onClick={() => setActiveTab('substitutes')}
-          />
-        </div>
+        {showTabs ? (
+          <div
+            className={`mb-2 flex rounded-xl border border-white/6 bg-[#161a20] p-1 ${
+              align === 'right' ? 'justify-end' : 'justify-start'
+            }`}
+          >
+            <LineupTabButton
+              active={selectedTab === 'starters'}
+              label="Titulares"
+              count={starters.length}
+              onClick={() => setSelectedTab('starters')}
+            />
+            <LineupTabButton
+              active={selectedTab === 'substitutes'}
+              label="Suplentes"
+              count={substitutes.length}
+              onClick={() => setSelectedTab('substitutes')}
+            />
+          </div>
+        ) : null}
 
         <PlayerSection
           players={activePlayers}
@@ -216,7 +251,7 @@ function PlayerSection({
   players,
   align,
 }: {
-  players: PanelPlayer[]
+  players: FormationPanelPlayer[]
   align: 'left' | 'right'
 }) {
   return (
@@ -240,11 +275,12 @@ function PlayerRow({
   player,
   align,
 }: {
-  player: PanelPlayer
+  player: FormationPanelPlayer
   align: 'left' | 'right'
 }) {
   return (
     <div
+      data-match-detail="lineup-player"
       className={`flex items-center gap-2 rounded-xl border border-white/6 bg-[#161a20] px-2 py-1.5 md:gap-2.5 md:px-3 ${
         align === 'right' ? 'flex-row-reverse text-right' : ''
       }`}
@@ -290,6 +326,8 @@ function PlayerRow({
 
       <TinyEventBadges
         goals={player.goals}
+        penaltyGoals={player.penaltyGoals}
+        ownGoals={player.ownGoals}
         missedPenalties={player.missedPenalties}
         yellowCards={player.yellowCards}
         redCards={player.redCards}

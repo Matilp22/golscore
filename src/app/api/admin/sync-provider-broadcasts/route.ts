@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
-import { auditMatchInfo } from '@/server/match-info-sync'
+import { syncProviderBroadcasts } from '@/server/broadcasts/admin'
 import { serializeError } from '@/server/match-detail-cache'
+import { addDaysToISO, getArgentinaDateISO } from '@/shared/utils/argentina-time'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -29,8 +30,10 @@ function isAuthorized(request: Request) {
   return getAuthorizationToken(request) === cronSecret
 }
 
-function readBoolean(value: string | null) {
-  return ['1', 'true', 'yes', 'si'].includes((value ?? '').trim().toLowerCase())
+function readBoolean(value: string | null, fallback = false) {
+  if (value === null) return fallback
+
+  return ['1', 'true', 'yes', 'si'].includes(value.trim().toLowerCase())
 }
 
 function readNumber(value: string | null) {
@@ -47,27 +50,34 @@ export async function GET(request: Request) {
 
   try {
     const { searchParams } = new URL(request.url)
+    const today = getArgentinaDateISO()
+    const date = searchParams.get('date')
+    const futureDays = readNumber(searchParams.get('futureDays'))
+    const dateFrom = date ?? searchParams.get('dateFrom') ?? today
+    const dateTo =
+      date ??
+      searchParams.get('dateTo') ??
+      (futureDays !== null ? addDaysToISO(dateFrom, futureDays) : dateFrom)
     const supabase = getSupabaseAdminClient()
-    const result = await auditMatchInfo(supabase, {
-      matchId: searchParams.get('matchId') ?? searchParams.get('match_id'),
-      fixture: readNumber(searchParams.get('fixture')),
-      date: searchParams.get('date'),
-      dateFrom: searchParams.get('dateFrom'),
-      dateTo: searchParams.get('dateTo'),
-      futureDays: readNumber(searchParams.get('futureDays')),
-      leagueExternalId: readNumber(searchParams.get('leagueExternalId')),
-      includeProvider: readBoolean(searchParams.get('includeProvider')),
-      onlyProblems: readBoolean(searchParams.get('onlyProblems')),
-      limit: readNumber(searchParams.get('limit')),
+    const result = await syncProviderBroadcasts(supabase, {
+      dateFrom,
+      dateTo,
+      leagueExternalId: searchParams.get('leagueExternalId'),
+      leagueName: searchParams.get('leagueName'),
+      includeApi: readBoolean(searchParams.get('includeApi'), false),
+      dryRun: readBoolean(searchParams.get('dryRun'), true),
+      force: readBoolean(searchParams.get('force'), false),
+      limit: readNumber(searchParams.get('limit')) ?? 50,
     })
 
     return jsonNoStore({
-      endpoint: 'match-info-audit',
+      endpoint: 'sync-provider-broadcasts',
+      dateRange: { dateFrom, dateTo },
       ...result,
     })
   } catch (error) {
     const serialized = serializeError(error, 'unknown')
-    console.error('[match-info-audit] Error completo', serialized)
+    console.error('[sync-provider-broadcasts] Error completo', serialized)
 
     return jsonNoStore(
       {
@@ -81,4 +91,8 @@ export async function GET(request: Request) {
       { status: 500 }
     )
   }
+}
+
+export async function POST(request: Request) {
+  return GET(request)
 }

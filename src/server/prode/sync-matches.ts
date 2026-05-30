@@ -946,6 +946,10 @@ async function syncMatchBroadcastsFromFixtureIfSupported(
     broadcaster_name: broadcast.broadcaster_name,
     broadcaster_logo_url: broadcast.broadcaster_logo_url,
     country: broadcast.country,
+    source: 'provider',
+    confidence: 'high',
+    verified: true,
+    created_by_rule_id: null,
   }))
 
   const response = await withTimeout(

@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
-import { auditMatchInfo } from '@/server/match-info-sync'
+import { auditBroadcastRules } from '@/server/broadcasts/admin'
 import { serializeError } from '@/server/match-detail-cache'
+import { addDaysToISO, getArgentinaDateISO } from '@/shared/utils/argentina-time'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -29,10 +30,6 @@ function isAuthorized(request: Request) {
   return getAuthorizationToken(request) === cronSecret
 }
 
-function readBoolean(value: string | null) {
-  return ['1', 'true', 'yes', 'si'].includes((value ?? '').trim().toLowerCase())
-}
-
 function readNumber(value: string | null) {
   if (!value?.trim()) return null
   const parsed = Number(value)
@@ -47,27 +44,37 @@ export async function GET(request: Request) {
 
   try {
     const { searchParams } = new URL(request.url)
+    const today = getArgentinaDateISO()
+    const date = searchParams.get('date')
+    const futureDays = readNumber(searchParams.get('futureDays'))
+    const dateFrom = date ?? searchParams.get('dateFrom') ?? today
+    const dateTo =
+      date ??
+      searchParams.get('dateTo') ??
+      (futureDays !== null ? addDaysToISO(dateFrom, futureDays) : dateFrom)
     const supabase = getSupabaseAdminClient()
-    const result = await auditMatchInfo(supabase, {
-      matchId: searchParams.get('matchId') ?? searchParams.get('match_id'),
-      fixture: readNumber(searchParams.get('fixture')),
-      date: searchParams.get('date'),
-      dateFrom: searchParams.get('dateFrom'),
-      dateTo: searchParams.get('dateTo'),
-      futureDays: readNumber(searchParams.get('futureDays')),
-      leagueExternalId: readNumber(searchParams.get('leagueExternalId')),
-      includeProvider: readBoolean(searchParams.get('includeProvider')),
-      onlyProblems: readBoolean(searchParams.get('onlyProblems')),
+    const result = await auditBroadcastRules(supabase, {
+      dateFrom,
+      dateTo,
+      leagueExternalId: searchParams.get('leagueExternalId'),
+      leagueName: searchParams.get('leagueName'),
       limit: readNumber(searchParams.get('limit')),
     })
 
     return jsonNoStore({
-      endpoint: 'match-info-audit',
+      endpoint: 'broadcast-rules-audit',
+      ok: true,
+      dateRange: {
+        dateFrom,
+        dateTo,
+      },
+      created: result.broadcastsCreated,
+      updated: result.broadcastsUpdated,
       ...result,
     })
   } catch (error) {
     const serialized = serializeError(error, 'unknown')
-    console.error('[match-info-audit] Error completo', serialized)
+    console.error('[broadcast-rules-audit] Error completo', serialized)
 
     return jsonNoStore(
       {

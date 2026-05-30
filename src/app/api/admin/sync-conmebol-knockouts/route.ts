@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server'
 
-import { getSupabaseAdminClient } from '@/lib/supabase/admin'
-import { auditMatchInfo } from '@/server/match-info-sync'
-import { serializeError } from '@/server/match-detail-cache'
+import {
+  getDefaultConmebolLeagueExternalId,
+  parseConmebolCompetition,
+  syncConmebolKnockouts,
+} from '@/server/conmebol-bracket'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -10,6 +12,7 @@ export const fetchCache = 'force-no-store'
 function jsonNoStore(body: unknown, init?: ResponseInit) {
   const response = NextResponse.json(body, init)
   response.headers.set('Cache-Control', 'no-store, max-age=0')
+
   return response
 }
 
@@ -30,11 +33,14 @@ function isAuthorized(request: Request) {
 }
 
 function readBoolean(value: string | null) {
-  return ['1', 'true', 'yes', 'si'].includes((value ?? '').trim().toLowerCase())
+  if (value === null) return false
+
+  return ['1', 'true', 'yes', 'si'].includes(value.toLowerCase())
 }
 
 function readNumber(value: string | null) {
-  if (!value?.trim()) return null
+  if (value === null || value.trim() === '') return null
+
   const parsed = Number(value)
 
   return Number.isFinite(parsed) ? parsed : null
@@ -47,38 +53,44 @@ export async function GET(request: Request) {
 
   try {
     const { searchParams } = new URL(request.url)
-    const supabase = getSupabaseAdminClient()
-    const result = await auditMatchInfo(supabase, {
-      matchId: searchParams.get('matchId') ?? searchParams.get('match_id'),
-      fixture: readNumber(searchParams.get('fixture')),
-      date: searchParams.get('date'),
-      dateFrom: searchParams.get('dateFrom'),
-      dateTo: searchParams.get('dateTo'),
-      futureDays: readNumber(searchParams.get('futureDays')),
-      leagueExternalId: readNumber(searchParams.get('leagueExternalId')),
-      includeProvider: readBoolean(searchParams.get('includeProvider')),
-      onlyProblems: readBoolean(searchParams.get('onlyProblems')),
-      limit: readNumber(searchParams.get('limit')),
+    const competition = parseConmebolCompetition(searchParams.get('competition'))
+
+    if (!competition) {
+      return jsonNoStore(
+        { ok: false, error: 'competition debe ser libertadores o sudamericana.' },
+        { status: 400 }
+      )
+    }
+
+    const leagueExternalId =
+      readNumber(searchParams.get('leagueExternalId')) ??
+      getDefaultConmebolLeagueExternalId(competition)
+    const season = readNumber(searchParams.get('season')) ?? 2026
+    const result = await syncConmebolKnockouts({
+      competition,
+      leagueExternalId,
+      season,
+      force: readBoolean(searchParams.get('force')),
+      dryRun: readBoolean(searchParams.get('dryRun')),
     })
 
-    return jsonNoStore({
-      endpoint: 'match-info-audit',
-      ...result,
-    })
+    return jsonNoStore(result)
   } catch (error) {
-    const serialized = serializeError(error, 'unknown')
-    console.error('[match-info-audit] Error completo', serialized)
+    console.error('[sync-conmebol-knockouts] Error completo', error)
 
     return jsonNoStore(
       {
         ok: false,
-        error: serialized.message,
-        code: serialized.code,
-        detail: serialized.detail,
-        hint: serialized.hint,
-        source: serialized.source,
+        error:
+          error instanceof Error
+            ? error.message
+            : 'No se pudo sincronizar cruces Conmebol.',
       },
       { status: 500 }
     )
   }
+}
+
+export async function POST(request: Request) {
+  return GET(request)
 }

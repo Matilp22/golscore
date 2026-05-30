@@ -1,15 +1,13 @@
 ﻿import {
-  getMatchDetail,
   type MatchBroadcaster,
   type MatchEvent,
   type MatchFixture,
   type MatchLineup,
-  type MatchStatisticsTeam,
   type PlayerWrapper,
 } from '@/lib/api-football'
 import AutoRefresh from '@/frontend/components/AutoRefresh'
 import { TeamLogo as AssetTeamLogo } from '@/frontend/components/AssetImage'
-import FormationTeamPanel from '@/frontend/components/FormationTeamPanel'
+import LineupTabs from '@/frontend/components/LineupTabs'
 import SafeImage from '@/frontend/components/SafeImage'
 import {
   formatMatchDateTimeArgentina,
@@ -17,27 +15,19 @@ import {
 } from '@/shared/utils/argentina-time'
 import { formatEventMinute } from '@/shared/utils/event-minute'
 import {
-  getTimelineEvents,
   getPlayerIncidentsForLineup,
   isInjuryEvent,
   isMissedPenaltyEvent,
-  isPenaltyShootoutEvent,
   getSubstitutionMap,
   normalizeFootballEventText,
   normalizeMatchEvent,
   normalizeSubstitutionEvent,
   translateMatchEventDetail,
 } from '@/shared/utils/football-events'
-import {
-  formatMatchScoreWithPenalties,
-  hasPenaltyShootoutScore,
-} from '@/shared/utils/match-display'
+import { formatMatchScoreWithPenalties } from '@/shared/utils/match-display'
 import { getEventElapsedMinute, getFixtureStatusElapsedMinute } from '@/shared/utils/match-minute'
 import { isFinishedStatus } from '@/shared/utils/match-status'
-import {
-  buildDisciplineStatisticsFromEvents,
-  normalizeMatchStatistics,
-} from '@/shared/utils/match-statistics'
+import { buildMatchDetailViewModel } from '@/server/match-detail-view-model'
 import { getYouTubeThumbnailUrl, isValidYouTubeUrl } from '@/shared/utils/youtube'
 import Link from 'next/link'
 
@@ -281,24 +271,6 @@ function didPenaltyShootoutEventScore(event: MatchEvent) {
   ].join(' ').toLowerCase()
 
   return !(text.includes('missed') || text.includes('saved') || text.includes('failed'))
-}
-
-function isLikelyPenaltyShootoutAttempt(event: MatchEvent, hasPenaltyScore: boolean) {
-  if (!hasPenaltyScore) return false
-
-  const elapsed = event.time?.elapsed ?? 0
-  const extra = event.time?.extra ?? 0
-  const text = [
-    event.type,
-    event.detail,
-    event.comments,
-  ].join(' ').toLowerCase()
-
-  return (
-    elapsed >= 120 &&
-    extra > 0 &&
-    text.includes('penalty')
-  )
 }
 
 type EventKind = ReturnType<typeof normalizeMatchEvent>['kind']
@@ -1248,39 +1220,33 @@ type PlayerFieldState = {
   substitutionExtraMinute?: number | null
   substitutionReplacementName?: string | null
   goals: number
+  penaltyGoals: number
+  ownGoals: number
   missedPenalties: number
   yellowCards: number
   redCards: number
 }
 
-function matchesPlayerEvent(
-  candidate: { id?: number; name?: string } | undefined,
-  playerId?: number,
-  playerName?: string
-) {
-  if (!candidate) return false
-  if (playerId && candidate.id && candidate.id === playerId) return true
-
-  const normalizedCandidate = normalizeTeamRefName(candidate.name)
-  const normalizedPlayer = normalizeTeamRefName(playerName)
-
-  return Boolean(normalizedCandidate && normalizedPlayer && normalizedCandidate === normalizedPlayer)
-}
-
 function getPlayerFieldState(
   playerWrap: PlayerWrapper,
-  events: MatchEvent[]
+  teamId: number | string | null | undefined,
+  events: MatchEvent[],
+  substitutionContext: {
+    starters?: Array<{ id?: number | null; name?: string | null }>
+    substitutes?: Array<{ id?: number | null; name?: string | null }>
+  } = {}
 ): PlayerFieldState {
   const basePlayer = playerWrap.player || {}
   const displayName = basePlayer.name || 'Jugador'
   const displayNumber = basePlayer.number
-  const substitutionMap = getSubstitutionMap(events)
+  const substitutionMap = getSubstitutionMap(events, substitutionContext)
   const substitutionEvent = basePlayer.name
     ? substitutionMap.byPlayerOutName.get(normalizeFootballEventText(basePlayer.name))
     : null
 
   const incidents = getPlayerIncidentsForLineup(
     { id: basePlayer.id, name: displayName },
+    teamId,
     events
   )
 
@@ -1292,11 +1258,9 @@ function getPlayerFieldState(
     substitutionReplacementName: substitutionEvent?.playerInName
       ? abbreviatePlayerName(substitutionEvent.playerInName)
       : null,
-    goals: incidents.filter((incident) => (
-      incident.kind === 'goal' ||
-      incident.kind === 'penalty-goal' ||
-      incident.kind === 'own-goal'
-    )).length,
+    goals: incidents.filter((incident) => incident.kind === 'goal').length,
+    penaltyGoals: incidents.filter((incident) => incident.kind === 'penalty-goal').length,
+    ownGoals: incidents.filter((incident) => incident.kind === 'own-goal').length,
     missedPenalties: incidents.filter((incident) => incident.kind === 'penalty-missed').length,
     yellowCards: incidents.filter((incident) => incident.kind === 'yellow-card').length,
     redCards: incidents.filter((incident) => (
@@ -1322,22 +1286,38 @@ function incidenceSlots(count: number) {
 
 function FieldSideIncidences({
   goals,
+  penaltyGoals,
+  ownGoals,
   missedPenalties,
   yellowCards,
   redCards,
 }: {
   goals: number
+  penaltyGoals: number
+  ownGoals: number
   missedPenalties: number
   yellowCards: number
   redCards: number
 }) {
-  if (!goals && !missedPenalties && !yellowCards && !redCards) return null
+  if (!goals && !penaltyGoals && !ownGoals && !missedPenalties && !yellowCards && !redCards) {
+    return null
+  }
 
   return (
     <div className="absolute left-[calc(50%+16px)] top-1/2 flex -translate-y-1/2 items-center gap-1 whitespace-nowrap text-left sm:left-[calc(50%+27px)] sm:gap-1.5">
       {incidenceSlots(goals).map((_, index) => (
         <span key={`goal-${index}`} className="inline-flex items-center gap-0.5 text-[9px] font-black text-white sm:text-[11px]">
           <EventIcon kind="goal" size="lg" />
+        </span>
+      ))}
+      {incidenceSlots(penaltyGoals).map((_, index) => (
+        <span key={`penalty-goal-${index}`} className="inline-flex items-center gap-0.5 text-[9px] font-black text-white sm:text-[11px]" title="Gol de penal">
+          <EventIcon kind="penalty-goal" size="lg" />
+        </span>
+      ))}
+      {incidenceSlots(ownGoals).map((_, index) => (
+        <span key={`own-goal-${index}`} className="inline-flex rounded bg-[#3b1919] px-1 py-0.5 text-[8px] font-black uppercase leading-none text-[#ffb3b3] sm:text-[10px]" title="Gol en contra">
+          e/c
         </span>
       ))}
       {incidenceSlots(missedPenalties).map((_, index) => (
@@ -1388,6 +1368,7 @@ function PlayerOnField({
   formation,
   side,
   teamName,
+  teamId,
   isHome,
   lineup,
   events,
@@ -1400,6 +1381,7 @@ function PlayerOnField({
   formation?: string
   side: 'top' | 'bottom'
   teamName: string
+  teamId?: number | string | null
   isHome: boolean
   lineup?: MatchLineup | null
   events: MatchEvent[]
@@ -1414,7 +1396,17 @@ function PlayerOnField({
   const pos = getPlayerPosition(playerWrap, formation, side, playerIndex, lineupPlayers, fullField)
   const player = playerWrap.player || {}
   const style = getStyleForPlayer(playerWrap, teamName, isHome, lineup)
-  const playerState = getPlayerFieldState(playerWrap, events)
+  const substitutionContext = {
+    starters: (lineup?.startXI || []).map((entry) => ({
+      id: entry.player?.id ?? null,
+      name: entry.player?.name ?? null,
+    })),
+    substitutes: (lineup?.substitutes || []).map((entry) => ({
+      id: entry.player?.id ?? null,
+      name: entry.player?.name ?? null,
+    })),
+  }
+  const playerState = getPlayerFieldState(playerWrap, teamId, events, substitutionContext)
   const isCaptain = Boolean(
     isCaptainFlag(player.captain) ||
     isCaptainFlag(playerWrap.captain) ||
@@ -1429,6 +1421,7 @@ function PlayerOnField({
 
   return (
     <div
+      data-match-detail="formation-player"
       className="absolute w-[88px] -translate-x-1/2 -translate-y-1/2 text-center sm:w-[116px]"
       style={{
         left: `${pos.x}%`,
@@ -1444,6 +1437,8 @@ function PlayerOnField({
         <Shirt number={playerState.displayNumber ?? player.number} style={style} />
         <FieldSideIncidences
           goals={playerState.goals}
+          penaltyGoals={playerState.penaltyGoals}
+          ownGoals={playerState.ownGoals}
           missedPenalties={playerState.missedPenalties}
           yellowCards={playerState.yellowCards}
           redCards={playerState.redCards}
@@ -1467,6 +1462,7 @@ function FormationPitch({
   teamLogo,
   formation,
   lineup,
+  teamId,
   side,
   isHome,
   events,
@@ -1476,6 +1472,7 @@ function FormationPitch({
   teamLogo?: string
   formation?: string
   lineup?: MatchLineup | null
+  teamId?: number | string | null
   side: 'top' | 'bottom'
   isHome: boolean
   events: MatchEvent[]
@@ -1515,6 +1512,7 @@ function FormationPitch({
             formation={formation}
             side={side}
             teamName={teamName}
+            teamId={teamId}
             isHome={isHome}
             lineup={lineup}
             lineupPlayers={starters}
@@ -1533,6 +1531,7 @@ function buildPanelPlayers({
   players,
   events,
   teamName,
+  teamId,
   isHome,
   lineup,
   captainReference,
@@ -1540,6 +1539,7 @@ function buildPanelPlayers({
   players: PlayerWrapper[]
   events: MatchEvent[]
   teamName: string
+  teamId?: number | string | null
   isHome: boolean
   lineup?: MatchLineup | null
   captainReference?: {
@@ -1579,26 +1579,20 @@ function buildPanelPlayers({
     const playerInEvent = playerKey
       ? substitutionMap.byPlayerInName.get(playerKey)
       : null
-    const goals = events.filter((event) => {
-      const kind = getEventKind(event)
-      return (
-        kind === 'goal' ||
-        kind === 'penalty-goal' ||
-        kind === 'own-goal'
-      ) && matchesPlayerEvent(event.player, player.id, player.name)
-    }).length
-    const missedPenalties = events.filter((event) =>
-      getEventKind(event) === 'penalty-missed' && matchesPlayerEvent(event.player, player.id, player.name)
-    ).length
-    const yellowCards = events.filter((event) =>
-      getEventKind(event) === 'yellow-card' && matchesPlayerEvent(event.player, player.id, player.name)
-    ).length
-    const redCards = events.filter((event) =>
-      (
-        getEventKind(event) === 'red-card' ||
-        getEventKind(event) === 'second-yellow'
-      ) && matchesPlayerEvent(event.player, player.id, player.name)
-    ).length
+    const incidents = getPlayerIncidentsForLineup(
+      { id: player.id, name: player.name ?? null },
+      teamId,
+      events
+    )
+    const goals = incidents.filter((incident) => incident.kind === 'goal').length
+    const penaltyGoals = incidents.filter((incident) => incident.kind === 'penalty-goal').length
+    const ownGoals = incidents.filter((incident) => incident.kind === 'own-goal').length
+    const missedPenalties = incidents.filter((incident) => incident.kind === 'penalty-missed').length
+    const yellowCards = incidents.filter((incident) => incident.kind === 'yellow-card').length
+    const redCards = incidents.filter((incident) => (
+      incident.kind === 'red-card' ||
+      incident.kind === 'second-yellow'
+    )).length
     const substitutionDirection: 'in' | 'out' | undefined = playerOutEvent
       ? 'out'
       : playerInEvent
@@ -1614,6 +1608,8 @@ function buildPanelPlayers({
       style: getStyleForPlayer(playerWrap, teamName, isHome, lineup),
       isCaptain,
       goals,
+      penaltyGoals,
+      ownGoals,
       missedPenalties,
       yellowCards,
       redCards,
@@ -1641,10 +1637,13 @@ function hasVisualFormation(lineup?: MatchLineup | null) {
 
 export default async function PartidoDetallePage({ params }: PageProps) {
   const { id } = await params
-  let data
+  let data: Awaited<ReturnType<typeof buildMatchDetailViewModel>>
 
   try {
-    data = await getMatchDetail(Number(id))
+    data = await buildMatchDetailViewModel({
+      fixtureExternalId: id,
+      matchId: id,
+    })
   } catch (error) {
     console.warn('[match-detail-page] No se pudo cargar detalle desde Supabase.', {
       id,
@@ -1685,44 +1684,25 @@ export default async function PartidoDetallePage({ params }: PageProps) {
   const goals = fixture.goals
   const penaltyScore = fixture.score?.penalty ?? { home: null, away: null }
   const status = fixture.fixture.status
-  const broadcastChannel =
-    typeof data.broadcastChannel === 'string' ? data.broadcastChannel : null
-  const broadcastLogoUrl =
-    typeof data.broadcastLogoUrl === 'string' ? data.broadcastLogoUrl : null
   const broadcasters: MatchBroadcaster[] = Array.isArray(data.broadcasters)
     ? data.broadcasters
-    : broadcastChannel
-      ? [{ name: broadcastChannel, logoUrl: broadcastLogoUrl, country: null }]
-      : []
+    : []
   const broadcastLabel = broadcasters.map((broadcaster) => broadcaster.name).join(' / ')
   const primaryBroadcastLogo =
-    broadcasters.find((broadcaster) => broadcaster.logoUrl)?.logoUrl ?? broadcastLogoUrl
+    broadcasters.find((broadcaster) => broadcaster.logoUrl)?.logoUrl ?? null
   const highlightsUrl = typeof data.highlightsUrl === 'string' ? data.highlightsUrl : null
   const highlightsTitle = typeof data.highlightsTitle === 'string' ? data.highlightsTitle : null
-  const stats: MatchStatisticsTeam[] = Array.isArray(data.statistics) ? data.statistics : []
-  const events: MatchEvent[] = Array.isArray(data.events) ? data.events : []
-  const lineups: MatchLineup[] = Array.isArray(data.lineups) ? data.lineups : []
-  const statPairs = normalizeMatchStatistics(stats, homeTeam, awayTeam, events)
-  const disciplinePairs = statPairs.length
-    ? []
-    : buildDisciplineStatisticsFromEvents(events, homeTeam, awayTeam)
-  const hasPenaltyScore = hasPenaltyShootoutScore(penaltyScore.home, penaltyScore.away)
-  const penaltyShootoutEvents = events.filter((event) =>
-    isPenaltyShootoutEvent(event) ||
-    isLikelyPenaltyShootoutAttempt(event, hasPenaltyScore)
-  )
-  const hasPenaltyShootout = hasPenaltyScore || penaltyShootoutEvents.length > 0
-  const timelineEvents = getTimelineEvents(
-    events.filter((event) =>
-      !isPenaltyShootoutEvent(event) &&
-      !isLikelyPenaltyShootoutAttempt(event, hasPenaltyScore)
-    )
-  )
-
-  const homeLineup =
-    lineups.find((lineup) => isSameTeamRef(lineup.team, homeTeam)) || lineups[0] || null
-  const awayLineup =
-    lineups.find((lineup) => isSameTeamRef(lineup.team, awayTeam)) || lineups[1] || null
+  const stats = Array.isArray(data.statistics) ? data.statistics : []
+  const events = data.sourceEvents
+  const lineups = data.lineups
+  const statPairs = data.statisticsRows
+  const disciplinePairs = data.disciplineRows
+  const penaltyShootoutEvents = data.penaltyShootoutEvents
+  const hasPenaltyShootout = data.hasPenaltyShootout
+  const timelineEvents = data.timelineEvents
+  const lineupEvents = data.lineupEvents
+  const homeLineup = data.homeLineup
+  const awayLineup = data.awayLineup
 
   const homeColors = getTeamStyle(homeTeam.name, true, homeLineup, 'player')
   const awayColors = getTeamStyle(awayTeam.name, false, awayLineup, 'player')
@@ -1734,48 +1714,52 @@ export default async function PartidoDetallePage({ params }: PageProps) {
     fixture.fixture.date
   )
   const headerStatusIsLive = isHeaderLiveStatus(status.short)
-  const homeTeamEvents = timelineEvents.filter((event) => isHomeEvent(event, homeTeam))
-  const awayTeamEvents = timelineEvents.filter((event) => isAwayEvent(event, awayTeam))
   const homeCaptainReference = getCaptainReference(homeLineup)
   const awayCaptainReference = getCaptainReference(awayLineup)
+  const homeLineupTeamId = homeTeam.id ?? homeLineup?.team?.id ?? null
+  const awayLineupTeamId = awayTeam.id ?? awayLineup?.team?.id ?? null
   const homeHasVisualFormation = hasVisualFormation(homeLineup)
   const awayHasVisualFormation = hasVisualFormation(awayLineup)
   const hasAnyVisualFormation = homeHasVisualFormation || awayHasVisualFormation
   const confirmedLineupPlayers =
-    (homeLineup?.startXI?.length ?? 0) +
-    (homeLineup?.substitutes?.length ?? 0) +
-    (awayLineup?.startXI?.length ?? 0) +
-    (awayLineup?.substitutes?.length ?? 0)
+    data.renderCounts.startersCount + data.renderCounts.substitutesCount
+  const matchIsFinished = isFinishedStatus(status.short) || isFinishedStatus(status.long)
   const lineupStatusLabel = confirmedLineupPlayers > 0
     ? 'Alineación confirmada'
-    : 'Alineación no confirmada'
+    : matchIsFinished
+      ? 'Formación no disponible'
+      : 'Alineación no confirmada'
   const homeStarterPlayers = buildPanelPlayers({
     players: homeLineup?.startXI || [],
-    events: homeTeamEvents,
+    events: lineupEvents,
     teamName: homeTeam.name,
+    teamId: homeLineupTeamId,
     isHome: true,
     lineup: homeLineup,
     captainReference: homeCaptainReference,
   })
   const awayStarterPlayers = buildPanelPlayers({
     players: awayLineup?.startXI || [],
-    events: awayTeamEvents,
+    events: lineupEvents,
     teamName: awayTeam.name,
+    teamId: awayLineupTeamId,
     isHome: false,
     lineup: awayLineup,
     captainReference: awayCaptainReference,
   })
   const homeSubstitutePlayers = buildPanelPlayers({
     players: homeLineup?.substitutes || [],
-    events: homeTeamEvents,
+    events: lineupEvents,
     teamName: homeTeam.name,
+    teamId: homeLineupTeamId,
     isHome: true,
     lineup: homeLineup,
   })
   const awaySubstitutePlayers = buildPanelPlayers({
     players: awayLineup?.substitutes || [],
-    events: awayTeamEvents,
+    events: lineupEvents,
     teamName: awayTeam.name,
+    teamId: awayLineupTeamId,
     isHome: false,
     lineup: awayLineup,
   })
@@ -1784,12 +1768,14 @@ export default async function PartidoDetallePage({ params }: PageProps) {
     console.info('[match-detail-render]', {
       fixtureId: fixture.fixture.id,
       events: events.length,
+      timelineEvents: data.renderCounts.timelineEvents,
+      formationPlayers: data.renderCounts.formationPlayers,
       statisticsTeams: stats.length,
-      statisticsCount: statPairs.length,
-      disciplineCount: disciplinePairs.length,
+      statisticsRows: data.renderCounts.statisticsRows,
+      disciplineRows: disciplinePairs.length,
       lineups: lineups.length,
-      homeLineupPlayers: (homeLineup?.startXI?.length ?? 0) + (homeLineup?.substitutes?.length ?? 0),
-      awayLineupPlayers: (awayLineup?.startXI?.length ?? 0) + (awayLineup?.substitutes?.length ?? 0),
+      starters: data.renderCounts.startersCount,
+      substitutes: data.renderCounts.substitutesCount,
     })
   }
 
@@ -1891,6 +1877,19 @@ export default async function PartidoDetallePage({ params }: PageProps) {
           </div>
         </header>
 
+        {process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_SHOW_MATCH_DEBUG === 'true' ? (
+          <details className="mb-4 rounded-2xl border border-white/8 bg-[#0f1317]/92 px-3 py-2 text-xs text-[#c8d0da]">
+            <summary className="cursor-pointer font-bold text-white">Match detail debug</summary>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+              <span>timelineEvents: {data.renderCounts.timelineEvents}</span>
+              <span>formationPlayers: {data.renderCounts.formationPlayers}</span>
+              <span>statisticsRows: {data.renderCounts.statisticsRows}</span>
+              <span>starters: {data.renderCounts.startersCount}</span>
+              <span>substitutes: {data.renderCounts.substitutesCount}</span>
+            </div>
+          </details>
+        ) : null}
+
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_320px]">
           <section className="space-y-4">
             <div className="hf-card w-full overflow-hidden rounded-2xl">
@@ -1930,6 +1929,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
 
                     return (
                       <div
+                        data-match-detail="timeline-event"
                         key={`${event.time?.elapsed || 'x'}-${event.time?.extra || 0}-${index}`}
                         className="grid grid-cols-[1fr_56px_1fr] items-center border-b border-white/6 px-2 py-2 last:border-b-0 md:grid-cols-[1fr_72px_1fr] md:px-3"
                         >
@@ -1999,7 +1999,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                 </span>
               </div>
 
-              {homeLineup || awayLineup ? (
+              {confirmedLineupPlayers > 0 ? (
                 <div className="w-full px-0 py-2 md:p-4">
                   {hasAnyVisualFormation ? (
                     <div className="space-y-3">
@@ -2009,9 +2009,10 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                           teamLogo={homeTeam.logo_url ?? homeTeam.logo}
                           formation={homeLineup.formation}
                           lineup={homeLineup}
+                          teamId={homeLineupTeamId}
                           side="top"
                           isHome
-                          events={homeTeamEvents}
+                          events={lineupEvents}
                           captainReference={homeCaptainReference}
                         />
                       ) : null}
@@ -2022,9 +2023,10 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                           teamLogo={awayTeam.logo_url ?? awayTeam.logo}
                           formation={awayLineup.formation}
                           lineup={awayLineup}
+                          teamId={awayLineupTeamId}
                           side="bottom"
                           isHome={false}
-                          events={awayTeamEvents}
+                          events={lineupEvents}
                           captainReference={awayCaptainReference}
                         />
                       ) : null}
@@ -2035,27 +2037,28 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                     </div>
                   )}
 
-                  <div className="mt-3 grid gap-3 md:mt-4 md:grid-cols-2 md:gap-4">
-                <FormationTeamPanel
-                  title={homeTeam.name}
-                  coachName={homeLineup?.coach?.name}
-                  starters={homeStarterPlayers}
-                  substitutes={homeSubstitutePlayers}
-                  align="left"
-                />
-
-                <FormationTeamPanel
-                  title={awayTeam.name}
-                  coachName={awayLineup?.coach?.name}
-                  starters={awayStarterPlayers}
-                  substitutes={awaySubstitutePlayers}
-                  align="right"
-                />
-                  </div>
+                  <LineupTabs
+                    teams={[
+                      {
+                        title: homeTeam.name,
+                        coachName: homeLineup?.coach?.name,
+                        starters: homeStarterPlayers,
+                        substitutes: homeSubstitutePlayers,
+                        align: 'left',
+                      },
+                      {
+                        title: awayTeam.name,
+                        coachName: awayLineup?.coach?.name,
+                        starters: awayStarterPlayers,
+                        substitutes: awaySubstitutePlayers,
+                        align: 'right',
+                      },
+                    ]}
+                  />
                 </div>
               ) : (
                 <div className="px-2 py-5 text-sm text-[#8d98a7] md:px-4">
-                  Alineación no confirmada.
+                  {lineupStatusLabel}.
                 </div>
               )}
             </div>
@@ -2091,6 +2094,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
 
                     return (
                       <div
+                        data-match-detail="statistics-row"
                         key={`${stat.type}-${index}`}
                         className="rounded-xl border border-white/6 bg-[#13181d] px-2.5 py-2"
                       >

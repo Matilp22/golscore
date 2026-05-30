@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
-import { auditMatchInfo } from '@/server/match-info-sync'
+import { verifyBroadcastRule } from '@/server/broadcasts/admin'
 import { serializeError } from '@/server/match-detail-cache'
 
 export const dynamic = 'force-dynamic'
@@ -29,45 +29,35 @@ function isAuthorized(request: Request) {
   return getAuthorizationToken(request) === cronSecret
 }
 
-function readBoolean(value: string | null) {
-  return ['1', 'true', 'yes', 'si'].includes((value ?? '').trim().toLowerCase())
+async function readBody(request: Request) {
+  try {
+    return (await request.json()) as Record<string, unknown>
+  } catch {
+    return {}
+  }
 }
 
-function readNumber(value: string | null) {
-  if (!value?.trim()) return null
-  const parsed = Number(value)
-
-  return Number.isFinite(parsed) ? parsed : null
-}
-
-export async function GET(request: Request) {
+export async function POST(request: Request) {
   if (!isAuthorized(request)) {
     return jsonNoStore({ ok: false, error: 'No autorizado' }, { status: 401 })
   }
 
   try {
-    const { searchParams } = new URL(request.url)
-    const supabase = getSupabaseAdminClient()
-    const result = await auditMatchInfo(supabase, {
-      matchId: searchParams.get('matchId') ?? searchParams.get('match_id'),
-      fixture: readNumber(searchParams.get('fixture')),
-      date: searchParams.get('date'),
-      dateFrom: searchParams.get('dateFrom'),
-      dateTo: searchParams.get('dateTo'),
-      futureDays: readNumber(searchParams.get('futureDays')),
-      leagueExternalId: readNumber(searchParams.get('leagueExternalId')),
-      includeProvider: readBoolean(searchParams.get('includeProvider')),
-      onlyProblems: readBoolean(searchParams.get('onlyProblems')),
-      limit: readNumber(searchParams.get('limit')),
+    const body = await readBody(request)
+    const result = await verifyBroadcastRule(getSupabaseAdminClient(), {
+      ruleId: typeof body.ruleId === 'string' ? body.ruleId : '',
+      verified: typeof body.verified === 'boolean' ? body.verified : true,
+      source: typeof body.source === 'string' ? body.source : 'manual',
+      confidence: typeof body.confidence === 'string' ? body.confidence : 'high',
     })
 
     return jsonNoStore({
-      endpoint: 'match-info-audit',
+      endpoint: 'verify-broadcast-rule',
       ...result,
-    })
+    }, { status: result.ok ? 200 : 400 })
   } catch (error) {
-    const serialized = serializeError(error, 'unknown')
-    console.error('[match-info-audit] Error completo', serialized)
+    const serialized = serializeError(error, 'supabase')
+    console.error('[verify-broadcast-rule] Error completo', serialized)
 
     return jsonNoStore(
       {

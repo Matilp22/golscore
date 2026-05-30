@@ -54,6 +54,9 @@ type BroadcastRow = {
   broadcaster_name: string | null
   broadcaster_logo_url: string | null
   country: string | null
+  source?: string | null
+  confidence?: string | null
+  verified?: boolean | null
 }
 
 export type MatchInfoAuditOptions = {
@@ -62,6 +65,7 @@ export type MatchInfoAuditOptions = {
   date?: string | null
   dateFrom?: string | null
   dateTo?: string | null
+  futureDays?: number | null
   leagueExternalId?: number | null
   includeProvider?: boolean
   onlyProblems?: boolean
@@ -94,6 +98,24 @@ function toNumber(value: unknown) {
 
 function cleanText(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function normalizeTrustText(value?: string | number | null) {
+  return String(value ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+}
+
+function isTrustedBroadcast(row: BroadcastRow) {
+  return (
+    row.verified === true &&
+    (
+      ['manual', 'verified_rule', 'official', 'provider', 'provider_suggestion_approved'].includes(normalizeTrustText(row.source)) ||
+      normalizeTrustText(row.confidence) === 'high'
+    )
+  )
 }
 
 function asRecord(value: unknown) {
@@ -222,12 +244,31 @@ async function fetchBroadcastsByMatchIds(supabase: SupabaseClient, matchIds: DbI
 
   const response = await supabase
     .from('match_broadcasts')
-    .select('match_id, broadcaster_name, broadcaster_logo_url, country')
+    .select('match_id, broadcaster_name, broadcaster_logo_url, country, source, confidence, verified')
     .in('match_id', uniqueIds)
     .order('broadcaster_name', { ascending: true })
 
   if (response.error) {
     const message = response.error.message.toLowerCase()
+    const isMissingTrustColumns =
+      response.error.code === '42703' ||
+      response.error.code === 'PGRST204' ||
+      message.includes('source') ||
+      message.includes('confidence') ||
+      message.includes('verified') ||
+      message.includes('schema cache')
+
+    if (isMissingTrustColumns) {
+      const fallback = await supabase
+        .from('match_broadcasts')
+        .select('match_id, broadcaster_name, broadcaster_logo_url, country')
+        .in('match_id', uniqueIds)
+        .order('broadcaster_name', { ascending: true })
+
+      if (fallback.error) return []
+
+      return ((fallback.data ?? []) as BroadcastRow[]).filter(isTrustedBroadcast)
+    }
 
     if (
       response.error.code === '42P01' ||
@@ -241,7 +282,7 @@ async function fetchBroadcastsByMatchIds(supabase: SupabaseClient, matchIds: DbI
     throw response.error
   }
 
-  return (response.data ?? []) as BroadcastRow[]
+  return ((response.data ?? []) as BroadcastRow[]).filter(isTrustedBroadcast)
 }
 
 async function fetchMatchInfoRows(
@@ -313,15 +354,10 @@ function getBroadcastersForMatch(
       name: broadcast.broadcaster_name,
       logoUrl: broadcast.broadcaster_logo_url,
       country: broadcast.country,
+      source: broadcast.source,
+      confidence: broadcast.confidence,
+      verified: broadcast.verified,
     }))
-  }
-
-  if (match.broadcast_channel) {
-    return [{
-      name: match.broadcast_channel,
-      logoUrl: match.broadcast_logo_url ?? null,
-      country: null,
-    }]
   }
 
   return []
@@ -487,6 +523,20 @@ export async function auditMatchInfo(
       items.push(item)
     }
   }
+  const checkedByDay = matches.reduce<Record<string, number>>((accumulator, match) => {
+    const day = match.match_date ? getArgentinaDateISO(match.match_date) : 'sin-fecha'
+
+    accumulator[day] = (accumulator[day] ?? 0) + 1
+
+    return accumulator
+  }, {})
+  const returnedByDay = items.reduce<Record<string, number>>((accumulator, item) => {
+    const day = item.matchDate ? getArgentinaDateISO(item.matchDate) : 'sin-fecha'
+
+    accumulator[day] = (accumulator[day] ?? 0) + 1
+
+    return accumulator
+  }, {})
 
   return {
     ok: true,
@@ -498,6 +548,10 @@ export async function auditMatchInfo(
     },
     checked: matches.length,
     returned: items.length,
+    byDay: {
+      checked: checkedByDay,
+      returned: returnedByDay,
+    },
     includeProvider,
     warnings: [...new Set(warnings)],
     items,
@@ -565,6 +619,7 @@ export async function auditMissingMatchInfo(
   return {
     ok: true,
     dateRange: audit.dateRange,
+    byDay: audit.byDay,
     warnings: audit.warnings,
     totals: {
       problems: audit.returned,

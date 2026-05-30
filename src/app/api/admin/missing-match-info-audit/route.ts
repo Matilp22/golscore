@@ -56,6 +56,7 @@ export async function GET(request: Request) {
       date: searchParams.get('date'),
       dateFrom: searchParams.get('dateFrom'),
       dateTo: searchParams.get('dateTo'),
+      futureDays: readNumber(searchParams.get('futureDays')),
       leagueExternalId: readNumber(searchParams.get('leagueExternalId')),
       includeProvider: readBoolean(searchParams.get('includeProvider'), true),
       limit: readNumber(searchParams.get('limit')),

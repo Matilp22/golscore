@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
-import { auditMatchInfo } from '@/server/match-info-sync'
+import { cleanupBroadcastDefaults } from '@/server/broadcasts/admin'
 import { serializeError } from '@/server/match-detail-cache'
 
 export const dynamic = 'force-dynamic'
@@ -29,8 +29,10 @@ function isAuthorized(request: Request) {
   return getAuthorizationToken(request) === cronSecret
 }
 
-function readBoolean(value: string | null) {
-  return ['1', 'true', 'yes', 'si'].includes((value ?? '').trim().toLowerCase())
+function readBoolean(value: string | null, fallback = true) {
+  if (value === null) return fallback
+
+  return ['1', 'true', 'yes', 'si'].includes(value.trim().toLowerCase())
 }
 
 function readNumber(value: string | null) {
@@ -48,26 +50,22 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const supabase = getSupabaseAdminClient()
-    const result = await auditMatchInfo(supabase, {
-      matchId: searchParams.get('matchId') ?? searchParams.get('match_id'),
-      fixture: readNumber(searchParams.get('fixture')),
-      date: searchParams.get('date'),
+    const result = await cleanupBroadcastDefaults(supabase, {
+      dryRun: readBoolean(searchParams.get('dryRun'), true),
+      broadcasterName: searchParams.get('broadcasterName'),
       dateFrom: searchParams.get('dateFrom'),
       dateTo: searchParams.get('dateTo'),
-      futureDays: readNumber(searchParams.get('futureDays')),
-      leagueExternalId: readNumber(searchParams.get('leagueExternalId')),
-      includeProvider: readBoolean(searchParams.get('includeProvider')),
-      onlyProblems: readBoolean(searchParams.get('onlyProblems')),
+      leagueExternalId: searchParams.get('leagueExternalId'),
       limit: readNumber(searchParams.get('limit')),
     })
 
     return jsonNoStore({
-      endpoint: 'match-info-audit',
+      endpoint: 'cleanup-broadcast-defaults',
       ...result,
     })
   } catch (error) {
-    const serialized = serializeError(error, 'unknown')
-    console.error('[match-info-audit] Error completo', serialized)
+    const serialized = serializeError(error, 'supabase')
+    console.error('[cleanup-broadcast-defaults] Error completo', serialized)
 
     return jsonNoStore(
       {

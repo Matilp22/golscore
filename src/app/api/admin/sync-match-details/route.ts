@@ -69,6 +69,7 @@ async function readOptions(request: Request) {
     recentFinishedOnly: readBoolean(get('recentFinishedOnly')),
     missingDetailsOnly: readBoolean(get('missingDetailsOnly')),
     futureDays: readNumber(get('futureDays')),
+    lookbackDays: readNumber(get('lookbackDays')),
     limit: readNumber(get('limit')),
     force: readBoolean(get('force')),
   }

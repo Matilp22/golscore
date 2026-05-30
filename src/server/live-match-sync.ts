@@ -421,6 +421,30 @@ function asArray(value: unknown) {
   return Array.isArray(value) ? value : []
 }
 
+function asRecord(value: unknown) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+function countLineupPlayers(lineups: unknown[]) {
+  return lineups.reduce<number>((total, lineup) => {
+    const record = asRecord(lineup)
+    const startXI = asArray(record?.startXI).length
+    const substitutes = asArray(record?.substitutes).length
+
+    return total + startXI + substitutes
+  }, 0)
+}
+
+function countStatisticsValues(statistics: unknown[]) {
+  return statistics.reduce<number>((total, entry) => {
+    const record = asRecord(entry)
+
+    return total + asArray(record?.statistics).length
+  }, 0)
+}
+
 function getFixtureExternalId(fixture: ApiFixture) {
   return toNumber(fixture.fixture?.id)
 }
@@ -1046,8 +1070,8 @@ async function upsertDetailCache(
       return {
         ok: false,
         eventsCount: events.length,
-        lineupsCount: lineups.length,
-        statisticsCount: statistics.length,
+        lineupsCount: countLineupPlayers(lineups),
+        statisticsCount: countStatisticsValues(statistics),
       }
     }
     throw response.error
@@ -1056,8 +1080,8 @@ async function upsertDetailCache(
   return {
     ok: true,
     eventsCount: events.length,
-    lineupsCount: lineups.length,
-    statisticsCount: statistics.length,
+    lineupsCount: countLineupPlayers(lineups),
+    statisticsCount: countStatisticsValues(statistics),
   }
 }
 
@@ -1135,11 +1159,9 @@ function shouldMarkFinalDetailSynced(input: {
 }) {
   return (
     isFinalSyncStatus(input.status) &&
-    (
-      input.persistedEventsCount > 0 ||
-      input.persistedStatisticsCount > 0 ||
-      input.persistedLineupsCount > 0
-    )
+    input.persistedEventsCount > 0 &&
+    input.persistedStatisticsCount > 0 &&
+    input.persistedLineupsCount > 0
   )
 }
 

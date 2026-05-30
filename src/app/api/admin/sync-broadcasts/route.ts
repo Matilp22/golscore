@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
-import { syncBroadcastsFromRules } from '@/server/broadcasts/admin'
-import { syncHomeBroadcastsFromApiFixtures } from '@/server/prode/sync-matches'
+import { syncBroadcastsFromRules, syncProviderBroadcasts } from '@/server/broadcasts/admin'
 
 function isAuthorized(request: Request) {
   const cronSecret = process.env.CRON_SECRET
@@ -115,7 +114,11 @@ export async function GET(request: Request) {
     const shouldSyncApi = normalizedSource === 'auto' || normalizedSource === 'api'
     const shouldSyncRules = normalizedSource === 'auto' || normalizedSource === 'rules'
     const apiResult = shouldSyncApi
-      ? await syncHomeBroadcastsFromApiFixtures(supabase, options).catch((error) => ({
+      ? await syncProviderBroadcasts(supabase, {
+          ...options,
+          includeApi: true,
+          dryRun: false,
+        }).catch((error) => ({
           ok: false,
           error: error instanceof Error ? error.message : 'No se pudo sincronizar TV desde API.',
         }))
