@@ -6,12 +6,20 @@ import AuthStatus from '@/frontend/components/auth/AuthStatus'
 import GoogleAnalytics from '@/frontend/components/analytics/GoogleAnalytics'
 import './globals.css'
 
+const SITE_URL = 'https://hayfulbo.com'
+const SITE_DESCRIPTION =
+  'Resultados de fútbol, fixtures, estadísticas, prode y contenido futbolero en Hay Fulbo.'
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
     default: 'HAY FULBO',
     template: '%s | HAY FULBO',
   },
-  description: 'Resultados, fixtures y Prode con identidad futbolera.',
+  description: SITE_DESCRIPTION,
+  alternates: {
+    canonical: '/',
+  },
   manifest: '/manifest.json',
   applicationName: 'HAY FULBO',
   appleWebApp: {
@@ -28,14 +36,16 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: 'HAY FULBO',
-    description: 'Resultados, fixtures y Prode con identidad futbolera.',
+    description: SITE_DESCRIPTION,
+    url: SITE_URL,
     siteName: 'HAY FULBO',
     type: 'website',
+    locale: 'es_AR',
   },
   twitter: {
     card: 'summary',
     title: 'HAY FULBO',
-    description: 'Resultados, fixtures y Prode con identidad futbolera.',
+    description: SITE_DESCRIPTION,
   },
 }
 
