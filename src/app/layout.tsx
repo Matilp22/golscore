@@ -5,27 +5,29 @@ import PwaInstallPrompt from '@/frontend/components/PwaInstallPrompt'
 import AuthStatus from '@/frontend/components/auth/AuthStatus'
 import GoogleAdSense from '@/frontend/components/ads/GoogleAdSense'
 import GoogleAnalytics from '@/frontend/components/analytics/GoogleAnalytics'
+import {
+  DEFAULT_SEO_DESCRIPTION,
+  DEFAULT_SEO_TITLE,
+  SITE_NAME,
+  SITE_URL,
+} from '@/shared/seo'
 import './globals.css'
-
-const SITE_URL = 'https://hayfulbo.com'
-const SITE_DESCRIPTION =
-  'Resultados de fútbol, fixtures, estadísticas, prode y contenido futbolero en Hay Fulbo.'
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: 'HAY FULBO',
-    template: '%s | HAY FULBO',
+    default: DEFAULT_SEO_TITLE,
+    template: `%s | ${SITE_NAME}`,
   },
-  description: SITE_DESCRIPTION,
+  description: DEFAULT_SEO_DESCRIPTION,
   alternates: {
-    canonical: '/',
+    canonical: SITE_URL,
   },
   manifest: '/manifest.json',
-  applicationName: 'HAY FULBO',
+  applicationName: SITE_NAME,
   appleWebApp: {
     capable: true,
-    title: 'HAY FULBO',
+    title: SITE_NAME,
     statusBarStyle: 'black-translucent',
   },
   icons: {
@@ -36,17 +38,20 @@ export const metadata: Metadata = {
     apple: [{ url: '/icons/hay-fulbo-icon.svg', sizes: 'any', type: 'image/svg+xml' }],
   },
   openGraph: {
-    title: 'HAY FULBO',
-    description: SITE_DESCRIPTION,
+    title: DEFAULT_SEO_TITLE,
+    description: DEFAULT_SEO_DESCRIPTION,
     url: SITE_URL,
-    siteName: 'HAY FULBO',
+    siteName: SITE_NAME,
     type: 'website',
     locale: 'es_AR',
   },
   twitter: {
     card: 'summary',
-    title: 'HAY FULBO',
-    description: SITE_DESCRIPTION,
+    title: DEFAULT_SEO_TITLE,
+    description: DEFAULT_SEO_DESCRIPTION,
+  },
+  other: {
+    'google-adsense-account': 'ca-pub-9918770947892784',
   },
 }
 

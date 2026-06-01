@@ -36,6 +36,17 @@ import {
   formatHomeMatchStatus,
   formatMatchScoreWithPenalties,
 } from '@/shared/utils/match-display'
+import {
+  buildSeoMetadata,
+  DEFAULT_SEO_DESCRIPTION,
+  DEFAULT_SEO_TITLE,
+} from '@/shared/seo'
+
+export const metadata = buildSeoMetadata({
+  title: DEFAULT_SEO_TITLE,
+  description: DEFAULT_SEO_DESCRIPTION,
+  path: '/',
+})
 
 type ApiMatch = MatchListItemWithGoalScorers
 

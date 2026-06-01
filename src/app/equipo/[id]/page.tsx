@@ -1,5 +1,7 @@
 import SafeImage from '@/frontend/components/SafeImage'
 import { PlayerPhoto, TeamLogo } from '@/frontend/components/AssetImage'
+import type { Metadata } from 'next'
+import { buildSeoMetadata } from '@/shared/seo'
 
 import {
   getTeamDetail,
@@ -9,6 +11,41 @@ import {
 
 type PageProps = {
   params: Promise<{ id: string }>
+}
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { id } = await params
+
+  try {
+    const data = await getTeamDetail(Number(id))
+    const teamData = data.team as TeamProfile | null
+    const team = teamData?.team
+    const venue = teamData?.venue
+
+    if (!team) {
+      return buildSeoMetadata({
+        title: 'Equipo no encontrado | Hay Fulbo',
+        description: 'El equipo solicitado no está disponible en Hay Fulbo.',
+        path: `/equipo/${id}`,
+        noIndex: true,
+      })
+    }
+
+    const venueText = venue?.name ? `, estadio ${venue.name}` : ''
+
+    return buildSeoMetadata({
+      title: `${team.name} | Plantel, Fixture y Estadísticas | Hay Fulbo`,
+      description: `Conocé el plantel de ${team.name}, jugadores${venueText} y estadísticas del equipo en Hay Fulbo.`,
+      path: `/equipo/${id}`,
+    })
+  } catch {
+    return buildSeoMetadata({
+      title: 'Equipo no disponible | Hay Fulbo',
+      description: 'La ficha del equipo está temporalmente no disponible en Hay Fulbo.',
+      path: `/equipo/${id}`,
+      noIndex: true,
+    })
+  }
 }
 
 function formatCapacity(value?: number) {

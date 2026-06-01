@@ -1,5 +1,6 @@
 import { PlayerPhoto } from '@/frontend/components/AssetImage'
 import PlayerIncidentsList from '@/frontend/components/PlayerIncidentsList'
+import { buildSeoMetadata } from '@/shared/seo'
 import {
   getPlayerDetail,
   type LeaderStatType,
@@ -18,6 +19,19 @@ type PageProps = {
     teamName?: string
     teamLogo?: string
   }>
+}
+
+export async function generateMetadata({ params, searchParams }: PageProps) {
+  const { id } = await params
+  const query = await searchParams
+  const playerName = query.name || 'Jugador'
+
+  return buildSeoMetadata({
+    title: `${playerName} | Estadísticas de Jugador | Hay Fulbo`,
+    description: `Ficha, estadísticas e incidencias de ${playerName} en Hay Fulbo.`,
+    path: `/jugador/${id}`,
+    noIndex: true,
+  })
 }
 
 function isLeaderStatType(value?: string): value is LeaderStatType {

@@ -1,4 +1,11 @@
 import ProfileForm from '@/frontend/components/profile/ProfileForm'
+import { buildNoIndexMetadata } from '@/shared/seo'
+
+export const metadata = buildNoIndexMetadata(
+  'Mi Perfil | Hay Fulbo',
+  'Configuración privada de la cuenta de Hay Fulbo.',
+  '/perfil'
+)
 
 export default function ProfilePage() {
   return (

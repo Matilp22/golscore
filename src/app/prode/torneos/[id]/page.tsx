@@ -1,9 +1,20 @@
 import PrivateTournamentDetailPage from '@/frontend/components/prode/private-tournaments/PrivateTournamentDetailPage'
+import { buildNoIndexMetadata } from '@/shared/seo'
 
 type ProdeTournamentDetailPageProps = {
   params: Promise<{
     id: string
   }>
+}
+
+export async function generateMetadata({ params }: ProdeTournamentDetailPageProps) {
+  const { id } = await params
+
+  return buildNoIndexMetadata(
+    'Torneo Privado del Prode | Hay Fulbo',
+    'Detalle privado de un torneo del Prode de Hay Fulbo.',
+    `/prode/torneos/${id}`
+  )
 }
 
 export default async function ProdeTournamentDetailPage({

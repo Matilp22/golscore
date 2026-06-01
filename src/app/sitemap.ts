@@ -3,22 +3,20 @@ import {
   SIDEBAR_SECTION_CONFIGS,
   VISIBLE_TOURNAMENT_PAGE_CONFIGS,
 } from '@/lib/tournament-pages'
-
-const SITE_URL = 'https://hayfulbo.com'
+import { absoluteUrl } from '@/shared/seo'
 
 type SitemapEntry = MetadataRoute.Sitemap[number]
 
 const staticRoutes = [
   { path: '/', priority: 1 },
   { path: '/prode', priority: 0.8 },
-  { path: '/prode/torneos', priority: 0.7 },
   { path: '/privacy-policy', priority: 0.4 },
   { path: '/terms', priority: 0.4 },
   { path: '/contact', priority: 0.4 },
 ] as const
 
 function createUrl(path: string) {
-  return new URL(path, SITE_URL).toString()
+  return absoluteUrl(path)
 }
 
 export default function sitemap(): MetadataRoute.Sitemap {

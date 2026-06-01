@@ -1,5 +1,12 @@
 import { Suspense } from 'react'
 import AuthForm from '@/frontend/components/auth/AuthForm'
+import { buildNoIndexMetadata } from '@/shared/seo'
+
+export const metadata = buildNoIndexMetadata(
+  'Iniciar Sesión | Hay Fulbo',
+  'Acceso a tu cuenta de Hay Fulbo.',
+  '/login'
+)
 
 export default function LoginPage() {
   return (

@@ -1,6 +1,13 @@
 import Link from 'next/link'
 import BrandMark from '@/frontend/components/BrandMark'
 import PrivateTournamentsPage from '@/frontend/components/prode/private-tournaments/PrivateTournamentsPage'
+import { buildNoIndexMetadata } from '@/shared/seo'
+
+export const metadata = buildNoIndexMetadata(
+  'Torneos Privados del Prode | Hay Fulbo',
+  'Creá o administrá torneos privados del Prode de Hay Fulbo para competir con amigos.',
+  '/prode/torneos'
+)
 
 export default function ProdeTournamentsPage() {
   return (

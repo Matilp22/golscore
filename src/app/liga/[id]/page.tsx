@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import type { Metadata } from 'next'
 import type { CSSProperties, ReactNode } from 'react'
 
 import CurrentRoundNavigator from '@/frontend/components/CurrentRoundNavigator'
@@ -80,9 +81,65 @@ import {
   formatMatchScoreWithPenalties,
 } from '@/shared/utils/match-display'
 import type { ConmebolCompetitionType } from '@/shared/utils/conmebol-rounds'
+import { buildSeoMetadata } from '@/shared/seo'
 
 type PageProps = {
   params: Promise<{ id: string }>
+}
+
+type LeagueSeoOverride = {
+  title: string
+  description: string
+}
+
+const LEAGUE_SEO_OVERRIDES: Record<string, LeagueSeoOverride> = {
+  'argentina-liga-profesional': {
+    title: 'Tabla de Posiciones Liga Profesional Argentina | Hay Fulbo',
+    description:
+      'Consultá la tabla de posiciones, fixture, resultados, goleadores y estadísticas de la Liga Profesional Argentina en Hay Fulbo.',
+  },
+  'internacional-libertadores': {
+    title: 'Copa Libertadores | Resultados, Fixture, Tabla y Estadísticas | Hay Fulbo',
+    description:
+      'Seguí la Copa Libertadores con resultados, fixture, tabla de posiciones, llaves, goleadores y estadísticas en Hay Fulbo.',
+  },
+  'internacional-champions': {
+    title: 'Champions League | Resultados, Fixture, Tabla y Estadísticas | Hay Fulbo',
+    description:
+      'Seguí la Champions League con resultados, fixture, tabla de posiciones, fases, goleadores y estadísticas en Hay Fulbo.',
+  },
+  'argentina-copa-argentina': {
+    title: 'Copa Argentina | Partidos, Llaves y Estadísticas | Hay Fulbo',
+    description:
+      'Consultá partidos, llaves, resultados, campeones y estadísticas de la Copa Argentina en Hay Fulbo.',
+  },
+}
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { id } = await params
+  const tournament = getTournamentConfig(id)
+
+  if (!tournament) {
+    return buildSeoMetadata({
+      title: 'Liga no encontrada | Hay Fulbo',
+      description: 'La liga solicitada no está disponible en Hay Fulbo.',
+      path: `/liga/${id}`,
+      noIndex: true,
+    })
+  }
+
+  const override = LEAGUE_SEO_OVERRIDES[id]
+  const resolvedTournament = await resolveTournament(tournament.searchTerms, tournament.country)
+    .catch(() => null)
+  const displayName = resolvedTournament?.name || tournament.title
+
+  return buildSeoMetadata({
+    title: override?.title ?? `Tabla de Posiciones ${displayName} | Hay Fulbo`,
+    description:
+      override?.description ??
+      `Consultá fixture, tabla de posiciones, resultados, goleadores, asistencias y estadísticas de ${displayName} en Hay Fulbo.`,
+    path: `/liga/${id}`,
+  })
 }
 
 function formatAverage(value: number) {

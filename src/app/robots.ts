@@ -1,6 +1,5 @@
 import type { MetadataRoute } from 'next'
-
-const SITE_URL = 'https://hayfulbo.com'
+import { SITE_URL } from '@/shared/seo'
 
 export default function robots(): MetadataRoute.Robots {
   return {

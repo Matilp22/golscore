@@ -1,9 +1,30 @@
 import Link from 'next/link'
 
 import { getSectionConfig } from '@/lib/tournament-pages'
+import { buildSeoMetadata } from '@/shared/seo'
 
 type PageProps = {
   params: Promise<{ id: string }>
+}
+
+export async function generateMetadata({ params }: PageProps) {
+  const { id } = await params
+  const section = getSectionConfig(id)
+
+  if (!section) {
+    return buildSeoMetadata({
+      title: 'Sección no encontrada | Hay Fulbo',
+      description: 'La sección solicitada no está disponible en Hay Fulbo.',
+      path: `/seccion/${id}`,
+      noIndex: true,
+    })
+  }
+
+  return buildSeoMetadata({
+    title: `${section.title} | Ligas, Tablas y Estadísticas | Hay Fulbo`,
+    description: `Explorá ligas de ${section.title} con fixtures, tablas de posiciones, goleadores, asistencias y estadísticas en Hay Fulbo.`,
+    path: `/seccion/${id}`,
+  })
 }
 
 export default async function SeccionPage({ params }: PageProps) {

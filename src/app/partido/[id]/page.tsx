@@ -29,10 +29,59 @@ import { getEventElapsedMinute, getFixtureStatusElapsedMinute } from '@/shared/u
 import { isFinishedStatus } from '@/shared/utils/match-status'
 import { buildMatchDetailViewModel } from '@/server/match-detail-view-model'
 import { getYouTubeThumbnailUrl, isValidYouTubeUrl } from '@/shared/utils/youtube'
+import { buildSeoMetadata } from '@/shared/seo'
 import Link from 'next/link'
+import type { Metadata } from 'next'
 
 type PageProps = {
   params: Promise<{ id: string }>
+}
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { id } = await params
+
+  try {
+    const data = await buildMatchDetailViewModel({
+      fixtureExternalId: id,
+      matchId: id,
+    })
+    const fixture = data.fixture as MatchFixture | null
+
+    if (!fixture) {
+      return buildSeoMetadata({
+        title: 'Partido no encontrado | Hay Fulbo',
+        description: 'El partido solicitado no está disponible en Hay Fulbo.',
+        path: `/partido/${id}`,
+        noIndex: true,
+      })
+    }
+
+    const homeTeam = fixture.teams.home.name
+    const awayTeam = fixture.teams.away.name
+    const leagueName = translateLeagueName(fixture.league.name)
+    const score = formatMatchScoreWithPenalties({
+      goalsHome: fixture.goals.home,
+      goalsAway: fixture.goals.away,
+      homePenaltyScore: fixture.score?.penalty?.home,
+      awayPenaltyScore: fixture.score?.penalty?.away,
+    })
+    const hasScore = fixture.goals.home !== null || fixture.goals.away !== null
+
+    return buildSeoMetadata({
+      title: `${homeTeam} vs ${awayTeam} | Resultado, Formaciones y Estadísticas | Hay Fulbo`,
+      description: hasScore
+        ? `${homeTeam} vs ${awayTeam} por ${leagueName}: resultado ${score}, formaciones, estadísticas, goles y eventos del partido.`
+        : `Seguí ${homeTeam} vs ${awayTeam} por ${leagueName}: horario, formaciones, estadísticas y toda la previa del partido.`,
+      path: `/partido/${id}`,
+    })
+  } catch {
+    return buildSeoMetadata({
+      title: 'Partido no disponible | Hay Fulbo',
+      description: 'El detalle del partido está temporalmente no disponible en Hay Fulbo.',
+      path: `/partido/${id}`,
+      noIndex: true,
+    })
+  }
 }
 
 function translateStatus(statusLong: string) {

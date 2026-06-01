@@ -1,6 +1,14 @@
 import Link from 'next/link'
 import BrandMark from '@/frontend/components/BrandMark'
 import ProdePanel from '@/frontend/components/prode/ProdePanel'
+import { buildSeoMetadata } from '@/shared/seo'
+
+export const metadata = buildSeoMetadata({
+  title: 'Prode Hay Fulbo | Pronósticos de Fútbol y Ranking | Hay Fulbo',
+  description:
+    'Jugá al Prode de Hay Fulbo, pronosticá resultados de fútbol, sumá puntos y competí en rankings con amigos y torneos privados.',
+  path: '/prode',
+})
 
 export default function ProdePage() {
   return (
