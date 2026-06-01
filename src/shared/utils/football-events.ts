@@ -1,3 +1,5 @@
+export { formatEventMinute } from '@/shared/utils/event-minute'
+
 export function normalizeFootballEventText(value?: string | null) {
   return (value ?? '')
     .toLowerCase()
@@ -20,6 +22,8 @@ export type FootballEventLike = {
   type?: string | null
   detail?: string | null
   comments?: string | null
+  minute?: number | null
+  extra_minute?: number | null
   playerName?: string | null
   player_name?: string | null
   assistName?: string | null
@@ -78,11 +82,19 @@ export function getEventAssistName(event: FootballEventLike) {
 }
 
 function getEventExternalId(event: FootballEventLike) {
-  return event.external_event_id ?? event.id ?? null
+  return event.external_event_id ?? null
 }
 
 export function getEventTeamId(event: FootballEventLike) {
   return event.team?.id ?? event.team_id ?? null
+}
+
+export function getEventMinute(event: FootballEventLike) {
+  return event.time?.elapsed ?? event.minute ?? null
+}
+
+export function getEventExtraMinute(event: FootballEventLike) {
+  return event.time?.extra ?? event.extra_minute ?? null
 }
 
 export function getEventPlayerId(event: FootballEventLike) {
@@ -295,8 +307,8 @@ export function isPenaltyShootoutEvent(event: FootballEventLike) {
     getEventDetail(event),
     getEventComments(event)
   )
-  const elapsed = event.time?.elapsed ?? 0
-  const extra = event.time?.extra ?? 0
+  const elapsed = getEventMinute(event) ?? 0
+  const extra = getEventExtraMinute(event) ?? 0
 
   return (
     combined.includes('penalty shootout') ||
@@ -337,11 +349,12 @@ export function formatMatchEventStableKey(
     matchId ?? event.match_id ?? 'match',
     getEventType(event) ?? 'type',
     getEventDetail(event) ?? 'detail',
-    event.time?.elapsed ?? 'minute',
-    formatEventKeyExtra(event.time?.extra),
+    getEventMinute(event) ?? 'minute',
+    formatEventKeyExtra(getEventExtraMinute(event)),
     getEventTeamId(event) ?? event.team?.name ?? 'team',
     getEventPlayerName(event) ?? 'player',
     getEventAssistName(event) ?? 'assist',
+    getEventComments(event) ?? 'comments',
   ].map((part) =>
     String(part)
       .normalize('NFD')
@@ -358,14 +371,16 @@ export const getMatchEventDedupeKey = formatMatchEventStableKey
 function formatMatchEventDisplayKey(event: FootballEventLike, matchId?: string | number | null) {
   const displayDetail = isSubstitutionEvent(event)
     ? 'substitution'
+    : isVarEvent(event) || isCancelledEvent(event)
+      ? [getEventDetail(event), getEventComments(event)].filter(Boolean).join(':') || 'var'
     : getEventDetail(event) ?? 'detail'
 
   return [
     matchId ?? event.match_id ?? 'match',
     getEventType(event) ?? 'type',
     displayDetail,
-    event.time?.elapsed ?? 'minute',
-    formatEventKeyExtra(event.time?.extra),
+    getEventMinute(event) ?? 'minute',
+    formatEventKeyExtra(getEventExtraMinute(event)),
     getEventTeamId(event) ?? event.team?.name ?? 'team',
     normalizePersonDisplayRef(getEventPlayerName(event)) || 'player',
   ].map((part) =>
@@ -387,8 +402,8 @@ function eventCompletenessScore(event: FootballEventLike) {
     getEventPlayerName(event),
     getEventAssistId(event),
     getEventAssistName(event),
-    event.time?.elapsed,
-    event.time?.extra,
+    getEventMinute(event),
+    getEventExtraMinute(event),
     getEventType(event),
     getEventDetail(event),
     getEventComments(event),
@@ -404,7 +419,7 @@ function eventCompletenessScore(event: FootballEventLike) {
 }
 
 function getEventSortValue(event: FootballEventLike) {
-  return (event.time?.elapsed ?? 0) * 100 + (event.time?.extra ?? 0)
+  return (getEventMinute(event) ?? 0) * 100 + (getEventExtraMinute(event) ?? 0)
 }
 
 export function dedupeTimelineEvents<T extends FootballEventLike>(
@@ -473,6 +488,14 @@ export function getTimelineEvents<T extends FootballEventLike>(
   return dedupeTimelineEvents(events, options)
 }
 
+export function dedupeRankingEvents<T extends FootballEventLike>(events: T[]) {
+  return dedupeTimelineEvents(events, {
+    descending: false,
+    excludePenaltyShootout: true,
+    semanticDedupe: true,
+  })
+}
+
 export function normalizeSubstitutionEvent(
   event: FootballEventLike,
   context: {
@@ -511,8 +534,8 @@ export function normalizeSubstitutionEvent(
 
   return {
     type: 'substitution' as const,
-    minute: event.time?.elapsed ?? null,
-    extraMinute: event.time?.extra ?? null,
+    minute: getEventMinute(event),
+    extraMinute: getEventExtraMinute(event),
     teamId: getEventTeamId(event),
     teamName: event.team?.name ?? null,
     playerInName,
@@ -632,6 +655,8 @@ export function isValidAssistEvent(event: FootballEventLike) {
   )
 }
 
+export const isValidAssistForAssistTable = isValidAssistEvent
+
 export function isYellowCardEvent(event: FootballEventLike) {
   const normalizedType = normalizeFootballEventText(getEventType(event))
   const normalizedDetail = normalizeFootballEventText(getEventDetail(event))
@@ -642,6 +667,46 @@ export function isYellowCardEvent(event: FootballEventLike) {
     !normalizedDetail.includes('second yellow') &&
     !normalizedDetail.includes('red') &&
     !isCancelledEvent(event)
+  )
+}
+
+export const isValidYellowCard = isYellowCardEvent
+
+export function isValidGoalForScore(event: FootballEventLike) {
+  return isScoreboardGoalEvent(getEventType(event), getEventDetail(event))
+}
+
+export function isCancelledGoalEvent(event: FootballEventLike) {
+  const combined = eventText(
+    getEventType(event),
+    getEventDetail(event),
+    getEventComments(event)
+  )
+
+  return (
+    isCancelledEvent(event) &&
+    (
+      combined.includes('goal') ||
+      combined.includes('gol')
+    )
+  )
+}
+
+export function isCancelledCardEvent(event: FootballEventLike) {
+  const combined = eventText(
+    getEventType(event),
+    getEventDetail(event),
+    getEventComments(event)
+  )
+
+  return (
+    isCancelledEvent(event) &&
+    (
+      combined.includes('card') ||
+      combined.includes('tarjeta') ||
+      combined.includes('yellow') ||
+      combined.includes('red')
+    )
   )
 }
 
@@ -659,6 +724,25 @@ export function isRedCardEvent(event: FootballEventLike) {
     !isCancelledEvent(event)
   )
 }
+
+export const isValidRedCard = isRedCardEvent
+
+export function isSecondYellowCardEvent(event: FootballEventLike) {
+  const normalizedType = normalizeFootballEventText(getEventType(event))
+  const normalizedDetail = normalizeFootballEventText(getEventDetail(event))
+
+  return (
+    normalizedType.includes('card') &&
+    normalizedDetail.includes('second yellow') &&
+    !isCancelledEvent(event)
+  )
+}
+
+export function isOwnGoal(event: FootballEventLike) {
+  return getGoalKindFromDetail(getEventDetail(event)) === 'own-goal'
+}
+
+export const isMissedPenalty = isMissedPenaltyEvent
 
 export function isGoalEvent(event: FootballEventLike) {
   const kind = normalizeMatchEvent(event).kind
@@ -889,8 +973,8 @@ export function normalizeMatchEvent(event: FootballEventLike): NormalizedMatchEv
     playerRole,
     playerInName: substitution?.playerInName ?? null,
     playerOutName: substitution?.playerOutName ?? null,
-    minute: event.time?.elapsed ?? null,
-    extraMinute: event.time?.extra ?? null,
+    minute: getEventMinute(event),
+    extraMinute: getEventExtraMinute(event),
     isGoalForScoreboard: isScoreboardGoalEvent(getEventType(event), getEventDetail(event)),
     isMissedPenalty: kind === 'penalty-missed',
     isSubstitution: kind === 'substitution',

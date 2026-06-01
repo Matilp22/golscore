@@ -17,6 +17,7 @@ import {
   getArgentinaDateISO,
 } from '@/shared/utils/argentina-time'
 import {
+  formatMatchEventStableKey,
   getGoalKindFromDetail,
   getImportantLiveEventKind,
   isRedCardEvent,
@@ -220,6 +221,7 @@ export type LeagueFixtureEventSummary = {
   extraMinute?: number | null
   type: string
   detail?: string | null
+  comments?: string | null
 }
 
 export type LeagueFixtureSummary = {
@@ -1298,6 +1300,35 @@ function mapStoredGoalEvent(row: StoredMatchEventRow): MatchGoalScorer | null {
   }
 }
 
+function storedEventCompletenessScore(row: StoredMatchEventRow) {
+  return [
+    row.external_event_id,
+    row.team_id,
+    row.player_name,
+    row.assist_name,
+    row.minute,
+    row.extra_minute,
+    row.type,
+    row.detail,
+    row.comments,
+  ].filter((value) => value !== null && value !== undefined && String(value).trim() !== '').length
+}
+
+function dedupeStoredMatchEventRows(rows: StoredMatchEventRow[]) {
+  const rowsByKey = new Map<string, StoredMatchEventRow>()
+
+  for (const row of rows) {
+    const key = formatMatchEventStableKey(row, row.match_id)
+    const current = rowsByKey.get(key)
+
+    if (!current || storedEventCompletenessScore(row) > storedEventCompletenessScore(current)) {
+      rowsByKey.set(key, row)
+    }
+  }
+
+  return [...rowsByKey.values()]
+}
+
 function getLiveEventLabel(row: StoredMatchEventRow, kind: ImportantLiveEventKind) {
   if (kind === 'red-card') return 'Tarjeta roja'
   if (kind === 'penalty') return 'Penal'
@@ -1537,16 +1568,42 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
     for (const chunk of chunkArray(matchIds, 100)) {
       const eventsResponse = await supabase
         .from('match_events')
-        .select('id, external_event_id, match_id, team_id, player_name, minute, extra_minute, type, detail')
+        .select('id, external_event_id, match_id, team_id, player_name, assist_name, minute, extra_minute, type, detail, comments')
         .in('match_id', chunk)
 
       if (eventsResponse.error) {
         const message = eventsResponse.error.message.toLowerCase()
+        const isMissingOptionalEventsColumn =
+          eventsResponse.error.code === '42703' ||
+          eventsResponse.error.code === 'PGRST204' ||
+          message.includes('comments') ||
+          message.includes('assist_name') ||
+          message.includes('schema cache')
         const isMissingOptionalEventsTable =
           eventsResponse.error.code === '42P01' ||
           eventsResponse.error.code === 'PGRST205' ||
-          message.includes('match_events') ||
-          message.includes('schema cache')
+          message.includes('match_events')
+
+        if (isMissingOptionalEventsColumn) {
+          const fallbackResponse = await supabase
+            .from('match_events')
+            .select('id, external_event_id, match_id, team_id, player_name, minute, extra_minute, type, detail')
+            .in('match_id', chunk)
+
+          if (fallbackResponse.error) {
+            const fallbackMessage = fallbackResponse.error.message.toLowerCase()
+            const isMissingFallbackTable =
+              fallbackResponse.error.code === '42P01' ||
+              fallbackResponse.error.code === 'PGRST205' ||
+              fallbackMessage.includes('match_events')
+
+            if (isMissingFallbackTable) return extrasByExternalId
+            throw fallbackResponse.error
+          }
+
+          eventRows.push(...((fallbackResponse.data ?? []) as StoredMatchEventRow[]))
+          continue
+        }
 
         if (isMissingOptionalEventsTable) return extrasByExternalId
         throw eventsResponse.error
@@ -1555,10 +1612,11 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
       eventRows.push(...((eventsResponse.data ?? []) as StoredMatchEventRow[]))
     }
 
-    const goalEvents = eventRows.filter((event) =>
+    const dedupedEventRows = dedupeStoredMatchEventRows(eventRows)
+    const goalEvents = dedupedEventRows.filter((event) =>
       isScoreboardGoalEvent(event.type, event.detail)
     )
-    const importantLiveEvents = eventRows.filter((event) =>
+    const importantLiveEvents = dedupedEventRows.filter((event) =>
       Boolean(getImportantLiveEventKind(event.type, event.detail))
     )
     const eventsFoundByMatchId = goalEvents.reduce<Map<string, number>>((accumulator, event) => {
@@ -1664,6 +1722,7 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
         matchIds: matchIds.length,
         broadcastRows: broadcastRows.length,
         storedEvents: eventRows.length,
+        dedupedStoredEvents: dedupedEventRows.length,
         goalEvents: goalEvents.length,
         importantLiveEvents: importantLiveEvents.length,
         mappedHomeGoals,
@@ -4457,6 +4516,7 @@ function mapStoredEventToLeagueFixtureEvent(
     extraMinute: row.extra_minute,
     type: row.type,
     detail: row.detail,
+    comments: row.comments ?? null,
   }
 }
 
@@ -4464,7 +4524,7 @@ async function enrichLeagueFixturesWithStoredEvents(
   leagueId: number,
   fixtures: LeagueFixtureSummary[]
 ) {
-  if (leagueId !== 130 || !fixtures.length) return fixtures
+  if (!fixtures.length) return fixtures
 
   try {
     const supabase = getSupabaseAdminClient()
@@ -4496,12 +4556,39 @@ async function enrichLeagueFixturesWithStoredEvents(
     for (const chunk of chunkArray([...matchRowsByMatchId.keys()], 100)) {
       const response = await supabase
         .from('match_events')
-        .select('id, external_event_id, match_id, team_id, player_name, assist_name, minute, extra_minute, type, detail')
+        .select('id, external_event_id, match_id, team_id, player_name, assist_name, minute, extra_minute, type, detail, comments')
         .in('match_id', chunk)
         .order('minute', { ascending: true })
         .order('extra_minute', { ascending: true })
 
       if (response.error) {
+        if (
+          response.error.code === '42703' ||
+          response.error.code === 'PGRST204' ||
+          response.error.message.toLowerCase().includes('comments') ||
+          response.error.message.toLowerCase().includes('schema cache')
+        ) {
+          const fallbackResponse = await supabase
+            .from('match_events')
+            .select('id, external_event_id, match_id, team_id, player_name, assist_name, minute, extra_minute, type, detail')
+            .in('match_id', chunk)
+            .order('minute', { ascending: true })
+            .order('extra_minute', { ascending: true })
+
+          if (fallbackResponse.error) {
+            if (isMissingOptionalStoredEvents(fallbackResponse.error)) return fixtures
+            throw fallbackResponse.error
+          }
+
+          for (const event of (fallbackResponse.data ?? []) as StoredMatchEventRow[]) {
+            const matchId = String(event.match_id)
+            const current = eventsByMatchId.get(matchId) ?? []
+            current.push(event)
+            eventsByMatchId.set(matchId, current)
+          }
+          continue
+        }
+
         if (isMissingOptionalStoredEvents(response.error)) return fixtures
         throw response.error
       }
@@ -4518,7 +4605,7 @@ async function enrichLeagueFixturesWithStoredEvents(
       const matchRow = matchRowsByExternalId.get(String(fixture.id))
       if (!matchRow) return fixture
 
-      const events = (eventsByMatchId.get(String(matchRow.id)) ?? [])
+      const events = dedupeStoredMatchEventRows(eventsByMatchId.get(String(matchRow.id)) ?? [])
         .map((event) => mapStoredEventToLeagueFixtureEvent(event, matchRow))
         .sort((a, b) => {
           if ((a.minute ?? 0) !== (b.minute ?? 0)) return (a.minute ?? 0) - (b.minute ?? 0)
@@ -4531,7 +4618,7 @@ async function enrichLeagueFixturesWithStoredEvents(
       }
     })
   } catch (error) {
-    console.warn('[copa-argentina:events] No se pudieron leer incidencias desde Supabase.', {
+    console.warn('[league-fixtures:events] No se pudieron leer incidencias desde Supabase.', {
       leagueId,
       message: error instanceof Error ? error.message : String(error),
     })

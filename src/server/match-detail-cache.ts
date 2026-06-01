@@ -971,7 +971,6 @@ async function upsertStoredMatchEvents(
   }
 
   const mappedRows = input.events
-    .filter((event) => event.time?.elapsed !== null && event.time?.elapsed !== undefined)
     .map((event) => {
       const apiTeamId = toNumber(event.team?.id)
       const teamId =
@@ -1012,7 +1011,7 @@ async function upsertStoredMatchEvents(
           event.type ||
           'Evento',
         assist_name: event.assist?.name ?? null,
-        minute: event.time?.elapsed ?? 0,
+        minute: event.time?.elapsed ?? null,
         extra_minute: event.time?.extra ?? null,
         type: event.type ?? 'Event',
         detail: event.detail ?? null,
@@ -1086,6 +1085,7 @@ async function upsertStoredMatchEvents(
         extra_minute: row.extra_minute,
         type: row.type,
         detail: row.detail,
+        comments: row.comments ?? null,
       }) === formatMatchEventStableKey(
         {
           time: {
@@ -1109,6 +1109,7 @@ async function upsertStoredMatchEvents(
             : null,
           type: nextRow.type as string | null,
           detail: nextRow.detail as string | null,
+          comments: nextRow.comments as string | null,
         },
         input.match.id
       )

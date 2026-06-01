@@ -12,7 +12,10 @@ import {
 } from '@/shared/utils/competition-filter'
 import { getArgentinaTodayISO } from '@/shared/utils/argentina-time'
 import { formatEventMinute } from '@/shared/utils/event-minute'
-import { isScoreboardGoalEvent } from '@/shared/utils/football-events'
+import {
+  formatMatchEventStableKey,
+  isScoreboardGoalEvent,
+} from '@/shared/utils/football-events'
 
 type MatchRow = {
   id: string | number
@@ -26,13 +29,17 @@ type MatchRow = {
 }
 
 type MatchEventRow = {
+  id?: string | number | null
+  external_event_id?: string | number | null
   match_id: string | number
   team_id: string | number | null
-  player_name: string
-  minute: number
+  player_name: string | null
+  assist_name?: string | null
+  minute: number | null
   extra_minute: number | null
   type: string
   detail: string | null
+  comments?: string | null
 }
 
 type MatchBroadcastRow = {
@@ -91,6 +98,17 @@ function countGoalScorers(goalScorers?: MatchGoalScorers | null) {
     (goalScorers?.away.length ?? 0) +
     (goalScorers?.unassigned?.length ?? 0)
   )
+}
+
+function dedupeEventRows(events: MatchEventRow[]) {
+  const rowsByKey = new Map<string, MatchEventRow>()
+
+  for (const event of events) {
+    const key = formatMatchEventStableKey(event, event.match_id)
+    if (!rowsByKey.has(key)) rowsByKey.set(key, event)
+  }
+
+  return [...rowsByKey.values()]
 }
 
 function isVisibleHomeCompetition(match: Awaited<ReturnType<typeof getMatchesByDate>>[number]) {
@@ -179,10 +197,19 @@ export async function GET(request: Request) {
     for (const chunk of chunkArray(internalMatchIds, 100)) {
       const response = await supabase
         .from('match_events')
-        .select('match_id, team_id, player_name, minute, extra_minute, type, detail')
+        .select('id, external_event_id, match_id, team_id, player_name, assist_name, minute, extra_minute, type, detail, comments')
         .in('match_id', chunk)
 
-      if (response.error) throw response.error
+      if (response.error) {
+        const fallback = await supabase
+          .from('match_events')
+          .select('id, external_event_id, match_id, team_id, player_name, minute, extra_minute, type, detail')
+          .in('match_id', chunk)
+
+        if (fallback.error) throw fallback.error
+        eventRows.push(...((fallback.data ?? []) as MatchEventRow[]))
+        continue
+      }
 
       eventRows.push(...((response.data ?? []) as MatchEventRow[]))
     }
@@ -230,7 +257,7 @@ export async function GET(request: Request) {
       const externalId = match.externalId ?? match.id
       const matchRow = matchRowsByExternalId.get(String(externalId)) ?? null
       const events = matchRow ? eventsByMatchId.get(String(matchRow.id)) ?? [] : []
-      const goalEvents = events.filter((event) =>
+      const goalEvents = dedupeEventRows(events).filter((event) =>
         isScoreboardGoalEvent(event.type, event.detail)
       )
       const renderedMatch = renderedMatchesByExternalId.get(String(externalId)) ?? null

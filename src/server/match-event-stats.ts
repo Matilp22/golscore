@@ -1,16 +1,23 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
+import { fetchMatchDetailProviderCounts, serializeError, syncMatchDetail } from '@/server/match-detail-cache'
 import {
+  dedupeRankingEvents,
   getEventAssistName,
   getEventPlayerName,
   getGoalKindFromDetail,
+  isCancelledCardEvent,
   isCancelledEvent,
-  isRedCardEvent,
+  isCancelledGoalEvent,
+  isMissedPenalty,
+  isOwnGoal,
   isScoreboardGoalEvent,
-  isValidAssistEvent,
+  isSecondYellowCardEvent,
+  isValidAssistForAssistTable,
   isValidGoalForScorerTable,
-  isYellowCardEvent,
+  isValidRedCard,
+  isValidYellowCard,
   normalizeFootballEventText,
   type FootballEventLike,
 } from '@/shared/utils/football-events'
@@ -27,6 +34,9 @@ export type EventStatsTopPlayerRow = {
   teamLogo?: string
   value: number
   details?: string
+  matches?: number
+  penalties?: number
+  secondYellowReds?: number
 }
 
 export type EventStatsLeaders = {
@@ -69,6 +79,7 @@ export type MatchEventStatsRow = FootballEventLike & {
   extra_minute: number | null
   type: string | null
   detail: string | null
+  comments?: string | null
 }
 
 type TeamRow = {
@@ -97,6 +108,7 @@ type EventLeaderAccumulator = {
   value: number
   penalties: number
   secondYellowReds: number
+  matchIds: Set<string>
   kind: 'scorers' | 'assists' | 'yellowCards' | 'redCards'
 }
 
@@ -208,15 +220,35 @@ async function fetchEventsByMatchIds(supabase: SupabaseClient, matchIds: string[
   const events: MatchEventStatsRow[] = []
 
   for (const chunk of chunkArray(matchIds, 100)) {
-    const chunkEvents = await fetchAllByRange<MatchEventStatsRow>((from, to) =>
-      supabase
+    const chunkEvents = await fetchAllByRange<MatchEventStatsRow>(async (from, to) => {
+      const withComments = await supabase
         .from('match_events')
-        .select('id, external_event_id, match_id, team_id, player_name, assist_name, minute, extra_minute, type, detail')
+        .select('id, external_event_id, match_id, team_id, player_name, assist_name, minute, extra_minute, type, detail, comments')
         .in('match_id', chunk)
         .order('minute', { ascending: true, nullsFirst: false })
         .order('extra_minute', { ascending: true, nullsFirst: false })
         .range(from, to)
-    )
+
+      if (
+        withComments.error &&
+        (
+          withComments.error.code === '42703' ||
+          withComments.error.code === 'PGRST204' ||
+          withComments.error.message.toLowerCase().includes('comments') ||
+          withComments.error.message.toLowerCase().includes('schema cache')
+        )
+      ) {
+        return supabase
+          .from('match_events')
+          .select('id, external_event_id, match_id, team_id, player_name, assist_name, minute, extra_minute, type, detail')
+          .in('match_id', chunk)
+          .order('minute', { ascending: true, nullsFirst: false })
+          .order('extra_minute', { ascending: true, nullsFirst: false })
+          .range(from, to)
+      }
+
+      return withComments
+    })
 
     events.push(...chunkEvents)
   }
@@ -316,7 +348,7 @@ function addLeader(
   playerName: string | null | undefined,
   team: TeamRow | null,
   kind: EventLeaderAccumulator['kind'],
-  options: { penalty?: boolean; secondYellowRed?: boolean } = {}
+  options: { penalty?: boolean; secondYellowRed?: boolean; matchId?: DbId | null } = {}
 ) {
   const name = playerName?.trim()
   if (!name) return
@@ -330,6 +362,7 @@ function addLeader(
     current.value += 1
     if (options.penalty) current.penalties += 1
     if (options.secondYellowRed) current.secondYellowReds += 1
+    if (options.matchId !== null && options.matchId !== undefined) current.matchIds.add(String(options.matchId))
     if (!current.teamInternalId && team?.id) current.teamInternalId = String(team.id)
     if (!current.teamExternalId) current.teamExternalId = toNumericExternalId(team?.external_id)
     if (!current.teamExternalKey && team?.external_id) current.teamExternalKey = String(team.external_id)
@@ -349,6 +382,10 @@ function addLeader(
     value: 1,
     penalties: options.penalty ? 1 : 0,
     secondYellowReds: options.secondYellowRed ? 1 : 0,
+    matchIds:
+      options.matchId !== null && options.matchId !== undefined
+        ? new Set([String(options.matchId)])
+        : new Set(),
     kind,
   })
 }
@@ -492,6 +529,9 @@ function toRows(
         teamLogo: leader.teamLogo,
         value: leader.value,
         details: getLeaderDetails(leader),
+        matches: leader.matchIds.size || undefined,
+        penalties: leader.penalties || undefined,
+        secondYellowReds: leader.secondYellowReds || undefined,
       }
     })
 }
@@ -508,25 +548,31 @@ export function buildEventStatsLeaders(
   const redCards = new Map<string, EventLeaderAccumulator>()
   const countedRedCards = new Set<string>()
   const playerLookups = buildPlayerLookups(players)
+  const dedupedEvents = dedupeRankingEvents(events)
 
-  for (const event of events) {
+  for (const event of dedupedEvents) {
     const team = getEventTeam(event, matchesById, teamsById)
 
     if (isValidGoalForScorerTable(event)) {
       addLeader(scorers, getEventPlayerName(event), team, 'scorers', {
         penalty: getGoalKindFromDetail(event.detail) === 'penalty',
+        matchId: event.match_id,
       })
     }
 
-    if (isValidAssistEvent(event)) {
-      addLeader(assists, getEventAssistName(event), team, 'assists')
+    if (isValidAssistForAssistTable(event)) {
+      addLeader(assists, getEventAssistName(event), team, 'assists', {
+        matchId: event.match_id,
+      })
     }
 
-    if (isYellowCardEvent(event)) {
-      addLeader(yellowCards, getEventPlayerName(event), team, 'yellowCards')
+    if (isValidYellowCard(event)) {
+      addLeader(yellowCards, getEventPlayerName(event), team, 'yellowCards', {
+        matchId: event.match_id,
+      })
     }
 
-    if (isRedCardEvent(event)) {
+    if (isValidRedCard(event)) {
       const redKey = [
         event.match_id,
         event.team_id,
@@ -537,6 +583,7 @@ export function buildEventStatsLeaders(
         countedRedCards.add(redKey)
         addLeader(redCards, getEventPlayerName(event), team, 'redCards', {
           secondYellowRed: normalizeFootballEventText(event.detail).includes('second yellow'),
+          matchId: event.match_id,
         })
       }
     }
@@ -554,28 +601,19 @@ export async function getLeagueEventStatsLeaders(
   leagueExternalId: number | string,
   season?: number
 ): Promise<EventStatsLeaders> {
-  const warnings: string[] = []
-  const supabase = getSupabaseAdminClient()
-  const dataset = await fetchLeagueEventStatsDataset(supabase, leagueExternalId, season)
-
-  if (!dataset.leagues.length) {
-    warnings.push('No se encontro la competencia en Supabase.')
-  }
-
-  if (!dataset.matches.length) {
-    warnings.push('No se encontraron partidos para la competencia en Supabase.')
-  }
-
-  if (!dataset.events.length) {
-    warnings.push('No hay eventos cargados en match_events para esta competencia.')
-  }
-
-  const matchesById = new Map(dataset.matches.map((match) => [String(match.id), match]))
+  const rankings = await buildCompetitionIncidentRankings({
+    leagueExternalId,
+    season,
+    includeKnockouts: true,
+  })
 
   return {
-    ...buildEventStatsLeaders(dataset.events, matchesById, dataset.teamsById, dataset.players),
-    hasEvents: dataset.events.length > 0,
-    warnings,
+    scorers: rankings.rankings.scorers,
+    assists: rankings.rankings.assists,
+    yellowCards: rankings.rankings.yellowCards,
+    redCards: rankings.rankings.redCards,
+    hasEvents: rankings.counts.eventsDeduped > 0,
+    warnings: rankings.warnings,
   }
 }
 
@@ -605,6 +643,424 @@ function serializeTopRows(rows: EventStatsTopPlayerRow[]) {
   }))
 }
 
+function sumLeaderValues(rows: EventStatsTopPlayerRow[]) {
+  return rows.reduce((sum, row) => sum + row.value, 0)
+}
+
+function groupEventsByMatchId(events: MatchEventStatsRow[]) {
+  return events.reduce<Map<string, MatchEventStatsRow[]>>((accumulator, event) => {
+    const matchId = String(event.match_id)
+    const current = accumulator.get(matchId) ?? []
+
+    current.push(event)
+    accumulator.set(matchId, current)
+
+    return accumulator
+  }, new Map())
+}
+
+function getExpectedGoals(match: MatchRow) {
+  if (match.home_score === null || match.away_score === null) return null
+
+  return match.home_score + match.away_score
+}
+
+function getMatchLabel(match: MatchRow, teamsById: Map<string, TeamRow>) {
+  const home = match.home_team_id ? teamsById.get(String(match.home_team_id)) : null
+  const away = match.away_team_id ? teamsById.get(String(match.away_team_id)) : null
+
+  return {
+    match_id: match.id,
+    external_id: match.external_id,
+    round: match.round,
+    home: home?.name ?? null,
+    away: away?.name ?? null,
+    status: match.status,
+    match_date: match.match_date,
+  }
+}
+
+function buildMissingGoalMatches(
+  matches: MatchRow[],
+  eventsByMatchId: Map<string, MatchEventStatsRow[]>,
+  teamsById: Map<string, TeamRow>
+) {
+  return matches
+    .filter((match) => isFinishedStatus(match.status))
+    .map((match) => {
+      const expectedGoals = getExpectedGoals(match)
+      const goalEvents = (eventsByMatchId.get(String(match.id)) ?? []).filter((event) =>
+        isScoreboardGoalEvent(event.type, event.detail)
+      )
+
+      return {
+        ...getMatchLabel(match, teamsById),
+        expected_goals: expectedGoals,
+        valid_goal_events: goalEvents.length,
+        missing_goals:
+          expectedGoals === null ? null : Math.max(expectedGoals - goalEvents.length, 0),
+      }
+    })
+    .filter((match) => match.missing_goals !== null && match.missing_goals > 0)
+}
+
+function buildCompetitionWarnings(input: {
+  leagues: LeagueRow[]
+  matches: MatchRow[]
+  events: MatchEventStatsRow[]
+  finishedMatchesWithoutEvents: number
+  matchesWithMissingGoals: number
+}) {
+  const warnings: string[] = []
+
+  if (!input.leagues.length) warnings.push('No se encontro la competencia en Supabase.')
+  if (!input.matches.length) warnings.push('No se encontraron partidos para la competencia en Supabase.')
+  if (!input.events.length) warnings.push('No hay eventos cargados en match_events para esta competencia.')
+  if (input.finishedMatchesWithoutEvents > 0) {
+    warnings.push('Hay partidos finalizados sin eventos en match_events; ejecutar sync-competition-incidents.')
+  }
+  if (input.matchesWithMissingGoals > 0) {
+    warnings.push('Hay partidos finalizados con goles faltantes en match_events.')
+  }
+
+  return warnings
+}
+
+export async function buildCompetitionIncidentRankings(input: {
+  leagueExternalId: number | string
+  season?: number
+  includeKnockouts?: boolean
+}) {
+  const supabase = getSupabaseAdminClient()
+  const includeKnockouts = input.includeKnockouts ?? true
+  const dataset = await fetchLeagueEventStatsDataset(supabase, input.leagueExternalId, input.season)
+  const matchesById = new Map(dataset.matches.map((match) => [String(match.id), match]))
+  const dedupedEvents = dedupeRankingEvents(dataset.events)
+  const leaders = buildEventStatsLeaders(dedupedEvents, matchesById, dataset.teamsById, dataset.players)
+  const eventsByMatchId = groupEventsByMatchId(dedupedEvents)
+  const finishedMatches = dataset.matches.filter((match) => isFinishedStatus(match.status))
+  const matchesWithEvents = new Set(dedupedEvents.map((event) => String(event.match_id)))
+  const finishedWithoutEvents = finishedMatches.filter((match) => !matchesWithEvents.has(String(match.id)))
+  const matchesWithMissingGoals = buildMissingGoalMatches(
+    dataset.matches,
+    eventsByMatchId,
+    dataset.teamsById
+  )
+  const scorerGoals = dedupedEvents.filter(isValidGoalForScorerTable)
+  const scoreboardGoals = dedupedEvents.filter((event) =>
+    isScoreboardGoalEvent(event.type, event.detail)
+  )
+  const penaltiesScored = scorerGoals.filter((event) => getGoalKindFromDetail(event.detail) === 'penalty')
+  const ownGoals = scoreboardGoals.filter(isOwnGoal)
+  const missedPenalties = dedupedEvents.filter(isMissedPenalty)
+  const assistEvents = dedupedEvents.filter(isValidAssistForAssistTable)
+  const yellowCardEvents = dedupedEvents.filter(isValidYellowCard)
+  const redCardEvents = dedupedEvents.filter(isValidRedCard)
+  const secondYellowEvents = dedupedEvents.filter(isSecondYellowCardEvent)
+  const cancelledGoals = dedupedEvents.filter(isCancelledGoalEvent)
+  const cancelledCards = dedupedEvents.filter(isCancelledCardEvent)
+  const warnings = buildCompetitionWarnings({
+    leagues: dataset.leagues,
+    matches: dataset.matches,
+    events: dataset.events,
+    finishedMatchesWithoutEvents: finishedWithoutEvents.length,
+    matchesWithMissingGoals: matchesWithMissingGoals.length,
+  })
+
+  return {
+    ok: true,
+    source: 'supabase_match_events' as const,
+    includeKnockouts,
+    leagueExternalId: String(input.leagueExternalId),
+    requestedSeason: input.season ?? null,
+    league: dataset.leagues.map((league) => ({
+      id: league.id,
+      external_id: league.external_id,
+      name: league.name,
+      season: league.season ?? null,
+    })),
+    phasesIncluded: [...new Set(dataset.matches.map((match) => match.round).filter(Boolean))],
+    rankings: {
+      scorers: leaders.scorers,
+      assists: leaders.assists,
+      yellowCards: leaders.yellowCards,
+      redCards: leaders.redCards,
+    },
+    counts: {
+      matchesTotal: dataset.matches.length,
+      matchesFinal: finishedMatches.length,
+      matchesWithEvents: matchesWithEvents.size,
+      eventsRaw: dataset.events.length,
+      eventsDeduped: dedupedEvents.length,
+      scoreboardGoals: scoreboardGoals.length,
+      scorerGoals: scorerGoals.length,
+      penaltiesScored: penaltiesScored.length,
+      ownGoalsExcludedFromScorers: ownGoals.length,
+      missedPenaltiesExcludedFromScorers: missedPenalties.length,
+      assists: assistEvents.length,
+      yellowCards: yellowCardEvents.length,
+      redCards: redCardEvents.length,
+      secondYellowRedCards: secondYellowEvents.length,
+      cancelledGoalsExcluded: cancelledGoals.length,
+      cancelledCardsExcluded: cancelledCards.length,
+    },
+    rankingRows: {
+      scorers: leaders.scorers.length,
+      assists: leaders.assists.length,
+      yellowCards: leaders.yellowCards.length,
+      redCards: leaders.redCards.length,
+    },
+    rankingEventSums: {
+      scorers: sumLeaderValues(leaders.scorers),
+      assists: sumLeaderValues(leaders.assists),
+      yellowCards: sumLeaderValues(leaders.yellowCards),
+      redCards: sumLeaderValues(leaders.redCards),
+    },
+    coverage: {
+      fullCompetitionQuery: true,
+      allPhasesIncluded: includeKnockouts,
+      finishedMatchesWithoutEvents: finishedWithoutEvents.length,
+      matchesWithMissingGoals: matchesWithMissingGoals.length,
+      needsSync:
+        finishedWithoutEvents.length > 0 ||
+        matchesWithMissingGoals.length > 0,
+    },
+    problemMatches: {
+      finishedWithoutEvents: finishedWithoutEvents.slice(0, 50).map((match) =>
+        getMatchLabel(match, dataset.teamsById)
+      ),
+      matchesWithMissingGoals: matchesWithMissingGoals.slice(0, 50),
+    },
+    warnings,
+  }
+}
+
+export async function buildCompetitionIncidentRankingsAudit(input: {
+  leagueExternalId: number | string
+  season?: number
+  includeProvider?: boolean
+  onlyProblems?: boolean
+  limit?: number
+}) {
+  const limit = Math.min(Math.max(input.limit ?? 100, 1), 500)
+  const audit = await buildCompetitionIncidentRankings(input)
+  const providerSamples: Array<{
+    match: unknown
+    providerEvents: number | null
+    dbEvents: number
+    diagnosis: 'provider-no-events' | 'sync-events-not-persisted' | 'provider-not-checked' | 'provider-error'
+    error?: string
+  }> = []
+
+  if (input.includeProvider) {
+    const problemMatches = [
+      ...audit.problemMatches.matchesWithMissingGoals,
+      ...audit.problemMatches.finishedWithoutEvents,
+    ]
+    const checkedExternalIds = new Set<string>()
+
+    for (const match of problemMatches) {
+      const externalId = Number(match.external_id)
+      if (!Number.isFinite(externalId) || checkedExternalIds.has(String(externalId))) continue
+      checkedExternalIds.add(String(externalId))
+
+      if (providerSamples.length >= limit) break
+
+      try {
+        const providerCounts = await fetchMatchDetailProviderCounts(externalId, {
+          events: true,
+          lineups: false,
+          statistics: false,
+        })
+        const dbEvents =
+          'valid_goal_events' in match && typeof match.valid_goal_events === 'number'
+            ? match.valid_goal_events
+            : 0
+
+        providerSamples.push({
+          match,
+          providerEvents: providerCounts.events,
+          dbEvents,
+          diagnosis:
+            providerCounts.events > 0 && dbEvents === 0
+              ? 'sync-events-not-persisted'
+              : providerCounts.events === 0
+                ? 'provider-no-events'
+                : 'provider-not-checked',
+        })
+      } catch (error) {
+        providerSamples.push({
+          match,
+          providerEvents: null,
+          dbEvents: 0,
+          diagnosis: 'provider-error',
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
+  }
+
+  const providerSummary = {
+    checkedMatches: providerSamples.length,
+    providerNoEvents: providerSamples.filter((sample) => sample.diagnosis === 'provider-no-events').length,
+    syncEventsNotPersisted: providerSamples.filter((sample) => sample.diagnosis === 'sync-events-not-persisted').length,
+    providerErrors: providerSamples.filter((sample) => sample.diagnosis === 'provider-error').length,
+  }
+  const diagnosis = {
+    sync:
+      audit.coverage.finishedMatchesWithoutEvents > 0 ||
+      audit.coverage.matchesWithMissingGoals > 0
+        ? 'sync-incomplete'
+        : 'complete',
+    query: audit.coverage.fullCompetitionQuery ? 'full-competition' : 'partial',
+    mapper:
+      audit.counts.scorerGoals === audit.rankingEventSums.scorers &&
+      audit.counts.assists === audit.rankingEventSums.assists &&
+      audit.counts.yellowCards === audit.rankingEventSums.yellowCards
+        ? 'complete'
+        : 'mapper-missing',
+    render: 'top-list-expandable',
+  }
+
+  return {
+    ...audit,
+    onlyProblems: Boolean(input.onlyProblems),
+    provider: input.includeProvider
+      ? {
+          summary: providerSummary,
+          samples: providerSamples,
+        }
+      : null,
+    diagnosis,
+    problem:
+      diagnosis.sync !== 'complete' ||
+      diagnosis.mapper !== 'complete' ||
+      providerSummary.syncEventsNotPersisted > 0,
+  }
+}
+
+export async function syncCompetitionIncidents(input: {
+  leagueExternalId: number | string
+  season?: number
+  force?: boolean
+  onlyMissing?: boolean
+  limit?: number
+}) {
+  const supabase = getSupabaseAdminClient()
+  const limit = Math.min(Math.max(input.limit ?? 100, 1), 300)
+  const onlyMissing = input.onlyMissing ?? true
+  const dataset = await fetchLeagueEventStatsDataset(supabase, input.leagueExternalId, input.season)
+  const dedupedEvents = dedupeRankingEvents(dataset.events)
+  const eventsByMatchId = groupEventsByMatchId(dedupedEvents)
+  const candidates = dataset.matches
+    .filter((match) => isFinishedStatus(match.status))
+    .filter((match) => {
+      if (input.force && !onlyMissing) return true
+
+      const matchEvents = eventsByMatchId.get(String(match.id)) ?? []
+      const expectedGoals = getExpectedGoals(match)
+      const goalEvents = matchEvents.filter((event) => isScoreboardGoalEvent(event.type, event.detail))
+
+      return (
+        matchEvents.length === 0 ||
+        (
+          expectedGoals !== null &&
+          expectedGoals > goalEvents.length
+        ) ||
+        Boolean(input.force)
+      )
+    })
+    .slice(0, limit)
+  const items: Array<{
+    matchId: DbId
+    fixtureExternalId: number | null
+    status: 'synced' | 'skipped' | 'failed'
+    eventsBefore: number
+    eventsAfter: number
+    providerEvents: number | null
+    matchEventsUpserted: number
+    warnings: string[]
+    errors: unknown[]
+  }> = []
+
+  for (const match of candidates) {
+    const fixtureExternalId = toNumericExternalId(match.external_id)
+    const eventsBefore = (eventsByMatchId.get(String(match.id)) ?? []).length
+
+    if (!fixtureExternalId) {
+      items.push({
+        matchId: match.id,
+        fixtureExternalId: null,
+        status: 'skipped',
+        eventsBefore,
+        eventsAfter: eventsBefore,
+        providerEvents: null,
+        matchEventsUpserted: 0,
+        warnings: ['El partido no tiene external_id numerico.'],
+        errors: [],
+      })
+      continue
+    }
+
+    try {
+      const result = await syncMatchDetail(supabase, {
+        fixtureExternalId,
+        matchId: String(match.id),
+        sections: {
+          fixture: false,
+          events: true,
+          lineups: false,
+          statistics: false,
+        },
+      })
+      const afterEvents = await fetchEventsByMatchIds(supabase, [String(match.id)])
+
+      items.push({
+        matchId: match.id,
+        fixtureExternalId,
+        status: result.errors.length ? 'failed' : 'synced',
+        eventsBefore,
+        eventsAfter: dedupeRankingEvents(afterEvents).length,
+        providerEvents: result.fetched.events,
+        matchEventsUpserted: result.matchEventsUpserted,
+        warnings: result.warnings,
+        errors: result.errors,
+      })
+    } catch (error) {
+      items.push({
+        matchId: match.id,
+        fixtureExternalId,
+        status: 'failed',
+        eventsBefore,
+        eventsAfter: eventsBefore,
+        providerEvents: null,
+        matchEventsUpserted: 0,
+        warnings: [],
+        errors: [serializeError(error, 'unknown')],
+      })
+    }
+  }
+
+  return {
+    ok: true,
+    leagueExternalId: String(input.leagueExternalId),
+    season: input.season ?? null,
+    force: Boolean(input.force),
+    onlyMissing,
+    selected: candidates.length,
+    processed: items.length,
+    synced: items.filter((item) => item.status === 'synced').length,
+    failed: items.filter((item) => item.status === 'failed').length,
+    skipped: items.filter((item) => item.status === 'skipped').length,
+    eventsBefore: items.reduce((sum, item) => sum + item.eventsBefore, 0),
+    eventsAfter: items.reduce((sum, item) => sum + item.eventsAfter, 0),
+    providerEvents: items.reduce((sum, item) => sum + (item.providerEvents ?? 0), 0),
+    matchesSynced: items.filter((item) => item.matchEventsUpserted > 0).length,
+    eventsUpserted: items.reduce((sum, item) => sum + item.matchEventsUpserted, 0),
+    items,
+  }
+}
+
 export async function getLeagueEventStatsAudit(
   leagueExternalId: number | string,
   season?: number
@@ -612,6 +1068,7 @@ export async function getLeagueEventStatsAudit(
   const supabase = getSupabaseAdminClient()
   const dataset = await fetchLeagueEventStatsDataset(supabase, leagueExternalId, season)
   const matchesById = new Map(dataset.matches.map((match) => [String(match.id), match]))
+  const dedupedEvents = dedupeRankingEvents(dataset.events)
   const leaders = buildEventStatsLeaders(dataset.events, matchesById, dataset.teamsById, dataset.players)
   const duplicateCounts = dataset.events.reduce<Map<string, MatchEventStatsRow[]>>((accumulator, event) => {
     const key = getDuplicateEventKey(event)
@@ -633,24 +1090,24 @@ export async function getLeagueEventStatsAudit(
       String(event.team_id) !== String(match.away_team_id)
     )
   })
-  const scorerGoals = dataset.events.filter(isValidGoalForScorerTable)
-  const scoreboardGoals = dataset.events.filter((event) =>
+  const scorerGoals = dedupedEvents.filter(isValidGoalForScorerTable)
+  const scoreboardGoals = dedupedEvents.filter((event) =>
     isScoreboardGoalEvent(event.type, event.detail)
   )
   const ownGoals = scoreboardGoals.filter((event) =>
     getGoalKindFromDetail(event.detail) === 'own-goal'
   )
-  const yellowCards = dataset.events.filter(isYellowCardEvent)
-  const redCards = dataset.events.filter(isRedCardEvent)
-  const validAssistEvents = dataset.events.filter(isValidAssistEvent)
-  const missingPlayerEvents = dataset.events.filter((event) =>
+  const yellowCards = dedupedEvents.filter(isValidYellowCard)
+  const redCards = dedupedEvents.filter(isValidRedCard)
+  const validAssistEvents = dedupedEvents.filter(isValidAssistForAssistTable)
+  const missingPlayerEvents = dedupedEvents.filter((event) =>
     (
       isValidGoalForScorerTable(event) ||
-      isYellowCardEvent(event) ||
-      isRedCardEvent(event)
+      isValidYellowCard(event) ||
+      isValidRedCard(event)
     ) && !getEventPlayerName(event)?.trim()
   )
-  const eventsByMatchId = dataset.events.reduce<Map<string, MatchEventStatsRow[]>>(
+  const eventsByMatchId = dedupedEvents.reduce<Map<string, MatchEventStatsRow[]>>(
     (accumulator, event) => {
       const matchId = String(event.match_id)
       const current = accumulator.get(matchId) ?? []

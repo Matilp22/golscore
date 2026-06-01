@@ -394,6 +394,7 @@ function getEventSemanticKey(input: {
   teamId: DbId | null | undefined
   playerName: string | null | undefined
   assistName?: string | null | undefined
+  comments?: string | null | undefined
 }) {
   return formatMatchEventStableKey(
     {
@@ -412,6 +413,7 @@ function getEventSemanticKey(input: {
       assist: {
         name: input.assistName,
       },
+      comments: input.comments,
     },
     input.matchId
   )
@@ -798,6 +800,7 @@ async function removeDuplicateStoredEvents(
       teamId: row.team_id,
       playerName: row.player_name,
       assistName: row.assist_name,
+      comments: row.comments,
     })
     const rows = rowsByKey.get(key) ?? []
     rows.push(row)
@@ -853,6 +856,7 @@ async function upsertMatchEvents(
       teamId: row.team_id,
       playerName: row.player_name,
       assistName: row.assist_name,
+      comments: row.comments,
     })
 
     if (row.external_event_id && !existingExternalIdByKey.has(key)) {
@@ -869,7 +873,7 @@ async function upsertMatchEvents(
       match: input.match,
       teamsById: input.teamsById,
     })
-    const minute = toNumber(event.time?.elapsed) ?? 0
+    const minute = toNumber(event.time?.elapsed)
     const extraMinute = toNumber(event.time?.extra)
     const playerName =
       cleanString(event.player?.name) ||
@@ -880,6 +884,7 @@ async function upsertMatchEvents(
     const eventType = cleanString(event.type) || 'Event'
     const eventDetail = cleanString(event.detail) || null
     const assistName = cleanString(event.assist?.name) || null
+    const comments = cleanString(event.comments) || null
     const semanticKey = getEventSemanticKey({
       matchId: input.match.id,
       type: eventType,
@@ -889,6 +894,7 @@ async function upsertMatchEvents(
       teamId,
       playerName,
       assistName,
+      comments,
     })
     const externalEventId =
       existingExternalIdByKey.get(semanticKey) ??
@@ -906,7 +912,7 @@ async function upsertMatchEvents(
       extra_minute: extraMinute,
       type: eventType,
       detail: eventDetail,
-      comments: cleanString(event.comments) || null,
+      comments,
     })
   }
 
@@ -923,6 +929,7 @@ async function upsertMatchEvents(
       teamId: row.team_id,
       playerName: row.player_name,
       assistName: row.assist_name,
+      comments: row.comments,
     })
 
     return rowsByKey.has(key)
