@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import BackButton from '@/frontend/components/BackButton'
 import BrandMark from '@/frontend/components/BrandMark'
+import SiteFooter from '@/frontend/components/SiteFooter'
 import SidebarNav from '@/frontend/components/SidebarNav'
 import { useAuth } from '@/frontend/hooks/useAuth'
 import { SIDEBAR_SECTION_CONFIGS } from '@/lib/tournament-pages'
@@ -241,6 +242,7 @@ export default function AppShell({ auth, children }: AppShellProps) {
           {children}
         </div>
       </div>
+      <SiteFooter />
     </>
   )
 }
