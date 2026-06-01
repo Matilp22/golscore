@@ -3,6 +3,7 @@ import { Analytics } from '@vercel/analytics/next'
 import AppShell from '@/frontend/components/AppShell'
 import PwaInstallPrompt from '@/frontend/components/PwaInstallPrompt'
 import AuthStatus from '@/frontend/components/auth/AuthStatus'
+import GoogleAdSense from '@/frontend/components/ads/GoogleAdSense'
 import GoogleAnalytics from '@/frontend/components/analytics/GoogleAnalytics'
 import './globals.css'
 
@@ -65,6 +66,7 @@ export default function RootLayout({
           {children}
         </AppShell>
         <PwaInstallPrompt />
+        <GoogleAdSense />
         <GoogleAnalytics />
         <Analytics />
       </body>
