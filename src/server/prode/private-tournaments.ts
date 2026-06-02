@@ -11,16 +11,16 @@ export type PrivateTournamentRole = 'owner' | 'member'
 export type JoinRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled'
 export const PRIVATE_TOURNAMENT_LEAGUE_OPTIONS = [
   {
+    externalId: '1',
+    name: 'Copa del Mundo 2026',
+  },
+  {
     externalId: '128',
     name: 'Liga Profesional Argentina',
   },
   {
     externalId: '129',
     name: 'Primera Nacional',
-  },
-  {
-    externalId: '1',
-    name: 'Mundial',
   },
 ] as const
 

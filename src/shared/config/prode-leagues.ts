@@ -1,5 +1,22 @@
 export const ALLOWED_TOURNAMENTS = [
   {
+    slug: 'mundial-2026',
+    name: 'Copa del Mundo 2026',
+    type: 'cup',
+    externalLeagueId: 1,
+    season: 2026,
+    aliases: [
+      'mundial',
+      'mundial 2026',
+      'world cup 2026',
+      'world cup',
+      'fifa world cup',
+      'copa mundial',
+      'copa del mundo',
+      'copa del mundo 2026',
+    ],
+  },
+  {
     slug: 'liga-profesional-argentina',
     name: 'Liga Profesional Argentina',
     type: 'league',
@@ -27,16 +44,9 @@ export const ALLOWED_TOURNAMENTS = [
     season: 2026,
     aliases: ['copa argentina'],
   },
-  {
-    slug: 'mundial-2026',
-    name: 'Mundial 2026',
-    type: 'cup',
-    externalLeagueId: 1,
-    season: 2026,
-    aliases: ['mundial 2026', 'world cup 2026', 'world cup', 'fifa world cup', 'copa mundial'],
-  },
 ] as const
 
+export const DEFAULT_PRODE_TOURNAMENT_SLUG = 'mundial-2026'
 export type AllowedTournamentSlug = (typeof ALLOWED_TOURNAMENTS)[number]['slug']
 export type AllowedTournament = (typeof ALLOWED_TOURNAMENTS)[number]
 

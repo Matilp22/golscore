@@ -32,9 +32,9 @@ function EmptyState({ children }: { children: string }) {
 }
 
 const PRODE_TOURNAMENT_OPTIONS = [
+  { externalId: '1', name: 'Copa del Mundo 2026' },
   { externalId: '128', name: 'Liga Profesional Argentina' },
   { externalId: '129', name: 'Primera Nacional' },
-  { externalId: '1', name: 'Mundial' },
 ]
 
 export default function PrivateTournamentsPage() {

@@ -10,8 +10,9 @@ import { TeamLogo as AssetTeamLogo } from '@/frontend/components/AssetImage'
 import LineupTabs from '@/frontend/components/LineupTabs'
 import SafeImage from '@/frontend/components/SafeImage'
 import {
-  formatMatchDateTimeArgentina,
+  ARGENTINA_TIME_ZONE,
   formatMatchTimeArgentina,
+  toArgentinaDate,
 } from '@/shared/utils/argentina-time'
 import { formatEventMinute } from '@/shared/utils/event-minute'
 import {
@@ -110,6 +111,21 @@ function formatMatchTime(dateString: string) {
   return formatMatchTimeArgentina(dateString)
 }
 
+function formatHeaderDateTime(dateString: string) {
+  const timeLabel = formatMatchTimeArgentina(dateString)
+
+  if (timeLabel === 'A confirmar') return 'A confirmar'
+
+  const dateLabel = new Intl.DateTimeFormat('es-AR', {
+    timeZone: ARGENTINA_TIME_ZONE,
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+  }).format(toArgentinaDate(dateString))
+
+  return `${dateLabel.charAt(0).toLocaleUpperCase('es-AR')}${dateLabel.slice(1)} · ${timeLabel}`
+}
+
 function isHeaderLiveStatus(statusShort: string) {
   return ['LIVE', '1H', '2H', 'ET', 'BT', 'P', 'HT'].includes(statusShort)
 }
@@ -157,37 +173,28 @@ function getMatchDisplayElapsed(status: MatchFixture['fixture']['status'], event
   return statusMinute
 }
 
-function translateCountry(country: string) {
-  const map: Record<string, string> = {
-    Argentina: 'Argentina',
-    Spain: 'España',
-    Italy: 'Italia',
-    Germany: 'Alemania',
-    England: 'Inglaterra',
-    Portugal: 'Portugal',
-    France: 'Francia',
-    Netherlands: 'Países Bajos',
-    Holland: 'Países Bajos',
-    Brazil: 'Brasil',
-    Serbia: 'Serbia',
-    World: 'Mundo',
-    Europe: 'Europa',
-    USA: 'Estados Unidos',
-    'United States': 'Estados Unidos',
-  }
-
-  return map[country] || country
-}
-
 function translateLeagueName(name: string) {
   const lower = name.toLowerCase()
 
   if (lower.includes('international friendlies')) return 'Amistoso'
   if (lower.includes('friendly international')) return 'Amistoso'
   if (lower.includes('friendlies')) return 'Amistoso'
+  if (
+    (
+      lower === 'world cup' ||
+      lower === 'mundial' ||
+      lower.includes('fifa world cup') ||
+      lower.includes('copa del mundo')
+    ) &&
+    !lower.includes('qualification') &&
+    !lower.includes('qualif') &&
+    !lower.includes('eliminatoria')
+  ) {
+    return 'Copa del Mundo 2026'
+  }
 
   const map: Record<string, string> = {
-    'World Cup': 'Mundial',
+    'World Cup': 'Copa del Mundo 2026',
     'Copa America': 'Copa América',
     'UEFA Euro': 'Eurocopa',
     'UEFA Nations League': 'Liga de Naciones UEFA',
@@ -1812,6 +1819,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
     isHome: false,
     lineup: awayLineup,
   })
+  const matchHistoryHref = `/partido/${id}/historial`
 
   if (process.env.NODE_ENV === 'development') {
     console.info('[match-detail-render]', {
@@ -1835,22 +1843,25 @@ export default async function PartidoDetallePage({ params }: PageProps) {
           <AutoRefresh
             intervalMs={headerStatusIsLive ? 30000 : 60000}
             showButton
-            className="absolute right-4 top-4 z-10"
+            className="absolute right-4 top-16 z-10 md:top-4"
           />
 
           <div className="relative z-10 border-b border-white/6 px-2 py-3 md:px-4">
-            <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
+            <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#7ff0b2] md:text-[11px]">
-                  {translateCountry(fixture.league.country)}
-                </p>
                 <h1 className="mt-1 text-base font-bold text-white md:text-xl">
                   {translateLeagueName(fixture.league.name)}
                 </h1>
-                <p className="mt-1 text-xs font-semibold text-[#c8d0da]">
-                  {formatMatchDateTimeArgentina(fixture.fixture.date)}
+                <p className="mt-2 inline-flex rounded-xl border border-[#25553d] bg-[#163828] px-3 py-1.5 text-xs font-black text-[#b8f7d2] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+                  {formatHeaderDateTime(fixture.fixture.date)}
                 </p>
               </div>
+              <Link
+                href={matchHistoryHref}
+                className="inline-flex min-h-10 items-center justify-center rounded-xl border border-[#c89d35] bg-[linear-gradient(135deg,#7c5513_0%,#d5a940_48%,#8a5f16_100%)] px-3 py-2 text-sm font-black text-[#150f05] shadow-[0_0_18px_rgba(213,169,64,0.18),inset_0_1px_0_rgba(255,255,255,0.34)] transition hover:border-[#f0c85a] hover:shadow-[0_0_24px_rgba(240,200,90,0.28),inset_0_1px_0_rgba(255,255,255,0.4)] sm:px-4"
+              >
+                Historial
+              </Link>
             </div>
           </div>
 
@@ -1892,16 +1903,16 @@ export default async function PartidoDetallePage({ params }: PageProps) {
             />
           </div>
 
-          <div className="relative z-10 grid gap-3 border-t border-white/6 bg-black/20 px-2 py-3 text-sm text-[#c8d0da] md:grid-cols-3 md:px-4">
-            <div>
+          <div className="relative z-10 grid gap-3 border-t border-white/6 bg-black/20 px-2 py-3 text-center text-sm text-[#c8d0da] md:grid-cols-3 md:px-4 md:text-left">
+            <div className="flex min-h-14 flex-col items-center justify-center md:items-start">
               <span className="text-[#8d98a7]">Estadio</span>
               <p className="mt-1 font-medium text-white">
                 {formatVenue(fixture.fixture.venue)}
               </p>
             </div>
-            <div>
+            <div className="flex min-h-14 flex-col items-center justify-center md:items-start">
               <span className="text-[#8d98a7]">TV</span>
-              <p className="mt-1 flex min-w-0 items-center gap-2 font-medium text-white">
+              <p className="mt-1 flex min-w-0 items-center justify-center gap-2 font-medium text-white md:justify-start">
                 {primaryBroadcastLogo ? (
                   <SafeImage
                     src={primaryBroadcastLogo}
@@ -1917,7 +1928,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                 <span className="min-w-0 truncate">{broadcastLabel || 'No disponible'}</span>
               </p>
             </div>
-            <div>
+            <div className="flex min-h-14 flex-col items-center justify-center md:items-start">
               <span className="text-[#8d98a7]">Árbitro</span>
               <p className="mt-1 font-medium text-white">
                 {formatReferee(fixture.fixture.referee)}

@@ -1,10 +1,20 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseServerClient } from '@/lib/supabase/server'
 import { getAllowedProdeLeagueIds } from '@/server/prode/scope'
+import {
+  buildWorldCupTeamGroupIndex,
+  getWorldCupGroupStandings,
+  inferWorldCupGroupsFromFixtures,
+  resolveWorldCupMatchGroup,
+} from '@/server/prode/world-cup-groups'
 import { getAllowedProdeLeagueLabel } from '@/shared/config/prode-leagues'
 import { normalizeLeagueRound } from '@/shared/utils/league-rounds'
 import { parseMatchDate } from '@/shared/utils/prediction-lock'
 import { pickLeagueLogoUrl, pickTeamLogoUrl } from '@/shared/utils/asset-urls'
+import {
+  getWorldCupGroupLabel,
+  isWorldCupTournamentExternalId,
+} from '@/shared/utils/world-cup-groups'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -32,6 +42,7 @@ type LeagueRow = {
   name: string | null
   country: string | null
   external_id: string | number | null
+  season?: number | null
   logo_url?: string | null
 }
 
@@ -220,7 +231,7 @@ export async function GET(request: Request) {
     leagueIds.length
       ? supabase
           .from('leagues')
-          .select('id, name, country, external_id, logo_url')
+          .select('id, name, country, external_id, season, logo_url')
           .in('id', leagueIds)
       : Promise.resolve({ data: [], error: null }),
     fetchTeamsWithLogos(supabase, teamIds),
@@ -235,6 +246,55 @@ export async function GET(request: Request) {
   const teamsById = new Map(
     ((teamsData ?? []) as TeamRow[]).map((team) => [team.id, team])
   )
+  const worldCupLeague = [...leaguesById.values()].find((league) =>
+    isWorldCupTournamentExternalId(league.external_id)
+  )
+  const worldCupSeason = worldCupLeague?.season ?? 2026
+  const worldCupGroups = worldCupLeague
+    ? await getWorldCupGroupStandings(worldCupSeason).catch((error) => {
+        console.warn('[prode-matches] No se pudieron leer standings del Mundial.', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+
+        return []
+      })
+    : []
+  const standingsWorldCupTeamGroupIndex = buildWorldCupTeamGroupIndex(worldCupGroups)
+  const inferredWorldCupGroups =
+    worldCupLeague && !standingsWorldCupTeamGroupIndex.size
+      ? inferWorldCupGroupsFromFixtures(
+          rows.map((match) => {
+            const homeTeam = match.home_team_id ? teamsById.get(match.home_team_id) : null
+            const awayTeam = match.away_team_id ? teamsById.get(match.away_team_id) : null
+
+            return {
+              round: match.round,
+              leagueExternalId: worldCupLeague.external_id,
+              homeTeam: homeTeam
+                ? {
+                    externalId: homeTeam.external_id ?? null,
+                    name: homeTeam.name,
+                  }
+                : null,
+              awayTeam: awayTeam
+                ? {
+                    externalId: awayTeam.external_id ?? null,
+                    name: awayTeam.name,
+                  }
+                : null,
+            }
+          })
+        )
+      : null
+  const worldCupTeamGroupIndex = standingsWorldCupTeamGroupIndex.size
+    ? standingsWorldCupTeamGroupIndex
+    : inferredWorldCupGroups?.teamGroupIndex ?? new Map()
+
+  if (inferredWorldCupGroups?.warnings.length) {
+    console.warn('[prode-matches] Inferencia de grupos del Mundial', {
+      warnings: inferredWorldCupGroups.warnings,
+    })
+  }
   const rowsForResponse = round
     ? rows.filter((match) => {
         const league = match.league_id ? leaguesById.get(match.league_id) : null
@@ -255,6 +315,27 @@ export async function GET(request: Request) {
     const league = match.league_id ? leaguesById.get(match.league_id) : null
     const homeTeam = match.home_team_id ? teamsById.get(match.home_team_id) : null
     const awayTeam = match.away_team_id ? teamsById.get(match.away_team_id) : null
+    const worldCupGroupKey = league && isWorldCupTournamentExternalId(league.external_id)
+      ? resolveWorldCupMatchGroup(
+          {
+            round: match.round,
+            leagueExternalId: league.external_id,
+            homeTeam: homeTeam
+              ? {
+                  externalId: homeTeam.external_id ?? null,
+                  name: homeTeam.name,
+                }
+              : null,
+            awayTeam: awayTeam
+              ? {
+                  externalId: awayTeam.external_id ?? null,
+                  name: awayTeam.name,
+                }
+              : null,
+          },
+          worldCupTeamGroupIndex
+        )
+      : null
 
     return {
       id: String(match.id),
@@ -264,6 +345,8 @@ export async function GET(request: Request) {
       matchDate: match.match_date,
       status: match.status,
       round: match.round === null || match.round === undefined ? null : String(match.round),
+      groupKey: worldCupGroupKey,
+      groupLabel: worldCupGroupKey ? getWorldCupGroupLabel(worldCupGroupKey) : null,
       homeScore: match.home_score,
       awayScore: match.away_score,
       league: league
@@ -272,9 +355,11 @@ export async function GET(request: Request) {
             externalId: league.external_id === null ? null : Number(league.external_id),
             name: getAllowedProdeLeagueLabel(league.name),
             country: league.country,
-            season: match.match_date
-              ? parseMatchDate(match.match_date).getFullYear()
-              : new Date().getFullYear(),
+            season: league.season ?? (
+              match.match_date
+                ? parseMatchDate(match.match_date).getFullYear()
+                : new Date().getFullYear()
+            ),
             logoUrl: pickLeagueLogoUrl(league.logo_url, league.external_id),
           }
         : null,

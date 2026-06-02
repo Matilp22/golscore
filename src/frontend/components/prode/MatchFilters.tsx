@@ -6,10 +6,14 @@ import type { League, RoundOption } from '@/frontend/types/prode'
 type MatchFiltersProps = {
   leagues: League[]
   rounds: RoundOption[]
+  groups?: Array<{ value: string; label: string }>
   selectedLeagueId: string | null
   selectedRound: string | null
+  selectedGroup?: string | null
+  showGroupFilter?: boolean
   onLeagueChange: (leagueId: string | null) => void
   onRoundChange: (round: string | null) => void
+  onGroupChange?: (group: string | null) => void
 }
 
 type FilterSelectProps = {
@@ -128,10 +132,14 @@ function FilterSelect({
 export default function MatchFilters({
   leagues,
   rounds,
+  groups = [],
   selectedLeagueId,
   selectedRound,
+  selectedGroup = null,
+  showGroupFilter = false,
   onLeagueChange,
   onRoundChange,
+  onGroupChange,
 }: MatchFiltersProps) {
   const leagueOptions = useMemo(
     () =>
@@ -157,23 +165,42 @@ export default function MatchFilters({
       })),
     [rounds]
   )
+  const groupOptions = useMemo(
+    () =>
+      groups.map((group) => ({
+        value: group.value,
+        label: group.label,
+      })),
+    [groups]
+  )
 
   return (
-    <div className="hf-card grid w-full min-w-0 gap-3 rounded-2xl p-3 md:grid-cols-2 md:p-4">
+    <div className={`hf-card grid w-full min-w-0 gap-3 rounded-2xl p-3 md:p-4 ${
+      showGroupFilter ? 'md:grid-cols-2 2xl:grid-cols-3' : 'md:grid-cols-2'
+    }`}>
       <FilterSelect
         label="Liga"
         value={selectedLeagueId}
-        placeholder="Elegí un torneo"
+        placeholder="Elegir torneo"
         options={leagueOptions}
         onChange={onLeagueChange}
       />
       <FilterSelect
-        label="Fecha"
+        label="Fecha / Fase"
         value={selectedRound}
         placeholder="Sin fecha disponible"
         options={roundOptions}
         onChange={onRoundChange}
       />
+      {showGroupFilter ? (
+        <FilterSelect
+          label="Grupo"
+          value={selectedGroup}
+          placeholder="Sin grupo disponible"
+          options={groupOptions}
+          onChange={(group) => onGroupChange?.(group)}
+        />
+      ) : null}
     </div>
   )
 }

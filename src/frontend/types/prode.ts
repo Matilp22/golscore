@@ -41,11 +41,35 @@ export type Match = {
   matchDate: string | null
   status: string
   round: string | null
+  groupKey?: string | null
+  groupLabel?: string | null
   homeScore: number | null
   awayScore: number | null
   league: League | null
   homeTeam: Team | null
   awayTeam: Team | null
+}
+
+export type GroupStandingRow = {
+  rank: number
+  teamId?: number
+  teamName: string
+  teamLogo?: string
+  points: number
+  played: number
+  won: number
+  drawn: number
+  lost: number
+  goalsFor: number
+  goalsAgainst: number
+  goalDifference: number
+  description?: string | null
+}
+
+export type GroupStanding = {
+  group: string
+  label: string
+  rows: GroupStandingRow[]
 }
 
 export type MatchPredictionViewModel = {

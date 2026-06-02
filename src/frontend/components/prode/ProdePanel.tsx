@@ -6,6 +6,7 @@ import MatchFilters from '@/frontend/components/prode/MatchFilters'
 import MatchList from '@/frontend/components/prode/MatchList'
 import PointsSummary from '@/frontend/components/prode/PointsSummary'
 import PredictionCard from '@/frontend/components/prode/PredictionCard'
+import WorldCupGroupStandings from '@/frontend/components/prode/WorldCupGroupStandings'
 import { useAuth } from '@/frontend/hooks/useAuth'
 import { useAutoRefresh } from '@/frontend/hooks/useAutoRefresh'
 import { getLeaderboard } from '@/frontend/services/leaderboardService'
@@ -15,6 +16,8 @@ import {
   getMyPredictions,
   savePrediction,
 } from '@/frontend/services/predictionsService'
+import { getWorldCupGroups } from '@/frontend/services/worldCupGroupsService'
+import { DEFAULT_PRODE_TOURNAMENT_SLUG } from '@/shared/config/prode-leagues'
 import {
   getCurrentProdeRound,
   getProdeRoundLabel,
@@ -22,7 +25,14 @@ import {
   isVisibleProdeRound,
   normalizeProdeRound,
 } from '@/shared/config/prode-rounds'
+import {
+  getWorldCupGroupLabel,
+  isWorldCupGroupStageRound,
+  isWorldCupTournamentExternalId,
+  sortWorldCupGroupKeys,
+} from '@/shared/utils/world-cup-groups'
 import type {
+  GroupStanding,
   LeaderboardRow,
   League,
   Match,
@@ -41,6 +51,8 @@ export default function ProdePanel() {
   const [roundLeaderboard, setRoundLeaderboard] = useState<LeaderboardRow[]>([])
   const [selectedLeagueId, setSelectedLeagueId] = useState<string | null>(null)
   const [selectedRound, setSelectedRound] = useState<string | null>(null)
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(null)
+  const [worldCupGroups, setWorldCupGroups] = useState<GroupStanding[]>([])
   const [selectedLeaderboardRound, setSelectedLeaderboardRound] = useState<string | null>(null)
   const [isLeaderboardRoundManuallySelected, setIsLeaderboardRoundManuallySelected] =
     useState(false)
@@ -49,6 +61,7 @@ export default function ProdePanel() {
   const [roundRankingMessage, setRoundRankingMessage] = useState('')
   const [isLeaguesLoading, setIsLeaguesLoading] = useState(true)
   const [isMatchesLoading, setIsMatchesLoading] = useState(false)
+  const [isWorldCupGroupsLoading, setIsWorldCupGroupsLoading] = useState(false)
   const [isRoundLeaderboardLoading, setIsRoundLeaderboardLoading] = useState(false)
   const [editingMatchIds, setEditingMatchIds] = useState<Set<string>>(new Set())
   const [predictionDrafts, setPredictionDrafts] = useState<Record<string, { home: string; away: string }>>({})
@@ -64,6 +77,13 @@ export default function ProdePanel() {
   }, [predictionDrafts])
 
   const myRanking = leaderboard.find((row) => row.userId === user?.id)
+  const selectedLeague = useMemo(
+    () => leagues.find((league) => league.id === selectedLeagueId) ?? null,
+    [leagues, selectedLeagueId]
+  )
+  const isWorldCupLeague = Boolean(
+    selectedLeague && isWorldCupTournamentExternalId(selectedLeague.externalId)
+  )
 
   const filteredMatches = useMemo(
     () =>
@@ -119,7 +139,7 @@ export default function ProdePanel() {
       : currentRound
   }, [currentRound, rounds, selectedRound])
 
-  const visibleMatches = useMemo(() => {
+  const roundMatches = useMemo(() => {
     if (!effectiveSelectedRound) return filteredMatches
 
     return filteredMatches.filter(
@@ -127,6 +147,64 @@ export default function ProdePanel() {
         normalizeProdeRound(match.round, match.league?.externalId) === effectiveSelectedRound
     )
   }, [effectiveSelectedRound, filteredMatches])
+  const selectedRoundIsWorldCupGroupStage = Boolean(
+    isWorldCupLeague &&
+      effectiveSelectedRound &&
+      isWorldCupGroupStageRound(effectiveSelectedRound, selectedLeague?.externalId)
+  )
+  const worldCupGroupsByKey = useMemo(
+    () => new Map(worldCupGroups.map((group) => [group.group, group])),
+    [worldCupGroups]
+  )
+  const groupOptions = useMemo(() => {
+    if (!selectedRoundIsWorldCupGroupStage) return []
+
+    const counts = new Map<string, number>()
+    const keys = new Set<string>()
+
+    for (const group of worldCupGroups) {
+      keys.add(group.group)
+    }
+
+    for (const match of roundMatches) {
+      if (!match.groupKey) continue
+
+      keys.add(match.groupKey)
+      counts.set(match.groupKey, (counts.get(match.groupKey) ?? 0) + 1)
+    }
+
+    return sortWorldCupGroupKeys([...keys]).map((group) => ({
+      value: group,
+      label: getWorldCupGroupLabel(group),
+      matchCount: counts.get(group) ?? 0,
+    }))
+  }, [roundMatches, selectedRoundIsWorldCupGroupStage, worldCupGroups])
+  const effectiveSelectedGroup = useMemo(() => {
+    if (!selectedRoundIsWorldCupGroupStage || !groupOptions.length) return null
+
+    const groupsWithMatches = groupOptions.filter((group) => group.matchCount > 0)
+    const selectedOption = groupOptions.find((group) => group.value === selectedGroup)
+
+    if (selectedOption && (!groupsWithMatches.length || selectedOption.matchCount > 0)) {
+      return selectedOption.value
+    }
+
+    return groupsWithMatches[0]?.value ?? groupOptions[0]?.value ?? null
+  }, [groupOptions, selectedGroup, selectedRoundIsWorldCupGroupStage])
+  const selectedGroupStandings = effectiveSelectedGroup
+    ? worldCupGroupsByKey.get(effectiveSelectedGroup) ?? {
+        group: effectiveSelectedGroup,
+        label: getWorldCupGroupLabel(effectiveSelectedGroup),
+        rows: [],
+      }
+    : null
+  const visibleMatches = useMemo(() => {
+    if (selectedRoundIsWorldCupGroupStage && effectiveSelectedGroup) {
+      return roundMatches.filter((match) => match.groupKey === effectiveSelectedGroup)
+    }
+
+    return roundMatches
+  }, [effectiveSelectedGroup, roundMatches, selectedRoundIsWorldCupGroupStage])
 
   const visibleMatchesById = useMemo(() => {
     return new Map(visibleMatches.map((match) => [match.id, match]))
@@ -137,6 +215,47 @@ export default function ProdePanel() {
 
     return predictions.filter((prediction) => visibleMatchesById.has(prediction.matchId))
   }, [predictions, visibleMatchesById])
+
+  useEffect(() => {
+    if (selectedGroup === effectiveSelectedGroup) return
+
+    setSelectedGroup(effectiveSelectedGroup)
+  }, [effectiveSelectedGroup, selectedGroup])
+
+  useEffect(() => {
+    let active = true
+
+    if (!selectedLeagueId || !isWorldCupLeague) {
+      setWorldCupGroups([])
+      setIsWorldCupGroupsLoading(false)
+      setSelectedGroup(null)
+      return
+    }
+
+    setIsWorldCupGroupsLoading(true)
+
+    getWorldCupGroups({ leagueId: selectedLeagueId })
+      .then((groups) => {
+        if (!active) return
+        setWorldCupGroups(groups)
+      })
+      .catch((error: unknown) => {
+        if (!active) return
+        setWorldCupGroups([])
+        setMessage(
+          error instanceof Error && error.message
+            ? error.message
+            : 'No se pudieron cargar las tablas de grupos.'
+        )
+      })
+      .finally(() => {
+        if (active) setIsWorldCupGroupsLoading(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [isWorldCupLeague, selectedLeagueId])
 
   useEffect(() => {
     if (process.env.NODE_ENV !== 'development') return
@@ -319,12 +438,16 @@ export default function ProdePanel() {
 
         setLeagues(leaguesData)
 
-        if (leaguesData[0]) {
+        const defaultLeague =
+          leaguesData.find((league) => league.slug === DEFAULT_PRODE_TOURNAMENT_SLUG) ??
+          leaguesData[0]
+
+        if (defaultLeague) {
           setSelectedLeagueId((current) => {
             if (current) return current
 
             setIsMatchesLoading(true)
-            return leaguesData[0].id
+            return defaultLeague.id
           })
         }
       })
@@ -505,8 +628,11 @@ export default function ProdePanel() {
           <MatchFilters
             leagues={leagues}
             rounds={rounds}
+            groups={groupOptions}
             selectedLeagueId={selectedLeagueId}
             selectedRound={effectiveSelectedRound}
+            selectedGroup={effectiveSelectedGroup}
+            showGroupFilter={selectedRoundIsWorldCupGroupStage}
             onLeagueChange={(leagueId) => {
               setMessage('')
               setRankingMessage('')
@@ -523,12 +649,18 @@ export default function ProdePanel() {
               setIsRoundLeaderboardLoading(false)
               setSelectedLeagueId(leagueId)
               setSelectedRound(null)
+              setSelectedGroup(null)
             }}
             onRoundChange={(round) => {
               setMessage('')
               setSelectedRound(round)
               setSelectedLeaderboardRound(round)
               setIsLeaderboardRoundManuallySelected(false)
+              setSelectedGroup(null)
+            }}
+            onGroupChange={(group) => {
+              setMessage('')
+              setSelectedGroup(group)
             }}
           />
           {isLeaguesLoading || isMatchesLoading || isAuthLoading ? (
@@ -548,6 +680,13 @@ export default function ProdePanel() {
               onSavePrediction={handleSavePrediction}
             />
           )}
+
+          {selectedRoundIsWorldCupGroupStage ? (
+            <WorldCupGroupStandings
+              group={selectedGroupStandings}
+              isLoading={isWorldCupGroupsLoading}
+            />
+          ) : null}
 
           {message ? (
             <div className="hf-card w-full rounded-2xl px-3 py-3 text-sm text-[#dce7f2] md:px-4">
