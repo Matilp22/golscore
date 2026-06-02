@@ -9,7 +9,10 @@ import {
   isUpcomingStatus,
 } from '@/shared/utils/match-status'
 import { getFixtureStatusElapsedMinute } from '@/shared/utils/match-minute'
-import { formatMatchEventStableKey } from '@/shared/utils/football-events'
+import {
+  formatMatchEventSemanticKey,
+  getMatchEventExternalIdPriority,
+} from '@/shared/utils/football-events'
 
 type DbId = string | number
 
@@ -396,8 +399,12 @@ function getEventSemanticKey(input: {
   assistName?: string | null | undefined
   comments?: string | null | undefined
 }) {
-  return formatMatchEventStableKey(
+  return formatMatchEventSemanticKey(
     {
+      match_id: input.matchId,
+      team_id: input.teamId,
+      player_name: input.playerName,
+      assist_name: input.assistName,
       type: input.type,
       detail: input.detail,
       time: {
@@ -809,9 +816,22 @@ async function removeDuplicateStoredEvents(
 
   const duplicateIds = [...rowsByKey.values()]
     .filter((rows) => rows.length > 1)
-    .flatMap((rows) => rows.slice(1).map((row) => row.id).filter((id): id is DbId => id !== null && id !== undefined))
+    .flatMap((rows) => {
+      const [, ...toDelete] = [...rows].sort((a, b) => {
+        const priorityDiff =
+          getMatchEventExternalIdPriority(b.external_event_id) -
+          getMatchEventExternalIdPriority(a.external_event_id)
+        if (priorityDiff !== 0) return priorityDiff
 
-  if (!duplicateIds.length) return 0
+        return String(a.id ?? '').localeCompare(String(b.id ?? ''))
+      })
+
+      return toDelete
+        .map((row) => row.id)
+        .filter((id): id is DbId => id !== null && id !== undefined)
+    })
+
+  if (!duplicateIds.length) return []
 
   const response = await supabase
     .from('match_events')
@@ -819,11 +839,11 @@ async function removeDuplicateStoredEvents(
     .in('id', duplicateIds.map(String))
 
   if (response.error) {
-    if (isMissingOptionalTable(response.error, 'match_events')) return 0
+    if (isMissingOptionalTable(response.error, 'match_events')) return []
     throw response.error
   }
 
-  return duplicateIds.length
+  return duplicateIds.map(String)
 }
 
 async function upsertMatchEvents(
@@ -843,10 +863,16 @@ async function upsertMatchEvents(
   }
 
   const existingRows = await fetchStoredEventRows(supabase, input.match.id)
-  const duplicatesRemoved = await removeDuplicateStoredEvents(supabase, existingRows)
+  const deletedDuplicateIds = new Set(
+    await removeDuplicateStoredEvents(supabase, existingRows)
+  )
+  const duplicatesRemoved = deletedDuplicateIds.size
+  const remainingExistingRows = existingRows.filter((row) =>
+    row.id === null || row.id === undefined || !deletedDuplicateIds.has(String(row.id))
+  )
   const existingExternalIdByKey = new Map<string, string>()
 
-  for (const row of existingRows) {
+  for (const row of remainingExistingRows) {
     const key = getEventSemanticKey({
       matchId: row.match_id,
       type: row.type,
@@ -859,7 +885,14 @@ async function upsertMatchEvents(
       comments: row.comments,
     })
 
-    if (row.external_event_id && !existingExternalIdByKey.has(key)) {
+    if (
+      row.external_event_id &&
+      (
+        !existingExternalIdByKey.has(key) ||
+        getMatchEventExternalIdPriority(row.external_event_id) >
+          getMatchEventExternalIdPriority(existingExternalIdByKey.get(key))
+      )
+    ) {
       existingExternalIdByKey.set(key, row.external_event_id)
     }
   }
@@ -917,7 +950,7 @@ async function upsertMatchEvents(
   }
 
   const rows = [...rowsByKey.values()]
-  const existingNullExternalIdRows = existingRows.filter((row) => {
+  const existingNullExternalIdRows = remainingExistingRows.filter((row) => {
     if (row.external_event_id) return false
 
     const key = getEventSemanticKey({

@@ -1,6 +1,5 @@
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
-import { fetchAllTeamLogoRows, type TeamLogoLookupRow } from '@/server/team-logo-lookup'
-import { normalizeCopaArgentinaTeamName } from '@/shared/utils/copa-argentina'
+import { resolveTeamIdentity } from '@/server/team-identity'
 
 export type CopaArgentinaChampion = {
   season: number
@@ -28,12 +27,12 @@ export const COPA_ARGENTINA_CHAMPIONS_SEED: CopaArgentinaChampion[] = [
     championName: 'Independiente Rivadavia',
     runnerUpName: 'Argentinos Juniors',
     finalScore: '2-2 (5-3 pen.)',
-    venue: 'Estadio Monumental Presidente Peron, Cordoba',
+    venue: 'Estadio Monumental Presidente Perón, Córdoba',
   },
   {
     season: 2024,
-    championName: 'Central Cordoba (SdE)',
-    runnerUpName: 'Velez Sarsfield',
+    championName: 'Central Córdoba (SdE)',
+    runnerUpName: 'Vélez Sarsfield',
     finalScore: '1-0',
     venue: 'Estadio 15 de Abril, Santa Fe',
   },
@@ -42,26 +41,26 @@ export const COPA_ARGENTINA_CHAMPIONS_SEED: CopaArgentinaChampion[] = [
     championName: 'Estudiantes (LP)',
     runnerUpName: 'Defensa y Justicia',
     finalScore: '1-0',
-    venue: 'Estadio Ciudad de Lanus',
+    venue: 'Estadio Ciudad de Lanús',
   },
   {
     season: 2022,
     championName: 'Patronato',
-    runnerUpName: 'Talleres de Cordoba',
+    runnerUpName: 'Talleres de Córdoba',
     finalScore: '1-0',
     venue: 'Estadio Malvinas Argentinas, Mendoza',
   },
   {
     season: 2021,
     championName: 'Boca Juniors',
-    runnerUpName: 'Talleres de Cordoba',
+    runnerUpName: 'Talleres de Córdoba',
     finalScore: '0-0 (5-4 pen.)',
     venue: 'Estadio Madre de Ciudades, Santiago del Estero',
   },
   {
     season: 2019,
     championName: 'River Plate',
-    runnerUpName: 'Central Cordoba (SdE)',
+    runnerUpName: 'Central Córdoba (SdE)',
     finalScore: '3-0',
     venue: 'Estadio Malvinas Argentinas, Mendoza',
   },
@@ -75,7 +74,7 @@ export const COPA_ARGENTINA_CHAMPIONS_SEED: CopaArgentinaChampion[] = [
   {
     season: 2017,
     championName: 'River Plate',
-    runnerUpName: 'Atletico Tucuman',
+    runnerUpName: 'Atlético Tucumán',
     finalScore: '2-1',
     venue: 'Estadio Malvinas Argentinas, Mendoza',
   },
@@ -84,18 +83,18 @@ export const COPA_ARGENTINA_CHAMPIONS_SEED: CopaArgentinaChampion[] = [
     championName: 'River Plate',
     runnerUpName: 'Rosario Central',
     finalScore: '4-3',
-    venue: 'Estadio Mario Alberto Kempes, Cordoba',
+    venue: 'Estadio Mario Alberto Kempes, Córdoba',
   },
   {
     season: 2015,
     championName: 'Boca Juniors',
     runnerUpName: 'Rosario Central',
     finalScore: '2-0',
-    venue: 'Estadio Mario Alberto Kempes, Cordoba',
+    venue: 'Estadio Mario Alberto Kempes, Córdoba',
   },
   {
     season: 2014,
-    championName: 'Huracan',
+    championName: 'Huracán',
     runnerUpName: 'Rosario Central',
     finalScore: '0-0 (5-4 pen.)',
     venue: 'Estadio San Juan del Bicentenario',
@@ -123,26 +122,29 @@ export const COPA_ARGENTINA_CHAMPIONS_SEED: CopaArgentinaChampion[] = [
   },
 ]
 
-function toChampion(
-  row: ChampionRow,
-  teamsById: Map<string, TeamLogoLookupRow>,
-  teamsByName: Map<string, TeamLogoLookupRow>
-) {
-  const championTeam =
-    (row.champion_team_id ? teamsById.get(String(row.champion_team_id)) : null) ??
-    teamsByName.get(normalizeCopaArgentinaTeamName(row.champion_name))
-  const runnerUpTeam =
-    (row.runner_up_team_id ? teamsById.get(String(row.runner_up_team_id)) : null) ??
-    teamsByName.get(normalizeCopaArgentinaTeamName(row.runner_up_name))
+async function toChampion(row: ChampionRow) {
+  const supabase = getSupabaseAdminClient()
+  const [championTeam, runnerUpTeam] = await Promise.all([
+    resolveTeamIdentity(supabase, {
+      name: row.champion_name,
+      context: 'argentina-copa-argentina',
+      leagueExternalId: 130,
+    }),
+    resolveTeamIdentity(supabase, {
+      name: row.runner_up_name,
+      context: 'argentina-copa-argentina',
+      leagueExternalId: 130,
+    }),
+  ])
 
   return {
     season: row.season,
-    championName: row.champion_name,
-    runnerUpName: row.runner_up_name,
+    championName: championTeam.name || row.champion_name,
+    runnerUpName: runnerUpTeam.name || row.runner_up_name,
     finalScore: row.final_score,
     venue: row.venue,
-    championLogo: championTeam?.logo_url ?? null,
-    runnerUpLogo: runnerUpTeam?.logo_url ?? null,
+    championLogo: championTeam.logoUrl ?? null,
+    runnerUpLogo: runnerUpTeam.logoUrl ?? null,
   }
 }
 
@@ -159,35 +161,24 @@ export async function getCopaArgentinaChampions(): Promise<CopaArgentinaChampion
     const rows = (championsResponse.data ?? []) as ChampionRow[]
     if (!rows.length) return COPA_ARGENTINA_CHAMPIONS_SEED
 
-    const teamIds = [
-      ...new Set(
-        rows
-          .flatMap((row) => [row.champion_team_id, row.runner_up_team_id])
-          .filter((id): id is string => Boolean(id))
-          .map(String)
-      ),
-    ]
-
-    const teams = await fetchAllTeamLogoRows(supabase)
-    const teamsById = new Map(teams.map((team) => [String(team.id), team]))
-    const teamsByName = new Map(
-      teams
-        .filter((team) => Boolean(team.name))
-        .map((team) => [normalizeCopaArgentinaTeamName(team.name ?? ''), team])
-    )
-
-    for (const teamId of teamIds) {
-      if (!teamsById.has(teamId)) {
-        teamsById.set(teamId, { id: teamId, name: null, logo_url: null })
-      }
-    }
-
-    return rows.map((row) => toChampion(row, teamsById, teamsByName))
+    return Promise.all(rows.map(toChampion))
   } catch (error) {
     console.warn('[copa-argentina:champions] No se pudieron leer campeones desde Supabase.', {
       message: error instanceof Error ? error.message : String(error),
     })
 
-    return COPA_ARGENTINA_CHAMPIONS_SEED
+    return Promise.all(
+      COPA_ARGENTINA_CHAMPIONS_SEED.map((champion) =>
+        toChampion({
+          season: champion.season,
+          champion_team_id: null,
+          runner_up_team_id: null,
+          champion_name: champion.championName,
+          runner_up_name: champion.runnerUpName,
+          final_score: champion.finalScore,
+          venue: champion.venue ?? null,
+        })
+      )
+    ).catch(() => COPA_ARGENTINA_CHAMPIONS_SEED)
   }
 }

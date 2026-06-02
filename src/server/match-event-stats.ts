@@ -12,9 +12,10 @@ import {
   isCancelledGoalEvent,
   isMissedPenalty,
   isOwnGoal,
-  isScoreboardGoalEvent,
+  isPenaltyShootoutEvent,
   isSecondYellowCardEvent,
   isValidAssistForAssistTable,
+  isValidGoalForScore,
   isValidGoalForScorerTable,
   isValidRedCard,
   isValidYellowCard,
@@ -689,9 +690,7 @@ function buildMissingGoalMatches(
     .filter((match) => isFinishedStatus(match.status))
     .map((match) => {
       const expectedGoals = getExpectedGoals(match)
-      const goalEvents = (eventsByMatchId.get(String(match.id)) ?? []).filter((event) =>
-        isScoreboardGoalEvent(event.type, event.detail)
-      )
+      const goalEvents = (eventsByMatchId.get(String(match.id)) ?? []).filter(isValidGoalForScore)
 
       return {
         ...getMatchLabel(match, teamsById),
@@ -747,9 +746,8 @@ export async function buildCompetitionIncidentRankings(input: {
     dataset.teamsById
   )
   const scorerGoals = dedupedEvents.filter(isValidGoalForScorerTable)
-  const scoreboardGoals = dedupedEvents.filter((event) =>
-    isScoreboardGoalEvent(event.type, event.detail)
-  )
+  const scoreboardGoals = dedupedEvents.filter(isValidGoalForScore)
+  const shootoutPenalties = dedupedEvents.filter(isPenaltyShootoutEvent)
   const penaltiesScored = scorerGoals.filter((event) => getGoalKindFromDetail(event.detail) === 'penalty')
   const ownGoals = scoreboardGoals.filter(isOwnGoal)
   const missedPenalties = dedupedEvents.filter(isMissedPenalty)
@@ -797,6 +795,7 @@ export async function buildCompetitionIncidentRankings(input: {
       penaltiesScored: penaltiesScored.length,
       ownGoalsExcludedFromScorers: ownGoals.length,
       missedPenaltiesExcludedFromScorers: missedPenalties.length,
+      shootoutPenaltiesExcludedFromScorers: shootoutPenalties.length,
       assists: assistEvents.length,
       yellowCards: yellowCardEvents.length,
       redCards: redCardEvents.length,
@@ -959,7 +958,7 @@ export async function syncCompetitionIncidents(input: {
 
       const matchEvents = eventsByMatchId.get(String(match.id)) ?? []
       const expectedGoals = getExpectedGoals(match)
-      const goalEvents = matchEvents.filter((event) => isScoreboardGoalEvent(event.type, event.detail))
+      const goalEvents = matchEvents.filter(isValidGoalForScore)
 
       return (
         matchEvents.length === 0 ||
@@ -1091,9 +1090,8 @@ export async function getLeagueEventStatsAudit(
     )
   })
   const scorerGoals = dedupedEvents.filter(isValidGoalForScorerTable)
-  const scoreboardGoals = dedupedEvents.filter((event) =>
-    isScoreboardGoalEvent(event.type, event.detail)
-  )
+  const scoreboardGoals = dedupedEvents.filter(isValidGoalForScore)
+  const shootoutPenalties = dedupedEvents.filter(isPenaltyShootoutEvent)
   const ownGoals = scoreboardGoals.filter((event) =>
     getGoalKindFromDetail(event.detail) === 'own-goal'
   )
@@ -1126,9 +1124,7 @@ export async function getLeagueEventStatsAudit(
         match.home_score !== null && match.away_score !== null
           ? match.home_score + match.away_score
           : null
-      const goalEvents = (eventsByMatchId.get(String(match.id)) ?? []).filter((event) =>
-        isScoreboardGoalEvent(event.type, event.detail)
-      )
+      const goalEvents = (eventsByMatchId.get(String(match.id)) ?? []).filter(isValidGoalForScore)
       const home = match.home_team_id ? dataset.teamsById.get(String(match.home_team_id)) : null
       const away = match.away_team_id ? dataset.teamsById.get(String(match.away_team_id)) : null
 
@@ -1168,6 +1164,7 @@ export async function getLeagueEventStatsAudit(
       matchesFinal: dataset.matches.filter((match) => isFinishedStatus(match.status)).length,
       goalEvents: scoreboardGoals.length,
       scorerGoals: scorerGoals.length,
+      shootoutPenaltiesExcludedFromScorers: shootoutPenalties.length,
       ownGoals: ownGoals.length,
       assists: validAssistEvents.length,
       yellowCards: yellowCards.length,

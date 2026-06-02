@@ -6,10 +6,13 @@ export const YOUTUBE_IMAGE_ALT_HOST = 'i.ytimg.com'
 
 export const LIGA_PROFESIONAL_ARGENTINA_LOGO_URL =
   `https://${API_SPORTS_MEDIA_HOST}/football/leagues/128.png`
+export const WORLD_CUP_2026_LOGO_URL = '/brand/competitions/world-cup-2026.png'
 
 const LEAGUE_LOGO_OVERRIDES: Record<string, string> = {
+  '1': WORLD_CUP_2026_LOGO_URL,
   '128': LIGA_PROFESIONAL_ARGENTINA_LOGO_URL,
 }
+const FORCE_LEAGUE_LOGO_OVERRIDES = new Set(['1'])
 
 export const ALLOWED_REMOTE_ASSET_HOSTS = [
   API_SPORTS_MEDIA_HOST,
@@ -32,6 +35,7 @@ export function normalizeAssetUrl(value: string | null | undefined) {
 
   const trimmed = value.trim()
   if (!trimmed) return null
+  if (trimmed.startsWith('/')) return trimmed
 
   try {
     const url = new URL(trimmed)
@@ -45,6 +49,7 @@ export function normalizeAssetUrl(value: string | null | undefined) {
 export function getAssetHostname(value: string | null | undefined) {
   const normalized = normalizeAssetUrl(value)
   if (!normalized) return null
+  if (normalized.startsWith('/')) return null
 
   try {
     return new URL(normalized).hostname
@@ -54,6 +59,8 @@ export function getAssetHostname(value: string | null | undefined) {
 }
 
 export function isAllowedRemoteAssetHost(value: string | null | undefined) {
+  if (value?.trim().startsWith('/')) return true
+
   const hostname = getAssetHostname(value)
   if (!hostname) return false
 
@@ -118,9 +125,15 @@ export function pickLeagueLogoUrl(
   externalId: string | number | null | undefined,
   apiUrl?: string | null
 ) {
-  return (
-    getLeagueLogoOverrideUrl(externalId) ||
-    pickFreshAssetUrl(persistedUrl, apiUrl, getApiSportsLeagueLogoUrl(externalId))
+  const id = normalizeExternalId(externalId)
+  const override = getLeagueLogoOverrideUrl(externalId)
+
+  if (id && FORCE_LEAGUE_LOGO_OVERRIDES.has(id) && override) return override
+
+  return pickFreshAssetUrl(
+    persistedUrl,
+    apiUrl,
+    override || getApiSportsLeagueLogoUrl(externalId)
   )
 }
 

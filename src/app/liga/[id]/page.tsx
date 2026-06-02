@@ -80,6 +80,7 @@ import {
 import {
   formatMatchScoreWithPenalties,
 } from '@/shared/utils/match-display'
+import { WORLD_CUP_2026_LOGO_URL } from '@/shared/utils/asset-urls'
 import type { ConmebolCompetitionType } from '@/shared/utils/conmebol-rounds'
 import { buildSeoMetadata } from '@/shared/seo'
 
@@ -727,7 +728,25 @@ function getGroupKeyFromText(value?: string | null) {
   return match ? match[1].toUpperCase() : null
 }
 
+function isThirdPlaceRankingGroup(value?: string | null) {
+  const normalized = normalizeGroupName(value || '')
+  const compact = normalized.replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
+
+  return (
+    compact.includes('third place ranking') ||
+    compact.includes('best third placed teams') ||
+    compact.includes('third placed') ||
+    compact === 'thirds' ||
+    compact.includes('tabla de terceros') ||
+    compact.includes('mejores terceros')
+  )
+}
+
 function getDisplayGroupName(value: string) {
+  if (isThirdPlaceRankingGroup(value)) {
+    return 'Tabla de terceros'
+  }
+
   const groupKey = getGroupKeyFromText(value)
 
   if (groupKey) {
@@ -1951,6 +1970,7 @@ function StandingsTable({
   rule = null,
   allowLegacyFallback = true,
   preferConfiguredRules = false,
+  thirdPlaceTable = false,
 }: {
   rows: Array<LeagueStandingRow & { average?: number }>
   showAverage?: boolean
@@ -1961,6 +1981,7 @@ function StandingsTable({
   rule?: CompetitionRule | null
   allowLegacyFallback?: boolean
   preferConfiguredRules?: boolean
+  thirdPlaceTable?: boolean
 }) {
   const cellPadding = compact
     ? fitNarrow
@@ -1991,11 +2012,11 @@ function StandingsTable({
           <tr className="border-b border-white/6">
             <th className={`${cellPadding} font-semibold`}>#</th>
             <th className={`${cellPadding} font-semibold`}>Equipo</th>
-            <th className={`${cellPadding} font-semibold text-center`}>PTS</th>
+            <th className={`${cellPadding} font-semibold text-center`}>{thirdPlaceTable ? 'Pts' : 'PTS'}</th>
             <th className={`${cellPadding} font-semibold text-center`}>PJ</th>
-            <th className={`${cellPadding} font-semibold text-center`}>PG</th>
-            <th className={`${cellPadding} font-semibold text-center`}>PE</th>
-            <th className={`${cellPadding} font-semibold text-center`}>PP</th>
+            <th className={`${cellPadding} font-semibold text-center`}>{thirdPlaceTable ? 'G' : 'PG'}</th>
+            <th className={`${cellPadding} font-semibold text-center`}>{thirdPlaceTable ? 'E' : 'PE'}</th>
+            <th className={`${cellPadding} font-semibold text-center`}>{thirdPlaceTable ? 'P' : 'PP'}</th>
             <th className={`${cellPadding} font-semibold text-center`}>GF</th>
             <th className={`${cellPadding} font-semibold text-center`}>GC</th>
             <th className={`${cellPadding} font-semibold text-center`}>DG</th>
@@ -2399,6 +2420,7 @@ export default async function LigaPage({ params }: PageProps) {
   const compactSummaryTables = annualTable.length > 0 && promedioTable.length > 0
   const visibleTournamentTitle = displayOptions.visibleNameEs
   const visibleTournamentCountry = displayOptions.countryNameEs
+  const isWorldCupTournament = tournament.key === 'selecciones-mundial'
   const hasTournamentData =
     fixtures.length > 0 ||
     standings.some((group) => group.rows.length > 0) ||
@@ -2410,6 +2432,15 @@ export default async function LigaPage({ params }: PageProps) {
     boxShadow: tournamentTheme.glow,
     '--tournament-accent': tournamentTheme.accent,
   } as CSSProperties
+  const headerLeagueLogo =
+    isWorldCupTournament
+      ? WORLD_CUP_2026_LOGO_URL
+      : resolvedTournament?.logo ?? null
+  const tournamentSubtitle = isWorldCupTournament
+    ? 'Canadá - México - Estados Unidos'
+    : resolvedTournament
+      ? `Temporada ${resolvedTournament.season}`
+      : 'Buscando información del torneo'
 
   return (
     <div className="min-h-screen bg-transparent text-white">
@@ -2422,11 +2453,11 @@ export default async function LigaPage({ params }: PageProps) {
             <div className="pointer-events-none absolute inset-0 bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.035)_0_1px,transparent_1px_54px)] opacity-45" />
             <div className="flex flex-col gap-3 px-2 py-3 md:flex-row md:items-center md:justify-between md:gap-4 md:px-4 md:py-5">
               <div className="flex items-center gap-4">
-                {resolvedTournament?.logo ? (
+                {headerLeagueLogo ? (
                   <div className="flex h-16 w-16 items-center justify-center">
                     <LeagueLogo
-                      src={resolvedTournament.logo}
-                      alt={resolvedTournament.name}
+                      src={headerLeagueLogo}
+                      alt={resolvedTournament?.name ?? visibleTournamentTitle}
                       size={56}
                       className="h-14 w-14 object-contain"
                       fallbackClassName="h-12 w-10"
@@ -2443,9 +2474,7 @@ export default async function LigaPage({ params }: PageProps) {
                     {visibleTournamentTitle}
                   </h1>
                   <p className="mt-1 text-sm text-[#8d98a7]">
-                    {resolvedTournament
-                      ? `Temporada ${resolvedTournament.season}`
-                      : 'Buscando información del torneo'}
+                    {tournamentSubtitle}
                   </p>
                 </div>
               </div>
@@ -2462,6 +2491,17 @@ export default async function LigaPage({ params }: PageProps) {
                     competitionName={visibleTournamentTitle}
                     champions={tournamentChampions}
                   />
+                </div>
+              ) : null}
+
+              {tournament.key === 'selecciones-mundial' ? (
+                <div className="flex justify-start md:justify-end">
+                  <Link
+                    href={`/liga/${id}/campeones`}
+                    className="inline-flex min-h-10 items-center justify-center rounded-xl border border-[#f6ca58] bg-[linear-gradient(135deg,#7c5513_0%,#d5a940_48%,#8a5f16_100%)] px-3 py-2 text-sm font-black text-[#150f05] shadow-[0_0_18px_rgba(213,169,64,0.18),inset_0_1px_0_rgba(255,255,255,0.34)] transition hover:border-[#f0c85a] hover:shadow-[0_0_24px_rgba(240,200,90,0.28),inset_0_1px_0_rgba(255,255,255,0.4)] sm:px-4"
+                  >
+                    Campeones
+                  </Link>
                 </div>
               ) : null}
 
@@ -2554,6 +2594,7 @@ export default async function LigaPage({ params }: PageProps) {
                       displayOptions.rule,
                       displayOptions.protected
                     )
+                    const thirdPlaceTable = isThirdPlaceRankingGroup(group.name)
 
                     return {
                       id: `${groupId}-${index}`,
@@ -2567,6 +2608,7 @@ export default async function LigaPage({ params }: PageProps) {
                             rule={displayOptions.rule}
                             allowLegacyFallback={false}
                             preferConfiguredRules
+                            thirdPlaceTable={thirdPlaceTable}
                           />
                           {tableLegendItems.length ? (
                             <TableLegend items={tableLegendItems} />
@@ -2633,6 +2675,7 @@ export default async function LigaPage({ params }: PageProps) {
                       displayOptions.rule,
                       displayOptions.protected
                     )
+                    const thirdPlaceTable = isThirdPlaceRankingGroup(group.name)
 
                     return {
                       id: `${groupId}-${index}`,
@@ -2646,6 +2689,7 @@ export default async function LigaPage({ params }: PageProps) {
                             rule={displayOptions.rule}
                             allowLegacyFallback={false}
                             preferConfiguredRules
+                            thirdPlaceTable={thirdPlaceTable}
                           />
                           {tableLegendItems.length ? (
                             <TableLegend items={tableLegendItems} />
@@ -2671,18 +2715,24 @@ export default async function LigaPage({ params }: PageProps) {
                     displayOptions.rule,
                     displayOptions.protected
                   )
+                  const thirdPlaceTable = isThirdPlaceRankingGroup(group.name)
 
                   return (
                     <SectionCard
                       key={group.name}
                       title={getDisplayGroupName(group.name)}
-                      subtitle="Tabla de posiciones"
+                      subtitle={
+                        thirdPlaceTable
+                          ? 'Los mejores terceros avanzan a fase eliminatoria según el formato FIFA.'
+                          : 'Tabla de posiciones'
+                      }
                     >
                       <StandingsTable
                         rows={group.rows}
                         compact={compactGroups}
                         rule={displayOptions.rule}
                         allowLegacyFallback={displayOptions.protected}
+                        thirdPlaceTable={thirdPlaceTable}
                       />
                       {tableLegendItems.length ? (
                         <TableLegend items={tableLegendItems} />
@@ -2711,17 +2761,23 @@ export default async function LigaPage({ params }: PageProps) {
                   displayOptions.rule,
                   displayOptions.protected
                 )
+                const thirdPlaceTable = isThirdPlaceRankingGroup(group.name)
 
                 return (
                   <SectionCard
                     key={group.name}
                     title={getDisplayGroupName(group.name)}
-                    subtitle="Tabla complementaria"
+                    subtitle={
+                      thirdPlaceTable
+                        ? 'Los mejores terceros avanzan a fase eliminatoria según el formato FIFA.'
+                        : 'Tabla complementaria'
+                    }
                   >
                     <StandingsTable
                       rows={group.rows}
                       rule={displayOptions.rule}
                       allowLegacyFallback={displayOptions.protected}
+                      thirdPlaceTable={thirdPlaceTable}
                     />
                     {tableLegendItems.length ? (
                       <TableLegend items={tableLegendItems} />

@@ -343,7 +343,7 @@ export const TOURNAMENT_PAGE_CONFIGS: TournamentPageConfig[] = [
   },
   {
     key: 'selecciones-mundial',
-    title: 'Mundial',
+    title: 'Copa del Mundo 2026',
     sectionKey: 'selecciones',
     country: 'World',
     searchTerms: ['World Cup', 'FIFA World Cup', 'Mundial 2026', 'Mundial'],

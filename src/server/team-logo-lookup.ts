@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 export type TeamLogoLookupRow = {
   id: string
+  external_id?: string | number | null
   name: string | null
   logo_url: string | null
 }
@@ -16,7 +17,7 @@ export async function fetchAllTeamLogoRows(
   for (let from = 0; ; from += TEAM_LOGO_PAGE_SIZE) {
     const { data, error } = await supabase
       .from('teams')
-      .select('id, name, logo_url')
+      .select('id, external_id, name, logo_url')
       .order('id', { ascending: true })
       .range(from, from + TEAM_LOGO_PAGE_SIZE - 1)
 

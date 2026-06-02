@@ -26,7 +26,7 @@ const defaultTheme: TournamentTheme = {
 const themesByKey: Record<string, TournamentTheme> = {
   'selecciones-mundial': {
     key: 'selecciones-mundial',
-    name: 'Mundial',
+    name: 'Copa del Mundo 2026',
     background:
       'radial-gradient(circle at 12% 4%, rgba(246,202,88,0.24), transparent 30%), radial-gradient(circle at 88% 16%, rgba(99,199,255,0.18), transparent 30%), linear-gradient(135deg, #11172a, #06110d 58%, #050807)',
     accent: '#f6ca58',

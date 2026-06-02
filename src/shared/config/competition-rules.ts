@@ -283,7 +283,7 @@ export const COMPETITION_NAME_ES: Record<string, string> = {
   'selecciones-eurocopa': 'Eurocopa',
   'selecciones-uefa-nations-league': 'UEFA Nations League',
   'selecciones-eliminatorias-eurocopa': 'Eliminatorias Eurocopa',
-  'selecciones-mundial': 'Mundial',
+  'selecciones-mundial': 'Copa del Mundo 2026',
   'selecciones-sudamericano-sub20': 'Sudamericano Sub-20',
   'selecciones-eliminatorias-concacaf': 'Eliminatorias Concacaf',
   'selecciones-repechaje-mundialista': 'Repechaje Mundialista',
@@ -899,8 +899,12 @@ export const COMPETITION_RULES: CompetitionRule[] = [
     bracketMode: 'knockout_rounds',
     showBracket: true,
     qualificationRules: [
-      { from: 1, to: 2, label: 'Fase eliminatoria', tone: 'playoff' },
-      { from: 3, to: 3, label: 'Mejores terceros si aplica', tone: 'relegationPlayoff' },
+      { from: 1, to: 2, label: 'Fase eliminatoria', tone: 'champions' },
+      { from: 3, to: 3, label: 'Mejores terceros', tone: 'champions' },
+    ],
+    legendItems: [
+      { label: 'Fase eliminatoria', tone: 'champions' },
+      { label: 'Mejores terceros', tone: 'champions' },
     ],
     playoffRules: ['Grupos y eliminatorias según formato FIFA y rounds de API.'],
     roundLabels: ['Grupos', 'Dieciseisavos', 'Octavos', 'Cuartos', 'Semifinales', 'Final'],

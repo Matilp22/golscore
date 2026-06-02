@@ -368,14 +368,40 @@ export function formatMatchEventStableKey(
 
 export const getMatchEventDedupeKey = formatMatchEventStableKey
 
-function formatMatchEventDisplayKey(event: FootballEventLike, matchId?: string | number | null) {
+function startsWithUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
+    .test(value)
+}
+
+export function getMatchEventExternalIdPriority(value: unknown) {
+  const text = String(value ?? '').trim()
+  if (!text) return 0
+
+  if (!text.includes(':')) return 4
+  if (/^\d+:/.test(text)) return 3
+  if (startsWithUuid(text)) return 1
+
+  return 2
+}
+
+export function formatMatchEventSemanticKey(
+  event: FootballEventLike,
+  matchId?: string | number | null
+) {
+  if (isPenaltyShootoutEvent(event)) {
+    return formatMatchEventStableKey(event, matchId)
+  }
+
   const displayDetail = isSubstitutionEvent(event)
     ? 'substitution'
     : isVarEvent(event) || isCancelledEvent(event)
       ? [getEventDetail(event), getEventComments(event)].filter(Boolean).join(':') || 'var'
     : getEventDetail(event) ?? 'detail'
+  const substitutionAssist = isSubstitutionEvent(event)
+    ? normalizePersonDisplayRef(getEventAssistName(event)) || 'assist'
+    : null
 
-  return [
+  const keyParts = [
     matchId ?? event.match_id ?? 'match',
     getEventType(event) ?? 'type',
     displayDetail,
@@ -383,7 +409,10 @@ function formatMatchEventDisplayKey(event: FootballEventLike, matchId?: string |
     formatEventKeyExtra(getEventExtraMinute(event)),
     getEventTeamId(event) ?? event.team?.name ?? 'team',
     normalizePersonDisplayRef(getEventPlayerName(event)) || 'player',
-  ].map((part) =>
+  ]
+  if (substitutionAssist) keyParts.push(substitutionAssist)
+
+  return keyParts.map((part) =>
     String(part)
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
@@ -391,12 +420,15 @@ function formatMatchEventDisplayKey(event: FootballEventLike, matchId?: string |
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '') || 'none'
-  ).join(':')
+    ).join(':')
 }
 
+const formatMatchEventDisplayKey = formatMatchEventSemanticKey
+
 function eventCompletenessScore(event: FootballEventLike) {
+  const externalId = getEventExternalId(event)
   const values: unknown[] = [
-    getEventExternalId(event),
+    externalId,
     getEventTeamId(event) ?? event.team?.name,
     getEventPlayerId(event),
     getEventPlayerName(event),
@@ -415,7 +447,7 @@ function eventCompletenessScore(event: FootballEventLike) {
     if (!text) return score
 
     return score + 1 + Math.min(text.length, 40) / 40
-  }, 0)
+  }, getMatchEventExternalIdPriority(externalId) * 100)
 }
 
 function getEventSortValue(event: FootballEventLike) {
@@ -635,6 +667,7 @@ export function getGoalKindFromDetail(detail?: string | null) {
 
 export function isValidGoalForScorerTable(event: FootballEventLike) {
   return (
+    !isPenaltyShootoutEvent(event) &&
     isScoreboardGoalEvent(getEventType(event), getEventDetail(event)) &&
     getGoalKindFromDetail(getEventDetail(event)) !== 'own-goal'
   )
@@ -673,7 +706,10 @@ export function isYellowCardEvent(event: FootballEventLike) {
 export const isValidYellowCard = isYellowCardEvent
 
 export function isValidGoalForScore(event: FootballEventLike) {
-  return isScoreboardGoalEvent(getEventType(event), getEventDetail(event))
+  return (
+    !isPenaltyShootoutEvent(event) &&
+    isScoreboardGoalEvent(getEventType(event), getEventDetail(event))
+  )
 }
 
 export function isCancelledGoalEvent(event: FootballEventLike) {
@@ -975,7 +1011,7 @@ export function normalizeMatchEvent(event: FootballEventLike): NormalizedMatchEv
     playerOutName: substitution?.playerOutName ?? null,
     minute: getEventMinute(event),
     extraMinute: getEventExtraMinute(event),
-    isGoalForScoreboard: isScoreboardGoalEvent(getEventType(event), getEventDetail(event)),
+    isGoalForScoreboard: isValidGoalForScore(event),
     isMissedPenalty: kind === 'penalty-missed',
     isSubstitution: kind === 'substitution',
     isVar: kind === 'var',
@@ -989,6 +1025,22 @@ export function normalizeMatchEvent(event: FootballEventLike): NormalizedMatchEv
 
 function normalizePlayerRef(value?: string | null) {
   return normalizeFootballEventText(value)
+}
+
+export function normalizePlayerIncident(
+  event: FootballEventLike,
+  player?: { id?: number | string | null; name?: string | null },
+  teamId?: string | number | null
+) {
+  if (teamId !== undefined && teamId !== null && !sameEventTeam(event, teamId)) {
+    return null
+  }
+
+  if (player && !isSubstitutionEvent(event) && !playerMatchesMainEvent(player, event, teamId)) {
+    return null
+  }
+
+  return normalizeMatchEvent(event)
 }
 
 export function dedupePlayerIncidents<
@@ -1045,9 +1097,8 @@ export function getPlayerIncidentsForLineup(
   })
     .flatMap<NormalizedMatchEvent>((event) => {
       const normalized = normalizeMatchEvent(event)
-      const isOwnGoal = normalized.kind === 'own-goal'
 
-      if (!isOwnGoal && !sameEventTeam(event, teamId)) return []
+      if (!sameEventTeam(event, teamId)) return []
 
       if (normalized.kind === 'substitution') {
         const substitution = normalizeSubstitutionEvent(event)
@@ -1089,7 +1140,7 @@ export function getPlayerIncidentsForLineup(
         return []
       }
 
-      if (!playerMatchesMainEvent(player, event, teamId, { requireTeam: !isOwnGoal })) {
+      if (!playerMatchesMainEvent(player, event, teamId)) {
         return []
       }
 

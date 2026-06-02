@@ -41,6 +41,7 @@ import {
   DEFAULT_SEO_DESCRIPTION,
   DEFAULT_SEO_TITLE,
 } from '@/shared/seo'
+import { WORLD_CUP_2026_LOGO_URL } from '@/shared/utils/asset-urls'
 
 export const metadata = buildSeoMetadata({
   title: DEFAULT_SEO_TITLE,
@@ -916,7 +917,7 @@ const LEAGUE_RULES: LeagueRule[] = [
     key: 'selecciones-mundial',
     sectionKey: 'selecciones',
     sectionTitle: 'Selecciones',
-    baseTitle: 'Mundial',
+    baseTitle: 'Copa del Mundo 2026',
     match: (match) => {
       const league = leagueText(match)
       return (
@@ -1099,7 +1100,9 @@ function resolveFallbackHomeCompetitionHref(sampleMatch?: ApiMatch) {
   return tournament ? `/liga/${tournament.key}` : null
 }
 
-function resolveHomeCompetitionLogo(sampleMatch?: ApiMatch) {
+function resolveHomeCompetitionLogo(ruleKey: string, sampleMatch?: ApiMatch) {
+  if (ruleKey === 'selecciones-mundial') return WORLD_CUP_2026_LOGO_URL
+
   if (sampleMatch?.leagueLogo) return sampleMatch.leagueLogo
 
   if (sampleMatch?.leagueId && Number.isFinite(sampleMatch.leagueId)) {
@@ -1152,7 +1155,7 @@ function groupMatchesWithPromiedosStructure(matches: ApiMatch[]): SectionBucket[
     competitionBuckets.push({
       key: rule.key,
       title: getCompetitionVisibleNameEs(rule.key, rule.baseTitle),
-      logo: resolveHomeCompetitionLogo(filtered[0]),
+      logo: resolveHomeCompetitionLogo(rule.key, filtered[0]),
       sectionKey: rule.sectionKey,
       sectionTitle: rule.sectionTitle,
       href: resolveHomeCompetitionHref(rule.key, filtered[0]),
@@ -1183,7 +1186,7 @@ function groupMatchesWithPromiedosStructure(matches: ApiMatch[]): SectionBucket[
     fallbackBuckets.set(bucketKey, {
       key: bucketKey,
       title: getCompetitionVisibleNameEs(bucketKey, match.league || 'Otros partidos'),
-      logo: resolveHomeCompetitionLogo(match),
+      logo: resolveHomeCompetitionLogo(bucketKey, match),
       sectionKey: fallbackSection.key,
       sectionTitle: fallbackSection.title,
       href: resolveFallbackHomeCompetitionHref(match),

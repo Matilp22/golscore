@@ -6,9 +6,9 @@ import { serializeError } from '@/server/match-detail-cache'
 import { getArgentinaDayUtcRange } from '@/shared/utils/argentina-time'
 import {
   dedupeTimelineEvents,
+  formatMatchEventSemanticKey,
   getEventMinute,
   getEventPlayerName,
-  getMatchEventDedupeKey,
   isCancelledCardEvent,
   isCancelledGoalEvent,
   isMissedPenaltyEvent,
@@ -22,6 +22,7 @@ import {
   normalizeMatchEvent,
   type FootballEventLike,
 } from '@/shared/utils/football-events'
+import { isNotStartedOrInactiveStatus } from '@/shared/utils/match-status'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -259,7 +260,7 @@ function getDuplicateEvents(events: FootballEventLike[], matchId: DbId) {
   const groups = new Map<string, FootballEventLike[]>()
 
   for (const event of events) {
-    const key = getMatchEventDedupeKey(event, matchId)
+    const key = formatMatchEventSemanticKey(event, matchId)
     const group = groups.get(key) ?? []
     group.push(event)
     groups.set(key, group)
@@ -490,6 +491,7 @@ function buildLeagueSummary(matchesAudit: Array<{
   dbCounts: IncidentCounts
   providerCounts: IncidentCounts | null
   diagnosis: ReturnType<typeof buildDiagnosis>
+  expectedPendingDetails?: boolean
 }>) {
   const summaries = new Map<string, {
     leagueExternalId: DbId | null
@@ -519,13 +521,16 @@ function buildLeagueSummary(matchesAudit: Array<{
       renderMissing: 0,
     }
     const hasProblem =
+      !match.expectedPendingDetails &&
       (
-        match.diagnosis.provider !== 'ok' &&
-        match.diagnosis.provider !== 'not_checked'
-      ) ||
-      match.diagnosis.persistence !== 'ok' ||
-      match.diagnosis.mapper !== 'ok' ||
-      match.diagnosis.render !== 'ok'
+        (
+          match.diagnosis.provider !== 'ok' &&
+          match.diagnosis.provider !== 'not_checked'
+        ) ||
+        match.diagnosis.persistence !== 'ok' ||
+        match.diagnosis.mapper !== 'ok' ||
+        match.diagnosis.render !== 'ok'
+      )
 
     summary.matchesChecked += 1
     if (hasProblem) summary.partialIncidents += 1
@@ -624,6 +629,10 @@ export async function GET(request: Request) {
       })
       const duplicateEvents = getDuplicateEvents(dbEvents, match.id)
       const missingIncidentTypes = compareCounts(providerCounts, dbCounts)
+      const expectedPendingDetails =
+        isNotStartedOrInactiveStatus(match.status) &&
+        dbCounts.totalEvents === 0 &&
+        (!providerCounts || providerCounts.totalEvents === 0)
       const warnings = [
         ...providerWarnings.map((warning) => `provider: ${warning}`),
         ...missingIncidentTypes.map((type) => `db_missing_${String(type)}`),
@@ -659,6 +668,7 @@ export async function GET(request: Request) {
         dbCounts,
         mappedCounts,
         diagnosis,
+        expectedPendingDetails,
         missingIncidentTypes,
         duplicateEvents: {
           totalGroups: duplicateEvents.length,
@@ -677,14 +687,17 @@ export async function GET(request: Request) {
     }
 
     const problemMatches = matchesAudit.filter((match) =>
-      match.warnings.length > 0 ||
+      !match.expectedPendingDetails &&
       (
-        match.diagnosis.provider !== 'ok' &&
-        match.diagnosis.provider !== 'not_checked'
-      ) ||
-      match.diagnosis.persistence !== 'ok' ||
-      match.diagnosis.mapper !== 'ok' ||
-      match.diagnosis.render !== 'ok'
+        match.warnings.length > 0 ||
+        (
+          match.diagnosis.provider !== 'ok' &&
+          match.diagnosis.provider !== 'not_checked'
+        ) ||
+        match.diagnosis.persistence !== 'ok' ||
+        match.diagnosis.mapper !== 'ok' ||
+        match.diagnosis.render !== 'ok'
+      )
     )
     const returnedMatches = onlyProblems ? problemMatches : matchesAudit
 

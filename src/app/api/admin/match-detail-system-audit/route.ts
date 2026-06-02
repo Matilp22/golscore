@@ -17,6 +17,7 @@ import {
   normalizeFootballEventText,
   normalizeMatchEvent,
 } from '@/shared/utils/football-events'
+import { isNotStartedOrInactiveStatus } from '@/shared/utils/match-status'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -316,6 +317,7 @@ function buildPlayerIncidentAudit(viewModel: MatchDetailSystemViewModel) {
         minute: normalized.minute,
       }]
     }
+    if (!team.players.length) return []
 
     const matched = team.players.some((player) =>
       playerMatchesEvent(player, team.teamId, event, {
@@ -541,6 +543,16 @@ export async function GET(request: Request) {
         ...baseDiagnosis,
         events: applyIncidentDiagnosis(baseDiagnosis.events, playerIncidentAudit),
       }
+      const expectedPendingDetails =
+        isNotStartedOrInactiveStatus(viewModel.match.status ?? match.status) &&
+        dbCounts.events === 0 &&
+        dbCounts.lineups === 0 &&
+        dbCounts.statistics === 0 &&
+        (!providerCounts || (
+          providerCounts.events === 0 &&
+          providerCounts.lineups === 0 &&
+          providerCounts.statistics === 0
+        ))
       const itemWarnings = [
         ...(audit.warnings ?? []),
         playerIncidentAudit.duplicatedEvents > 0
@@ -569,9 +581,12 @@ export async function GET(request: Request) {
           : null,
       ].filter((warning): warning is string => Boolean(warning))
       const hasProblem =
-        Object.values(diagnosis).some((value) => value !== 'ok') ||
-        providerErrors.length > 0 ||
-        playerIncidentAudit.suspiciousAssignments > 0
+        !expectedPendingDetails &&
+        (
+          Object.values(diagnosis).some((value) => value !== 'ok') ||
+          providerErrors.length > 0 ||
+          playerIncidentAudit.suspiciousAssignments > 0
+        )
 
       const item = {
         match: audit.match ?? {
@@ -589,6 +604,7 @@ export async function GET(request: Request) {
         mappedCounts,
         renderReadiness,
         diagnosis,
+        expectedPendingDetails,
         playerIncidentAudit,
         warnings: itemWarnings,
         errors: providerErrors,

@@ -17,12 +17,13 @@ import {
   getArgentinaDateISO,
 } from '@/shared/utils/argentina-time'
 import {
-  formatMatchEventStableKey,
+  dedupeTimelineEvents,
+  formatMatchEventSemanticKey,
   getGoalKindFromDetail,
   getImportantLiveEventKind,
   isRedCardEvent,
-  isScoreboardGoalEvent,
   isValidAssistEvent,
+  isValidGoalForScore,
   isValidGoalForScorerTable,
   isYellowCardEvent,
   type ImportantLiveEventKind,
@@ -1300,33 +1301,12 @@ function mapStoredGoalEvent(row: StoredMatchEventRow): MatchGoalScorer | null {
   }
 }
 
-function storedEventCompletenessScore(row: StoredMatchEventRow) {
-  return [
-    row.external_event_id,
-    row.team_id,
-    row.player_name,
-    row.assist_name,
-    row.minute,
-    row.extra_minute,
-    row.type,
-    row.detail,
-    row.comments,
-  ].filter((value) => value !== null && value !== undefined && String(value).trim() !== '').length
-}
-
 function dedupeStoredMatchEventRows(rows: StoredMatchEventRow[]) {
-  const rowsByKey = new Map<string, StoredMatchEventRow>()
-
-  for (const row of rows) {
-    const key = formatMatchEventStableKey(row, row.match_id)
-    const current = rowsByKey.get(key)
-
-    if (!current || storedEventCompletenessScore(row) > storedEventCompletenessScore(current)) {
-      rowsByKey.set(key, row)
-    }
-  }
-
-  return [...rowsByKey.values()]
+  return dedupeTimelineEvents(rows, {
+    descending: false,
+    excludePenaltyShootout: false,
+    semanticDedupe: true,
+  })
 }
 
 function getLiveEventLabel(row: StoredMatchEventRow, kind: ImportantLiveEventKind) {
@@ -1613,9 +1593,7 @@ async function getHomeMatchExtrasByFixtureId(matches: MatchListItem[]) {
     }
 
     const dedupedEventRows = dedupeStoredMatchEventRows(eventRows)
-    const goalEvents = dedupedEventRows.filter((event) =>
-      isScoreboardGoalEvent(event.type, event.detail)
-    )
+    const goalEvents = dedupedEventRows.filter(isValidGoalForScore)
     const importantLiveEvents = dedupedEventRows.filter((event) =>
       Boolean(getImportantLiveEventKind(event.type, event.detail))
     )
@@ -2587,35 +2565,19 @@ function getMatchEventSortValue(event: MatchEvent) {
   return elapsed * 100 + extra
 }
 
-function normalizeEventKeyPart(value: unknown) {
-  return String(value ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toLowerCase()
-}
-
-function getEventPersonKey(person?: { id?: number; name?: string }) {
-  return person?.name || person?.id || ''
-}
-
-function getEventTeamKey(team?: { id?: number; name?: string }) {
-  return team?.id || team?.name || ''
-}
-
 function getMatchEventMergeKey(event: MatchEvent) {
-  return [
-    getEventTeamKey(event.team),
-    event.time?.elapsed ?? '',
-    event.time?.extra ?? '',
-    event.type ?? '',
-    event.detail ?? '',
-    getEventPersonKey(event.player),
-    getEventPersonKey(event.assist),
-  ].map(normalizeEventKeyPart).join('|')
+  return formatMatchEventSemanticKey(event)
 }
 
 function mergeMatchEvents(cachedEvents: MatchEvent[], storedEvents: MatchEvent[]) {
+  if (!cachedEvents.length || storedEvents.length >= cachedEvents.length) {
+    return dedupeTimelineEvents(storedEvents, {
+      descending: false,
+      excludePenaltyShootout: false,
+      semanticDedupe: true,
+    })
+  }
+
   const merged = new Map<string, MatchEvent>()
 
   for (const event of storedEvents) {

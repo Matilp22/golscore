@@ -7,7 +7,9 @@ import {
   getArgentinaDayUtcRange,
 } from '@/shared/utils/argentina-time'
 import {
+  formatMatchEventSemanticKey,
   formatMatchEventStableKey,
+  getMatchEventExternalIdPriority,
   getTimelineEvents,
   normalizeFootballEventText,
   normalizeMatchEvent,
@@ -904,6 +906,77 @@ function getStoredMatchEventStableKey(row: StoredMatchEventRow) {
   )
 }
 
+function getStoredMatchEventSemanticKey(row: StoredMatchEventRow) {
+  return formatMatchEventSemanticKey(
+    {
+      id: row.id,
+      external_event_id: row.external_event_id,
+      match_id: row.match_id,
+      team_id: row.team_id,
+      player_name: row.player_name,
+      assist_name: row.assist_name,
+      time: {
+        elapsed: row.minute,
+        extra: row.extra_minute,
+      },
+      team: row.team_id !== null && row.team_id !== undefined
+        ? {
+            id: row.team_id,
+          }
+        : null,
+      player: row.player_name
+        ? {
+            name: row.player_name,
+          }
+        : null,
+      assist: row.assist_name
+        ? {
+            name: row.assist_name,
+          }
+        : null,
+      type: row.type,
+      detail: row.detail,
+      comments: row.comments ?? null,
+    },
+    row.match_id
+  )
+}
+
+function getStoredMatchEventCompletenessScore(row: StoredMatchEventRow) {
+  return [
+    row.external_event_id,
+    row.team_id,
+    row.player_name,
+    row.assist_name,
+    row.minute,
+    row.extra_minute,
+    row.type,
+    row.detail,
+    row.comments,
+  ].reduce<number>((score, value) => {
+    if (value === null || value === undefined) return score
+    const text = String(value).trim()
+    if (!text) return score
+
+    return score + 1 + Math.min(text.length, 40) / 40
+  }, getMatchEventExternalIdPriority(row.external_event_id) * 100)
+}
+
+function getStoredDuplicateIdsToDelete(rows: StoredMatchEventRow[]) {
+  const [keep, ...toDelete] = [...rows].sort((a, b) => {
+    const score = getStoredMatchEventCompletenessScore(b) - getStoredMatchEventCompletenessScore(a)
+    if (score !== 0) return score
+
+    return String(a.id ?? '').localeCompare(String(b.id ?? ''))
+  })
+
+  if (!keep) return []
+
+  return toDelete
+    .map((row) => row.id)
+    .filter((id): id is DbId => id !== null && id !== undefined)
+}
+
 async function deleteDuplicateStoredMatchEvents(
   supabase: SupabaseClient,
   rows: StoredMatchEventRow[]
@@ -911,7 +984,7 @@ async function deleteDuplicateStoredMatchEvents(
   const rowsByKey = new Map<string, StoredMatchEventRow[]>()
 
   for (const row of rows) {
-    const key = getStoredMatchEventStableKey(row)
+    const key = getStoredMatchEventSemanticKey(row)
     const groupedRows = rowsByKey.get(key) ?? []
 
     groupedRows.push(row)
@@ -920,10 +993,10 @@ async function deleteDuplicateStoredMatchEvents(
 
   const duplicateIds = [...rowsByKey.values()]
     .flatMap((groupedRows) =>
-      groupedRows.slice(1).map((row) => row.id).filter((id): id is DbId => id !== null && id !== undefined)
+      getStoredDuplicateIdsToDelete(groupedRows)
     )
 
-  if (!duplicateIds.length) return 0
+  if (!duplicateIds.length) return []
 
   const response = await supabase
     .from('match_events')
@@ -931,11 +1004,11 @@ async function deleteDuplicateStoredMatchEvents(
     .in('id', duplicateIds.map(String))
 
   if (response.error) {
-    if (isMissingOptionalTable(response.error, 'match_events')) return 0
+    if (isMissingOptionalTable(response.error, 'match_events')) return []
     throw response.error
   }
 
-  return duplicateIds.length
+  return duplicateIds.map(String)
 }
 
 async function upsertStoredMatchEvents(
@@ -959,14 +1032,26 @@ async function upsertStoredMatchEvents(
   const awayExternalId = toNumber(awayTeam?.external_id)
 
   const existingRows = await fetchStoredMatchEventRows(supabase, input.match.id)
-  await deleteDuplicateStoredMatchEvents(supabase, existingRows)
+  const deletedExistingIds = new Set(
+    await deleteDuplicateStoredMatchEvents(supabase, existingRows)
+  )
+  const remainingExistingRows = existingRows.filter((row) =>
+    row.id === null || row.id === undefined || !deletedExistingIds.has(String(row.id))
+  )
   const existingExternalIdByKey = new Map<string, string>()
 
-  for (const row of existingRows) {
-    const stableKey = getStoredMatchEventStableKey(row)
+  for (const row of remainingExistingRows) {
+    const semanticKey = getStoredMatchEventSemanticKey(row)
 
-    if (row.external_event_id && !existingExternalIdByKey.has(stableKey)) {
-      existingExternalIdByKey.set(stableKey, row.external_event_id)
+    if (
+      row.external_event_id &&
+      (
+        !existingExternalIdByKey.has(semanticKey) ||
+        getMatchEventExternalIdPriority(row.external_event_id) >
+          getMatchEventExternalIdPriority(existingExternalIdByKey.get(semanticKey))
+      )
+    ) {
+      existingExternalIdByKey.set(semanticKey, row.external_event_id)
     }
   }
 
@@ -977,8 +1062,15 @@ async function upsertStoredMatchEvents(
         apiTeamId !== null && homeExternalId !== null && apiTeamId === homeExternalId
           ? input.match.home_team_id
           : apiTeamId !== null && awayExternalId !== null && apiTeamId === awayExternalId
-            ? input.match.away_team_id
+          ? input.match.away_team_id
             : null
+      const playerName =
+        event.player?.name?.trim() ||
+        event.team?.name?.trim() ||
+        event.detail ||
+        event.type ||
+        'Evento'
+      const assistName = event.assist?.name ?? null
       const stableKey = formatMatchEventStableKey(
         {
           time: event.time ?? null,
@@ -987,8 +1079,40 @@ async function upsertStoredMatchEvents(
                 id: teamId,
               }
             : null,
-          player: event.player,
-          assist: event.assist,
+          player: playerName
+            ? {
+                name: playerName,
+              }
+            : null,
+          assist: assistName
+            ? {
+                name: assistName,
+              }
+            : null,
+          type: event.type,
+          detail: event.detail,
+          comments: event.comments,
+        },
+        input.match.id
+      )
+      const semanticKey = formatMatchEventSemanticKey(
+        {
+          time: event.time ?? null,
+          team: teamId !== null && teamId !== undefined
+          ? {
+              id: teamId,
+            }
+          : null,
+          player: playerName
+            ? {
+                name: playerName,
+              }
+            : null,
+          assist: assistName
+            ? {
+                name: assistName,
+              }
+            : null,
           type: event.type,
           detail: event.detail,
           comments: event.comments,
@@ -999,18 +1123,13 @@ async function upsertStoredMatchEvents(
       return {
         match_id: input.match.id,
         external_event_id: getEventExternalId(
-          existingExternalIdByKey.get(stableKey),
+          existingExternalIdByKey.get(semanticKey),
           stableKey,
           event
         ),
         team_id: teamId,
-        player_name:
-          event.player?.name?.trim() ||
-          event.team?.name?.trim() ||
-          event.detail ||
-          event.type ||
-          'Evento',
-        assist_name: event.assist?.name ?? null,
+        player_name: playerName,
+        assist_name: assistName,
         minute: event.time?.elapsed ?? null,
         extra_minute: event.time?.extra ?? null,
         type: event.type ?? 'Event',
@@ -1021,7 +1140,7 @@ async function upsertStoredMatchEvents(
   const rowsByKey = new Map<string, (typeof mappedRows)[number]>()
 
   for (const row of mappedRows) {
-    const key = formatMatchEventStableKey(
+    const key = formatMatchEventSemanticKey(
       {
         time: {
           elapsed: row.minute as number | null,
@@ -1057,12 +1176,41 @@ async function upsertStoredMatchEvents(
 
     const currentHasRealExternalId =
       current.external_event_id &&
-      !String(current.external_event_id).startsWith(String(input.match.id))
+      !String(current.external_event_id).includes(':')
     const rowHasRealExternalId =
       row.external_event_id &&
-      !String(row.external_event_id).startsWith(String(input.match.id))
+      !String(row.external_event_id).includes(':')
+    const currentScore = getStoredMatchEventCompletenessScore({
+      id: null,
+      external_event_id: current.external_event_id,
+      match_id: current.match_id,
+      team_id: current.team_id,
+      player_name: current.player_name,
+      assist_name: current.assist_name,
+      minute: current.minute,
+      extra_minute: current.extra_minute,
+      type: current.type,
+      detail: current.detail,
+      comments: current.comments,
+    })
+    const rowScore = getStoredMatchEventCompletenessScore({
+      id: null,
+      external_event_id: row.external_event_id,
+      match_id: row.match_id,
+      team_id: row.team_id,
+      player_name: row.player_name,
+      assist_name: row.assist_name,
+      minute: row.minute,
+      extra_minute: row.extra_minute,
+      type: row.type,
+      detail: row.detail,
+      comments: row.comments,
+    })
 
-    if (!currentHasRealExternalId && rowHasRealExternalId) {
+    if (
+      (!currentHasRealExternalId && rowHasRealExternalId) ||
+      (currentHasRealExternalId === rowHasRealExternalId && rowScore > currentScore)
+    ) {
       rowsByKey.set(key, row)
     }
   }
@@ -1071,7 +1219,7 @@ async function upsertStoredMatchEvents(
 
   if (!rows.length) return 0
 
-  const existingNullIdsToDelete = existingRows
+  const existingNullIdsToDelete = remainingExistingRows
     .filter((row) => !row.external_event_id)
     .filter((row) => rows.some((nextRow) => (
       getStoredMatchEventStableKey({
@@ -1664,28 +1812,27 @@ function extractCaptains(lineups: unknown[]): MatchDetailAuditCaptain[] {
 }
 
 function getAuditEventMergeKey(event: unknown) {
-  const eventLike = toAuditEventLike(event)
-
-  return [
-    eventLike.team?.id ?? eventLike.team?.name,
-    eventLike.time?.elapsed,
-    eventLike.time?.extra,
-    eventLike.type,
-    eventLike.detail,
-    eventLike.player?.id ?? eventLike.player?.name,
-    eventLike.assist?.id ?? eventLike.assist?.name,
-  ].map((part) => normalizeFootballEventText(String(part ?? ''))).join('|')
+  return formatMatchEventSemanticKey(toAuditEventLike(event))
 }
 
 function mergeAuditEvents(primary: unknown[], fallback: unknown[]) {
   const merged = new Map<string, unknown>()
-
-  for (const event of fallback) {
+  const addUnique = (event: unknown) => {
     merged.set(getAuditEventMergeKey(event), event)
   }
 
+  if (!primary.length || fallback.length >= primary.length) {
+    for (const event of fallback) addUnique(event)
+
+    return [...merged.values()]
+  }
+
+  for (const event of fallback) {
+    addUnique(event)
+  }
+
   for (const event of primary) {
-    merged.set(getAuditEventMergeKey(event), event)
+    addUnique(event)
   }
 
   return [...merged.values()]
@@ -2467,27 +2614,6 @@ function buildDetailedAuditSections(input: {
   }
 }
 
-function mergeStoredEventsIntoAudit(
-  snapshot: MatchDetailAuditSnapshot,
-  storedEventsCount: number
-): MatchDetailAuditSnapshot {
-  if (storedEventsCount <= snapshot.eventsCount) return snapshot
-
-  const missingSections = snapshot.missingSections.filter(
-    (section) => section !== 'events'
-  )
-
-  return {
-    ...snapshot,
-    hasEvents: true,
-    eventsCount: storedEventsCount,
-    missingSections,
-    warnings: missingSections.length
-      ? [`Faltan secciones de detalle: ${missingSections.join(', ')}.`]
-      : [],
-  }
-}
-
 export async function auditMatchDetailCache(
   supabase: SupabaseClient,
   input: { fixtureExternalId?: number | null; matchId?: string | null }
@@ -2523,7 +2649,6 @@ export async function auditMatchDetailCache(
   ])
   const storedEvents = storedEventRows.map((event) => mapStoredAuditEvent(event, teamsById))
   const mergedEvents = mergeAuditEvents(asArray(cache?.events), storedEvents)
-  const storedEventsCount = storedEventRows.length
   const dbCounts = getCacheDetailCounts(cache, mergedEvents)
   const renderCounts = buildRenderCounts({
     cache,
@@ -2542,7 +2667,7 @@ export async function auditMatchDetailCache(
     match,
     teamsById,
   })
-  const snapshot = mergeStoredEventsIntoAudit(buildAuditSnapshot(cache, mergedEvents), storedEventsCount)
+  const snapshot = buildAuditSnapshot(cache, mergedEvents)
   const fixturePayload = readCachedFixturePayload(cache)
   const matchAuditInfo = buildMatchAuditInfo({
     match,
@@ -3851,7 +3976,24 @@ export async function syncMatchDetail(
   const fetchedStatisticsValues = countApiStatisticsValues(statistics)
   const usableLineups = fetchedLineupPlayers > 0 ? lineups : []
   const usableStatistics = fetchedStatisticsValues > 0 ? statistics : []
-  const eventsForCache = events.length ? events : asArray(beforeCache?.events)
+  const fetchedEventsForCache = events.length
+    ? getTimelineEvents(events, {
+        descending: false,
+        excludePenaltyShootout: false,
+        semanticDedupe: true,
+      })
+    : []
+  const cachedEventsForCache = getTimelineEvents(
+    asArray(beforeCache?.events) as Parameters<typeof getTimelineEvents>[0],
+    {
+      descending: false,
+      excludePenaltyShootout: false,
+      semanticDedupe: true,
+    }
+  )
+  const eventsForCache = fetchedEventsForCache.length
+    ? fetchedEventsForCache
+    : cachedEventsForCache
   const lineupsForCache = usableLineups.length ? usableLineups : asArray(beforeCache?.lineups)
   const statisticsForCache = usableStatistics.length
     ? usableStatistics

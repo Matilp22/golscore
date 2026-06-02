@@ -3,7 +3,11 @@ import { NextResponse } from 'next/server'
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { serializeError } from '@/server/match-detail-cache'
 import { getArgentinaDayUtcRange } from '@/shared/utils/argentina-time'
-import { formatMatchEventStableKey } from '@/shared/utils/football-events'
+import {
+  formatMatchEventSemanticKey,
+  formatMatchEventStableKey,
+  getMatchEventExternalIdPriority,
+} from '@/shared/utils/football-events'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -127,6 +131,32 @@ function getEventDedupeKey(event: MatchEventRow) {
   )
 }
 
+function getEventSemanticDedupeKey(event: MatchEventRow) {
+  return formatMatchEventSemanticKey(
+    {
+      id: event.id,
+      external_event_id: event.external_event_id,
+      match_id: event.match_id,
+      team_id: event.team_id,
+      player_name: event.player_name,
+      assist_name: event.assist_name,
+      time: {
+        elapsed: event.minute,
+        extra: event.extra_minute,
+      },
+      team: event.team_id !== null && event.team_id !== undefined
+        ? { id: event.team_id }
+        : null,
+      player: event.player_name ? { name: event.player_name } : null,
+      assist: event.assist_name ? { name: event.assist_name } : null,
+      type: event.type,
+      detail: event.detail,
+      comments: event.comments,
+    },
+    event.match_id
+  )
+}
+
 function completenessScore(event: MatchEventRow) {
   return [
     event.external_event_id,
@@ -138,7 +168,13 @@ function completenessScore(event: MatchEventRow) {
     event.type,
     event.detail,
     event.comments,
-  ].filter((value) => value !== null && value !== undefined && String(value).trim() !== '').length
+  ].reduce<number>((score, value) => {
+    if (value === null || value === undefined) return score
+    const text = String(value).trim()
+    if (!text) return score
+
+    return score + 1 + Math.min(text.length, 40) / 40
+  }, getMatchEventExternalIdPriority(event.external_event_id) * 100)
 }
 
 function chooseKeeper(events: MatchEventRow[]) {
@@ -266,16 +302,18 @@ export async function GET(request: Request) {
     const idsToDelete: string[] = []
 
     for (const match of matches) {
-      const grouped = new Map<string, MatchEventRow[]>()
+      const grouped = new Map<string, { stableKeys: Set<string>; events: MatchEventRow[] }>()
 
       for (const event of eventsByMatch.get(String(match.id)) ?? []) {
-        const key = getEventDedupeKey(event)
-        const group = grouped.get(key) ?? []
-        group.push(event)
+        const key = getEventSemanticDedupeKey(event)
+        const group = grouped.get(key) ?? { stableKeys: new Set<string>(), events: [] }
+        group.stableKeys.add(getEventDedupeKey(event))
+        group.events.push(event)
         grouped.set(key, group)
       }
 
-      for (const [key, group] of grouped.entries()) {
+      for (const [key, groupInfo] of grouped.entries()) {
+        const group = groupInfo.events
         if (group.length <= 1) continue
 
         const keeper = chooseKeeper(group)
@@ -285,6 +323,7 @@ export async function GET(request: Request) {
           matchId: match.id,
           fixtureExternalId: match.external_id,
           key,
+          keyType: groupInfo.stableKeys.size === 1 ? 'stable' : 'semantic',
           keepId: keeper.id,
           deleteIds: toDelete.map((event) => event.id),
           events: group.map((event) => ({

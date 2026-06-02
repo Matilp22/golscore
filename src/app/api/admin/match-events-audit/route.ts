@@ -5,6 +5,7 @@ import { serializeError } from '@/server/match-detail-cache'
 import { getArgentinaDayUtcRange } from '@/shared/utils/argentina-time'
 import {
   dedupeTimelineEvents,
+  formatMatchEventSemanticKey,
   getMatchEventDedupeKey,
   getEventAssistName,
   getEventPlayerName,
@@ -154,6 +155,10 @@ function getIncidentLikeKey(event: FootballEventLike) {
     normalized.extraMinute ?? 'no-extra',
     normalizeFootballEventText(normalized.playerName),
   ].join(':')
+}
+
+function getRenderDedupeKey(event: FootballEventLike, matchId: DbId) {
+  return formatMatchEventSemanticKey(event, matchId)
 }
 
 function incidentLikeSample(event: FootballEventLike) {
@@ -363,16 +368,34 @@ export async function GET(request: Request) {
     const matchesAudit = matches.map((match) => {
       const matchEvents = eventsByMatchId.get(String(match.id)) ?? []
       const duplicateGroups = groupDuplicates(matchEvents, getEventDedupeKey)
-      const renderedIncidentEvents = dedupeTimelineEvents(
+      const renderedSourceEvents = dedupeTimelineEvents(
         matchEvents.map(eventToLike),
         {
           descending: false,
+          excludePenaltyShootout: false,
           matchId: match.id,
           semanticDedupe: true,
         }
       )
-      const incidentGroups = groupDuplicates(renderedIncidentEvents, getIncidentLikeKey)
+      const timelineIncidentEvents = dedupeTimelineEvents(
+        matchEvents.map(eventToLike),
+        {
+          descending: false,
+          excludePenaltyShootout: true,
+          matchId: match.id,
+          semanticDedupe: true,
+        }
+      )
+      const renderDuplicateGroups = groupDuplicates(
+        matchEvents.map(eventToLike),
+        (event) => getRenderDedupeKey(event, match.id)
+      )
+      const incidentGroups = groupDuplicates(timelineIncidentEvents, getIncidentLikeKey)
       const duplicateCount = duplicateGroups.reduce((sum, group) => sum + group.events.length - 1, 0)
+      const renderDuplicateCount = renderDuplicateGroups.reduce(
+        (sum, group) => sum + group.events.length - 1,
+        0
+      )
       const playerIncidentDuplicates = incidentGroups.reduce((sum, group) => sum + group.events.length - 1, 0)
       const duplicateKinds = classifyDuplicateGroups(duplicateGroups)
       const league = match.league_id === null ? null : leaguesById.get(String(match.league_id))
@@ -394,9 +417,11 @@ export async function GET(request: Request) {
         status: match.status,
         matchDate: match.match_date,
         eventsCount: matchEvents.length,
-        uniqueEventsCount: matchEvents.length - duplicateCount,
+        uniqueEventsCount: renderedSourceEvents.length,
         duplicateCount,
+        renderDuplicateCount,
         duplicateGroups: duplicateGroups.length,
+        renderDuplicateGroups: renderDuplicateGroups.length,
         duplicatedGoals: duplicateKinds.goals,
         duplicatedCards: duplicateKinds.cards,
         duplicatedSubstitutions: duplicateKinds.substitutions,
@@ -420,15 +445,21 @@ export async function GET(request: Request) {
           key: group.key,
           events: group.events.map(incidentLikeSample),
         })),
+        renderDuplicateSamples: renderDuplicateGroups.slice(0, 5).map((group) => ({
+          key: group.key,
+          events: group.events.map(incidentLikeSample),
+        })),
       }
     })
     const problemMatches = matchesAudit.filter((match) =>
       match.duplicateCount > 0 ||
+      match.renderDuplicateCount > 0 ||
       match.playerIncidentDuplicates > 0
     )
     const returnedMatches = onlyProblems ? problemMatches : matchesAudit
     const totalEvents = matchesAudit.reduce((sum, match) => sum + match.eventsCount, 0)
     const duplicateEvents = matchesAudit.reduce((sum, match) => sum + match.duplicateCount, 0)
+    const renderDuplicateEvents = matchesAudit.reduce((sum, match) => sum + match.renderDuplicateCount, 0)
 
     return jsonNoStore({
       ok: true,
@@ -443,9 +474,11 @@ export async function GET(request: Request) {
       },
       matchesChecked: matchesAudit.length,
       totalEvents,
-      uniqueEvents: totalEvents - duplicateEvents,
+      uniqueEvents: totalEvents - renderDuplicateEvents,
       duplicateEvents,
+      renderDuplicateEvents,
       duplicateGroups: matchesAudit.reduce((sum, match) => sum + match.duplicateGroups, 0),
+      renderDuplicateGroups: matchesAudit.reduce((sum, match) => sum + match.renderDuplicateGroups, 0),
       examples: problemMatches.slice(0, 10),
       matches: returnedMatches,
     })

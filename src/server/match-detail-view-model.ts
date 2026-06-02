@@ -37,6 +37,7 @@ export type MatchDetailLineupPlayer = {
 
 export type MatchDetailViewModel = MatchDetailPayload & {
   ok: boolean
+  rawEvents: MatchEvent[]
   sourceEvents: MatchEvent[]
   timelineEvents: MatchEvent[]
   lineupEvents: MatchEvent[]
@@ -251,11 +252,18 @@ export function buildMatchDetailViewModelFromDetail(
   } = {}
 ): MatchDetailViewModel {
   const fixture = detail.fixture as MatchFixture | null
-  const sourceEvents: MatchEvent[] = Array.isArray(detail.events) ? detail.events : []
+  const rawEvents: MatchEvent[] = Array.isArray(detail.events) ? detail.events : []
   const lineups: MatchLineup[] = Array.isArray(detail.lineups) ? detail.lineups : []
   const statistics: MatchStatisticsTeam[] = Array.isArray(detail.statistics)
     ? detail.statistics
     : []
+  const matchId = options.matchId ?? fixture?.fixture.id ?? null
+  const sourceEvents = getTimelineEvents(rawEvents, {
+    descending: false,
+    excludePenaltyShootout: false,
+    matchId,
+    semanticDedupe: true,
+  })
   const penaltyScore = fixture?.score?.penalty ?? { home: null, away: null }
   const hasPenaltyScore = hasPenaltyShootoutScore(penaltyScore.home, penaltyScore.away)
   const penaltyShootoutEvents = sourceEvents.filter((event) =>
@@ -267,7 +275,6 @@ export function buildMatchDetailViewModelFromDetail(
     !isPenaltyShootoutEvent(event) &&
     !isLikelyPenaltyShootoutAttempt(event, hasPenaltyScore)
   )
-  const matchId = options.matchId ?? fixture?.fixture.id ?? null
   const timelineEvents = getTimelineEvents(regularEvents, {
     matchId,
     semanticDedupe: true,
@@ -367,6 +374,7 @@ export function buildMatchDetailViewModelFromDetail(
   return {
     ...detail,
     ok: Boolean(fixture),
+    rawEvents,
     sourceEvents,
     timelineEvents,
     lineupEvents,
