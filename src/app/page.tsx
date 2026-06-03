@@ -134,6 +134,22 @@ function isYouthLeague(match: ApiMatch) {
   )
 }
 
+function isInternationalSeniorFriendly(match: ApiMatch) {
+  const league = leagueText(match)
+
+  return (
+    (
+      isExactLeagueId(match, 10) ||
+      league === 'friendlies' ||
+      league.includes('international friendlies') ||
+      league.includes('friendly international')
+    ) &&
+    !league.includes('club') &&
+    !isWomenLeague(match) &&
+    !isYouthLeague(match)
+  )
+}
+
 function isExactLeagueId(match: ApiMatch, leagueId: number) {
   return match.leagueId === leagueId
 }
@@ -349,6 +365,13 @@ const LEAGUE_RULES: LeagueRule[] = [
     sectionTitle: 'Argentina',
     baseTitle: 'Copa Argentina',
     match: (match) => leagueText(match).includes('copa argentina'),
+  },
+  {
+    key: 'selecciones-amistosos-internacionales',
+    sectionKey: 'selecciones',
+    sectionTitle: 'Selecciones',
+    baseTitle: 'Amistosos internacionales',
+    match: (match) => isInternationalSeniorFriendly(match),
   },
   {
     key: 'argentina-copa-de-la-liga',
@@ -1006,12 +1029,27 @@ function getHomeCompetitionPriority(competition: CompetitionBucket) {
   }
 
   if (
+    competition.key === 'argentina-copa-argentina' ||
+    text.includes('copa argentina')
+  ) {
+    return 2
+  }
+
+  if (
+    competition.key === 'selecciones-amistosos-internacionales' ||
+    text.includes('amistosos internacionales') ||
+    text.includes('international friendlies')
+  ) {
+    return 3
+  }
+
+  if (
     competition.key === 'selecciones-mundial' ||
     text.includes('mundial 2026') ||
     text === 'mundial' ||
     text.includes(' world cup ')
   ) {
-    return 2
+    return 4
   }
 
   if (
@@ -1020,7 +1058,7 @@ function getHomeCompetitionPriority(competition: CompetitionBucket) {
     text.includes('conmebol libertadores') ||
     text.includes('libertadores')
   ) {
-    return 3
+    return 5
   }
 
   if (
@@ -1029,7 +1067,7 @@ function getHomeCompetitionPriority(competition: CompetitionBucket) {
     text.includes('conmebol sudamericana') ||
     text.includes('sudamericana')
   ) {
-    return 4
+    return 6
   }
 
   if (
@@ -1037,14 +1075,14 @@ function getHomeCompetitionPriority(competition: CompetitionBucket) {
     text.includes('uefa champions league') ||
     text.includes('champions league')
   ) {
-    return 5
+    return 7
   }
 
   if (
     competition.key === 'argentina-primera-nacional' ||
     text.includes('primera nacional')
   ) {
-    return 6
+    return 8
   }
 
   if (
@@ -1052,7 +1090,7 @@ function getHomeCompetitionPriority(competition: CompetitionBucket) {
     text.includes('primera b metro') ||
     text.includes('primera b metropolitana')
   ) {
-    return 7
+    return 9
   }
 
   return Number.MAX_SAFE_INTEGER
@@ -1072,6 +1110,8 @@ function sortHomeCompetitions(competitions: CompetitionBucket[]) {
 }
 
 function resolveHomeCompetitionHref(ruleKey: string, sampleMatch?: ApiMatch) {
+  if (ruleKey === 'selecciones-amistosos-internacionales') return null
+
   const tournamentKey =
     getTournamentConfig(ruleKey)?.key ??
     (sampleMatch?.leagueId

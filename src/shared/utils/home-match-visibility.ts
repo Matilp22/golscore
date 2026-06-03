@@ -13,6 +13,7 @@ export type HomeMatchVisibilityResult = {
   included: boolean
   reason:
     | 'allowedLeagueId'
+    | 'internationalFriendly'
     | 'argentinaProfessional'
     | 'internationalCompetition'
     | 'englandCompetition'
@@ -38,6 +39,7 @@ export const HOME_VISIBLE_LEAGUE_IDS = new Set([
   1,
   2,
   3,
+  10,
   11,
   13,
   39,
@@ -272,6 +274,18 @@ export function getHomeMatchVisibility(
     return {
       included: true,
       reason: 'mlsCompetition',
+      excludedReason: false,
+    }
+  }
+
+  if (
+    league === 'friendlies' ||
+    league.includes('international friendlies') ||
+    league.includes('friendly international')
+  ) {
+    return {
+      included: true,
+      reason: 'internationalFriendly',
       excludedReason: false,
     }
   }

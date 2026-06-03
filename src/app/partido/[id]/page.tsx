@@ -1858,7 +1858,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
               </div>
               <Link
                 href={matchHistoryHref}
-                className="inline-flex min-h-10 items-center justify-center rounded-xl border border-[#c89d35] bg-[linear-gradient(135deg,#7c5513_0%,#d5a940_48%,#8a5f16_100%)] px-3 py-2 text-sm font-black text-[#150f05] shadow-[0_0_18px_rgba(213,169,64,0.18),inset_0_1px_0_rgba(255,255,255,0.34)] transition hover:border-[#f0c85a] hover:shadow-[0_0_24px_rgba(240,200,90,0.28),inset_0_1px_0_rgba(255,255,255,0.4)] sm:px-4"
+                className="hf-button inline-flex min-h-10 items-center justify-center rounded-xl px-3 py-2 text-sm font-black sm:px-4"
               >
                 Historial
               </Link>

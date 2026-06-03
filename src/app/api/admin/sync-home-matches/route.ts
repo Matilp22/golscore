@@ -34,6 +34,14 @@ async function getSyncOptions(request: Request) {
   const date = searchParams.get('date') ?? (typeof body?.date === 'string' ? body.date : null)
   const debugValue = searchParams.get('debug') ?? body?.debug
   const liveOnlyValue = searchParams.get('liveOnly') ?? body?.liveOnly
+  const skipEventsValue = searchParams.get('skipEvents') ?? body?.skipEvents
+  const skipPointsValue = searchParams.get('skipPoints') ?? body?.skipPoints
+  const leagueExternalId =
+    searchParams.get('leagueExternalId') ??
+    searchParams.get('league') ??
+    body?.leagueExternalId ??
+    body?.league ??
+    null
   const limitValue = searchParams.get('limit') ?? body?.limit
   const offsetValue =
     searchParams.get('offset') ?? searchParams.get('cursor') ?? body?.offset ?? body?.cursor
@@ -42,6 +50,9 @@ async function getSyncOptions(request: Request) {
     date,
     debug: debugValue === true || debugValue === 'true' || debugValue === '1',
     liveOnly: liveOnlyValue === true || liveOnlyValue === 'true' || liveOnlyValue === '1',
+    skipEvents: skipEventsValue === true || skipEventsValue === 'true' || skipEventsValue === '1',
+    skipPoints: skipPointsValue === true || skipPointsValue === 'true' || skipPointsValue === '1',
+    leagueExternalId,
     limit: Number.isFinite(Number(limitValue)) ? Number(limitValue) : null,
     offset: Number.isFinite(Number(offsetValue)) ? Number(offsetValue) : null,
   }
