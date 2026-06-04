@@ -130,6 +130,13 @@ function inferErrorSource(error: unknown) {
 
 function errorJson(error: unknown) {
   const serialized = serializeHighlightError(error, inferErrorSource(error))
+  const status =
+    serialized.status ??
+    (serialized.code === 'missing_youtube_api_key' || serialized.code === 'MISSING_YOUTUBE_API_KEY'
+      ? 503
+      : serialized.source === 'youtube'
+        ? 502
+        : 500)
 
   console.error('[sync-match-highlights] endpoint-error', serialized)
 
@@ -145,7 +152,7 @@ function errorJson(error: unknown) {
       missingColumns: serialized.missingColumns,
     },
     {
-      status: 500,
+      status,
       headers: JSON_HEADERS,
     }
   )

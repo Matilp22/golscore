@@ -8,6 +8,8 @@ import {
 import { getArgentinaDayUtcRange } from '@/shared/utils/argentina-time'
 import { isFinishedStatus } from '@/shared/utils/match-status'
 import {
+  getYouTubeEmbedUrl,
+  getYouTubeThumbnailUrl,
   getYouTubeVideoId,
   getYouTubeWatchUrl,
   isValidYouTubeUrl,
@@ -83,11 +85,14 @@ export type HighlightSyncOptions = {
 }
 
 export type HighlightAuditOptions = {
+  matchId?: string | null
+  fixture?: string | null
   leagueExternalId?: string | null
   date?: string | null
   dateFrom?: string | null
   dateTo?: string | null
   limit?: number | null
+  onlyProblems?: boolean
 }
 
 type HighlightResult = {
@@ -119,6 +124,7 @@ type HighlightResult = {
   }
   highlightsUrl?: string
   highlightsTitle?: string
+  clearedExisting?: boolean
   candidates?: Array<{
     title: string
     channelTitle: string | null
@@ -186,18 +192,35 @@ const NEGATIVE_PATTERNS = [
   'watchalong',
   'watch along',
   'resumen falso',
+  'nursery rhymes',
+  'cocomelon',
+  'cocolemon',
+  'premier ligue tv',
+  'alaa elsafy',
+  'mahmoud shaker',
 ]
 const KNOWN_CHANNELS = [
   'liga profesional',
   'afa',
   'conmebol',
   'espn',
+  'espn premium',
+  'espn deportes',
   'tyc sports',
+  'tyc sports play',
   'dsports',
+  'd sports',
+  'directv',
+  'directv sports',
   'tnt sports',
+  'tnt premium',
+  'tnt sports premium',
   'fox sports',
+  'fox deportes',
   'fifa',
   'uefa',
+  'copa argentina',
+  'win sports',
 ]
 const STOPWORDS = new Set([
   'club',
@@ -214,6 +237,15 @@ const STOPWORDS = new Set([
   'cf',
   'sc',
 ])
+const TEAM_NAME_ALIASES: Record<string, string[]> = {
+  'new zealand': ['nueva zelanda', 'n zelanda'],
+  usa: ['estados unidos', 'united states', 'usmnt'],
+  'united states': ['estados unidos', 'usa', 'usmnt'],
+  mexico: ['mexico', 'méxico'],
+  'ivory coast': ['costa de marfil'],
+  'south korea': ['corea del sur'],
+  'north korea': ['corea del norte'],
+}
 
 function normalizeText(value: string | null | undefined) {
   return (value ?? '')
@@ -381,11 +413,21 @@ function getSignificantTokens(value: string | null | undefined) {
     .filter((token) => token.length >= 3 && !STOPWORDS.has(token))
 }
 
-function getTeamTitleScore(title: string, teamName: string | null) {
+function getTeamTitleCandidates(teamName: string | null) {
   const normalizedTeam = normalizeText(teamName)
+  if (!normalizedTeam) return []
+
+  return [
+    normalizedTeam,
+    ...(TEAM_NAME_ALIASES[normalizedTeam] ?? []).map((alias) => normalizeText(alias)),
+  ].filter(Boolean)
+}
+
+function getTeamTitleScore(title: string, teamName: string | null) {
   const normalizedTitle = normalizeText(title)
-  if (!normalizedTeam || !normalizedTitle) return 0
-  if (normalizedTitle.includes(normalizedTeam)) return 3
+  const candidates = getTeamTitleCandidates(teamName)
+  if (!candidates.length || !normalizedTitle) return 0
+  if (candidates.some((candidate) => normalizedTitle.includes(candidate))) return 3
 
   const tokens = getSignificantTokens(teamName)
   if (!tokens.length) return 0
@@ -458,11 +500,13 @@ export function scoreYouTubeHighlightResult(match: HighlightMatch, result: YouTu
   const description = result.snippet?.description ?? ''
   const channelTitle = result.snippet?.channelTitle ?? ''
   const publishedAt = result.snippet?.publishedAt ?? null
-  const text = normalizeText(`${title} ${description}`)
+  const text = normalizeText(`${title} ${description} ${channelTitle}`)
   const normalizedTitle = normalizeText(title)
   const normalizedChannel = normalizeText(channelTitle)
   const reasons: string[] = []
   let score = 0
+  let publishedBeforeMatch = false
+  const hasKnownChannel = KNOWN_CHANNELS.some((channel) => normalizedChannel.includes(channel))
 
   const homeScore = getTeamTitleScore(title, match.homeName)
   const awayScore = getTeamTitleScore(title, match.awayName)
@@ -502,7 +546,7 @@ export function scoreYouTubeHighlightResult(match: HighlightMatch, result: YouTu
     reasons.push('league')
   }
 
-  if (KNOWN_CHANNELS.some((channel) => normalizedChannel.includes(channel))) {
+  if (hasKnownChannel) {
     score += 3
     reasons.push('known-channel')
   }
@@ -510,6 +554,7 @@ export function scoreYouTubeHighlightResult(match: HighlightMatch, result: YouTu
   const distanceDays = getPublishedDistanceDays(match.match_date, publishedAt)
   if (distanceDays !== null) {
     if (isPublishedBeforeMatch(match.match_date, publishedAt)) {
+      publishedBeforeMatch = true
       score -= 8
       reasons.push('published-before-match')
     } else if (distanceDays <= 3) {
@@ -532,11 +577,20 @@ export function scoreYouTubeHighlightResult(match: HighlightMatch, result: YouTu
 
   const hasSummaryIntent = containsAny(normalizedTitle, SUMMARY_KEYWORDS)
   const hasBothTeams = homeScore >= 2 && awayScore >= 2
+  const hasTrustedOfficialClip =
+    hasKnownChannel &&
+    hasBothTeams &&
+    (reasons.includes('published-close') || reasons.includes('published-near'))
 
   return {
     score,
     reasons,
-    accepted: score >= 10 && hasBothTeams && hasSummaryIntent,
+    accepted:
+      score >= 10 &&
+      hasKnownChannel &&
+      hasBothTeams &&
+      (hasSummaryIntent || hasTrustedOfficialClip) &&
+      !publishedBeforeMatch,
   }
 }
 
@@ -710,10 +764,6 @@ async function searchYouTubeHighlights(query: string, apiKey: string) {
   url.searchParams.set('order', 'relevance')
   url.searchParams.set('videoEmbeddable', 'true')
   url.searchParams.set('safeSearch', 'moderate')
-  url.searchParams.set(
-    'fields',
-    'items(id/videoId,snippet/title,snippet/description,snippet/channelTitle,snippet/publishedAt),error(code,message,errors(message,reason,domain))'
-  )
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), YOUTUBE_FETCH_TIMEOUT_MS)
@@ -855,6 +905,21 @@ export async function syncMatchHighlights(supabase: DbClient, options: Highlight
         .find((item) => item.accepted)
 
       if (!selected?.videoId) {
+        let clearedExisting = false
+
+        if (options.force && match.highlights_url) {
+          const { error } = await supabase
+            .from('matches')
+            .update({
+              highlights_url: null,
+              highlights_title: null,
+            })
+            .eq('id', match.id)
+
+          if (error) throw error
+          clearedExisting = true
+        }
+
         results.push({
           ...toResultBase(match),
           query: queries[0],
@@ -862,6 +927,7 @@ export async function syncMatchHighlights(supabase: DbClient, options: Highlight
           status: 'no_reliable_video',
           skipReason: 'no_reliable_video',
           reason: 'no_reliable_video',
+          clearedExisting,
           candidates: allCandidates
             .sort((a, b) => b.score - a.score)
             .slice(0, 8)
@@ -970,6 +1036,11 @@ async function countFinishedMatches(
 }
 
 function serializeSample(match: HighlightMatch) {
+  const videoId = getYouTubeVideoId(match.highlights_url)
+  const thumbnailUrl = getYouTubeThumbnailUrl(match.highlights_url)
+  const embedUrl = getYouTubeEmbedUrl(match.highlights_url)
+  const validUrl = Boolean(match.highlights_url && videoId)
+
   return {
     id: match.id,
     externalId: match.external_id,
@@ -980,7 +1051,11 @@ function serializeSample(match: HighlightMatch) {
     status: match.status,
     title: match.highlights_title,
     url: match.highlights_url,
-    isValidYouTubeUrl: match.highlights_url ? isValidYouTubeUrl(match.highlights_url) : false,
+    videoId,
+    thumbnailUrl,
+    embedUrl,
+    isValidYouTubeUrl: validUrl,
+    renderReady: validUrl && Boolean(thumbnailUrl && embedUrl),
   }
 }
 
@@ -1007,6 +1082,15 @@ export async function getHighlightsAudit(supabase: DbClient, options: HighlightA
         hasCronSecret: Boolean(process.env.CRON_SECRET || process.env.ADMIN_CRON_SECRET),
       },
       db: columnStatus,
+      matches: {
+        checked: 0,
+        finishedMatches: 0,
+        withHighlights: 0,
+        withoutHighlights: 0,
+        invalidYoutubeUrls: 0,
+        renderReady: 0,
+        missingThumbnails: 0,
+      },
       totals: {
         finishedMatches: 0,
         matchesWithHighlights: 0,
@@ -1016,9 +1100,15 @@ export async function getHighlightsAudit(supabase: DbClient, options: HighlightA
       samples: {
         withHighlights: [],
         withoutHighlights: [],
+        invalidUrls: [],
+      },
+      nextConfig: {
+        allowsImgYoutube: ALLOWED_REMOTE_ASSET_HOSTS.includes(YOUTUBE_IMAGE_HOST),
+        allowsIYtimg: ALLOWED_REMOTE_ASSET_HOSTS.includes(YOUTUBE_IMAGE_ALT_HOST),
       },
       render,
       warnings,
+      errors: ['missing_database_columns'],
     }
   }
 
@@ -1038,7 +1128,15 @@ export async function getHighlightsAudit(supabase: DbClient, options: HighlightA
   const finished = matches.filter((match) => isFinishedStatus(match.status))
   const withHighlights = finished.filter((match) => Boolean(match.highlights_url))
   const withoutHighlights = finished.filter((match) => !match.highlights_url)
+  const invalidUrls = withHighlights.filter((match) => !isValidYouTubeUrl(match.highlights_url))
+  const renderReady = withHighlights.filter((match) => {
+    const videoId = getYouTubeVideoId(match.highlights_url)
+    const thumbnailUrl = getYouTubeThumbnailUrl(match.highlights_url)
+    const embedUrl = getYouTubeEmbedUrl(match.highlights_url)
 
+    return Boolean(videoId && thumbnailUrl && embedUrl)
+  })
+  const missingThumbnails = withHighlights.length - renderReady.length
   if (!render.thumbnailDomainsConfigured) warnings.push('youtube_thumbnail_domains_not_configured')
 
   return {
@@ -1048,6 +1146,15 @@ export async function getHighlightsAudit(supabase: DbClient, options: HighlightA
       hasCronSecret: Boolean(process.env.CRON_SECRET || process.env.ADMIN_CRON_SECRET),
     },
     db: columnStatus,
+    matches: {
+      checked: matches.length,
+      finishedMatches,
+      withHighlights: matchesWithHighlights,
+      withoutHighlights: matchesWithoutHighlights,
+      invalidYoutubeUrls: invalidUrls.length,
+      renderReady: renderReady.length,
+      missingThumbnails,
+    },
     totals: {
       finishedMatches,
       matchesWithHighlights,
@@ -1057,9 +1164,15 @@ export async function getHighlightsAudit(supabase: DbClient, options: HighlightA
     samples: {
       withHighlights: withHighlights.slice(0, limit).map(serializeSample),
       withoutHighlights: withoutHighlights.slice(0, limit).map(serializeSample),
+      invalidUrls: invalidUrls.slice(0, limit).map(serializeSample),
+    },
+    nextConfig: {
+      allowsImgYoutube: ALLOWED_REMOTE_ASSET_HOSTS.includes(YOUTUBE_IMAGE_HOST),
+      allowsIYtimg: ALLOWED_REMOTE_ASSET_HOSTS.includes(YOUTUBE_IMAGE_ALT_HOST),
     },
     render,
     warnings,
+    errors: [],
     checked: matches.length,
     finishedMatches,
     withHighlights: matchesWithHighlights,
@@ -1067,5 +1180,120 @@ export async function getHighlightsAudit(supabase: DbClient, options: HighlightA
     latestHighlights: withHighlights.slice(0, limit).map(serializeSample),
     finishedWithoutHighlights: withoutHighlights.slice(0, limit).map(serializeSample),
     recentErrors: [],
+  }
+}
+
+export async function getHighlightRenderAudit(
+  supabase: DbClient,
+  options: Pick<HighlightAuditOptions, 'matchId' | 'fixture'>
+) {
+  const warnings: string[] = []
+  const errors: string[] = []
+  const columnStatus = await getHighlightsColumnStatus(supabase)
+
+  if (columnStatus.missingColumns.length) {
+    errors.push('missing_database_columns')
+
+    return {
+      ok: false,
+      match: null,
+      db: {
+        highlightsUrl: null,
+        highlightsTitle: null,
+        ...columnStatus,
+      },
+      parsed: {
+        videoId: null,
+        thumbnailUrl: null,
+        embedUrl: null,
+        validUrl: false,
+      },
+      renderReadiness: {
+        canRenderSummary: false,
+        reasonIfNot: `missing_database_columns:${columnStatus.missingColumns.join(',')}`,
+      },
+      warnings,
+      errors,
+    }
+  }
+
+  const rows = await fetchMatches(supabase, {
+    matchId: options.matchId,
+    fixture: options.fixture,
+    force: true,
+    limit: 1,
+  })
+  const [match] = await enrichMatches(supabase, rows)
+
+  if (!match) {
+    errors.push('match_not_found')
+
+    return {
+      ok: false,
+      match: null,
+      db: {
+        highlightsUrl: null,
+        highlightsTitle: null,
+        ...columnStatus,
+      },
+      parsed: {
+        videoId: null,
+        thumbnailUrl: null,
+        embedUrl: null,
+        validUrl: false,
+      },
+      renderReadiness: {
+        canRenderSummary: false,
+        reasonIfNot: 'match_not_found',
+      },
+      warnings,
+      errors,
+    }
+  }
+
+  const videoId = getYouTubeVideoId(match.highlights_url)
+  const thumbnailUrl = getYouTubeThumbnailUrl(match.highlights_url)
+  const embedUrl = getYouTubeEmbedUrl(match.highlights_url)
+  const validUrl = Boolean(match.highlights_url && videoId)
+  const reasonIfNot = !match.highlights_url
+    ? 'missing_highlights_url'
+    : !validUrl
+      ? 'invalid_youtube_url'
+      : !thumbnailUrl
+        ? 'missing_thumbnail_url'
+        : !embedUrl
+          ? 'missing_embed_url'
+        : null
+
+  if (reasonIfNot) warnings.push(reasonIfNot)
+
+  return {
+    ok: true,
+    match: {
+      id: match.id,
+      externalId: match.external_id,
+      home: match.homeName,
+      away: match.awayName,
+      league: match.leagueName,
+      matchDate: match.match_date,
+      status: match.status,
+    },
+    db: {
+      highlightsUrl: match.highlights_url,
+      highlightsTitle: match.highlights_title,
+      ...columnStatus,
+    },
+    parsed: {
+      videoId,
+      thumbnailUrl,
+      embedUrl,
+      validUrl,
+    },
+    renderReadiness: {
+      canRenderSummary: Boolean(validUrl && thumbnailUrl && embedUrl),
+      reasonIfNot,
+    },
+    warnings,
+    errors,
   }
 }

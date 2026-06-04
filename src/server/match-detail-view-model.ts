@@ -16,6 +16,12 @@ import {
   normalizeMatchStatistics,
   type NormalizedMatchStatisticPair,
 } from '@/shared/utils/match-statistics'
+import {
+  getYouTubeEmbedUrl,
+  getYouTubeThumbnailUrl,
+  getYouTubeVideoId,
+  isValidYouTubeUrl,
+} from '@/shared/utils/youtube'
 
 type MatchDetailPayload = Awaited<ReturnType<typeof getMatchDetail>>
 
@@ -74,6 +80,10 @@ export type MatchDetailViewModel = MatchDetailPayload & {
   highlights: {
     url: string | null
     title: string | null
+    videoId: string | null
+    thumbnailUrl: string | null
+    embedUrl: string | null
+    renderReady: boolean
   }
   hasPenaltyShootout: boolean
   matchInfo: {
@@ -363,6 +373,12 @@ export function buildMatchDetailViewModelFromDetail(
   const highlights = {
     url: typeof detail.highlightsUrl === 'string' ? detail.highlightsUrl : null,
     title: typeof detail.highlightsTitle === 'string' ? detail.highlightsTitle : null,
+    videoId: getYouTubeVideoId(detail.highlightsUrl),
+    thumbnailUrl: getYouTubeThumbnailUrl(detail.highlightsUrl),
+    embedUrl: getYouTubeEmbedUrl(detail.highlightsUrl),
+    renderReady:
+      isValidYouTubeUrl(detail.highlightsUrl) &&
+      Boolean(getYouTubeThumbnailUrl(detail.highlightsUrl) && getYouTubeEmbedUrl(detail.highlightsUrl)),
   }
   const missingSections = [
     !renderCounts.timelineEvents ? 'timeline' : null,

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
-import { getHighlightsAudit, serializeHighlightError } from '@/server/match-highlights'
+import { getHighlightRenderAudit, serializeHighlightError } from '@/server/match-highlights'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -26,17 +26,6 @@ function isAuthorized(request: Request) {
   return getAuthorizationToken(request) === cronSecret
 }
 
-function parseLimit(value: string | null) {
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : null
-}
-
-function parseBoolean(value: string | null) {
-  if (!value) return false
-
-  return ['1', 'true', 'yes', 'si'].includes(value.trim().toLowerCase())
-}
-
 export async function GET(request: Request) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ ok: false, error: 'No autorizado' }, { status: 401, headers: JSON_HEADERS })
@@ -46,18 +35,12 @@ export async function GET(request: Request) {
 
   try {
     const supabase = getSupabaseAdminClient()
-    const audit = await getHighlightsAudit(supabase, {
+    const audit = await getHighlightRenderAudit(supabase, {
       matchId: searchParams.get('matchId') ?? searchParams.get('match_id'),
       fixture:
         searchParams.get('fixture') ??
         searchParams.get('fixtureExternalId') ??
         searchParams.get('fixture_external_id'),
-      leagueExternalId: searchParams.get('leagueExternalId') ?? searchParams.get('league_external_id'),
-      date: searchParams.get('date'),
-      dateFrom: searchParams.get('dateFrom') ?? searchParams.get('date_from'),
-      dateTo: searchParams.get('dateTo') ?? searchParams.get('date_to'),
-      limit: parseLimit(searchParams.get('limit')),
-      onlyProblems: parseBoolean(searchParams.get('onlyProblems') ?? searchParams.get('only_problems')),
     })
 
     return NextResponse.json(audit, {
@@ -65,7 +48,7 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     const serialized = serializeHighlightError(error, 'supabase')
-    console.error('[highlights-audit] Error completo', serialized)
+    console.error('[highlight-render-audit] Error completo', serialized)
 
     return NextResponse.json(
       {

@@ -29,7 +29,7 @@ import { formatMatchScoreWithPenalties } from '@/shared/utils/match-display'
 import { getEventElapsedMinute, getFixtureStatusElapsedMinute } from '@/shared/utils/match-minute'
 import { isFinishedStatus } from '@/shared/utils/match-status'
 import { buildMatchDetailViewModel } from '@/server/match-detail-view-model'
-import { getYouTubeThumbnailUrl, isValidYouTubeUrl } from '@/shared/utils/youtube'
+import { getYouTubeEmbedUrl, isValidYouTubeUrl } from '@/shared/utils/youtube'
 import { buildSeoMetadata } from '@/shared/seo'
 import Link from 'next/link'
 import type { Metadata } from 'next'
@@ -37,6 +37,9 @@ import type { Metadata } from 'next'
 type PageProps = {
   params: Promise<{ id: string }>
 }
+
+export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params
@@ -1166,9 +1169,9 @@ function MatchSummaryCard({
   title?: string | null
   url?: string | null
 }) {
-  const thumbnailUrl = getYouTubeThumbnailUrl(url)
+  const embedUrl = getYouTubeEmbedUrl(url)
 
-  if (!url || !thumbnailUrl || !isValidYouTubeUrl(url)) {
+  if (!url || !embedUrl || !isValidYouTubeUrl(url)) {
     return (
       <div className="flex aspect-video flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/10 bg-[#13181d] px-4 text-center">
         <div className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-[#8d98a7]">
@@ -1183,37 +1186,24 @@ function MatchSummaryCard({
   }
 
   return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noreferrer"
-      className="group block overflow-hidden rounded-xl border border-white/10 bg-[#13181d] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7ff0b2]"
-      aria-label={title ? `Ver resumen: ${title}` : 'Ver resumen del partido'}
-    >
-      <div className="relative aspect-video overflow-hidden">
-        <SafeImage
-          src={thumbnailUrl}
-          alt={title || 'Resumen del partido'}
-          imageType="video"
-          fill
-          sizes="(min-width: 1280px) 320px, 100vw"
-          className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.03]"
-          fallbackClassName="h-full w-full"
-          unoptimized
+    <div className="overflow-hidden rounded-xl border border-white/10 bg-[#13181d]">
+      <div className="relative aspect-video overflow-hidden bg-black">
+        <iframe
+          className="absolute inset-0 h-full w-full"
+          src={embedUrl}
+          title={title || 'Resumen del partido'}
+          loading="lazy"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          referrerPolicy="strict-origin-when-cross-origin"
+          allowFullScreen
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-transparent" />
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-[#7ff0b2]/90 text-[#07110c] shadow-[0_10px_25px_rgba(0,0,0,0.35)] transition group-hover:scale-105">
-            <span className="ml-1 text-2xl">▶</span>
-          </span>
-        </div>
-        {title ? (
-          <p className="absolute bottom-3 left-3 right-3 line-clamp-2 text-sm font-black leading-tight text-white">
-            {title}
-          </p>
-        ) : null}
       </div>
-    </a>
+      {title ? (
+        <p className="border-t border-white/8 px-3 py-2 text-xs font-bold leading-snug text-[#d7dee8]">
+          {title}
+        </p>
+      ) : null}
+    </div>
   )
 }
 
@@ -1746,8 +1736,18 @@ export default async function PartidoDetallePage({ params }: PageProps) {
   const broadcastLabel = broadcasters.map((broadcaster) => broadcaster.name).join(' / ')
   const primaryBroadcastLogo =
     broadcasters.find((broadcaster) => broadcaster.logoUrl)?.logoUrl ?? null
-  const highlightsUrl = typeof data.highlightsUrl === 'string' ? data.highlightsUrl : null
-  const highlightsTitle = typeof data.highlightsTitle === 'string' ? data.highlightsTitle : null
+  const highlightsUrl =
+    typeof data.highlights?.url === 'string'
+      ? data.highlights.url
+      : typeof data.highlightsUrl === 'string'
+        ? data.highlightsUrl
+        : null
+  const highlightsTitle =
+    typeof data.highlights?.title === 'string'
+      ? data.highlights.title
+      : typeof data.highlightsTitle === 'string'
+        ? data.highlightsTitle
+        : null
   const stats = Array.isArray(data.statistics) ? data.statistics : []
   const events = data.sourceEvents
   const lineups = data.lineups

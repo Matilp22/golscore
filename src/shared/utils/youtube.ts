@@ -32,6 +32,14 @@ export function getYouTubeWatchUrl(videoId: string) {
   return `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`
 }
 
+export function getYouTubeEmbedUrl(value?: string | null) {
+  const videoId = getYouTubeVideoId(value)
+
+  return videoId
+    ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?rel=0&modestbranding=1&playsinline=1`
+    : null
+}
+
 export function getYouTubeThumbnailUrl(value?: string | null) {
   const videoId = getYouTubeVideoId(value)
   return videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : null
