@@ -176,6 +176,8 @@ const DEFAULT_AUDIT_LIMIT = 30
 const MAX_AUDIT_LIMIT = 100
 const YOUTUBE_SEARCH_URL = 'https://www.googleapis.com/youtube/v3/search'
 const YOUTUBE_FETCH_TIMEOUT_MS = 8000
+const YOUTUBE_RESULTS_PER_QUERY = 12
+const MAX_TRUSTED_SOURCE_FALLBACK_QUERIES = 4
 const FINISHED_QUERY_STATUSES = ['FT', 'AET', 'PEN', 'Final', 'Finalizado', 'Finished', 'Match Finished']
 
 const SUMMARY_KEYWORDS = ['resumen', 'highlights', 'goles', 'goals', 'full highlights']
@@ -184,8 +186,15 @@ const NEGATIVE_PATTERNS = [
   'pronostico',
   'previa',
   'simulacion',
+  'simulation',
   'efootball',
   'pes',
+  'gameplay',
+  'virtual football',
+  'predict',
+  'prediction',
+  'betting',
+  'odds',
   'live stream',
   'radio',
   'reaccion',
@@ -204,6 +213,7 @@ const KNOWN_CHANNELS = [
   'afa',
   'conmebol',
   'espn',
+  'espn fans',
   'espn premium',
   'espn deportes',
   'tyc sports',
@@ -221,6 +231,35 @@ const KNOWN_CHANNELS = [
   'uefa',
   'copa argentina',
   'win sports',
+]
+const OFFICIAL_CHANNEL_HINTS = [
+  'football association',
+  'football federation',
+  'soccer association',
+  'soccer federation',
+  'federacion',
+  'federacao',
+  'federation',
+  'asociacion de futbol',
+  'national team',
+  'seleccion nacional',
+  'seleccion',
+  'official',
+  'oficial',
+  'tv oficial',
+  'new zealand football',
+  'us soccer',
+  'ussoccer',
+  'figc',
+  'vivo azzurro',
+]
+const TRUSTED_SOURCE_SEARCH_TERMS = [
+  'ESPN Fans',
+  'ESPN',
+  'TyC Sports',
+  'DSports',
+  'FOX Sports',
+  'TNT Sports',
 ]
 const STOPWORDS = new Set([
   'club',
@@ -245,6 +284,31 @@ const TEAM_NAME_ALIASES: Record<string, string[]> = {
   'ivory coast': ['costa de marfil'],
   'south korea': ['corea del sur'],
   'north korea': ['corea del norte'],
+}
+const EXTRA_TEAM_NAME_ALIASES: Record<string, string[]> = {
+  algeria: ['argelia'],
+  denmark: ['dinamarca'],
+  'dominican republic': ['republica dominicana'],
+  italy: ['italia'],
+  luxembourg: ['luxemburgo'],
+  netherlands: ['paises bajos', 'holanda'],
+  nigeria: ['nigeria'],
+  panama: ['panama'],
+  poland: ['polonia'],
+}
+const TEAM_SEARCH_ALIASES: Record<string, string[]> = {
+  algeria: ['Argelia'],
+  denmark: ['Dinamarca'],
+  'dominican republic': ['Republica Dominicana'],
+  italy: ['Italia'],
+  luxembourg: ['Luxemburgo'],
+  netherlands: ['Paises Bajos', 'Holanda'],
+  'new zealand': ['Nueva Zelanda', 'N Zelanda'],
+  poland: ['Polonia'],
+  'south korea': ['Corea del Sur'],
+  'north korea': ['Corea del Norte'],
+  usa: ['Estados Unidos'],
+  'united states': ['Estados Unidos', 'USA'],
 }
 
 function normalizeText(value: string | null | undefined) {
@@ -420,7 +484,32 @@ function getTeamTitleCandidates(teamName: string | null) {
   return [
     normalizedTeam,
     ...(TEAM_NAME_ALIASES[normalizedTeam] ?? []).map((alias) => normalizeText(alias)),
+    ...(EXTRA_TEAM_NAME_ALIASES[normalizedTeam] ?? []).map((alias) => normalizeText(alias)),
   ].filter(Boolean)
+}
+
+function getTeamSearchNames(teamName: string | null) {
+  const normalizedTeam = normalizeText(teamName)
+  if (!teamName || !normalizedTeam) return []
+
+  return [
+    teamName,
+    ...(TEAM_SEARCH_ALIASES[normalizedTeam] ?? []),
+  ].filter(Boolean)
+}
+
+function getTeamSearchPairVariants(match: HighlightMatch) {
+  const homeNames = getTeamSearchNames(match.homeName)
+  const awayNames = getTeamSearchNames(match.awayName)
+  if (!homeNames.length || !awayNames.length) return []
+
+  const pairs: Array<[string, string]> = [[homeNames[0], awayNames[0]]]
+  if (homeNames[1] && awayNames[1]) pairs.push([homeNames[1], awayNames[1]])
+  pairs.push([awayNames[0], homeNames[0]])
+
+  return pairs
+    .map(([home, away]) => [compactSpaces(home), compactSpaces(away)] as [string, string])
+    .filter(([home, away]) => home && away)
 }
 
 function getTeamTitleScore(title: string, teamName: string | null) {
@@ -442,6 +531,21 @@ function getTeamTitleScore(title: string, teamName: string | null) {
 
 function containsAny(normalizedTextValue: string, tokens: string[]) {
   return tokens.some((token) => normalizedTextValue.includes(token))
+}
+
+function getTrustedChannelReason(channelTitle: string | null | undefined) {
+  const normalizedChannel = normalizeText(channelTitle)
+  if (!normalizedChannel) return null
+
+  if (KNOWN_CHANNELS.some((channel) => normalizedChannel.includes(channel))) {
+    return 'known-channel'
+  }
+
+  if (OFFICIAL_CHANNEL_HINTS.some((hint) => normalizedChannel.includes(hint))) {
+    return 'official-channel'
+  }
+
+  return null
 }
 
 function isFifaGameText(normalizedTextValue: string) {
@@ -473,22 +577,31 @@ export function buildYouTubeHighlightQueries(match: HighlightMatch) {
 
   const year = match.match_date ? new Date(match.match_date).getFullYear() : null
   const yearText = year && Number.isFinite(year) ? String(year) : null
-  const pairs = [
-    [match.homeName, match.awayName],
-    [match.awayName, match.homeName],
-  ]
-  const suffixes = [
-    ['resumen', 'goles', yearText, match.leagueName],
-    ['highlights', yearText, match.leagueName],
-    ['full highlights', yearText],
-  ]
-  const queries = pairs.flatMap(([home, away]) =>
-    suffixes.map((suffix) =>
-      compactSpaces([home, away, ...suffix].filter(Boolean).join(' '))
+  const pairs = getTeamSearchPairVariants(match)
+  const queries = pairs.flatMap(([home, away]) => [
+    compactSpaces([home, away, 'resumen', 'goles', yearText, match.leagueName].filter(Boolean).join(' ')),
+    compactSpaces([home, away, 'highlights', yearText, match.leagueName].filter(Boolean).join(' ')),
+  ])
+  queries.push(compactSpaces([match.homeName, match.awayName, 'full highlights', yearText].filter(Boolean).join(' ')))
+
+  return [...new Set(queries)].filter((query) => query.length >= 12).slice(0, 4)
+}
+
+function buildYouTubeTrustedSourceQueries(match: HighlightMatch) {
+  if (!match.homeName || !match.awayName) return []
+
+  const year = match.match_date ? new Date(match.match_date).getFullYear() : null
+  const yearText = year && Number.isFinite(year) ? String(year) : null
+  const pairs = getTeamSearchPairVariants(match).slice(0, 2)
+  const queries = TRUSTED_SOURCE_SEARCH_TERMS.flatMap((source) =>
+    pairs.map(([home, away]) =>
+      compactSpaces([home, away, source, 'highlights', yearText].filter(Boolean).join(' '))
     )
   )
 
-  return [...new Set(queries)].filter((query) => query.length >= 12).slice(0, 4)
+  return [...new Set(queries)]
+    .filter((query) => query.length >= 12)
+    .slice(0, MAX_TRUSTED_SOURCE_FALLBACK_QUERIES)
 }
 
 export function buildYouTubeHighlightQuery(match: HighlightMatch) {
@@ -502,11 +615,11 @@ export function scoreYouTubeHighlightResult(match: HighlightMatch, result: YouTu
   const publishedAt = result.snippet?.publishedAt ?? null
   const text = normalizeText(`${title} ${description} ${channelTitle}`)
   const normalizedTitle = normalizeText(title)
-  const normalizedChannel = normalizeText(channelTitle)
   const reasons: string[] = []
   let score = 0
   let publishedBeforeMatch = false
-  const hasKnownChannel = KNOWN_CHANNELS.some((channel) => normalizedChannel.includes(channel))
+  const trustedChannelReason = getTrustedChannelReason(channelTitle)
+  const hasTrustedChannel = Boolean(trustedChannelReason)
 
   const homeScore = getTeamTitleScore(title, match.homeName)
   const awayScore = getTeamTitleScore(title, match.awayName)
@@ -546,9 +659,9 @@ export function scoreYouTubeHighlightResult(match: HighlightMatch, result: YouTu
     reasons.push('league')
   }
 
-  if (hasKnownChannel) {
+  if (trustedChannelReason) {
     score += 3
-    reasons.push('known-channel')
+    reasons.push(trustedChannelReason)
   }
 
   const distanceDays = getPublishedDistanceDays(match.match_date, publishedAt)
@@ -578,7 +691,7 @@ export function scoreYouTubeHighlightResult(match: HighlightMatch, result: YouTu
   const hasSummaryIntent = containsAny(normalizedTitle, SUMMARY_KEYWORDS)
   const hasBothTeams = homeScore >= 2 && awayScore >= 2
   const hasTrustedOfficialClip =
-    hasKnownChannel &&
+    hasTrustedChannel &&
     hasBothTeams &&
     (reasons.includes('published-close') || reasons.includes('published-near'))
 
@@ -587,7 +700,7 @@ export function scoreYouTubeHighlightResult(match: HighlightMatch, result: YouTu
     reasons,
     accepted:
       score >= 10 &&
-      hasKnownChannel &&
+      hasTrustedChannel &&
       hasBothTeams &&
       (hasSummaryIntent || hasTrustedOfficialClip) &&
       !publishedBeforeMatch,
@@ -759,7 +872,7 @@ async function searchYouTubeHighlights(query: string, apiKey: string) {
   const url = new URL(YOUTUBE_SEARCH_URL)
   url.searchParams.set('part', 'snippet')
   url.searchParams.set('type', 'video')
-  url.searchParams.set('maxResults', '5')
+  url.searchParams.set('maxResults', String(YOUTUBE_RESULTS_PER_QUERY))
   url.searchParams.set('q', query)
   url.searchParams.set('key', apiKey)
   url.searchParams.set('order', 'relevance')
@@ -886,18 +999,34 @@ export async function syncMatchHighlights(supabase: DbClient, options: Highlight
     }
 
     const allCandidates: ReturnType<typeof toCandidate>[] = []
+    const attemptedQueries = [...queries]
 
     try {
-      for (const query of queries) {
-        searched += 1
-        const items = await searchYouTubeHighlights(query, apiKey)
-        const scored = items
-          .map((item) => toCandidate(item, match, query))
-          .filter((item) => item.videoId)
-          .sort((a, b) => b.score - a.score)
+      const runSearches = async (searchQueries: string[]) => {
+        for (const query of searchQueries) {
+          searched += 1
+          const items = await searchYouTubeHighlights(query, apiKey)
+          const scored = items
+            .map((item) => toCandidate(item, match, query))
+            .filter((item) => item.videoId)
+            .sort((a, b) => b.score - a.score)
 
-        allCandidates.push(...scored)
-        if (scored.some((item) => item.accepted)) break
+          allCandidates.push(...scored)
+          if (scored.some((item) => item.accepted)) return true
+        }
+
+        return false
+      }
+
+      const foundPrimaryCandidate = await runSearches(queries)
+
+      if (!foundPrimaryCandidate) {
+        const trustedSourceQueries = buildYouTubeTrustedSourceQueries(match).filter(
+          (query) => !attemptedQueries.includes(query)
+        )
+
+        attemptedQueries.push(...trustedSourceQueries)
+        await runSearches(trustedSourceQueries)
       }
 
       const selected = allCandidates
@@ -923,8 +1052,8 @@ export async function syncMatchHighlights(supabase: DbClient, options: Highlight
 
         results.push({
           ...toResultBase(match),
-          query: queries[0],
-          queries,
+          query: attemptedQueries[0],
+          queries: attemptedQueries,
           status: 'no_reliable_video',
           skipReason: 'no_reliable_video',
           reason: 'no_reliable_video',
@@ -967,7 +1096,7 @@ export async function syncMatchHighlights(supabase: DbClient, options: Highlight
       results.push({
         ...toResultBase(match),
         query: selected.query,
-        queries,
+        queries: attemptedQueries,
         status: 'updated',
         selectedVideo,
         selected: selectedVideo,
@@ -982,8 +1111,8 @@ export async function syncMatchHighlights(supabase: DbClient, options: Highlight
 
       results.push({
         ...toResultBase(match),
-        query: queries[0],
-        queries,
+        query: attemptedQueries[0],
+        queries: attemptedQueries,
         status: 'error',
         skipReason: serialized.message,
         reason: serialized.message,
