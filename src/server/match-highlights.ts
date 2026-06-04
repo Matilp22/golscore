@@ -692,6 +692,7 @@ async function fetchMatches(supabase: DbClient, options: HighlightSyncOptions) {
   }
 
   if (options.fixture) query = query.eq('external_id', options.fixture.trim())
+  if (!isSingleMatch) query = query.in('status', FINISHED_QUERY_STATUSES)
 
   const leagueId = await getLeagueIdByExternalId(supabase, options.leagueExternalId)
   if (options.leagueExternalId && !leagueId) return []

@@ -4,6 +4,10 @@
     {
       "path": "/api/cron/sync-fixtures",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/sync-match-highlights",
+      "schedule": "0 * * * *"
     }
   ]
 }

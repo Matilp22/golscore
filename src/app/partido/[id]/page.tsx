@@ -1207,6 +1207,30 @@ function MatchSummaryCard({
   )
 }
 
+function MatchSummarySection({
+  title,
+  url,
+  className = '',
+}: {
+  title?: string | null
+  url?: string | null
+  className?: string
+}) {
+  return (
+    <div className={`hf-card w-full overflow-hidden rounded-2xl ${className}`}>
+      <div className="hf-section-head px-2 py-3 md:px-4">
+        <div className="flex items-center justify-center">
+          <h2 className="text-base font-bold text-white">Resumen del partido</h2>
+        </div>
+      </div>
+
+      <div className="p-2 md:p-3">
+        <MatchSummaryCard title={title} url={url} />
+      </div>
+    </div>
+  )
+}
+
 function Shirt({ number, style }: { number?: number | string; style: TeamStyle }) {
   return (
     <div
@@ -1748,6 +1772,9 @@ export default async function PartidoDetallePage({ params }: PageProps) {
       : typeof data.highlightsTitle === 'string'
         ? data.highlightsTitle
         : null
+  const highlightsRenderReady =
+    data.highlights?.renderReady === true ||
+    Boolean(highlightsUrl && isValidYouTubeUrl(highlightsUrl))
   const stats = Array.isArray(data.statistics) ? data.statistics : []
   const events = data.sourceEvents
   const lineups = data.lineups
@@ -1780,6 +1807,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
   const confirmedLineupPlayers =
     data.renderCounts.startersCount + data.renderCounts.substitutesCount
   const matchIsFinished = isFinishedStatus(status.short) || isFinishedStatus(status.long)
+  const showMobileFinishedHighlights = matchIsFinished && highlightsRenderReady
   const lineupStatusLabel = confirmedLineupPlayers > 0
     ? 'Alineación confirmada'
     : matchIsFinished
@@ -1936,6 +1964,14 @@ export default async function PartidoDetallePage({ params }: PageProps) {
             </div>
           </div>
         </header>
+
+        {showMobileFinishedHighlights ? (
+          <MatchSummarySection
+            title={highlightsTitle}
+            url={highlightsUrl}
+            className="mb-4 xl:hidden"
+          />
+        ) : null}
 
         {process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_SHOW_MATCH_DEBUG === 'true' ? (
           <details className="mb-4 rounded-2xl border border-white/8 bg-[#0f1317]/92 px-3 py-2 text-xs text-[#c8d0da]">
@@ -2125,17 +2161,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
           </section>
 
           <aside className="space-y-4">
-            <div className="hf-card w-full overflow-hidden rounded-2xl">
-              <div className="hf-section-head px-2 py-3 md:px-4">
-                <div className="flex items-center justify-center">
-                  <h2 className="text-base font-bold text-white">Resumen del partido</h2>
-                </div>
-              </div>
-
-              <div className="p-2 md:p-3">
-                <MatchSummaryCard title={highlightsTitle} url={highlightsUrl} />
-              </div>
-            </div>
+            <MatchSummarySection title={highlightsTitle} url={highlightsUrl} className="hidden xl:block" />
 
             <div className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
               <div className="border-b border-white/6 bg-[#13181d] px-2 py-3 md:px-4">

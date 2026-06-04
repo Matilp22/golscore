@@ -2,9 +2,11 @@ import { NextResponse } from 'next/server'
 
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { syncMatchDetailsBulk } from '@/server/match-detail-cache'
+import { serializeHighlightError, syncMatchHighlights } from '@/server/match-highlights'
 import { generateLigaProfesionalPlayoffs } from '@/server/liga-profesional/playoffs'
 import { syncHomeScoreboardMatches } from '@/server/prode/sync-matches'
 import { getAllowedTournamentByExternalId } from '@/shared/config/prode-leagues'
+import { addDaysToISO, getArgentinaTodayISO } from '@/shared/utils/argentina-time'
 import { LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID } from '@/shared/utils/league-rounds'
 
 export const dynamic = 'force-dynamic'
@@ -12,6 +14,8 @@ export const fetchCache = 'force-no-store'
 
 const DEFAULT_DETAIL_BACKFILL_DAYS = 14
 const DEFAULT_DETAIL_BACKFILL_LIMIT = 25
+const DEFAULT_HIGHLIGHTS_BACKFILL_DAYS = 3
+const DEFAULT_HIGHLIGHTS_LIMIT = 20
 
 function jsonNoStore(body: unknown, init?: ResponseInit) {
   const response = NextResponse.json(body, init)
@@ -105,6 +109,23 @@ async function getSyncOptions(request: Request) {
       : typeof body?.skipDetails === 'boolean'
         ? String(body.skipDetails)
         : null)
+  const skipHighlightsValue =
+    searchParams.get('skipHighlights') ??
+    (typeof body?.skipHighlights === 'string'
+      ? body.skipHighlights
+      : typeof body?.skipHighlights === 'boolean'
+        ? String(body.skipHighlights)
+        : null)
+  const highlightsLimitValue =
+    searchParams.get('highlightsLimit') ??
+    searchParams.get('highlightLimit') ??
+    body?.highlightsLimit ??
+    body?.highlightLimit
+  const highlightsLookbackDaysValue =
+    searchParams.get('highlightsLookbackDays') ??
+    searchParams.get('highlightLookbackDays') ??
+    body?.highlightsLookbackDays ??
+    body?.highlightLookbackDays
 
   return {
     date: searchParams.get('date') ?? (typeof body?.date === 'string' ? body.date : null),
@@ -116,8 +137,11 @@ async function getSyncOptions(request: Request) {
     futureDays: readNonNegativeNumber(searchParams.get('futureDays') ?? body?.futureDays),
     includeDetails: parseOptionalBoolean(includeDetailsValue),
     skipDetails: parseBoolean(skipDetailsValue),
+    skipHighlights: parseBoolean(skipHighlightsValue),
     detailsLimit: readPositiveNumber(detailsLimitValue),
     detailsLookbackDays: readNonNegativeNumber(detailsLookbackDaysValue),
+    highlightsLimit: readPositiveNumber(highlightsLimitValue),
+    highlightsLookbackDays: readNonNegativeNumber(highlightsLookbackDaysValue),
     limit: readPositiveNumber(limitValue),
     debug: parseBoolean(
       searchParams.get('debug') ??
@@ -165,6 +189,45 @@ export async function GET(request: Request) {
           missingDetailsOnly: true,
         })
       : null
+    const shouldSyncHighlights = !options.skipHighlights && Boolean(process.env.YOUTUBE_API_KEY)
+    const highlightToday = getArgentinaTodayISO()
+    const highlightDateFrom =
+      options.dateFrom ??
+      options.date ??
+      addDaysToISO(
+        highlightToday,
+        -(options.highlightsLookbackDays ?? DEFAULT_HIGHLIGHTS_BACKFILL_DAYS)
+      )
+    const highlightDateTo = options.dateTo ?? options.date ?? highlightToday
+    let matchHighlights:
+      | Awaited<ReturnType<typeof syncMatchHighlights>>
+      | { ok: false; skipped: true; reason: string }
+
+    if (shouldSyncHighlights) {
+      try {
+        matchHighlights = await syncMatchHighlights(supabase, {
+          dateFrom: highlightDateFrom,
+          dateTo: highlightDateTo,
+          limit: options.highlightsLimit ?? DEFAULT_HIGHLIGHTS_LIMIT,
+          force: false,
+        })
+      } catch (error) {
+        const serialized = serializeHighlightError(error, 'unknown')
+
+        matchHighlights = {
+          ok: false,
+          skipped: true,
+          reason: serialized.code,
+        }
+      }
+    } else {
+      matchHighlights = {
+        ok: false,
+        skipped: true,
+        reason: options.skipHighlights ? 'skip_highlights_requested' : 'missing_youtube_api_key',
+      }
+    }
+
     let ligaProfesionalPlayoffs: Awaited<ReturnType<typeof generateLigaProfesionalPlayoffs>> | null = null
 
     if (shouldGenerateLigaProfesionalPlayoffs(options.leagueExternalId)) {
@@ -194,6 +257,14 @@ export async function GET(request: Request) {
           : options.detailsLookbackDays ?? DEFAULT_DETAIL_BACKFILL_DAYS,
       },
       matchDetails,
+      matchHighlightsAutomation: {
+        enabled: shouldSyncHighlights,
+        dateFrom: highlightDateFrom,
+        dateTo: highlightDateTo,
+        limit: options.highlightsLimit ?? DEFAULT_HIGHLIGHTS_LIMIT,
+        force: false,
+      },
+      matchHighlights,
       ligaProfesionalPlayoffs,
     })
   } catch (error) {
