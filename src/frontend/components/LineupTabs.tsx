@@ -84,7 +84,7 @@ export default function LineupTabs({ teams }: LineupTabsProps) {
           <span className="rounded-full border border-[#70ff9d]/20 bg-[#70ff9d]/10 px-2 py-1 text-[#70ff9d]">vs</span>
           <span className="truncate text-right">{teams[1]?.title ?? 'Visitante'}</span>
         </div>
-        <div className="grid gap-3 md:grid-cols-2 md:gap-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 md:gap-4">
         {teams.map((team) => (
           <FormationTeamPanel
             key={team.title}

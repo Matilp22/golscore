@@ -19,6 +19,21 @@ type AppShellProps = {
   children: ReactNode
 }
 
+type ProfileQuery = {
+  select: (columns: string) => {
+    eq: (column: string, value: string) => {
+      maybeSingle: () => Promise<{
+        data: { username?: string | null } | null
+        error: { message: string; code?: string; details?: string | null } | null
+      }>
+    }
+  }
+}
+
+function profilesQuery() {
+  return getSupabaseBrowserClient().from('profiles' as 'leagues') as unknown as ProfileQuery
+}
+
 function DrawerChevron({ open }: { open: boolean }) {
   return (
     <svg viewBox="0 0 20 20" aria-hidden="true" className={`h-4 w-4 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}>
@@ -30,13 +45,58 @@ function DrawerChevron({ open }: { open: boolean }) {
 function MobileAccountSection({ onNavigate }: { onNavigate: () => void }) {
   const router = useRouter()
   const { user, isLoading } = useAuth()
-  const [isOpen, setIsOpen] = useState(true)
+  const [isOpen, setIsOpen] = useState(false)
+  const [profile, setProfile] = useState<{ userId: string; username: string | null } | null>(null)
   const [error, setError] = useState('')
   const [isPending, startTransition] = useTransition()
   const currentUserLabel =
+    (profile && profile.userId === user?.id ? profile.username : null) ||
     (typeof user?.user_metadata?.username === 'string' && user.user_metadata.username) ||
     user?.email ||
     'Mi cuenta'
+
+  useEffect(() => {
+    let active = true
+
+    if (!user) {
+      return () => {
+        active = false
+      }
+    }
+
+    profilesQuery()
+      .select('username')
+      .eq('id', user.id)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!active) return
+
+        if (error) {
+          console.warn('[mobile-account] No se pudo cargar profiles', {
+            message: error.message,
+            code: error.code ?? null,
+            details: error.details ?? null,
+          })
+          return
+        }
+
+        setProfile({
+          userId: user.id,
+          username: data?.username ?? null,
+        })
+      })
+      .catch((error: unknown) => {
+        if (!active) return
+
+        console.warn('[mobile-account] Error cargando perfil', {
+          message: error instanceof Error ? error.message : 'Error desconocido',
+        })
+      })
+
+    return () => {
+      active = false
+    }
+  }, [user])
 
   const handleLogout = () => {
     setError('')
@@ -45,7 +105,7 @@ function MobileAccountSection({ onNavigate }: { onNavigate: () => void }) {
       try {
         getSupabaseBrowserClient()
       } catch (error) {
-        setError(error instanceof Error ? error.message : 'Supabase no esta configurado.')
+        setError(error instanceof Error ? error.message : 'Supabase no está configurado.')
         return
       }
 
@@ -56,6 +116,7 @@ function MobileAccountSection({ onNavigate }: { onNavigate: () => void }) {
         return
       }
 
+      setProfile(null)
       onNavigate()
       router.replace('/')
       router.refresh()
@@ -83,27 +144,18 @@ function MobileAccountSection({ onNavigate }: { onNavigate: () => void }) {
               <div className="h-9 rounded-xl border border-white/8 bg-white/[0.03]" />
             ) : user ? (
               <>
-                <div className="flex min-w-0 items-center gap-2 rounded-xl bg-white/[0.03] px-2.5 py-2">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#70ff9d]/25 bg-[#70ff9d]/10 text-xs font-black text-[#70ff9d]">
-                    {currentUserLabel.slice(0, 1).toUpperCase()}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-black text-white">{currentUserLabel}</p>
-                    <p className="text-[11px] text-[#8d98a7]">Mi cuenta</p>
-                  </div>
-                </div>
                 <Link
                   href="/perfil"
                   onClick={onNavigate}
-                  className="block truncate rounded-xl px-2.5 py-2 text-sm text-[#bcc6d2] transition hover:bg-[#70ff9d]/10 hover:text-white"
+                  className="block truncate rounded-xl bg-white/[0.04] px-2.5 py-2 text-sm font-black !text-[#e4ebf3] transition hover:bg-[#70ff9d]/10 hover:!text-white"
                 >
-                  Mi perfil
+                  {currentUserLabel}
                 </Link>
                 <button
                   type="button"
                   onClick={handleLogout}
                   disabled={isPending}
-                  className="block w-full rounded-xl px-2.5 py-2 text-left text-sm text-[#bcc6d2] transition hover:bg-[#70ff9d]/10 hover:text-white disabled:cursor-wait disabled:opacity-70"
+                  className="block w-full rounded-xl px-2.5 py-2 text-left text-sm font-semibold text-[#e6edf5] transition hover:bg-[#70ff9d]/10 hover:text-white disabled:cursor-wait disabled:opacity-70"
                 >
                   {isPending ? 'Cerrando...' : 'Cerrar sesión'}
                 </button>

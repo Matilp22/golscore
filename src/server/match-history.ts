@@ -140,6 +140,40 @@ export async function buildMatchHistoryViewModel(
     throw new Error('Partido no encontrado.')
   }
 
+  if (detail.headToHead.matches.length) {
+    const homeTeam = getFixtureTeam(fixture.teams.home)
+    const awayTeam = getFixtureTeam(fixture.teams.away)
+
+    return {
+      currentMatchId: String(fixture.fixture.id),
+      homeTeam,
+      awayTeam,
+      items: detail.headToHead.matches.map((match) => ({
+        id: match.fixtureExternalId ?? `${match.date ?? 'sin-fecha'}-${match.homeTeam.name}-${match.awayTeam.name}`,
+        externalId: match.fixtureExternalId,
+        date: match.date,
+        competition: match.leagueName,
+        stage: match.season ? `Temporada ${match.season}` : 'Partido',
+        status: match.status,
+        homeTeam: {
+          id: null,
+          externalId: match.homeTeam.externalId,
+          name: match.homeTeam.name,
+          logoUrl: match.homeLogoUrl,
+        },
+        awayTeam: {
+          id: null,
+          externalId: match.awayTeam.externalId,
+          name: match.awayTeam.name,
+          logoUrl: match.awayLogoUrl,
+        },
+        scoreLabel: match.scoreLabel,
+        isCurrentMatch: false,
+      })),
+      warnings: [...detail.headToHead.warnings, ...detail.headToHead.errors],
+    }
+  }
+
   const supabase = getSupabaseAdminClient()
   const warnings: string[] = []
   const currentExternalId = String(fixture.fixture.id)

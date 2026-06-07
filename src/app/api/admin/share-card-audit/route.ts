@@ -107,6 +107,49 @@ export async function GET(request: Request) {
         hasAwayLogo: Boolean(awayTeam?.logo_url),
         canRenderShareCard: Boolean(league?.name && homeTeam?.name && awayTeam?.name),
       },
+      shareTargets: [
+        {
+          key: 'match',
+          targetId: `match-share-card-${fixture}`,
+          mountedByDetailPage: true,
+          captures: ['competición', 'fecha', 'equipos', 'escudos', 'marcador', 'estado', 'estadio', 'TV', 'árbitro'],
+        },
+        {
+          key: 'summary',
+          targetId: `match-summary-card-${fixture}`,
+          mountedByDetailPage: true,
+          captures: ['resumen del partido'],
+        },
+        {
+          key: 'timeline',
+          targetId: `match-timeline-card-${fixture}`,
+          mountedByDetailPage: true,
+          captures: ['minuto a minuto'],
+        },
+        {
+          key: 'lineups',
+          targetId: `match-formation-card-${fixture}`,
+          mountedByDetailPage: true,
+          captures: ['campo de juego', 'titulares/suplentes', 'capitán', 'incidencias'],
+        },
+        {
+          key: 'stats',
+          targetId: `match-stats-card-${fixture}`,
+          mountedByDetailPage: true,
+          captures: ['estadísticas'],
+        },
+        {
+          key: 'history',
+          targetId: `match-history-card-${fixture}`,
+          mountedByDetailPage: true,
+          captures: ['resumen histórico', 'últimos enfrentamientos'],
+        },
+      ],
+      shareImplementation: {
+        ignoresButtonsWith: ['data-share-exclude="true"', 'data-share-ignore="true"'],
+        modal: 'solid-portal-overlay',
+        imageBackground: '#07100d',
+      },
     },
     { headers: JSON_HEADERS }
   )

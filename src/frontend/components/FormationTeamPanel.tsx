@@ -56,7 +56,7 @@ function CaptainBadge() {
 function Shirt({ number, style }: { number?: number | string; style: TeamStyle }) {
   return (
     <div
-      className="flex h-8 w-7 items-center justify-center border-2 text-[10px] font-black shadow-md"
+      className="flex h-7 w-6 items-center justify-center border-2 text-[9px] font-black shadow-md sm:h-8 sm:w-7 sm:text-[10px]"
       style={{
         backgroundColor: style.shirt,
         color: style.text,
@@ -160,6 +160,17 @@ function translatePosition(position?: string) {
   return position || null
 }
 
+function translatePositionShort(position?: string) {
+  const normalized = (position || '').trim().toUpperCase()
+
+  if (normalized === 'G') return 'ARQ'
+  if (normalized === 'D') return 'DEF'
+  if (normalized === 'M') return 'MED'
+  if (normalized === 'F' || normalized === 'A' || normalized === 'S') return 'DEL'
+
+  return normalized || null
+}
+
 export default function FormationTeamPanel({
   title,
   coachName,
@@ -189,9 +200,9 @@ export default function FormationTeamPanel({
         <h4 className="text-sm font-bold uppercase tracking-[0.14em] text-[#f3f6fa]">{title}</h4>
       </div>
 
-      <div className="mt-2 rounded-xl border border-white/6 bg-[#161a20] px-2 py-2 md:mt-3 md:px-3">
+      <div className="mt-2 rounded-xl border border-white/6 bg-[#161a20] px-2 py-1.5 md:mt-3 md:px-3 md:py-2">
         <p className="text-[11px] uppercase tracking-wide text-[#8d98a7]">DT</p>
-        <p className="mt-1 text-sm font-semibold text-white">
+        <p className="mt-1 truncate text-xs font-semibold text-white sm:text-sm">
           {coachName || 'No disponible'}
         </p>
       </div>
@@ -289,7 +300,7 @@ function PlayerRow({
   return (
     <div
       data-match-detail="lineup-player"
-      className={`flex items-center gap-2 rounded-xl border border-white/6 bg-[#161a20] px-2 py-1.5 md:gap-2.5 md:px-3 ${
+      className={`flex min-w-0 items-center gap-1.5 rounded-xl border border-white/6 bg-[#161a20] px-1.5 py-1.5 md:gap-2.5 md:px-3 ${
         align === 'right' ? 'flex-row-reverse text-right' : ''
       }`}
     >
@@ -302,13 +313,14 @@ function PlayerRow({
         <Shirt number={player.number} style={player.style} />
       </div>
 
-      <div className={`min-w-0 flex-1 ${align === 'right' ? 'text-right' : 'text-left'}`}>
-        <p className="truncate text-[13px] font-semibold text-white">
+      <div className={`min-w-0 flex-1 overflow-hidden ${align === 'right' ? 'text-right' : 'text-left'}`}>
+        <p className="truncate text-[11px] font-semibold leading-tight text-white sm:text-[13px]">
           {player.name}
         </p>
         {translatePosition(player.position) ? (
-          <p className="mt-0.5 truncate text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8d98a7]">
-            {translatePosition(player.position)}
+          <p className="mt-0.5 truncate text-[9px] font-semibold uppercase tracking-[0.06em] text-[#8d98a7] sm:text-[10px]">
+            <span className="sm:hidden">{translatePositionShort(player.position)}</span>
+            <span className="hidden sm:inline">{translatePosition(player.position)}</span>
           </p>
         ) : null}
         {player.replacedPlayerName && player.substitutionLabel ? (
@@ -325,21 +337,23 @@ function PlayerRow({
                 ? formatEventMinute(player.substitutionMinute, player.substitutionExtraMinute)
                 : ''}
             </p>
-            <p className="truncate text-[10px] text-[#9fb0c2]">
+            <p className="truncate text-[9px] text-[#9fb0c2] sm:text-[10px]">
               {player.substitutionLabel} {player.replacedPlayerName}
             </p>
           </div>
         ) : null}
       </div>
 
-      <TinyEventBadges
-        goals={player.goals}
-        penaltyGoals={player.penaltyGoals}
-        ownGoals={player.ownGoals}
-        missedPenalties={player.missedPenalties}
-        yellowCards={player.yellowCards}
-        redCards={player.redCards}
-      />
+      <div className="max-w-[46%] shrink-0">
+        <TinyEventBadges
+          goals={player.goals}
+          penaltyGoals={player.penaltyGoals}
+          ownGoals={player.ownGoals}
+          missedPenalties={player.missedPenalties}
+          yellowCards={player.yellowCards}
+          redCards={player.redCards}
+        />
+      </div>
     </div>
   )
 }

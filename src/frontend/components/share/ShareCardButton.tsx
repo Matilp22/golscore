@@ -54,10 +54,13 @@ export default function ShareCardButton({
   }, [isOpen])
 
   return (
-    <div data-share-exclude="true">
+    <div data-share-exclude="true" data-share-ignore="true">
       <button
         type="button"
-        onClick={() => setIsOpen((current) => !current)}
+        onClick={() => {
+          setLocalMessage('')
+          setIsOpen((current) => !current)
+        }}
         className="hf-button-secondary inline-flex h-10 w-10 items-center justify-center rounded-xl text-[#dce7f2] transition hover:text-white"
         aria-label="Compartir"
         title="Compartir"
@@ -82,14 +85,23 @@ export default function ShareCardButton({
 
       {isOpen && typeof document !== 'undefined'
         ? createPortal(
-            <div className="fixed inset-0 z-[1000] flex items-end justify-center bg-black/76 px-3 py-4 backdrop-blur-sm sm:items-center">
+            <div
+              className="fixed inset-0 z-[1100] isolate flex items-end justify-center bg-[#020403]/95 px-3 py-4 backdrop-blur-md sm:items-center"
+              data-share-exclude="true"
+              data-share-ignore="true"
+            >
               <button
                 type="button"
-                className="absolute inset-0 cursor-default"
+                className="absolute inset-0 z-0 cursor-default"
                 aria-label="Cerrar compartir"
                 onClick={() => setIsOpen(false)}
               />
-              <div className="relative w-full max-w-sm rounded-2xl border border-[#26332f] bg-[#07100d] p-4 text-sm text-white shadow-[0_28px_90px_rgba(0,0,0,0.72)]">
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-label="Opciones para compartir"
+                className="relative z-10 w-full max-w-sm rounded-2xl border border-[#335142] bg-[#07100d] p-4 text-sm text-white shadow-[0_28px_90px_rgba(0,0,0,0.86),0_0_0_1px_rgba(127,240,178,0.08)]"
+              >
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div>
                     <p className="text-[11px] font-black uppercase tracking-[0.12em] text-[#7ff0b2]">

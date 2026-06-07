@@ -11,6 +11,7 @@ import LineupTabs from '@/frontend/components/LineupTabs'
 import SafeImage from '@/frontend/components/SafeImage'
 import {
   ARGENTINA_TIME_ZONE,
+  formatMatchDateTimeArgentina,
   formatMatchTimeArgentina,
   toArgentinaDate,
 } from '@/shared/utils/argentina-time'
@@ -29,6 +30,7 @@ import { formatMatchScoreWithPenalties } from '@/shared/utils/match-display'
 import { getEventElapsedMinute, getFixtureStatusElapsedMinute } from '@/shared/utils/match-minute'
 import { isFinishedStatus } from '@/shared/utils/match-status'
 import { buildMatchDetailViewModel } from '@/server/match-detail-view-model'
+import type { HeadToHeadViewModel } from '@/server/head-to-head'
 import { getYouTubeThumbnailUrl, isValidYouTubeUrl } from '@/shared/utils/youtube'
 import { buildSeoMetadata } from '@/shared/seo'
 import ShareCardButton from '@/frontend/components/share/ShareCardButton'
@@ -1266,6 +1268,149 @@ function MatchSummarySection({
   )
 }
 
+function getHeadToHeadEmptyMessage(readiness: HeadToHeadViewModel['renderReadiness']) {
+  if (readiness === 'missing_home_external_id' || readiness === 'missing_away_external_id') {
+    return 'Historial no disponible para estos equipos.'
+  }
+
+  return 'No hay enfrentamientos recientes disponibles.'
+}
+
+function MatchHistorySection({
+  history,
+  homeTeamName,
+  awayTeamName,
+  shareId,
+  shareTitle,
+  shareText,
+  shareUrl,
+  shareFileName,
+  historyHref,
+}: {
+  history: HeadToHeadViewModel
+  homeTeamName: string
+  awayTeamName: string
+  shareId: string
+  shareTitle: string
+  shareText: string
+  shareUrl: string
+  shareFileName: string
+  historyHref: string
+}) {
+  const latestMatches = history.matches.slice(0, 5)
+
+  return (
+    <div id={shareId} className="hf-card w-full overflow-hidden rounded-2xl">
+      <div className="hf-section-head px-2 py-3 md:px-4">
+        <div className="flex items-center justify-between gap-3">
+          <span aria-hidden="true" className="h-10 w-10" />
+          <div className="min-w-0 text-center">
+            <h2 className="text-lg font-bold tracking-[0.01em] text-white">Historial</h2>
+            <p className="mt-0.5 truncate text-[11px] font-semibold text-[#8d98a7]">
+              Últimos enfrentamientos entre estos equipos
+            </p>
+          </div>
+          <ShareCardButton
+            targetId={shareId}
+            fileName={shareFileName}
+            title={shareTitle}
+            text={shareText}
+            url={shareUrl}
+          />
+        </div>
+      </div>
+
+      {latestMatches.length ? (
+        <div className="p-2 md:p-3">
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-xl border border-white/6 bg-[#13181d] px-2 py-2 text-center">
+              <p className="text-lg font-black text-white">{history.summary.homePerspectiveWins}</p>
+              <p className="truncate text-[10px] font-bold uppercase tracking-[0.08em] text-[#8d98a7]">
+                {homeTeamName}
+              </p>
+            </div>
+            <div className="rounded-xl border border-white/6 bg-[#13181d] px-2 py-2 text-center">
+              <p className="text-lg font-black text-white">{history.summary.draws}</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#8d98a7]">
+                Empates
+              </p>
+            </div>
+            <div className="rounded-xl border border-white/6 bg-[#13181d] px-2 py-2 text-center">
+              <p className="text-lg font-black text-white">{history.summary.awayPerspectiveWins}</p>
+              <p className="truncate text-[10px] font-bold uppercase tracking-[0.08em] text-[#8d98a7]">
+                {awayTeamName}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-2 rounded-xl border border-white/6 bg-[#13181d] px-3 py-2 text-center text-xs font-semibold text-[#c8d0da]">
+            {history.summary.total} partidos · Goles {homeTeamName}: {history.summary.homePerspectiveGoals} · {awayTeamName}: {history.summary.awayPerspectiveGoals}
+          </div>
+
+          <div className="mt-2 divide-y divide-white/7 overflow-hidden rounded-xl border border-white/6 bg-[#10151a]">
+            {latestMatches.map((match) => (
+              <article
+                key={`${match.fixtureExternalId ?? match.date}-${match.homeTeam.name}-${match.awayTeam.name}`}
+                className="px-2 py-2"
+              >
+                <div className="mb-1 flex items-center justify-between gap-2 text-[10px] font-semibold text-[#8d98a7]">
+                  <span className="truncate">{formatMatchDateTimeArgentina(match.date)}</span>
+                  <span className="truncate text-right">{match.leagueName}</span>
+                </div>
+                <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+                  <div className="flex min-w-0 items-center justify-end gap-1.5 text-right">
+                    <span className="truncate text-xs font-bold text-white">{match.homeTeam.name}</span>
+                    <AssetTeamLogo
+                      src={match.homeLogoUrl}
+                      alt={match.homeTeam.name}
+                      size={22}
+                      className="h-[22px] w-[22px] object-contain"
+                      fallbackClassName="h-5 w-4"
+                      unoptimized
+                    />
+                  </div>
+                  <span className="min-w-[58px] rounded-lg border border-white/8 bg-black/30 px-2 py-1 text-center text-xs font-black text-white">
+                    {match.scoreLabel}
+                  </span>
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <AssetTeamLogo
+                      src={match.awayLogoUrl}
+                      alt={match.awayTeam.name}
+                      size={22}
+                      className="h-[22px] w-[22px] object-contain"
+                      fallbackClassName="h-5 w-4"
+                      unoptimized
+                    />
+                    <span className="truncate text-xs font-bold text-white">{match.awayTeam.name}</span>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <Link
+            href={historyHref}
+            className="mt-3 inline-flex min-h-10 w-full items-center justify-center rounded-xl border border-[#25553d] bg-[#163828] px-3 py-2 text-sm font-black text-[#7ff0b2] transition hover:border-[#7ff0b2]/60 hover:bg-[#1b4a32]"
+            data-share-exclude="true"
+            data-share-ignore="true"
+          >
+            Ver historial completo
+          </Link>
+        </div>
+      ) : (
+        <div className="px-3 py-5 text-sm text-[#8d98a7] md:px-4">
+          <p>{getHeadToHeadEmptyMessage(history.renderReadiness)}</p>
+          {history.cacheKey ? (
+            <p className="mt-2 text-xs text-[#607083]">
+              Cache: {history.cacheKey}
+            </p>
+          ) : null}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function Shirt({ number, style }: { number?: number | string; style: TeamStyle }) {
   return (
     <div
@@ -1884,6 +2029,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
   const timelineShareId = `match-timeline-card-${fixture.fixture.id}`
   const formationShareId = `match-formation-card-${fixture.fixture.id}`
   const statsShareId = `match-stats-card-${fixture.fixture.id}`
+  const historyShareId = `match-history-card-${fixture.fixture.id}`
   const matchDetailHref = `/partido/${id}`
   const shareTitle = `${homeTeam.name} vs ${awayTeam.name} | Hay Fulbo`
   const shareText = `${homeTeam.name} ${formatMatchScoreWithPenalties({
@@ -2161,7 +2307,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
 
             <div id={formationShareId} className="hf-card w-full overflow-hidden rounded-2xl">
               <div className="hf-section-head flex items-center justify-between gap-3 px-2 py-3 md:px-4">
-                <h2 className="text-base font-bold text-white">Formación</h2>
+                <h2 className="text-base font-bold text-white">Alineaciones</h2>
                 <div className="flex shrink-0 items-center gap-2">
                   <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-black uppercase tracking-[0.03em] text-[#b8f7d2]">
                     {lineupStatusLabel}
@@ -2169,8 +2315,8 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                   <ShareCardButton
                     targetId={formationShareId}
                     fileName={`hay-fulbo-formacion-${fixture.fixture.id}.png`}
-                    title={`${shareTitle} - Formación`}
-                    text={`${shareText} | Formación`}
+                    title={`${shareTitle} - Alineaciones`}
+                    text={`${shareText} | Alineaciones`}
                     url={matchDetailHref}
                   />
                 </div>
@@ -2333,6 +2479,18 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                 </div>
               )}
             </div>
+
+            <MatchHistorySection
+              history={data.headToHead}
+              homeTeamName={homeTeam.name}
+              awayTeamName={awayTeam.name}
+              shareId={historyShareId}
+              shareTitle={`${shareTitle} - Historial`}
+              shareText={`${shareText} | Historial entre equipos`}
+              shareUrl={matchDetailHref}
+              shareFileName={`hay-fulbo-historial-${fixture.fixture.id}.png`}
+              historyHref={matchHistoryHref}
+            />
           </aside>
         </div>
       </div>

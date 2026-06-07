@@ -32,6 +32,31 @@ function downloadDataUrl(dataUrl: string, fileName: string) {
   link.remove()
 }
 
+async function waitForShareAssets(element: HTMLElement) {
+  if (document.fonts?.ready) {
+    await document.fonts.ready.catch(() => undefined)
+  }
+
+  const images = Array.from(element.querySelectorAll('img'))
+
+  await Promise.all(
+    images.map(async (image) => {
+      if (image.complete && image.naturalWidth > 0) return
+
+      if (typeof image.decode === 'function') {
+        await image.decode().catch(() => undefined)
+        return
+      }
+
+      await new Promise<void>((resolve) => {
+        const finish = () => resolve()
+        image.addEventListener('load', finish, { once: true })
+        image.addEventListener('error', finish, { once: true })
+      })
+    })
+  )
+}
+
 export function useShareCardAsImage(
   targetId: string,
   options: ShareCardOptions
@@ -47,12 +72,23 @@ export function useShareCardAsImage(
       throw new Error('No se encontró la card para compartir.')
     }
 
+    await waitForShareAssets(element)
+
     return toPng(element, {
+      backgroundColor: '#07100d',
       cacheBust: true,
       pixelRatio: 2,
+      width: element.scrollWidth,
+      height: element.scrollHeight,
+      style: {
+        backgroundColor: '#07100d',
+        color: '#ffffff',
+        overflow: 'hidden',
+      },
       filter: (node) => {
         if (!(node instanceof HTMLElement)) return true
-        return node.dataset.shareExclude !== 'true'
+
+        return node.dataset.shareExclude !== 'true' && node.dataset.shareIgnore !== 'true'
       },
     })
   }, [targetId])

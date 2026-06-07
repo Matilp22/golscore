@@ -7,7 +7,7 @@
     },
     {
       "path": "/api/cron/sync-match-highlights",
-      "schedule": "0 * * * *"
+      "schedule": "0 9 * * *"
     }
   ]
 }

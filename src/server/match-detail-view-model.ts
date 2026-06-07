@@ -22,6 +22,11 @@ import {
   getYouTubeVideoId,
   isValidYouTubeUrl,
 } from '@/shared/utils/youtube'
+import {
+  createEmptyHeadToHeadViewModel,
+  getCachedHeadToHeadForFixture,
+  type HeadToHeadViewModel,
+} from '@/server/head-to-head'
 
 type MatchDetailPayload = Awaited<ReturnType<typeof getMatchDetail>>
 
@@ -85,6 +90,7 @@ export type MatchDetailViewModel = MatchDetailPayload & {
     embedUrl: string | null
     renderReady: boolean
   }
+  headToHead: HeadToHeadViewModel
   hasPenaltyShootout: boolean
   matchInfo: {
     fixtureId: number | null
@@ -421,6 +427,7 @@ export function buildMatchDetailViewModelFromDetail(
     homeFormation: homeLineup?.formation?.trim() || null,
     awayFormation: awayLineup?.formation?.trim() || null,
     highlights,
+    headToHead: createEmptyHeadToHeadViewModel('cache_empty'),
     hasPenaltyShootout,
     matchInfo,
     renderCounts,
@@ -442,11 +449,26 @@ export async function buildMatchDetailViewModel(input: BuildMatchDetailViewModel
   const detail = resolved.id !== null
     ? await getMatchDetail(resolved.id)
     : createEmptyMatchDetailPayload()
-
-  return buildMatchDetailViewModelFromDetail(detail, {
+  const viewModel = buildMatchDetailViewModelFromDetail(detail, {
     matchId: resolved.id ?? resolved.requestedId,
     warnings,
   })
+
+  if (!viewModel.fixture) return viewModel
+
+  try {
+    return {
+      ...viewModel,
+      headToHead: await getCachedHeadToHeadForFixture(viewModel.fixture),
+    }
+  } catch (error) {
+    return {
+      ...viewModel,
+      headToHead: createEmptyHeadToHeadViewModel('cache_empty', {
+        errors: [error instanceof Error ? error.message : 'No se pudo leer historial.'],
+      }),
+    }
+  }
 }
 
 export function countMatchDetailLineupPlayers(
