@@ -8,6 +8,7 @@ import {
   type TeamProfile,
   type TeamSquadPlayer,
 } from '@/lib/api-football'
+import { translateCountryNameToSpanish } from '@/shared/utils/country-names'
 
 type PageProps = {
   params: Promise<{ id: string }>
@@ -174,6 +175,7 @@ export default async function EquipoPage({ params }: PageProps) {
   const venue = teamData?.venue
   const squad = data.squad?.players || []
   const groupedSquad = groupPlayersByPosition(squad)
+  const teamCountry = translateCountryNameToSpanish(team?.country)
 
   if (!team) {
     return (
@@ -214,7 +216,7 @@ export default async function EquipoPage({ params }: PageProps) {
                   {team.name}
                 </h1>
                 <p className="mt-1 text-sm text-[#8d98a7]">
-                  {team.country || 'País no disponible'}
+                  {teamCountry || 'País no disponible'}
                 </p>
               </div>
             </div>
@@ -244,7 +246,7 @@ export default async function EquipoPage({ params }: PageProps) {
               </div>
 
               <div className="px-2 py-1 md:px-3">
-                <TeamInfoRow label="País" value={team.country || 'No disponible'} />
+                <TeamInfoRow label="País" value={teamCountry || 'No disponible'} />
                 <TeamInfoRow label="Fundación" value={String(team.founded || 'No disponible')} />
                 <TeamInfoRow label="Código" value={team.code || 'No disponible'} />
                 <TeamInfoRow label="Estadio" value={venue?.name || 'No disponible'} />

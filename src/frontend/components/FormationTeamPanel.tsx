@@ -42,6 +42,7 @@ type FormationTeamPanelProps = {
   activeTab?: LineupPanelTab
   onActiveTabChange?: (tab: LineupPanelTab) => void
   showTabs?: boolean
+  framed?: boolean
 }
 
 function CaptainBadge() {
@@ -168,6 +169,7 @@ export default function FormationTeamPanel({
   activeTab,
   onActiveTabChange,
   showTabs = true,
+  framed = true,
 }: FormationTeamPanelProps) {
   const defaultTab = starters.length ? 'starters' : 'substitutes'
   const [internalActiveTab, setInternalActiveTab] = useState<LineupPanelTab>(defaultTab)
@@ -176,7 +178,13 @@ export default function FormationTeamPanel({
   const setSelectedTab = onActiveTabChange ?? setInternalActiveTab
 
   return (
-    <div className="w-full rounded-2xl border border-white/8 bg-[#111418] p-2 sm:p-3 md:p-4">
+    <div
+      className={
+        framed
+          ? 'w-full rounded-2xl border border-white/8 bg-[#111418] p-2 sm:p-3 md:p-4'
+          : 'w-full min-w-0 p-0'
+      }
+    >
       <div className={`${align === 'right' ? 'text-right' : 'text-left'}`}>
         <h4 className="text-sm font-bold uppercase tracking-[0.14em] text-[#f3f6fa]">{title}</h4>
       </div>

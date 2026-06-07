@@ -133,7 +133,7 @@ function errorJson(error: unknown) {
   const status =
     serialized.status ??
     (serialized.code === 'missing_youtube_api_key' || serialized.code === 'MISSING_YOUTUBE_API_KEY'
-      ? 503
+      ? 500
       : serialized.source === 'youtube'
         ? 502
         : 500)

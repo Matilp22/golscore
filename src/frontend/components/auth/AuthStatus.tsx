@@ -129,11 +129,14 @@ export default function AuthStatus() {
   if (!user) {
     return (
       <div className="flex items-center gap-2">
+        <span className="hidden text-xs font-semibold text-[#9aa7b5] sm:inline">
+          No iniciaste sesión
+        </span>
         <Link
           href="/register"
           className="hf-button-secondary rounded-xl px-3 py-2 text-sm font-semibold"
         >
-          Registrarse
+          Crear cuenta
         </Link>
         <Link
           href="/login"
@@ -150,7 +153,7 @@ export default function AuthStatus() {
       <div className="flex flex-wrap items-center justify-end gap-2">
         <Link
           href="/perfil"
-          className="hf-button-secondary rounded-xl px-3 py-2 text-sm font-semibold"
+          className="hf-button-secondary max-w-[180px] truncate rounded-xl px-3 py-2 text-sm font-semibold"
         >
           {currentUserLabel}
         </Link>

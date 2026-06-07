@@ -1,5 +1,7 @@
 import type {
   PrivateTournamentDetail,
+  PrivateTournamentInvite,
+  PrivateTournamentInviteInfo,
   PrivateTournamentSearchResult,
   PrivateTournamentSummary,
 } from '@/frontend/types/private-tournaments'
@@ -135,4 +137,58 @@ export async function rejectPrivateTournamentRequest(
   }
 
   return data.tournament
+}
+
+export async function createPrivateTournamentInvite(
+  tournamentId: string,
+  input: { email?: string; expiresInDays?: number } = {}
+) {
+  const response = await fetch(
+    `/api/prode/private-tournaments/${encodeURIComponent(tournamentId)}/invites`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(input),
+    }
+  )
+  const data = await parseResponse<{ invite?: PrivateTournamentInvite }>(
+    response,
+    'No se pudo crear la invitación.'
+  )
+
+  if (!data.invite) {
+    throw new Error('No se pudo crear la invitación.')
+  }
+
+  return data.invite
+}
+
+export async function getPrivateTournamentInvite(token: string) {
+  const response = await fetch(
+    `/api/prode/private-tournament-invites/${encodeURIComponent(token)}`,
+    {
+      cache: 'no-store',
+    }
+  )
+
+  return parseResponse<PrivateTournamentInviteInfo>(
+    response,
+    'No se pudo cargar la invitación.'
+  )
+}
+
+export async function acceptPrivateTournamentInvite(token: string) {
+  const response = await fetch(
+    `/api/prode/private-tournament-invites/${encodeURIComponent(token)}/accept`,
+    {
+      method: 'POST',
+    }
+  )
+
+  return parseResponse<PrivateTournamentInviteInfo & { requiresAuth?: boolean }>(
+    response,
+    'No se pudo aceptar la invitación.'
+  )
 }

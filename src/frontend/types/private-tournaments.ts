@@ -73,3 +73,40 @@ export type PrivateTournamentDetail = {
     requestedAt: string
   }>
 }
+
+export type PrivateTournamentInvite = {
+  id: string
+  tournamentId: string
+  token: string
+  email: string | null
+  status: 'pending' | 'accepted' | 'expired' | 'revoked'
+  expiresAt: string | null
+  acceptedAt: string | null
+  acceptedBy: string | null
+  createdAt: string
+  inviteUrl: string
+  mailtoUrl: string
+}
+
+export type PrivateTournamentInviteInfo = {
+  invite: {
+    id: string
+    token: string
+    status: 'pending' | 'accepted' | 'expired' | 'revoked'
+    expiresAt: string | null
+    expired: boolean
+    acceptedAt: string | null
+  }
+  tournament: {
+    id: string
+    name: string
+    baseName: string
+    displayName: string
+    leagueExternalId: string
+    leagueName: string
+    creatorName: string
+    memberCount: number
+  }
+  isMember: boolean
+  requiresAuth: boolean
+}

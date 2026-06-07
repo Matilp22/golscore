@@ -7,6 +7,7 @@ import { getTournamentConfig } from '@/lib/tournament-pages'
 import { getTournamentTheme } from '@/lib/tournament-themes'
 import { buildWorldCupChampionsViewModel } from '@/server/world-cup-champions'
 import { WORLD_CUP_2026_LOGO_URL } from '@/shared/utils/asset-urls'
+import { translateCountryNameToSpanish } from '@/shared/utils/country-names'
 
 type PageProps = {
   params: Promise<{ id: string }>
@@ -181,7 +182,9 @@ export default async function WorldCupChampionsPage({ params }: PageProps) {
                         </div>
                       </td>
                       <td className="px-3 py-3 text-[#c5ced8]">
-                        {[final.venue, final.city, final.country].filter(Boolean).join(' · ') || '-'}
+                        {[final.venue, final.city, translateCountryNameToSpanish(final.country)]
+                          .filter(Boolean)
+                          .join(' · ') || '-'}
                       </td>
                     </tr>
                   ))}

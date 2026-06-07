@@ -83,6 +83,7 @@ import {
 import { WORLD_CUP_2026_LOGO_URL } from '@/shared/utils/asset-urls'
 import type { ConmebolCompetitionType } from '@/shared/utils/conmebol-rounds'
 import { buildSeoMetadata } from '@/shared/seo'
+import { translateCountryNameToSpanish } from '@/shared/utils/country-names'
 
 type PageProps = {
   params: Promise<{ id: string }>
@@ -2419,7 +2420,9 @@ export default async function LigaPage({ params }: PageProps) {
     : new Set<string>()
   const compactSummaryTables = annualTable.length > 0 && promedioTable.length > 0
   const visibleTournamentTitle = displayOptions.visibleNameEs
-  const visibleTournamentCountry = displayOptions.countryNameEs
+  const visibleTournamentCountry =
+    displayOptions.countryNameEs ||
+    translateCountryNameToSpanish(resolvedTournament?.country || tournament.country)
   const isWorldCupTournament = tournament.key === 'selecciones-mundial'
   const hasTournamentData =
     fixtures.length > 0 ||

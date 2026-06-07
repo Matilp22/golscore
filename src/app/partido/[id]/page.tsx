@@ -29,8 +29,9 @@ import { formatMatchScoreWithPenalties } from '@/shared/utils/match-display'
 import { getEventElapsedMinute, getFixtureStatusElapsedMinute } from '@/shared/utils/match-minute'
 import { isFinishedStatus } from '@/shared/utils/match-status'
 import { buildMatchDetailViewModel } from '@/server/match-detail-view-model'
-import { getYouTubeEmbedUrl, isValidYouTubeUrl } from '@/shared/utils/youtube'
+import { getYouTubeThumbnailUrl, isValidYouTubeUrl } from '@/shared/utils/youtube'
 import { buildSeoMetadata } from '@/shared/seo'
+import ShareCardButton from '@/frontend/components/share/ShareCardButton'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 
@@ -1169,11 +1170,11 @@ function MatchSummaryCard({
   title?: string | null
   url?: string | null
 }) {
-  const embedUrl = getYouTubeEmbedUrl(url)
+  const thumbnailUrl = getYouTubeThumbnailUrl(url)
 
-  if (!url || !embedUrl || !isValidYouTubeUrl(url)) {
+  if (!url || !thumbnailUrl || !isValidYouTubeUrl(url)) {
     return (
-      <div className="flex aspect-video flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/10 bg-[#13181d] px-4 text-center">
+      <div className="flex min-h-28 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/10 bg-[#13181d] px-4 py-5 text-center">
         <div className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-[#8d98a7]">
           <span className="ml-0.5 text-lg">▶</span>
         </div>
@@ -1186,41 +1187,75 @@ function MatchSummaryCard({
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-white/10 bg-[#13181d]">
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="block overflow-hidden rounded-xl border border-white/10 bg-[#13181d] transition hover:border-[#7ff0b2]/35"
+    >
       <div className="relative aspect-video overflow-hidden bg-black">
-        <iframe
-          className="absolute inset-0 h-full w-full"
-          src={embedUrl}
-          title={title || 'Resumen del partido'}
-          loading="lazy"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-          referrerPolicy="strict-origin-when-cross-origin"
-          allowFullScreen
+        <SafeImage
+          src={thumbnailUrl}
+          alt={title || 'Resumen del partido'}
+          imageType="video"
+          width={640}
+          height={360}
+          className="h-full w-full object-cover"
+          fallbackClassName="h-full w-full"
+          unoptimized
         />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/72 via-black/20 to-transparent" />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-[#7ff0b2]/90 text-xl font-black text-[#06100b] shadow-[0_0_24px_rgba(127,240,178,0.25)]">
+            ▶
+          </span>
+        </div>
       </div>
       {title ? (
         <p className="border-t border-white/8 px-3 py-2 text-xs font-bold leading-snug text-[#d7dee8]">
           {title}
         </p>
       ) : null}
-    </div>
+    </a>
   )
 }
 
 function MatchSummarySection({
   title,
   url,
+  shareId,
+  shareTitle,
+  shareText,
+  shareUrl,
+  shareFileName,
   className = '',
 }: {
   title?: string | null
   url?: string | null
+  shareId?: string
+  shareTitle?: string
+  shareText?: string
+  shareUrl?: string
+  shareFileName?: string
   className?: string
 }) {
   return (
-    <div className={`hf-card w-full overflow-hidden rounded-2xl ${className}`}>
+    <div id={shareId} className={`hf-card w-full overflow-hidden rounded-2xl ${className}`}>
       <div className="hf-section-head px-2 py-3 md:px-4">
-        <div className="flex items-center justify-center">
+        <div className="flex items-center justify-between gap-3">
+          <span aria-hidden="true" className="h-10 w-10" />
           <h2 className="text-base font-bold text-white">Resumen del partido</h2>
+          {shareId && shareTitle && shareText && shareUrl && shareFileName ? (
+            <ShareCardButton
+              targetId={shareId}
+              fileName={shareFileName}
+              title={shareTitle}
+              text={shareText}
+              url={shareUrl}
+            />
+          ) : (
+            <span aria-hidden="true" className="h-10 w-10" />
+          )}
         </div>
       </div>
 
@@ -1772,9 +1807,6 @@ export default async function PartidoDetallePage({ params }: PageProps) {
       : typeof data.highlightsTitle === 'string'
         ? data.highlightsTitle
         : null
-  const highlightsRenderReady =
-    data.highlights?.renderReady === true ||
-    Boolean(highlightsUrl && isValidYouTubeUrl(highlightsUrl))
   const stats = Array.isArray(data.statistics) ? data.statistics : []
   const events = data.sourceEvents
   const lineups = data.lineups
@@ -1807,7 +1839,6 @@ export default async function PartidoDetallePage({ params }: PageProps) {
   const confirmedLineupPlayers =
     data.renderCounts.startersCount + data.renderCounts.substitutesCount
   const matchIsFinished = isFinishedStatus(status.short) || isFinishedStatus(status.long)
-  const showMobileFinishedHighlights = matchIsFinished && highlightsRenderReady
   const lineupStatusLabel = confirmedLineupPlayers > 0
     ? 'Alineación confirmada'
     : matchIsFinished
@@ -1848,6 +1879,19 @@ export default async function PartidoDetallePage({ params }: PageProps) {
     lineup: awayLineup,
   })
   const matchHistoryHref = `/partido/${id}/historial`
+  const shareCardId = `match-share-card-${fixture.fixture.id}`
+  const summaryShareId = `match-summary-card-${fixture.fixture.id}`
+  const timelineShareId = `match-timeline-card-${fixture.fixture.id}`
+  const formationShareId = `match-formation-card-${fixture.fixture.id}`
+  const statsShareId = `match-stats-card-${fixture.fixture.id}`
+  const matchDetailHref = `/partido/${id}`
+  const shareTitle = `${homeTeam.name} vs ${awayTeam.name} | Hay Fulbo`
+  const shareText = `${homeTeam.name} ${formatMatchScoreWithPenalties({
+    goalsHome: goals.home,
+    goalsAway: goals.away,
+    homePenaltyScore: penaltyScore.home,
+    awayPenaltyScore: penaltyScore.away,
+  })} ${awayTeam.name} - ${translateLeagueName(fixture.league.name)}`
 
   if (process.env.NODE_ENV === 'development') {
     console.info('[match-detail-render]', {
@@ -1867,16 +1911,21 @@ export default async function PartidoDetallePage({ params }: PageProps) {
   return (
     <div className="min-h-screen text-white">
       <div className="w-full max-w-none px-0 py-3 lg:mx-auto lg:max-w-7xl lg:px-5 lg:py-6">
-        <header className="hf-hero relative mb-4 w-full overflow-hidden rounded-3xl">
-          <AutoRefresh
-            intervalMs={headerStatusIsLive ? 30000 : 60000}
-            showButton
-            className="absolute right-4 top-16 z-10 md:top-4"
-          />
+        <header id={shareCardId} className="hf-hero relative mb-4 w-full overflow-hidden rounded-3xl">
+          <div data-share-exclude="true">
+            <AutoRefresh
+              intervalMs={headerStatusIsLive ? 30000 : 60000}
+              showButton
+              className="absolute right-4 top-16 z-10 md:top-4"
+            />
+          </div>
 
           <div className="relative z-10 border-b border-white/6 px-2 py-3 md:px-4">
             <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#7ff0b2]">
+                  HF · Hay Fulbo
+                </p>
                 <h1 className="mt-1 text-base font-bold text-white md:text-xl">
                   {translateLeagueName(fixture.league.name)}
                 </h1>
@@ -1884,12 +1933,22 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                   {formatHeaderDateTime(fixture.fixture.date)}
                 </p>
               </div>
-              <Link
-                href={matchHistoryHref}
-                className="hf-button inline-flex min-h-10 items-center justify-center rounded-xl px-3 py-2 text-sm font-black sm:px-4"
-              >
-                Historial
-              </Link>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <ShareCardButton
+                  targetId={shareCardId}
+                  fileName={`hay-fulbo-${fixture.fixture.id}.png`}
+                  title={shareTitle}
+                  text={shareText}
+                  url={matchDetailHref}
+                />
+                <Link
+                  href={matchHistoryHref}
+                  className="hf-button inline-flex min-h-10 items-center justify-center rounded-xl px-3 py-2 text-sm font-black sm:px-4"
+                  data-share-exclude="true"
+                >
+                  Historial
+                </Link>
+              </div>
             </div>
           </div>
 
@@ -1965,11 +2024,16 @@ export default async function PartidoDetallePage({ params }: PageProps) {
           </div>
         </header>
 
-        {showMobileFinishedHighlights ? (
+        {matchIsFinished ? (
           <MatchSummarySection
             title={highlightsTitle}
             url={highlightsUrl}
-            className="mb-4 xl:hidden"
+            shareId={summaryShareId}
+            shareTitle={`${shareTitle} - Resumen del partido`}
+            shareText={`${shareText} | Resumen del partido`}
+            shareUrl={matchDetailHref}
+            shareFileName={`hay-fulbo-resumen-${fixture.fixture.id}.png`}
+            className="mb-4"
           />
         ) : null}
 
@@ -1988,9 +2052,17 @@ export default async function PartidoDetallePage({ params }: PageProps) {
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_320px]">
           <section className="space-y-4">
-            <div className="hf-card w-full overflow-hidden rounded-2xl">
-              <div className="hf-section-head px-2 py-3 md:px-4">
+            <div id={timelineShareId} className="hf-card w-full overflow-hidden rounded-2xl">
+              <div className="hf-section-head flex items-center justify-between gap-3 px-2 py-3 md:px-4">
+                <span aria-hidden="true" className="h-10 w-10" />
                 <h2 className="text-base font-bold text-white">Minuto a minuto</h2>
+                <ShareCardButton
+                  targetId={timelineShareId}
+                  fileName={`hay-fulbo-minuto-a-minuto-${fixture.fixture.id}.png`}
+                  title={`${shareTitle} - Minuto a minuto`}
+                  text={`${shareText} | Minuto a minuto`}
+                  url={matchDetailHref}
+                />
               </div>
 
               {events.length || hasPenaltyShootout ? (
@@ -2087,12 +2159,21 @@ export default async function PartidoDetallePage({ params }: PageProps) {
               )}
             </div>
 
-            <div className="hf-card w-full overflow-hidden rounded-2xl">
+            <div id={formationShareId} className="hf-card w-full overflow-hidden rounded-2xl">
               <div className="hf-section-head flex items-center justify-between gap-3 px-2 py-3 md:px-4">
                 <h2 className="text-base font-bold text-white">Formación</h2>
-                <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-black uppercase tracking-[0.03em] text-[#b8f7d2]">
-                  {lineupStatusLabel}
-                </span>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-black uppercase tracking-[0.03em] text-[#b8f7d2]">
+                    {lineupStatusLabel}
+                  </span>
+                  <ShareCardButton
+                    targetId={formationShareId}
+                    fileName={`hay-fulbo-formacion-${fixture.fixture.id}.png`}
+                    title={`${shareTitle} - Formación`}
+                    text={`${shareText} | Formación`}
+                    url={matchDetailHref}
+                  />
+                </div>
               </div>
 
               {confirmedLineupPlayers > 0 ? (
@@ -2161,12 +2242,18 @@ export default async function PartidoDetallePage({ params }: PageProps) {
           </section>
 
           <aside className="space-y-4">
-            <MatchSummarySection title={highlightsTitle} url={highlightsUrl} className="hidden xl:block" />
-
-            <div className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
+            <div id={statsShareId} className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
               <div className="border-b border-white/6 bg-[#13181d] px-2 py-3 md:px-4">
-                <div className="flex items-center justify-center">
+                <div className="flex items-center justify-between gap-3">
+                  <span aria-hidden="true" className="h-10 w-10" />
                   <h2 className="text-lg font-bold tracking-[0.01em] text-white">Estadísticas</h2>
+                  <ShareCardButton
+                    targetId={statsShareId}
+                    fileName={`hay-fulbo-estadisticas-${fixture.fixture.id}.png`}
+                    title={`${shareTitle} - Estadísticas`}
+                    text={`${shareText} | Estadísticas`}
+                    url={matchDetailHref}
+                  />
                 </div>
               </div>
 

@@ -1,3 +1,5 @@
+import { randomBytes } from 'node:crypto'
+
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import {
   getProdeRoundLabel,
@@ -61,6 +63,20 @@ type JoinRequestRow = {
   requested_at: string
   reviewed_at: string | null
   reviewed_by: string | null
+}
+
+type InviteRow = {
+  id: string
+  tournament_id: string
+  token: string
+  email: string | null
+  invited_by: string | null
+  status: 'pending' | 'accepted' | 'expired' | 'revoked'
+  expires_at: string | null
+  accepted_at: string | null
+  accepted_by: string | null
+  created_at: string
+  updated_at: string
 }
 
 type ProfileRow = {
@@ -1127,4 +1143,258 @@ export async function reviewPrivateTournamentRequest({
   throwIfDatabaseError(updateError, 'No se pudo actualizar la solicitud.')
 
   return getPrivateTournamentDetail(ownerId, tournamentId)
+}
+
+function createInviteToken() {
+  return randomBytes(32).toString('base64url')
+}
+
+function buildInviteUrl(origin: string, token: string) {
+  return `${origin.replace(/\/$/, '')}/prode/torneos/invitacion/${encodeURIComponent(token)}`
+}
+
+function buildMailtoUrl(email: string | null | undefined, inviteUrl: string) {
+  const subject = 'Invitación al Prode de Hay Fulbo'
+  const body = `Te invitaron a un torneo privado del Prode de Hay Fulbo.\n\nAceptá la invitación desde este link:\n${inviteUrl}`
+  const recipient = email?.trim() ?? ''
+
+  return `mailto:${encodeURIComponent(recipient)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+}
+
+function serializeInvite(invite: InviteRow, inviteUrl: string) {
+  return {
+    id: invite.id,
+    tournamentId: invite.tournament_id,
+    token: invite.token,
+    email: invite.email,
+    status: invite.status,
+    expiresAt: invite.expires_at,
+    acceptedAt: invite.accepted_at,
+    acceptedBy: invite.accepted_by,
+    createdAt: invite.created_at,
+    inviteUrl,
+    mailtoUrl: buildMailtoUrl(invite.email, inviteUrl),
+  }
+}
+
+export async function createPrivateTournamentInvite({
+  ownerId,
+  tournamentId,
+  email,
+  expiresInDays,
+  origin,
+}: {
+  ownerId: string
+  tournamentId: string
+  email?: string | null
+  expiresInDays?: number | null
+  origin: string
+}) {
+  await assertTournamentOwner(ownerId, tournamentId)
+
+  const expiresAt =
+    expiresInDays && Number.isFinite(expiresInDays) && expiresInDays > 0
+      ? new Date(Date.now() + Math.min(Math.floor(expiresInDays), 90) * 24 * 60 * 60 * 1000).toISOString()
+      : null
+  const supabase = getSupabaseAdminClient()
+  const token = createInviteToken()
+  const { data, error } = await supabase
+    .from('private_tournament_invites')
+    .insert({
+      tournament_id: tournamentId,
+      token,
+      email: email?.trim() || null,
+      invited_by: ownerId,
+      expires_at: expiresAt,
+    })
+    .select('id, tournament_id, token, email, invited_by, status, expires_at, accepted_at, accepted_by, created_at, updated_at')
+    .single()
+
+  throwIfDatabaseError(error, 'No se pudo crear la invitación.')
+
+  const invite = data as InviteRow
+  return serializeInvite(invite, buildInviteUrl(origin, invite.token))
+}
+
+async function fetchInviteByToken(token: string) {
+  const supabase = getSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from('private_tournament_invites')
+    .select('id, tournament_id, token, email, invited_by, status, expires_at, accepted_at, accepted_by, created_at, updated_at')
+    .eq('token', token)
+    .maybeSingle()
+
+  throwIfDatabaseError(error, 'No se pudo leer la invitación.')
+
+  return (data ?? null) as InviteRow | null
+}
+
+function isInviteExpired(invite: InviteRow) {
+  return Boolean(invite.expires_at && new Date(invite.expires_at).getTime() < Date.now())
+}
+
+export async function getPrivateTournamentInviteInfo(token: string, userId?: string | null) {
+  const invite = await fetchInviteByToken(token)
+
+  if (!invite) {
+    throw new PrivateTournamentError('Invitación no encontrada.', 404)
+  }
+
+  const tournament = await fetchTournamentById(invite.tournament_id)
+
+  if (!tournament) {
+    throw new PrivateTournamentError('El torneo ya no existe.', 404)
+  }
+
+  const [members, membership, profilesById] = await Promise.all([
+    fetchMembers([tournament.id]),
+    userId ? fetchMembership(tournament.id, userId) : Promise.resolve(null),
+    fetchProfiles([tournament.created_by]),
+  ])
+  const expired = isInviteExpired(invite)
+
+  return {
+    invite: {
+      id: invite.id,
+      token: invite.token,
+      status: expired && invite.status === 'pending' ? 'expired' : invite.status,
+      expiresAt: invite.expires_at,
+      expired,
+      acceptedAt: invite.accepted_at,
+    },
+    tournament: {
+      id: tournament.id,
+      name: getTournamentDisplayName(tournament),
+      baseName: getTournamentBaseName(tournament),
+      displayName: getTournamentDisplayName(tournament),
+      leagueExternalId: getTournamentLeagueExternalId(tournament),
+      leagueName: getTournamentLeagueName(tournament),
+      creatorName: getDisplayName(tournament.created_by, profilesById),
+      memberCount: members.length,
+    },
+    isMember: Boolean(membership),
+    requiresAuth: !userId,
+  }
+}
+
+export async function acceptPrivateTournamentInvite(token: string, userId: string) {
+  const invite = await fetchInviteByToken(token)
+
+  if (!invite) {
+    throw new PrivateTournamentError('Invitación no encontrada.', 404)
+  }
+
+  if (invite.status === 'revoked') {
+    throw new PrivateTournamentError('La invitación fue revocada.', 409)
+  }
+
+  if (isInviteExpired(invite)) {
+    const supabase = getSupabaseAdminClient()
+    await supabase
+      .from('private_tournament_invites')
+      .update({ status: 'expired' })
+      .eq('id', invite.id)
+    throw new PrivateTournamentError('La invitación expiró.', 409)
+  }
+
+  const tournament = await fetchTournamentById(invite.tournament_id)
+
+  if (!tournament) {
+    throw new PrivateTournamentError('El torneo ya no existe.', 404)
+  }
+
+  const now = new Date().toISOString()
+  const supabase = getSupabaseAdminClient()
+  const { error: memberError } = await supabase
+    .from('prode_private_tournament_members')
+    .upsert(
+      {
+        tournament_id: invite.tournament_id,
+        user_id: userId,
+        role: 'member',
+        joined_at: now,
+      },
+      {
+        onConflict: 'tournament_id,user_id',
+        ignoreDuplicates: true,
+      }
+    )
+
+  throwIfDatabaseError(memberError, 'No se pudo agregarte al torneo.')
+
+  const { error: inviteError } = await supabase
+    .from('private_tournament_invites')
+    .update({
+      status: 'accepted',
+      accepted_at: now,
+      accepted_by: userId,
+    })
+    .eq('id', invite.id)
+
+  throwIfDatabaseError(inviteError, 'No se pudo marcar la invitación como aceptada.')
+
+  return getPrivateTournamentInviteInfo(token, userId)
+}
+
+export async function revokePrivateTournamentInvite({
+  ownerId,
+  token,
+}: {
+  ownerId: string
+  token: string
+}) {
+  const invite = await fetchInviteByToken(token)
+
+  if (!invite) {
+    throw new PrivateTournamentError('Invitación no encontrada.', 404)
+  }
+
+  await assertTournamentOwner(ownerId, invite.tournament_id)
+
+  const supabase = getSupabaseAdminClient()
+  const { error } = await supabase
+    .from('private_tournament_invites')
+    .update({ status: 'revoked' })
+    .eq('id', invite.id)
+
+  throwIfDatabaseError(error, 'No se pudo revocar la invitación.')
+
+  return { ok: true }
+}
+
+export async function getPrivateTournamentInvitesAudit() {
+  const supabase = getSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from('private_tournament_invites')
+    .select('id, tournament_id, token, email, invited_by, status, expires_at, accepted_at, accepted_by, created_at, updated_at')
+    .order('created_at', { ascending: false })
+    .limit(100)
+
+  throwIfDatabaseError(error, 'No se pudo auditar invitaciones.')
+
+  const invites = (data ?? []) as InviteRow[]
+  const expiredPending = invites.filter((invite) => invite.status === 'pending' && isInviteExpired(invite))
+
+  return {
+    ok: true,
+    totals: {
+      checked: invites.length,
+      pending: invites.filter((invite) => invite.status === 'pending').length,
+      accepted: invites.filter((invite) => invite.status === 'accepted').length,
+      revoked: invites.filter((invite) => invite.status === 'revoked').length,
+      expired: invites.filter((invite) => invite.status === 'expired').length,
+      expiredPending: expiredPending.length,
+    },
+    items: invites.map((invite) => ({
+      id: invite.id,
+      tournamentId: invite.tournament_id,
+      email: invite.email,
+      status: invite.status,
+      expiresAt: invite.expires_at,
+      expired: isInviteExpired(invite),
+      acceptedAt: invite.accepted_at,
+      acceptedBy: invite.accepted_by,
+      createdAt: invite.created_at,
+    })),
+  }
 }

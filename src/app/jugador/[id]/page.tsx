@@ -5,6 +5,7 @@ import {
   getPlayerDetail,
   type LeaderStatType,
 } from '@/lib/api-football'
+import { translateCountryNameToSpanish } from '@/shared/utils/country-names'
 
 type PageProps = {
   params: Promise<{ id: string }>
@@ -149,6 +150,8 @@ export default async function JugadorPage({ params, searchParams }: PageProps) {
       logo: fallbackTeamLogo,
     }
     const league = playerDetail?.league
+    const leagueCountry = translateCountryNameToSpanish(league?.country)
+    const birthCountry = translateCountryNameToSpanish(player.birthCountry)
     const statistics = playerDetail?.statistics || {
       appearances: 0,
       lineups: 0,
@@ -218,12 +221,15 @@ export default async function JugadorPage({ params, searchParams }: PageProps) {
 
                 <div className="px-2 py-1 md:px-3">
                   <InfoRow label="Edad" value={String(player.age || 'No disponible')} />
-                  <InfoRow label="Nacionalidad" value={player.nationality || 'No disponible'} />
+                  <InfoRow
+                    label="Nacionalidad"
+                    value={translateCountryNameToSpanish(player.nationality) || 'No disponible'}
+                  />
                   <InfoRow label="Nacimiento" value={formatDate(player.birthDate)} />
                   <InfoRow
                     label="Lugar"
                     value={
-                      [player.birthPlace, player.birthCountry].filter(Boolean).join(', ') ||
+                      [player.birthPlace, birthCountry].filter(Boolean).join(', ') ||
                       'No disponible'
                     }
                   />
@@ -240,7 +246,7 @@ export default async function JugadorPage({ params, searchParams }: PageProps) {
 
                 <div className="px-2 py-1 md:px-3">
                   <InfoRow label="Competencia" value={league?.name || 'No disponible'} />
-                  <InfoRow label="País" value={league?.country || 'No disponible'} />
+                  <InfoRow label="País" value={leagueCountry || 'No disponible'} />
                   <InfoRow label="Apariciones" value={String(statistics.appearances)} />
                   <InfoRow label="Titular" value={String(statistics.lineups)} />
                   <InfoRow label="Minutos" value={formatMinutes(statistics.minutes)} />

@@ -42,6 +42,7 @@ import {
   DEFAULT_SEO_TITLE,
 } from '@/shared/seo'
 import { WORLD_CUP_2026_LOGO_URL } from '@/shared/utils/asset-urls'
+import { translateCountryNameToSpanish } from '@/shared/utils/country-names'
 
 export const metadata = buildSeoMetadata({
   title: DEFAULT_SEO_TITLE,
@@ -1454,7 +1455,7 @@ export default async function HomePage({
                             key={match.id}
                             id={match.id}
                             league={competition.title}
-                            country={match.country}
+                            country={translateCountryNameToSpanish(match.country)}
                             homeLogo={match.homeLogo}
                             awayLogo={match.awayLogo}
                             time={formatMatchTimeArgentina(match.date)}

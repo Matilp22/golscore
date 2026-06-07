@@ -2,14 +2,17 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import PrivateTournamentChat from '@/frontend/components/prode/private-tournaments/PrivateTournamentChat'
 import { useAuth } from '@/frontend/hooks/useAuth'
 import {
   approvePrivateTournamentRequest,
+  createPrivateTournamentInvite,
   getPrivateTournamentDetail,
   rejectPrivateTournamentRequest,
 } from '@/frontend/services/privateTournamentsService'
 import type {
   PrivateTournamentDetail,
+  PrivateTournamentInvite,
   PrivateTournamentRankingRow,
 } from '@/frontend/types/private-tournaments'
 
@@ -107,6 +110,142 @@ function HonorBadge({
   )
 }
 
+function InviteModal({
+  tournamentId,
+  onClose,
+  onMessage,
+  onError,
+}: {
+  tournamentId: string
+  onClose: () => void
+  onMessage: (message: string) => void
+  onError: (message: string) => void
+}) {
+  const [invite, setInvite] = useState<PrivateTournamentInvite | null>(null)
+  const [email, setEmail] = useState('')
+  const [isCreating, setIsCreating] = useState(false)
+  const canUseWebShare = typeof navigator !== 'undefined' && 'share' in navigator
+
+  const createInvite = async (nextEmail?: string) => {
+    setIsCreating(true)
+
+    try {
+      const nextInvite = await createPrivateTournamentInvite(tournamentId, {
+        email: nextEmail?.trim() || undefined,
+      })
+      setInvite(nextInvite)
+      onMessage(nextEmail ? 'Invitación lista para enviar por mail.' : 'Link de invitación creado.')
+      return nextInvite
+    } catch (caughtError) {
+      const message =
+        caughtError instanceof Error ? caughtError.message : 'No se pudo crear la invitación.'
+      onError(message)
+      return null
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
+  useEffect(() => {
+    void createInvite()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const copyLink = async () => {
+    if (!invite?.inviteUrl) return
+
+    await navigator.clipboard?.writeText(invite.inviteUrl)
+    onMessage('Link copiado.')
+  }
+
+  const shareLink = async () => {
+    if (!invite?.inviteUrl || !canUseWebShare) return
+
+    await navigator.share({
+      title: 'Invitación al Prode de Hay Fulbo',
+      text: 'Te invito a jugar este torneo privado del Prode.',
+      url: invite.inviteUrl,
+    })
+  }
+
+  const sendEmail = async () => {
+    const nextInvite = await createInvite(email)
+    if (nextInvite?.mailtoUrl) {
+      window.location.href = nextInvite.mailtoUrl
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 px-3 py-4 backdrop-blur-sm sm:items-center">
+      <div className="hf-card w-full max-w-lg rounded-2xl p-4 shadow-[0_24px_80px_rgba(0,0,0,0.5)]">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-black text-white">Invitar al torneo</h2>
+            <p className="mt-1 text-sm text-[#9aa7b5]">
+              Compartí un link o prepará un mail con la invitación.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="hf-button-secondary h-9 rounded-xl px-3 text-sm font-black"
+          >
+            Cerrar
+          </button>
+        </div>
+
+        <div className="mt-4 space-y-3">
+          <label className="block text-xs font-black uppercase tracking-[0.12em] text-[#8d98a7]">
+            Link
+          </label>
+          <div className="rounded-xl border border-white/8 bg-black/25 p-3 text-sm text-[#dce7f2]">
+            {isCreating && !invite ? 'Generando link...' : invite?.inviteUrl ?? 'No disponible'}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={copyLink}
+              disabled={!invite}
+              className="hf-button h-10 rounded-xl px-3 text-sm font-black disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Copiar link
+            </button>
+            <button
+              type="button"
+              onClick={shareLink}
+              disabled={!invite || !canUseWebShare}
+              className="hf-button-secondary h-10 rounded-xl px-3 text-sm font-black disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Compartir
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-xs font-black uppercase tracking-[0.12em] text-[#8d98a7]">
+              Enviar por mail
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="email@ejemplo.com"
+              className="hf-input h-11 w-full rounded-xl px-3 text-sm font-semibold outline-none"
+            />
+            <button
+              type="button"
+              onClick={sendEmail}
+              disabled={isCreating}
+              className="hf-button-secondary h-10 w-full rounded-xl px-3 text-sm font-black disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Enviar por mail
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function PrivateTournamentDetailPage({
   tournamentId,
 }: PrivateTournamentDetailPageProps) {
@@ -117,6 +256,7 @@ export default function PrivateTournamentDetailPage({
   const [selectedHonorRound, setSelectedHonorRound] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [reviewingRequestId, setReviewingRequestId] = useState<string | null>(null)
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
@@ -273,12 +413,23 @@ export default function PrivateTournamentDetailPage({
               {tournament.memberCount} participantes
             </p>
           </div>
-          <Link
-            href="/prode/torneos"
-            className="hf-button-secondary inline-flex h-10 shrink-0 items-center justify-center rounded-xl px-4 text-sm font-black"
-          >
-            Volver
-          </Link>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            {isOwner ? (
+              <button
+                type="button"
+                onClick={() => setIsInviteModalOpen(true)}
+                className="hf-button inline-flex h-10 items-center justify-center rounded-xl px-4 text-sm font-black"
+              >
+                Invitar
+              </button>
+            ) : null}
+            <Link
+              href="/prode/torneos"
+              className="hf-button-secondary inline-flex h-10 items-center justify-center rounded-xl px-4 text-sm font-black"
+            >
+              Volver
+            </Link>
+          </div>
         </div>
       </section>
 
@@ -348,6 +499,11 @@ export default function PrivateTournamentDetailPage({
         </section>
 
         <aside className="min-w-0 space-y-3">
+          <PrivateTournamentChat
+            tournamentId={tournament.id}
+            tournamentName={tournament.displayName}
+          />
+
           <section className="hf-card overflow-hidden rounded-2xl">
             <div className="hf-section-head px-3 py-3 sm:px-4">
               <h2 className="text-lg font-black text-white">Menciones honoríficas</h2>
@@ -470,6 +626,14 @@ export default function PrivateTournamentDetailPage({
         <div className="rounded-2xl border border-red-400/20 bg-red-500/10 px-3 py-3 text-sm font-semibold text-red-200">
           {error}
         </div>
+      ) : null}
+      {isInviteModalOpen ? (
+        <InviteModal
+          tournamentId={tournamentId}
+          onClose={() => setIsInviteModalOpen(false)}
+          onMessage={setMessage}
+          onError={setError}
+        />
       ) : null}
     </div>
   )

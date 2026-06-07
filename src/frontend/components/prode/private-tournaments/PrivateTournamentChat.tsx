@@ -1,0 +1,398 @@
+'use client'
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+
+import { useAuth } from '@/frontend/hooks/useAuth'
+import type { ProdeChatSticker } from '@/shared/config/prode-chat-stickers'
+
+type ChatMessage = {
+  id: string
+  chatId: string
+  privateTournamentId: string
+  userId: string
+  username: string
+  messageType: 'text' | 'sticker'
+  message: string | null
+  stickerId: string | null
+  stickerUrl: string | null
+  stickerLabel: string | null
+  createdAt: string
+}
+
+type PrivateTournamentChatProps = {
+  tournamentId: string
+  tournamentName: string
+}
+
+function formatTime(value: string) {
+  return new Intl.DateTimeFormat('es-AR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date(value))
+}
+
+function renderSticker(stickerUrl: string | null, label: string | null) {
+  if (!stickerUrl) return <span className="text-4xl">🙂</span>
+  if (stickerUrl.startsWith('emoji:')) {
+    return <span className="text-4xl leading-none">{stickerUrl.replace('emoji:', '')}</span>
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={stickerUrl}
+      alt={label ?? 'Sticker'}
+      className="h-16 w-16 object-contain"
+      loading="lazy"
+    />
+  )
+}
+
+export default function PrivateTournamentChat({
+  tournamentId,
+  tournamentName,
+}: PrivateTournamentChatProps) {
+  const { user, isLoading: isAuthLoading } = useAuth()
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const shouldStickToBottomRef = useRef(true)
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [stickers, setStickers] = useState<ProdeChatSticker[]>([])
+  const [currentUserCanWrite, setCurrentUserCanWrite] = useState(false)
+  const [currentUserCanModerate, setCurrentUserCanModerate] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSending, setIsSending] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+  const [isStickerPanelOpen, setIsStickerPanelOpen] = useState(false)
+  const [isMobileOpen, setIsMobileOpen] = useState(false)
+
+  const loadChat = useCallback(async (silent = false) => {
+    if (isAuthLoading) return
+
+    if (!user) {
+      setMessages([])
+      setCurrentUserCanWrite(false)
+      setCurrentUserCanModerate(false)
+      setIsLoading(false)
+      return
+    }
+
+    if (!silent) setIsLoading(true)
+    setError('')
+
+    try {
+      const response = await fetch(
+        `/api/prode/private-tournaments/${encodeURIComponent(tournamentId)}/chat?limit=50`,
+        { cache: 'no-store' }
+      )
+      const payload = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'No se pudo cargar el chat.')
+      }
+
+      setMessages(payload.messages ?? [])
+      setStickers(payload.stickers ?? [])
+      setCurrentUserCanWrite(Boolean(payload.currentUserCanWrite))
+      setCurrentUserCanModerate(Boolean(payload.currentUserCanModerate))
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : 'No se pudo cargar el chat.')
+      setCurrentUserCanWrite(false)
+      setCurrentUserCanModerate(false)
+    } finally {
+      if (!silent) setIsLoading(false)
+    }
+  }, [isAuthLoading, tournamentId, user])
+
+  useEffect(() => {
+    void loadChat()
+  }, [loadChat])
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      void loadChat(true)
+    }, 15000)
+
+    return () => window.clearInterval(intervalId)
+  }, [loadChat])
+
+  useEffect(() => {
+    if (!shouldStickToBottomRef.current) return
+    const element = scrollRef.current
+    if (!element) return
+
+    element.scrollTop = element.scrollHeight
+  }, [messages])
+
+  const groupedStickers = useMemo(() => {
+    return stickers.reduce<Record<string, ProdeChatSticker[]>>((groups, sticker) => {
+      groups[sticker.category] = [...(groups[sticker.category] ?? []), sticker]
+      return groups
+    }, {})
+  }, [stickers])
+
+  const handleScroll = () => {
+    const element = scrollRef.current
+    if (!element) return
+
+    const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight
+    shouldStickToBottomRef.current = distanceFromBottom < 48
+  }
+
+  const sendMessage = async (input: {
+    messageType: 'text' | 'sticker'
+    message?: string
+    stickerId?: string
+  }) => {
+    if (isSending) return
+
+    setIsSending(true)
+    setError('')
+
+    try {
+      const response = await fetch(
+        `/api/prode/private-tournaments/${encodeURIComponent(tournamentId)}/chat/messages`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(input),
+        }
+      )
+      const payload = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'No se pudo enviar el mensaje.')
+      }
+
+      setMessages((current) => [...current, payload.message])
+      setMessage('')
+      setIsStickerPanelOpen(false)
+      shouldStickToBottomRef.current = true
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : 'No se pudo enviar el mensaje.')
+    } finally {
+      setIsSending(false)
+    }
+  }
+
+  const deleteMessage = async (messageId: string) => {
+    try {
+      const response = await fetch(
+        `/api/prode/private-tournaments/${encodeURIComponent(tournamentId)}/chat/messages/${encodeURIComponent(messageId)}`,
+        { method: 'DELETE' }
+      )
+      const payload = await response.json().catch(() => ({}))
+
+      if (!response.ok) throw new Error(payload.error || 'No se pudo borrar el mensaje.')
+
+      setMessages((current) => current.filter((chatMessage) => chatMessage.id !== messageId))
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : 'No se pudo borrar el mensaje.')
+    }
+  }
+
+  const sendText = () => {
+    const cleanMessage = message.trim()
+    if (!cleanMessage) return
+
+    void sendMessage({ messageType: 'text', message: cleanMessage })
+  }
+
+  const chatSurface = (
+    <section className="hf-card flex h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl">
+      <div className="hf-section-head shrink-0 px-3 py-3 sm:px-4">
+        <div className="flex min-w-0 items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-lg font-black text-white">Chat del torneo</h2>
+            <p className="mt-1 truncate text-xs text-[#8d98a7]">{tournamentName}</p>
+          </div>
+          <span className="rounded-full border border-[#70ff9d]/20 bg-[#70ff9d]/10 px-2 py-1 text-[10px] font-black uppercase text-[#70ff9d]">
+            En vivo
+          </span>
+        </div>
+      </div>
+
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="min-h-0 flex-1 overflow-y-auto border-y border-white/6 bg-[#080f0d] px-3 py-3"
+      >
+        {isLoading || isAuthLoading ? (
+          <p className="text-sm text-[#8d98a7]">Cargando chat...</p>
+        ) : messages.length ? (
+          <div className="space-y-2">
+            {messages.map((chatMessage) => {
+              const canDelete =
+                currentUserCanModerate || (user?.id && user.id === chatMessage.userId)
+
+              return (
+                <div key={chatMessage.id} className="group flex items-start gap-2 text-sm">
+                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[#70ff9d]/20 bg-[#70ff9d]/10 text-[11px] font-black text-[#70ff9d]">
+                    {chatMessage.username.slice(0, 1).toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 items-baseline gap-2">
+                      <span className="truncate text-xs font-black text-[#7ff0b2]">
+                        {chatMessage.username}
+                      </span>
+                      <span className="text-[10px] text-[#6f7a86]">
+                        {formatTime(chatMessage.createdAt)}
+                      </span>
+                      {canDelete ? (
+                        <button
+                          type="button"
+                          onClick={() => void deleteMessage(chatMessage.id)}
+                          className="ml-auto text-[10px] font-bold text-[#6f7a86] opacity-0 transition hover:text-red-200 group-hover:opacity-100"
+                        >
+                          Borrar
+                        </button>
+                      ) : null}
+                    </div>
+                    {chatMessage.messageType === 'sticker' ? (
+                      <div className="mt-1 inline-flex rounded-xl border border-white/8 bg-white/[0.03] p-2">
+                        {renderSticker(chatMessage.stickerUrl, chatMessage.stickerLabel)}
+                      </div>
+                    ) : (
+                      <p className="mt-0.5 break-words leading-relaxed text-[#dce7f2]">
+                        {chatMessage.message}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <p className="text-sm text-[#8d98a7]">
+            Todavía no hay mensajes. Sé el primero en escribir.
+          </p>
+        )}
+      </div>
+
+      <div className="shrink-0 space-y-2 p-3">
+        {!user && !isAuthLoading ? (
+          <p className="rounded-xl border border-white/8 bg-black/20 px-3 py-2 text-sm text-[#9aa7b5]">
+            Iniciá sesión para participar del chat.
+          </p>
+        ) : user && !currentUserCanWrite ? (
+          <p className="rounded-xl border border-white/8 bg-black/20 px-3 py-2 text-sm text-[#9aa7b5]">
+            No tenés acceso a este chat.
+          </p>
+        ) : null}
+
+        {isStickerPanelOpen ? (
+          <div className="max-h-44 overflow-y-auto rounded-xl border border-white/8 bg-[#101714] p-2">
+            {Object.entries(groupedStickers).map(([category, categoryStickers]) => (
+              <div key={category} className="mb-2 last:mb-0">
+                <p className="mb-1 px-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#8d98a7]">
+                  {category}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {categoryStickers.map((sticker) => (
+                    <button
+                      key={sticker.id}
+                      type="button"
+                      onClick={() => sendMessage({ messageType: 'sticker', stickerId: sticker.id })}
+                      disabled={!currentUserCanWrite || isSending}
+                      className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/8 bg-black/20 text-2xl transition hover:border-[#7ff0b2]/40 disabled:cursor-not-allowed disabled:opacity-50"
+                      title={sticker.label}
+                    >
+                      {sticker.emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setIsStickerPanelOpen((current) => !current)}
+            disabled={!currentUserCanWrite}
+            className="hf-button-secondary h-11 w-11 rounded-xl text-xl disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label="Stickers"
+            title="Stickers"
+          >
+            🙂
+          </button>
+          <textarea
+            value={message}
+            onChange={(event) => setMessage(event.target.value.slice(0, 500))}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault()
+                sendText()
+              }
+            }}
+            disabled={!currentUserCanWrite || isSending}
+            rows={1}
+            placeholder="Escribí en el chat..."
+            className="hf-input min-h-11 flex-1 resize-none rounded-xl px-3 py-2 text-sm font-semibold outline-none disabled:cursor-not-allowed disabled:opacity-60"
+          />
+          <button
+            type="button"
+            onClick={sendText}
+            disabled={!currentUserCanWrite || isSending || !message.trim()}
+            className="hf-button h-11 rounded-xl px-4 text-sm font-black disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Enviar
+          </button>
+        </div>
+        <div className="flex items-center justify-between gap-2 text-[10px] font-semibold text-[#6f7a86]">
+          <span>{message.length}/500</span>
+          <span>Enter envía · Shift+Enter salta línea</span>
+        </div>
+        {error ? <p className="text-xs font-semibold text-red-200">{error}</p> : null}
+      </div>
+    </section>
+  )
+
+  return (
+    <>
+      <div className="lg:hidden">
+        <button
+          type="button"
+          onClick={() => setIsMobileOpen(true)}
+          className="hf-button flex h-11 w-full items-center justify-center rounded-xl px-4 text-sm font-black"
+        >
+          Chat
+        </button>
+      </div>
+
+      <div className="hidden lg:sticky lg:top-4 lg:block lg:h-[calc(100vh-7rem)]">
+        {chatSurface}
+      </div>
+
+      {isMobileOpen ? (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <button
+            type="button"
+            aria-label="Cerrar chat"
+            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            onClick={() => setIsMobileOpen(false)}
+          />
+          <div className="absolute inset-x-0 bottom-0 h-[82vh] rounded-t-3xl border border-white/10 bg-[#070b09] p-3 shadow-[0_-24px_80px_rgba(0,0,0,0.55)]">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <p className="text-sm font-black uppercase tracking-[0.12em] text-[#8d98a7]">
+                Chat
+              </p>
+              <button
+                type="button"
+                onClick={() => setIsMobileOpen(false)}
+                className="hf-button-secondary h-9 rounded-xl px-3 text-xs font-black"
+              >
+                Cerrar
+              </button>
+            </div>
+            <div className="h-[calc(82vh-4rem)]">{chatSurface}</div>
+          </div>
+        </div>
+      ) : null}
+    </>
+  )
+}

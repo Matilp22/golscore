@@ -2,6 +2,7 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 
 import { TeamLogo } from '@/frontend/components/AssetImage'
+import ShareCardButton from '@/frontend/components/share/ShareCardButton'
 import { buildMatchHistoryViewModel } from '@/server/match-history'
 import { formatMatchDateTimeArgentina } from '@/shared/utils/argentina-time'
 import { buildSeoMetadata } from '@/shared/seo'
@@ -59,6 +60,10 @@ export default async function MatchHistoryPage({ params }: PageProps) {
       </div>
     )
   }
+
+  const historyShareId = `match-history-card-${id}`
+  const historyShareTitle = `${history.homeTeam.name} vs ${history.awayTeam.name} | Historial Hay Fulbo`
+  const historyShareText = `Historial: ${history.homeTeam.name} vs ${history.awayTeam.name}`
 
   return (
     <div className="min-h-screen text-white">
@@ -125,9 +130,17 @@ export default async function MatchHistoryPage({ params }: PageProps) {
             </section>
           ) : null}
 
-          <section className="hf-card overflow-hidden rounded-2xl">
-            <div className="hf-section-head px-3 py-3 md:px-4">
+          <section id={historyShareId} className="hf-card overflow-hidden rounded-2xl">
+            <div className="hf-section-head flex items-center justify-between gap-3 px-3 py-3 md:px-4">
+              <span aria-hidden="true" className="h-10 w-10" />
               <h2 className="text-lg font-black text-white">Enfrentamientos</h2>
+              <ShareCardButton
+                targetId={historyShareId}
+                fileName={`hay-fulbo-historial-${id}.png`}
+                title={historyShareTitle}
+                text={historyShareText}
+                url={`/partido/${id}/historial`}
+              />
             </div>
 
             {history.items.length ? (

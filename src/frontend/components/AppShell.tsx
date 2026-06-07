@@ -52,7 +52,7 @@ function MobileAccountSection({ onNavigate }: { onNavigate: () => void }) {
       const { error: signOutError } = await signOut()
 
       if (signOutError) {
-        setError('No se pudo cerrar sesion.')
+        setError('No se pudo cerrar sesión.')
         return
       }
 
@@ -83,12 +83,21 @@ function MobileAccountSection({ onNavigate }: { onNavigate: () => void }) {
               <div className="h-9 rounded-xl border border-white/8 bg-white/[0.03]" />
             ) : user ? (
               <>
+                <div className="flex min-w-0 items-center gap-2 rounded-xl bg-white/[0.03] px-2.5 py-2">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#70ff9d]/25 bg-[#70ff9d]/10 text-xs font-black text-[#70ff9d]">
+                    {currentUserLabel.slice(0, 1).toUpperCase()}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-black text-white">{currentUserLabel}</p>
+                    <p className="text-[11px] text-[#8d98a7]">Mi cuenta</p>
+                  </div>
+                </div>
                 <Link
                   href="/perfil"
                   onClick={onNavigate}
                   className="block truncate rounded-xl px-2.5 py-2 text-sm text-[#bcc6d2] transition hover:bg-[#70ff9d]/10 hover:text-white"
                 >
-                  {currentUserLabel}
+                  Mi perfil
                 </Link>
                 <button
                   type="button"
@@ -96,25 +105,28 @@ function MobileAccountSection({ onNavigate }: { onNavigate: () => void }) {
                   disabled={isPending}
                   className="block w-full rounded-xl px-2.5 py-2 text-left text-sm text-[#bcc6d2] transition hover:bg-[#70ff9d]/10 hover:text-white disabled:cursor-wait disabled:opacity-70"
                 >
-                  {isPending ? 'Cerrando...' : 'Cerrar sesion'}
+                  {isPending ? 'Cerrando...' : 'Cerrar sesión'}
                 </button>
                 {error ? <p className="px-2.5 text-xs text-[#ffd5d5]">{error}</p> : null}
               </>
             ) : (
               <>
+                <p className="rounded-xl bg-white/[0.03] px-2.5 py-2 text-sm font-semibold text-[#bcc6d2]">
+                  No iniciaste sesión
+                </p>
                 <Link
                   href="/login"
                   onClick={onNavigate}
                   className="block rounded-xl px-2.5 py-2 text-sm text-[#bcc6d2] transition hover:bg-[#70ff9d]/10 hover:text-white"
                 >
-                  Ingresar
+                  Iniciar sesión
                 </Link>
                 <Link
                   href="/register"
                   onClick={onNavigate}
                   className="block rounded-xl px-2.5 py-2 text-sm text-[#bcc6d2] transition hover:bg-[#70ff9d]/10 hover:text-white"
                 >
-                  Registrarse
+                  Crear cuenta
                 </Link>
               </>
             )}
