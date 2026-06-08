@@ -6,6 +6,7 @@ import {
   YOUTUBE_IMAGE_HOST,
 } from '@/shared/utils/asset-urls'
 import { getArgentinaDayUtcRange } from '@/shared/utils/argentina-time'
+import { translateCountryNameToSpanish } from '@/shared/utils/country-names'
 import { isFinishedStatus } from '@/shared/utils/match-status'
 import {
   getYouTubeEmbedUrl,
@@ -179,8 +180,22 @@ const MAX_AUDIT_LIMIT = 100
 const YOUTUBE_SEARCH_URL = 'https://www.googleapis.com/youtube/v3/search'
 const YOUTUBE_FETCH_TIMEOUT_MS = 8000
 const YOUTUBE_RESULTS_PER_QUERY = 12
-const MAX_TRUSTED_SOURCE_FALLBACK_QUERIES = 4
+const MAX_PRIMARY_HIGHLIGHT_QUERIES = 8
+const MAX_TRUSTED_SOURCE_FALLBACK_QUERIES = 18
+const MAX_TEAM_SEARCH_NAMES = 4
 const FINISHED_QUERY_STATUSES = ['FT', 'AET', 'PEN', 'Final', 'Finalizado', 'Finished', 'Match Finished']
+const PRIORITY_HIGHLIGHT_LEAGUES = [
+  {
+    externalId: '1',
+    name: 'Copa del Mundo 2026',
+    aliases: ['world cup', 'copa del mundo'],
+  },
+  {
+    externalId: '10',
+    name: 'Amistosos internacionales',
+    aliases: ['friendlies', 'amistosos'],
+  },
+] as const
 
 const SUMMARY_KEYWORDS = ['resumen', 'highlights', 'goles', 'goals', 'full highlights']
 const NEGATIVE_PATTERNS = [
@@ -223,6 +238,8 @@ const KNOWN_CHANNELS = [
   'espn deportes',
   'tyc sports',
   'tyc sports play',
+  'afa play',
+  'afaplay',
   'dsports',
   'd sports',
   'directv',
@@ -232,7 +249,10 @@ const KNOWN_CHANNELS = [
   'tnt sports premium',
   'fox sports',
   'fox deportes',
+  'dazn',
+  'dazn tv',
   'fifa',
+  'fifa+',
   'uefa',
   'copa argentina',
   'win sports',
@@ -261,11 +281,73 @@ const OFFICIAL_CHANNEL_HINTS = [
 const TRUSTED_SOURCE_SEARCH_TERMS = [
   'ESPN Fans',
   'ESPN',
-  'TyC Sports',
+  'Fox Sports',
   'DSports',
-  'FOX Sports',
+  'DirecTV Sports',
   'TNT Sports',
+  'AFA Play',
+  'canal oficial',
+  'DAZN TV',
+  'FIFA',
+  'TyC Sports',
 ]
+const COUNTRY_TEAM_SEARCH_ALIASES: Record<string, string[]> = {
+  algeria: ['Argelia'],
+  austria: ['Austria'],
+  belgium: ['Belgica'],
+  brazil: ['Brasil'],
+  cameroon: ['Camerun'],
+  canada: ['Canada'],
+  china: ['China'],
+  colombia: ['Colombia'],
+  croatia: ['Croacia'],
+  'czech republic': ['Republica Checa'],
+  czechia: ['Chequia'],
+  denmark: ['Dinamarca'],
+  'dominican republic': ['Republica Dominicana'],
+  ecuador: ['Ecuador'],
+  egypt: ['Egipto'],
+  england: ['Inglaterra'],
+  france: ['Francia'],
+  germany: ['Alemania'],
+  ghana: ['Ghana'],
+  greece: ['Grecia'],
+  honduras: ['Honduras'],
+  iran: ['Iran'],
+  ireland: ['Irlanda'],
+  italy: ['Italia'],
+  'ivory coast': ['Costa de Marfil'],
+  japan: ['Japon'],
+  luxembourg: ['Luxemburgo'],
+  mexico: ['Mexico'],
+  morocco: ['Marruecos'],
+  netherlands: ['Paises Bajos', 'Holanda'],
+  'new zealand': ['Nueva Zelanda', 'N Zelanda'],
+  nigeria: ['Nigeria'],
+  'north korea': ['Corea del Norte'],
+  norway: ['Noruega'],
+  panama: ['Panama'],
+  paraguay: ['Paraguay'],
+  peru: ['Peru'],
+  poland: ['Polonia'],
+  portugal: ['Portugal'],
+  qatar: ['Qatar'],
+  scotland: ['Escocia'],
+  senegal: ['Senegal'],
+  serbia: ['Serbia'],
+  'south africa': ['Sudafrica'],
+  'south korea': ['Corea del Sur'],
+  spain: ['Espana'],
+  sweden: ['Suecia'],
+  switzerland: ['Suiza'],
+  tunisia: ['Tunez'],
+  turkey: ['Turquia'],
+  'united states': ['Estados Unidos', 'USA'],
+  usa: ['Estados Unidos', 'USMNT'],
+  uruguay: ['Uruguay'],
+  venezuela: ['Venezuela'],
+  wales: ['Gales'],
+}
 const STOPWORDS = new Set([
   'club',
   'atletico',
@@ -482,25 +564,65 @@ function getSignificantTokens(value: string | null | undefined) {
     .filter((token) => token.length >= 3 && !STOPWORDS.has(token))
 }
 
+function hasSuspiciousEncoding(value: string) {
+  return /Ã|Â|�/.test(value)
+}
+
+function uniqueTextValues(values: Array<string | null | undefined>) {
+  const seen = new Set<string>()
+  const result: string[] = []
+
+  for (const value of values) {
+    const compacted = compactSpaces(value ?? '')
+    if (!compacted || hasSuspiciousEncoding(compacted)) continue
+
+    const normalized = normalizeText(compacted)
+    if (!normalized || seen.has(normalized)) continue
+
+    seen.add(normalized)
+    result.push(compacted)
+  }
+
+  return result
+}
+
+function getTranslatedCountryAliases(teamName: string | null, normalizedTeam: string) {
+  const translated = translateCountryNameToSpanish(teamName)
+
+  if (!translated || hasSuspiciousEncoding(translated)) return []
+  if (normalizeText(translated) === normalizedTeam) return []
+
+  return [translated]
+}
+
+function getTeamAliasNames(teamName: string | null) {
+  const normalizedTeam = normalizeText(teamName)
+  if (!normalizedTeam) return []
+
+  return uniqueTextValues([
+    ...(TEAM_NAME_ALIASES[normalizedTeam] ?? []),
+    ...(EXTRA_TEAM_NAME_ALIASES[normalizedTeam] ?? []),
+    ...(TEAM_SEARCH_ALIASES[normalizedTeam] ?? []),
+    ...(COUNTRY_TEAM_SEARCH_ALIASES[normalizedTeam] ?? []),
+    ...getTranslatedCountryAliases(teamName, normalizedTeam),
+  ])
+}
+
 function getTeamTitleCandidates(teamName: string | null) {
   const normalizedTeam = normalizeText(teamName)
   if (!normalizedTeam) return []
 
-  return [
-    normalizedTeam,
-    ...(TEAM_NAME_ALIASES[normalizedTeam] ?? []).map((alias) => normalizeText(alias)),
-    ...(EXTRA_TEAM_NAME_ALIASES[normalizedTeam] ?? []).map((alias) => normalizeText(alias)),
-  ].filter(Boolean)
+  return uniqueTextValues([normalizedTeam, ...getTeamAliasNames(teamName)])
+    .map((alias) => normalizeText(alias))
+    .filter(Boolean)
 }
 
 function getTeamSearchNames(teamName: string | null) {
   const normalizedTeam = normalizeText(teamName)
   if (!teamName || !normalizedTeam) return []
 
-  return [
-    teamName,
-    ...(TEAM_SEARCH_ALIASES[normalizedTeam] ?? []),
-  ].filter(Boolean)
+  return uniqueTextValues([teamName, ...getTeamAliasNames(teamName)])
+    .slice(0, MAX_TEAM_SEARCH_NAMES)
 }
 
 function getTeamSearchPairVariants(match: HighlightMatch) {
@@ -508,13 +630,27 @@ function getTeamSearchPairVariants(match: HighlightMatch) {
   const awayNames = getTeamSearchNames(match.awayName)
   if (!homeNames.length || !awayNames.length) return []
 
-  const pairs: Array<[string, string]> = [[homeNames[0], awayNames[0]]]
+  const pairs: Array<[string, string]> = [
+    [homeNames[0], awayNames[0]],
+  ]
   if (homeNames[1] && awayNames[1]) pairs.push([homeNames[1], awayNames[1]])
+  if (homeNames[1]) pairs.push([homeNames[1], awayNames[0]])
+  if (awayNames[1]) pairs.push([homeNames[0], awayNames[1]])
   pairs.push([awayNames[0], homeNames[0]])
+  if (homeNames[1] && awayNames[1]) pairs.push([awayNames[1], homeNames[1]])
+
+  const seen = new Set<string>()
 
   return pairs
     .map(([home, away]) => [compactSpaces(home), compactSpaces(away)] as [string, string])
     .filter(([home, away]) => home && away)
+    .filter(([home, away]) => {
+      const key = `${normalizeText(home)}:${normalizeText(away)}`
+      if (seen.has(key)) return false
+
+      seen.add(key)
+      return true
+    })
 }
 
 function getTeamTitleScore(title: string, teamName: string | null) {
@@ -619,7 +755,7 @@ export function buildYouTubeHighlightQueries(match: HighlightMatch) {
 
   return [...new Set([...primaryQueries, ...variantQueries])]
     .filter((query) => query.length >= 12)
-    .slice(0, 6)
+    .slice(0, MAX_PRIMARY_HIGHLIGHT_QUERIES)
 }
 
 function buildYouTubeTrustedSourceQueries(match: HighlightMatch) {
@@ -627,12 +763,20 @@ function buildYouTubeTrustedSourceQueries(match: HighlightMatch) {
 
   const year = match.match_date ? new Date(match.match_date).getFullYear() : null
   const yearText = year && Number.isFinite(year) ? String(year) : null
-  const pairs = getTeamSearchPairVariants(match).slice(0, 2)
-  const queries = TRUSTED_SOURCE_SEARCH_TERMS.flatMap((source) =>
-    pairs.map(([home, away]) =>
-      compactSpaces([home, away, source, 'highlights', yearText].filter(Boolean).join(' '))
-    )
-  )
+  const pairs = getTeamSearchPairVariants(match).slice(0, 3)
+  const primaryPair = pairs[0]
+  if (!primaryPair) return []
+
+  const queries = [
+    ...TRUSTED_SOURCE_SEARCH_TERMS.map((source) =>
+      compactSpaces([primaryPair[0], primaryPair[1], source, 'resumen highlights', yearText].filter(Boolean).join(' '))
+    ),
+    ...TRUSTED_SOURCE_SEARCH_TERMS.flatMap((source) =>
+      pairs.slice(1).map(([home, away]) =>
+        compactSpaces([home, away, source, 'resumen highlights', yearText].filter(Boolean).join(' '))
+      )
+    ),
+  ]
 
   return [...new Set(queries)]
     .filter((query) => query.length >= 12)
@@ -911,6 +1055,37 @@ function getPreSearchSkipReason(match: HighlightMatch, force: boolean | undefine
   return null
 }
 
+function getHighlightCompetitionPriority(match: HighlightMatch) {
+  const leagueExternalId = match.leagueExternalId ? String(match.leagueExternalId) : null
+  const normalizedLeague = normalizeText(match.leagueName)
+  const priorityIndex = PRIORITY_HIGHLIGHT_LEAGUES.findIndex((league) => {
+    if (leagueExternalId === league.externalId) return true
+
+    return league.aliases.some((alias) => normalizedLeague.includes(alias))
+  })
+
+  return priorityIndex === -1 ? PRIORITY_HIGHLIGHT_LEAGUES.length : priorityIndex
+}
+
+function getMatchTimestamp(match: HighlightMatch) {
+  if (!match.match_date) return 0
+
+  const timestamp = new Date(match.match_date).getTime()
+
+  return Number.isFinite(timestamp) ? timestamp : 0
+}
+
+function sortMatchesForHighlightSync(matches: HighlightMatch[], options: HighlightSyncOptions) {
+  if (options.matchId || options.fixture || options.leagueExternalId) return matches
+
+  return [...matches].sort((a, b) => {
+    const priorityDelta = getHighlightCompetitionPriority(a) - getHighlightCompetitionPriority(b)
+    if (priorityDelta !== 0) return priorityDelta
+
+    return getMatchTimestamp(b) - getMatchTimestamp(a)
+  })
+}
+
 async function searchYouTubeHighlights(query: string, apiKey: string) {
   const url = new URL(YOUTUBE_SEARCH_URL)
   url.searchParams.set('part', 'snippet')
@@ -919,6 +1094,7 @@ async function searchYouTubeHighlights(query: string, apiKey: string) {
   url.searchParams.set('q', query)
   url.searchParams.set('key', apiKey)
   url.searchParams.set('order', 'relevance')
+  url.searchParams.set('relevanceLanguage', 'es')
   url.searchParams.set('videoEmbeddable', 'true')
   url.searchParams.set('safeSearch', 'moderate')
 
@@ -1013,7 +1189,7 @@ export async function syncMatchHighlights(supabase: DbClient, options: Highlight
 
   const limit = clampLimit(options.limit, DEFAULT_SYNC_LIMIT, MAX_SYNC_LIMIT)
   const rows = await fetchMatches(supabase, { ...options, limit })
-  const matches = await enrichMatches(supabase, rows)
+  const matches = sortMatchesForHighlightSync(await enrichMatches(supabase, rows), options)
   const results: HighlightResult[] = []
   let searched = 0
   let updated = 0

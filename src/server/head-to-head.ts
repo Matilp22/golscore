@@ -3,6 +3,7 @@ import type { MatchFixture } from '@/lib/api-football'
 import { requestFootballApi } from '@/server/integrations/football-api-client'
 import { formatMatchScoreWithPenalties } from '@/shared/utils/match-display'
 import { pickTeamLogoUrl } from '@/shared/utils/asset-urls'
+import { isFinishedStatus } from '@/shared/utils/match-status'
 
 type DbId = string | number
 
@@ -80,6 +81,11 @@ type HeadToHeadApiTeam = {
   name?: string | null
   logo?: string | null
 } | null | undefined
+
+type CurrentHeadToHeadMatch = {
+  fixtureExternalId?: string | number | null
+  date?: string | null
+} | null
 
 export type HeadToHeadTeam = {
   externalId: number | null
@@ -292,6 +298,33 @@ function mapHeadToHeadFixture(match: HeadToHeadApiFixture): HeadToHeadMatchItem 
   }
 }
 
+function hasHeadToHeadResult(match: HeadToHeadMatchItem) {
+  return (
+    (match.goalsHome !== null && match.goalsAway !== null) ||
+    (match.homePenaltyScore !== null && match.awayPenaltyScore !== null)
+  )
+}
+
+function isPreviousHeadToHeadMatch(
+  match: HeadToHeadMatchItem,
+  currentMatch: CurrentHeadToHeadMatch
+) {
+  const currentFixtureId =
+    currentMatch?.fixtureExternalId === null || currentMatch?.fixtureExternalId === undefined
+      ? null
+      : String(currentMatch.fixtureExternalId)
+
+  if (currentFixtureId && match.fixtureExternalId === currentFixtureId) return false
+  if (!isFinishedStatus(match.status) && !hasHeadToHeadResult(match)) return false
+
+  const currentTimestamp = getFixtureDateTimestamp(currentMatch?.date ?? null)
+  if (!currentTimestamp) return true
+
+  const matchTimestamp = getFixtureDateTimestamp(match.date)
+
+  return Boolean(matchTimestamp && matchTimestamp < currentTimestamp)
+}
+
 export function buildHeadToHeadViewModel({
   currentMatch,
   rawFixtures,
@@ -303,7 +336,7 @@ export function buildHeadToHeadViewModel({
   warnings = [],
   errors = [],
 }: {
-  currentMatch?: { fixtureExternalId?: string | number | null } | null
+  currentMatch?: CurrentHeadToHeadMatch
   rawFixtures: unknown
   perspectiveHomeTeam: HeadToHeadTeam
   perspectiveAwayTeam: HeadToHeadTeam
@@ -314,13 +347,9 @@ export function buildHeadToHeadViewModel({
   errors?: string[]
 }): HeadToHeadViewModel {
   const rawMatches = getRawFixturesFromPayload(rawFixtures)
-  const currentFixtureId =
-    currentMatch?.fixtureExternalId === null || currentMatch?.fixtureExternalId === undefined
-      ? null
-      : String(currentMatch.fixtureExternalId)
   const matches = rawMatches
     .map(mapHeadToHeadFixture)
-    .filter((match) => !currentFixtureId || match.fixtureExternalId !== currentFixtureId)
+    .filter((match) => isPreviousHeadToHeadMatch(match, currentMatch ?? null))
     .sort((a, b) => getFixtureDateTimestamp(b.date) - getFixtureDateTimestamp(a.date))
 
   if (!rawMatches.length) {
@@ -466,7 +495,10 @@ export async function getCachedHeadToHeadForFixture(
   }
 
   return buildHeadToHeadViewModel({
-    currentMatch: { fixtureExternalId: fixture.fixture.id },
+    currentMatch: {
+      fixtureExternalId: fixture.fixture.id,
+      date: fixture.fixture.date ?? null,
+    },
     rawFixtures: cache.row.payload,
     perspectiveHomeTeam: homeTeam,
     perspectiveAwayTeam: awayTeam,
@@ -668,7 +700,10 @@ export async function auditHeadToHeadCache(resolved: HeadToHeadResolvedTeams) {
   }
 
   const viewModel = buildHeadToHeadViewModel({
-    currentMatch: { fixtureExternalId: resolved.match?.external_id ?? null },
+    currentMatch: {
+      fixtureExternalId: resolved.match?.external_id ?? null,
+      date: resolved.match?.match_date ?? null,
+    },
     rawFixtures: cache.row.payload,
     perspectiveHomeTeam: resolved.homeTeam,
     perspectiveAwayTeam: resolved.awayTeam,
@@ -719,7 +754,10 @@ export async function syncHeadToHeadCache(input: {
 
     if (cache.row) {
       const viewModel = buildHeadToHeadViewModel({
-        currentMatch: { fixtureExternalId: resolved.match?.external_id ?? null },
+        currentMatch: {
+          fixtureExternalId: resolved.match?.external_id ?? null,
+          date: resolved.match?.match_date ?? null,
+        },
         rawFixtures: cache.row.payload,
         perspectiveHomeTeam: resolved.homeTeam,
         perspectiveAwayTeam: resolved.awayTeam,
@@ -750,7 +788,10 @@ export async function syncHeadToHeadCache(input: {
   const payload = apiResponse.payload
   const rawMatches = payload.response ?? []
   const viewModel = buildHeadToHeadViewModel({
-    currentMatch: { fixtureExternalId: resolved.match?.external_id ?? null },
+    currentMatch: {
+      fixtureExternalId: resolved.match?.external_id ?? null,
+      date: resolved.match?.match_date ?? null,
+    },
     rawFixtures: payload,
     perspectiveHomeTeam: resolved.homeTeam,
     perspectiveAwayTeam: resolved.awayTeam,

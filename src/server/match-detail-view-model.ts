@@ -23,6 +23,11 @@ import {
   isValidYouTubeUrl,
 } from '@/shared/utils/youtube'
 import {
+  buildMatchSummary,
+  getSummaryCandidates,
+  type NormalizedMatchSummary,
+} from '@/shared/utils/match-summary'
+import {
   createEmptyHeadToHeadViewModel,
   getCachedHeadToHeadForFixture,
   type HeadToHeadViewModel,
@@ -90,6 +95,7 @@ export type MatchDetailViewModel = MatchDetailPayload & {
     embedUrl: string | null
     renderReady: boolean
   }
+  summary: NormalizedMatchSummary
   headToHead: HeadToHeadViewModel
   hasPenaltyShootout: boolean
   matchInfo: {
@@ -386,6 +392,10 @@ export function buildMatchDetailViewModelFromDetail(
       isValidYouTubeUrl(detail.highlightsUrl) &&
       Boolean(getYouTubeThumbnailUrl(detail.highlightsUrl) && getYouTubeEmbedUrl(detail.highlightsUrl)),
   }
+  const summary = buildMatchSummary(getSummaryCandidates({
+    highlightsUrl: highlights.url,
+    highlightsTitle: highlights.title,
+  }))
   const missingSections = [
     !renderCounts.timelineEvents ? 'timeline' : null,
     !renderCounts.formationPlayers ? 'formation' : null,
@@ -427,6 +437,7 @@ export function buildMatchDetailViewModelFromDetail(
     homeFormation: homeLineup?.formation?.trim() || null,
     awayFormation: awayLineup?.formation?.trim() || null,
     highlights,
+    summary,
     headToHead: createEmptyHeadToHeadViewModel('cache_empty'),
     hasPenaltyShootout,
     matchInfo,

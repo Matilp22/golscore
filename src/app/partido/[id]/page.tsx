@@ -31,9 +31,10 @@ import { getEventElapsedMinute, getFixtureStatusElapsedMinute } from '@/shared/u
 import { isFinishedStatus } from '@/shared/utils/match-status'
 import { buildMatchDetailViewModel } from '@/server/match-detail-view-model'
 import type { HeadToHeadViewModel } from '@/server/head-to-head'
-import { getYouTubeThumbnailUrl, isValidYouTubeUrl } from '@/shared/utils/youtube'
+import type { MatchSummarySource } from '@/shared/utils/match-summary'
 import { buildSeoMetadata } from '@/shared/seo'
 import ShareCardButton from '@/frontend/components/share/ShareCardButton'
+import MatchSummaryPlayer from '@/frontend/components/MatchSummaryPlayer'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 
@@ -1165,66 +1166,10 @@ function getPanelStyle(style: TeamStyle) {
   }
 }
 
-function MatchSummaryCard({
-  title,
-  url,
-}: {
-  title?: string | null
-  url?: string | null
-}) {
-  const thumbnailUrl = getYouTubeThumbnailUrl(url)
-
-  if (!url || !thumbnailUrl || !isValidYouTubeUrl(url)) {
-    return (
-      <div className="flex min-h-28 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/10 bg-[#13181d] px-4 py-5 text-center">
-        <div className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-[#8d98a7]">
-          <span className="ml-0.5 text-lg">▶</span>
-        </div>
-        <p className="text-sm font-bold text-white">Resumen no disponible</p>
-        <p className="text-xs leading-relaxed text-[#8d98a7]">
-          Cuando se cargue un video, va a aparecer acá.
-        </p>
-      </div>
-    )
-  }
-
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="block overflow-hidden rounded-xl border border-white/10 bg-[#13181d] transition hover:border-[#7ff0b2]/35"
-    >
-      <div className="relative aspect-video overflow-hidden bg-black">
-        <SafeImage
-          src={thumbnailUrl}
-          alt={title || 'Resumen del partido'}
-          imageType="video"
-          width={640}
-          height={360}
-          className="h-full w-full object-cover"
-          fallbackClassName="h-full w-full"
-          unoptimized
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/72 via-black/20 to-transparent" />
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-[#7ff0b2]/90 text-xl font-black text-[#06100b] shadow-[0_0_24px_rgba(127,240,178,0.25)]">
-            ▶
-          </span>
-        </div>
-      </div>
-      {title ? (
-        <p className="border-t border-white/8 px-3 py-2 text-xs font-bold leading-snug text-[#d7dee8]">
-          {title}
-        </p>
-      ) : null}
-    </a>
-  )
-}
-
 function MatchSummarySection({
-  title,
-  url,
+  source,
+  isLoading = false,
+  error,
   shareId,
   shareTitle,
   shareText,
@@ -1232,8 +1177,9 @@ function MatchSummarySection({
   shareFileName,
   className = '',
 }: {
-  title?: string | null
-  url?: string | null
+  source: MatchSummarySource | null
+  isLoading?: boolean
+  error?: unknown
   shareId?: string
   shareTitle?: string
   shareText?: string
@@ -1262,7 +1208,7 @@ function MatchSummarySection({
       </div>
 
       <div className="p-2 md:p-3">
-        <MatchSummaryCard title={title} url={url} />
+        <MatchSummaryPlayer source={source} isLoading={isLoading} error={error} />
       </div>
     </div>
   )
@@ -1940,18 +1886,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
   const broadcastLabel = broadcasters.map((broadcaster) => broadcaster.name).join(' / ')
   const primaryBroadcastLogo =
     broadcasters.find((broadcaster) => broadcaster.logoUrl)?.logoUrl ?? null
-  const highlightsUrl =
-    typeof data.highlights?.url === 'string'
-      ? data.highlights.url
-      : typeof data.highlightsUrl === 'string'
-        ? data.highlightsUrl
-        : null
-  const highlightsTitle =
-    typeof data.highlights?.title === 'string'
-      ? data.highlights.title
-      : typeof data.highlightsTitle === 'string'
-        ? data.highlightsTitle
-        : null
+  const summarySource = data.summary.source
   const stats = Array.isArray(data.statistics) ? data.statistics : []
   const events = data.sourceEvents
   const lineups = data.lineups
@@ -2136,44 +2071,51 @@ export default async function PartidoDetallePage({ params }: PageProps) {
             />
           </div>
 
-          <div className="relative z-10 grid gap-3 border-t border-white/6 bg-black/20 px-2 py-3 text-center text-sm text-[#c8d0da] md:grid-cols-3 md:px-4 md:text-left">
-            <div className="flex min-h-14 flex-col items-center justify-center md:items-start">
-              <span className="text-[#8d98a7]">Estadio</span>
-              <p className="mt-1 font-medium text-white">
+          <div className="relative z-10 grid grid-cols-3 gap-1.5 border-t border-white/6 bg-black/20 px-2 py-2 text-center text-[#c8d0da] md:gap-2 md:px-4">
+            <div className="min-w-0 rounded-lg border border-white/6 bg-white/[0.025] px-1.5 py-2">
+              <span className="block truncate text-[clamp(0.58rem,2vw,0.68rem)] font-black uppercase tracking-[0.08em] text-[#8d98a7]">
+                Estadio
+              </span>
+              <strong className="mt-1 block min-w-0 overflow-hidden text-[clamp(0.72rem,2.7vw,0.88rem)] font-semibold leading-tight text-white [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] [overflow-wrap:anywhere]">
                 {formatVenue(fixture.fixture.venue)}
-              </p>
+              </strong>
             </div>
-            <div className="flex min-h-14 flex-col items-center justify-center md:items-start">
-              <span className="text-[#8d98a7]">TV</span>
-              <p className="mt-1 flex min-w-0 items-center justify-center gap-2 font-medium text-white md:justify-start">
+            <div className="min-w-0 rounded-lg border border-white/6 bg-white/[0.025] px-1.5 py-2">
+              <span className="block truncate text-[clamp(0.58rem,2vw,0.68rem)] font-black uppercase tracking-[0.08em] text-[#8d98a7]">
+                TV
+              </span>
+              <div className="mt-1 flex min-w-0 items-center justify-center gap-1.5">
                 {primaryBroadcastLogo ? (
                   <SafeImage
                     src={primaryBroadcastLogo}
                     alt={broadcastLabel || 'TV'}
                     imageType="broadcast"
-                    width={20}
-                    height={20}
-                    className="h-5 w-5 shrink-0 object-contain"
+                    width={18}
+                    height={18}
+                    className="h-[18px] w-[18px] shrink-0 object-contain"
                     fallbackClassName="h-3.5 w-3.5 shrink-0"
                     unoptimized
                   />
                 ) : null}
-                <span className="min-w-0 truncate">{broadcastLabel || 'No disponible'}</span>
-              </p>
+                <strong className="block min-w-0 overflow-hidden text-[clamp(0.72rem,2.7vw,0.88rem)] font-semibold leading-tight text-white [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] [overflow-wrap:anywhere]">
+                  {broadcastLabel || 'No disponible'}
+                </strong>
+              </div>
             </div>
-            <div className="flex min-h-14 flex-col items-center justify-center md:items-start">
-              <span className="text-[#8d98a7]">Árbitro</span>
-              <p className="mt-1 font-medium text-white">
+            <div className="min-w-0 rounded-lg border border-white/6 bg-white/[0.025] px-1.5 py-2">
+              <span className="block truncate text-[clamp(0.58rem,2vw,0.68rem)] font-black uppercase tracking-[0.08em] text-[#8d98a7]">
+                Árbitro
+              </span>
+              <strong className="mt-1 block min-w-0 overflow-hidden text-[clamp(0.72rem,2.7vw,0.88rem)] font-semibold leading-tight text-white [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] [overflow-wrap:anywhere]">
                 {formatReferee(fixture.fixture.referee)}
-              </p>
+              </strong>
             </div>
           </div>
         </header>
 
         {matchIsFinished ? (
           <MatchSummarySection
-            title={highlightsTitle}
-            url={highlightsUrl}
+            source={summarySource}
             shareId={summaryShareId}
             shareTitle={`${shareTitle} - Resumen del partido`}
             shareText={`${shareText} | Resumen del partido`}
