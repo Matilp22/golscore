@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import BackButton from '@/frontend/components/BackButton'
 import BrandMark from '@/frontend/components/BrandMark'
+import LanguageSelector from '@/frontend/components/LanguageSelector'
 import SiteFooter from '@/frontend/components/SiteFooter'
 import SidebarNav from '@/frontend/components/SidebarNav'
 import { useAuth } from '@/frontend/hooks/useAuth'
@@ -13,10 +14,12 @@ import {
   getSupabaseBrowserClient,
   signOut,
 } from '@/lib/supabase/supabaseClient'
+import { t, type AppLocale } from '@/shared/i18n/locales'
 
 type AppShellProps = {
   auth: ReactNode
   children: ReactNode
+  locale: AppLocale
 }
 
 type ProfileQuery = {
@@ -42,7 +45,13 @@ function DrawerChevron({ open }: { open: boolean }) {
   )
 }
 
-function MobileAccountSection({ onNavigate }: { onNavigate: () => void }) {
+function MobileAccountSection({
+  locale,
+  onNavigate,
+}: {
+  locale: AppLocale
+  onNavigate: () => void
+}) {
   const router = useRouter()
   const { user, isLoading } = useAuth()
   const [isOpen, setIsOpen] = useState(false)
@@ -53,7 +62,7 @@ function MobileAccountSection({ onNavigate }: { onNavigate: () => void }) {
     (profile && profile.userId === user?.id ? profile.username : null) ||
     (typeof user?.user_metadata?.username === 'string' && user.user_metadata.username) ||
     user?.email ||
-    'Mi cuenta'
+    t(locale, 'account.myAccount')
 
   useEffect(() => {
     let active = true
@@ -105,14 +114,14 @@ function MobileAccountSection({ onNavigate }: { onNavigate: () => void }) {
       try {
         getSupabaseBrowserClient()
       } catch (error) {
-        setError(error instanceof Error ? error.message : 'Supabase no está configurado.')
+        setError(error instanceof Error ? error.message : t(locale, 'account.supabaseMissing'))
         return
       }
 
       const { error: signOutError } = await signOut()
 
       if (signOutError) {
-        setError('No se pudo cerrar sesión.')
+        setError(t(locale, 'account.signOutError'))
         return
       }
 
@@ -129,10 +138,10 @@ function MobileAccountSection({ onNavigate }: { onNavigate: () => void }) {
         type="button"
         onClick={() => setIsOpen((current) => !current)}
         className="flex w-full min-w-0 items-center justify-between gap-2 px-3 py-2 text-left transition hover:bg-[#70ff9d]/10"
-        aria-expanded={isOpen}
+          aria-expanded={isOpen}
       >
         <span className="min-w-0 truncate text-sm font-semibold text-[#e4ebf3]">
-          Mi cuenta
+          {t(locale, 'account.myAccount')}
         </span>
         <DrawerChevron open={isOpen} />
       </button>
@@ -157,28 +166,28 @@ function MobileAccountSection({ onNavigate }: { onNavigate: () => void }) {
                   disabled={isPending}
                   className="block w-full rounded-xl px-2.5 py-2 text-left text-sm font-semibold text-[#e6edf5] transition hover:bg-[#70ff9d]/10 hover:text-white disabled:cursor-wait disabled:opacity-70"
                 >
-                  {isPending ? 'Cerrando...' : 'Cerrar sesión'}
+                  {isPending ? t(locale, 'account.signingOut') : t(locale, 'account.signOut')}
                 </button>
                 {error ? <p className="px-2.5 text-xs text-[#ffd5d5]">{error}</p> : null}
               </>
             ) : (
               <>
                 <p className="rounded-xl bg-white/[0.03] px-2.5 py-2 text-sm font-semibold text-[#bcc6d2]">
-                  No iniciaste sesión
+                  {t(locale, 'account.notSignedIn')}
                 </p>
                 <Link
                   href="/login"
                   onClick={onNavigate}
                   className="block rounded-xl px-2.5 py-2 text-sm text-[#bcc6d2] transition hover:bg-[#70ff9d]/10 hover:text-white"
                 >
-                  Iniciar sesión
+                  {t(locale, 'account.signIn')}
                 </Link>
                 <Link
                   href="/register"
                   onClick={onNavigate}
                   className="block rounded-xl px-2.5 py-2 text-sm text-[#bcc6d2] transition hover:bg-[#70ff9d]/10 hover:text-white"
                 >
-                  Crear cuenta
+                  {t(locale, 'account.createAccount')}
                 </Link>
               </>
             )}
@@ -189,7 +198,7 @@ function MobileAccountSection({ onNavigate }: { onNavigate: () => void }) {
   )
 }
 
-export default function AppShell({ auth, children }: AppShellProps) {
+export default function AppShell({ auth, children, locale }: AppShellProps) {
   const [isOpen, setIsOpen] = useState(false)
   const pathname = usePathname()
   const isHome = pathname === '/'
@@ -213,6 +222,7 @@ export default function AppShell({ auth, children }: AppShellProps) {
   const sidebar = (
     <SidebarNav
       sections={SIDEBAR_SECTION_CONFIGS}
+      locale={locale}
       compact
       onNavigate={() => setIsOpen(false)}
     />
@@ -227,7 +237,7 @@ export default function AppShell({ auth, children }: AppShellProps) {
               type="button"
               onClick={() => setIsOpen(true)}
               className="hf-button-secondary inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white shadow-[0_10px_30px_rgba(0,0,0,0.22)] lg:hidden"
-              aria-label="Abrir menú"
+              aria-label={t(locale, 'shell.openMenu')}
               aria-expanded={isOpen}
             >
               <span className="flex flex-col gap-1.5" aria-hidden="true">
@@ -240,7 +250,7 @@ export default function AppShell({ auth, children }: AppShellProps) {
             <Link
               href="/"
               className="min-w-0 shrink transition hover:brightness-110"
-              aria-label="HAY FULBO inicio"
+              aria-label={t(locale, 'shell.homeLabel')}
             >
               <BrandMark className="max-w-full" />
             </Link>
@@ -259,6 +269,7 @@ export default function AppShell({ auth, children }: AppShellProps) {
             >
               Prode
             </Link>
+            <LanguageSelector locale={locale} compact />
             <div className="hidden lg:block">
               {auth}
             </div>
@@ -271,26 +282,29 @@ export default function AppShell({ auth, children }: AppShellProps) {
           <button
             type="button"
             className="absolute inset-0 bg-black/55"
-            aria-label="Cerrar menú tocando fuera"
+            aria-label={t(locale, 'shell.closeOverlay')}
             onClick={() => setIsOpen(false)}
           />
           <aside className="absolute bottom-0 left-0 top-0 flex w-[min(82vw,300px)] max-w-full flex-col border-r border-[#70ff9d]/15 bg-[#07100d] shadow-[18px_0_42px_rgba(0,0,0,0.42)]">
             <div className="flex items-center justify-between border-b border-white/8 px-3 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#70ff9d]">
-                Secciones
+                {t(locale, 'shell.sections')}
               </p>
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/8 bg-white/[0.03] text-base font-bold text-white transition hover:bg-white/[0.08]"
-                aria-label="Cerrar menú"
+                aria-label={t(locale, 'shell.closeMenu')}
               >
                 ×
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-2">
               <div className="mb-2">
-                <MobileAccountSection onNavigate={() => setIsOpen(false)} />
+                <MobileAccountSection locale={locale} onNavigate={() => setIsOpen(false)} />
+              </div>
+              <div className="mb-2">
+                <LanguageSelector locale={locale} />
               </div>
               {sidebar}
             </div>
@@ -306,7 +320,7 @@ export default function AppShell({ auth, children }: AppShellProps) {
           {children}
         </div>
       </div>
-      <SiteFooter />
+      <SiteFooter locale={locale} />
     </>
   )
 }

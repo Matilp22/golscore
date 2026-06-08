@@ -38,17 +38,26 @@ import {
 } from '@/shared/utils/match-display'
 import {
   buildSeoMetadata,
-  DEFAULT_SEO_DESCRIPTION,
-  DEFAULT_SEO_TITLE,
+  getDefaultSeoCopy,
 } from '@/shared/seo'
+import { getRequestLocale } from '@/server/request-locale'
+import {
+  getTournamentDisplayName,
+  t,
+} from '@/shared/i18n/locales'
 import { WORLD_CUP_2026_LOGO_URL } from '@/shared/utils/asset-urls'
-import { translateCountryNameToSpanish } from '@/shared/utils/country-names'
 
-export const metadata = buildSeoMetadata({
-  title: DEFAULT_SEO_TITLE,
-  description: DEFAULT_SEO_DESCRIPTION,
-  path: '/',
-})
+export async function generateMetadata() {
+  const locale = await getRequestLocale()
+  const seo = getDefaultSeoCopy(locale)
+
+  return buildSeoMetadata({
+    title: seo.title,
+    description: seo.description,
+    path: '/',
+    locale,
+  })
+}
 
 type ApiMatch = MatchListItemWithGoalScorers
 
@@ -1261,6 +1270,7 @@ export default async function HomePage({
   searchParams: Promise<{ date?: string }>
 }) {
   const sp = await searchParams
+  const locale = await getRequestLocale()
 
   const todayISO = getArgentinaTodayISO()
   const yesterdayISO = addDaysToISO(todayISO, -1)
@@ -1269,9 +1279,9 @@ export default async function HomePage({
   const selectedDate = sp.date || todayISO
 
   const dayOptions = [
-    { label: 'Ayer', value: yesterdayISO },
-    { label: 'Hoy', value: todayISO },
-    { label: 'Mañana', value: tomorrowISO },
+    { label: t(locale, 'home.yesterday'), value: yesterdayISO },
+    { label: t(locale, 'home.today'), value: todayISO },
+    { label: t(locale, 'home.tomorrow'), value: tomorrowISO },
   ]
 
   let groupedSections: SectionBucket[] = SECTION_ORDER.map((sectionKey) => ({
@@ -1306,7 +1316,7 @@ export default async function HomePage({
 
     groupedSections = groupMatchesWithPromiedosStructure(dateMatches)
   } catch {
-    dataError = 'Datos temporalmente no disponibles. Intentá nuevamente en unos minutos.'
+    dataError = t(locale, 'home.dataError')
   }
 
   const visibleSections = groupedSections.filter(
@@ -1339,7 +1349,7 @@ export default async function HomePage({
                 <BrandMark hero />
               </h1>
               <p className="mt-3 max-w-2xl text-xs font-semibold uppercase tracking-[0.22em] text-[#70ff9d] md:text-sm">
-                Partidos del dia, marcadores en vivo y agenda fulbo total
+                {t(locale, 'home.tagline')}
               </p>
             </div>
 
@@ -1379,7 +1389,14 @@ export default async function HomePage({
             {visibleCompetitions.length ? (
               <section className="w-full min-w-0 space-y-2">
                 <div className="space-y-2">
-                  {visibleCompetitions.map((competition) => (
+                  {visibleCompetitions.map((competition) => {
+                    const competitionTitle = getTournamentDisplayName(
+                      competition.key,
+                      competition.title,
+                      locale
+                    )
+
+                    return (
                     <div
                       id={competition.key}
                       key={competition.key}
@@ -1398,14 +1415,14 @@ export default async function HomePage({
                                   <span className="flex h-6 w-6 shrink-0 items-center justify-center">
                                     <LeagueLogo
                                       src={competition.logo}
-                                      alt={competition.title}
+                                      alt={competitionTitle}
                                       size={20}
                                       className="h-5 w-5 object-contain"
                                       fallbackClassName="h-4 w-3"
                                     />
                                   </span>
                                 ) : null}
-                                <span className="break-words">{competition.title}</span>
+                                <span className="break-words">{competitionTitle}</span>
                               </ChampionsEntrySoundLink>
                             ) : (
                               <Link
@@ -1415,15 +1432,15 @@ export default async function HomePage({
                               {competition.logo ? (
                                 <span className="flex h-6 w-6 shrink-0 items-center justify-center">
                                   <LeagueLogo
-                                    src={competition.logo}
-                                    alt={competition.title}
-                                    size={20}
+                                  src={competition.logo}
+                                  alt={competitionTitle}
+                                  size={20}
                                     className="h-5 w-5 object-contain"
                                     fallbackClassName="h-4 w-3"
                                   />
                                 </span>
                               ) : null}
-                              <span className="break-words">{competition.title}</span>
+                              <span className="break-words">{competitionTitle}</span>
                               </Link>
                             )
                           ) : (
@@ -1431,20 +1448,25 @@ export default async function HomePage({
                               {competition.logo ? (
                                 <span className="flex h-6 w-6 shrink-0 items-center justify-center">
                                   <LeagueLogo
-                                    src={competition.logo}
-                                    alt={competition.title}
-                                    size={20}
+                                  src={competition.logo}
+                                  alt={competitionTitle}
+                                  size={20}
                                     className="h-5 w-5 object-contain"
                                     fallbackClassName="h-4 w-3"
                                   />
                                 </span>
                               ) : null}
-                              <span className="break-words">{competition.title}</span>
+                              <span className="break-words">{competitionTitle}</span>
                             </h2>
                           )}
 
                           <div className="hf-badge shrink-0 rounded-lg px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.06em]">
-                            {competition.matches.length} partido{competition.matches.length !== 1 ? 's' : ''}
+                            {competition.matches.length} {t(
+                              locale,
+                              competition.matches.length === 1
+                                ? 'home.matchSingular'
+                                : 'home.matchPlural'
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1454,8 +1476,8 @@ export default async function HomePage({
                           <MatchRow
                             key={match.id}
                             id={match.id}
-                            league={competition.title}
-                            country={translateCountryNameToSpanish(match.country)}
+                            league={match.league}
+                            country={match.country}
                             homeLogo={match.homeLogo}
                             awayLogo={match.awayLogo}
                             time={formatMatchTimeArgentina(match.date)}
@@ -1471,21 +1493,24 @@ export default async function HomePage({
                               statusShort: match.statusShort,
                               minute: match.minute,
                               date: match.date,
+                              locale,
                             })}
                             goalScorers={match.goalScorers}
                             broadcasters={match.broadcasters}
                             broadcastChannel={match.broadcastChannel}
                             broadcastLogoUrl={match.broadcastLogoUrl}
+                            locale={locale}
                           />
                         ))}
                       </div>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </section>
             ) : dataError ? null : (
               <div className="w-full rounded-2xl border border-white/8 bg-[#0f1317]/92 px-2 py-5 text-sm text-[#94a0ae] md:px-4 md:py-6">
-                No hay partidos cargados para la fecha seleccionada.
+                {t(locale, 'home.noMatches')}
               </div>
             )}
           </main>

@@ -2,7 +2,9 @@ import Link from 'next/link'
 import SafeImage from '@/frontend/components/SafeImage'
 import { TeamLogo } from '@/frontend/components/AssetImage'
 import type { MatchBroadcaster, MatchGoalScorer, MatchGoalScorers } from '@/lib/api-football'
+import { t, type AppLocale } from '@/shared/i18n/locales'
 import { formatEventMinute } from '@/shared/utils/event-minute'
+import { getTeamDisplayName } from '@/shared/utils/team-display'
 
 type MatchRowProps = {
   id?: number | string
@@ -19,6 +21,7 @@ type MatchRowProps = {
   broadcasters?: MatchBroadcaster[]
   broadcastChannel?: string | null
   broadcastLogoUrl?: string | null
+  locale?: AppLocale
 }
 
 function formatCenterStatus(status: string, centerLabel: string) {
@@ -27,7 +30,11 @@ function formatCenterStatus(status: string, centerLabel: string) {
   const normalizedStatus = status.toLowerCase()
 
   if (normalizedStatus === 'finalizado') return 'FINAL'
+  if (normalizedStatus === 'finished' || normalizedStatus === 'terminé') return 'FINAL'
   if (normalizedStatus === 'entretiempo') return 'ENTRETIEMPO'
+  if (normalizedStatus === 'half-time' || normalizedStatus === 'intervalo' || normalizedStatus === 'mi-temps') {
+    return status.toUpperCase()
+  }
 
   return status
 }
@@ -35,9 +42,24 @@ function formatCenterStatus(status: string, centerLabel: string) {
 function getCenterStatusClass(status: string) {
   const normalizedStatus = status.toLowerCase()
 
-  if (normalizedStatus.includes('en vivo')) return 'text-[#7ff0b2]'
-  if (normalizedStatus === 'entretiempo') return 'text-[#f3d36c]'
-  if (normalizedStatus === 'finalizado' || normalizedStatus === 'final') return 'text-[#b8bec8]'
+  if (
+    normalizedStatus.includes('en vivo') ||
+    normalizedStatus.includes('live') ||
+    normalizedStatus.includes('ao vivo') ||
+    normalizedStatus.includes('direct')
+  ) return 'text-[#7ff0b2]'
+  if (
+    normalizedStatus === 'entretiempo' ||
+    normalizedStatus === 'half-time' ||
+    normalizedStatus === 'intervalo' ||
+    normalizedStatus === 'mi-temps'
+  ) return 'text-[#f3d36c]'
+  if (
+    normalizedStatus === 'finalizado' ||
+    normalizedStatus === 'finished' ||
+    normalizedStatus === 'terminé' ||
+    normalizedStatus === 'final'
+  ) return 'text-[#b8bec8]'
 
   return 'text-[#a8b0bc]'
 }
@@ -148,6 +170,8 @@ function GoalScorersLine({ goalScorers }: { goalScorers?: MatchGoalScorers }) {
 
 export default function MatchRow({
   id = 1,
+  league,
+  country,
   time,
   home,
   away,
@@ -157,9 +181,18 @@ export default function MatchRow({
   status,
   goalScorers,
   broadcasters,
+  locale = 'es',
 }: MatchRowProps) {
   const normalizedStatus = status.toLowerCase()
-  const isLive = normalizedStatus.includes('en vivo') || normalizedStatus === 'entretiempo'
+  const isLive =
+    normalizedStatus.includes('en vivo') ||
+    normalizedStatus.includes('live') ||
+    normalizedStatus.includes('ao vivo') ||
+    normalizedStatus.includes('direct') ||
+    normalizedStatus === 'entretiempo' ||
+    normalizedStatus === 'half-time' ||
+    normalizedStatus === 'intervalo' ||
+    normalizedStatus === 'mi-temps'
   const isTimeStatus = /^\d{1,2}:\d{2}$/.test(status.trim())
   const isScheduled = score === '- - -' && !isLive && isTimeStatus
   const centerLabel = isScheduled
@@ -170,6 +203,8 @@ export default function MatchRow({
   const centerStatus = isTimeStatus ? '' : formatCenterStatus(status, String(centerLabel))
   const allBroadcasters = broadcasters?.length ? broadcasters : []
   const broadcastText = allBroadcasters.map((broadcaster) => broadcaster.name).join(' / ')
+  const homeDisplayName = getTeamDisplayName({ name: home, league, country, locale })
+  const awayDisplayName = getTeamDisplayName({ name: away, league, country, locale })
 
   return (
     <Link
@@ -179,7 +214,7 @@ export default function MatchRow({
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_62px_minmax(0,1fr)] items-center gap-1.5 md:grid-cols-[minmax(0,1fr)_72px_minmax(0,1fr)] md:gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <BroadcastBadge broadcasters={allBroadcasters} className="hidden w-[104px] shrink-0 md:flex" />
-          <TeamBadge logo={homeLogo} name={home} />
+          <TeamBadge logo={homeLogo} name={homeDisplayName} />
         </div>
 
         <div className="text-center">
@@ -193,12 +228,12 @@ export default function MatchRow({
           ) : null}
         </div>
 
-        <TeamBadge logo={awayLogo} name={away} align="right" />
+        <TeamBadge logo={awayLogo} name={awayDisplayName} align="right" />
       </div>
 
       {broadcastText ? (
         <div className="mt-1 min-w-0 truncate text-center text-[10px] font-semibold leading-tight text-[#aab6c4] md:hidden">
-          TV: {broadcastText}
+          {t(locale, 'match.tv')}: {broadcastText}
         </div>
       ) : null}
 

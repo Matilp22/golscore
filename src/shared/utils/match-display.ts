@@ -1,4 +1,5 @@
 import { formatMatchTimeArgentina } from '@/shared/utils/argentina-time'
+import { t, type AppLocale } from '@/shared/i18n/locales'
 import {
   isFinishedStatus,
   isLiveStatus,
@@ -11,6 +12,7 @@ type MatchStatusDisplayInput = {
   statusShort: string
   minute?: number | null
   date?: string | null
+  locale?: AppLocale
 }
 
 type MatchScoreDisplayInput = {
@@ -22,28 +24,33 @@ type MatchScoreDisplayInput = {
   missing?: string
 }
 
-const POSTPONED_STATUS_LABELS: Record<string, string> = {
-  pst: 'Postergado',
-  postponed: 'Postergado',
-  'match postponed': 'Postergado',
-  int: 'Interrumpido',
-  interrupted: 'Interrumpido',
-  'match interrupted': 'Interrumpido',
-  susp: 'Suspendido',
-  suspended: 'Suspendido',
-  'match suspended': 'Suspendido',
-  canc: 'Cancelado',
-  cancelled: 'Cancelado',
-  canceled: 'Cancelado',
-  'match cancelled': 'Cancelado',
-  'match canceled': 'Cancelado',
-  abd: 'Suspendido',
-  abandoned: 'Suspendido',
-  'match abandoned': 'Suspendido',
+const POSTPONED_STATUS_KEYS: Record<string, Parameters<typeof t>[1]> = {
+  pst: 'status.postponed',
+  postponed: 'status.postponed',
+  'match postponed': 'status.postponed',
+  int: 'status.interrupted',
+  interrupted: 'status.interrupted',
+  'match interrupted': 'status.interrupted',
+  susp: 'status.suspended',
+  suspended: 'status.suspended',
+  'match suspended': 'status.suspended',
+  canc: 'status.cancelled',
+  cancelled: 'status.cancelled',
+  canceled: 'status.cancelled',
+  'match cancelled': 'status.cancelled',
+  'match canceled': 'status.cancelled',
+  abd: 'status.suspended',
+  abandoned: 'status.suspended',
+  'match abandoned': 'status.suspended',
 }
 
-export function getPostponedStatusLabel(statusShort: string | null | undefined) {
-  return POSTPONED_STATUS_LABELS[normalizeMatchStatus(statusShort)] ?? statusShort ?? 'Suspendido'
+export function getPostponedStatusLabel(
+  statusShort: string | null | undefined,
+  locale: AppLocale = 'es'
+) {
+  const key = POSTPONED_STATUS_KEYS[normalizeMatchStatus(statusShort)]
+
+  return key ? t(locale, key) : statusShort ?? t(locale, 'status.suspended')
 }
 
 export function hasPenaltyShootoutScore(
@@ -82,12 +89,13 @@ export function formatHomeMatchStatus({
   statusShort,
   minute,
   date,
+  locale = 'es',
 }: MatchStatusDisplayInput) {
-  if (isFinishedStatus(statusShort)) return 'Finalizado'
-  if (normalizeMatchStatus(statusShort) === 'ht') return 'Entretiempo'
-  if (isLiveStatus(statusShort)) return minute ? `EN VIVO ${minute}'` : 'EN VIVO'
+  if (isFinishedStatus(statusShort)) return t(locale, 'status.finished')
+  if (normalizeMatchStatus(statusShort) === 'ht') return t(locale, 'status.halftime')
+  if (isLiveStatus(statusShort)) return minute ? `${t(locale, 'status.live')} ${minute}'` : t(locale, 'status.live')
   if (isUpcomingStatus(statusShort)) return formatMatchTimeArgentina(date)
-  if (isPostponedStatus(statusShort)) return getPostponedStatusLabel(statusShort)
+  if (isPostponedStatus(statusShort)) return getPostponedStatusLabel(statusShort, locale)
 
   return statusShort
 }
@@ -96,12 +104,13 @@ export function formatMatchStatusUnderScore({
   statusShort,
   minute,
   date,
+  locale = 'es',
 }: MatchStatusDisplayInput) {
-  if (isFinishedStatus(statusShort)) return 'Finalizado'
-  if (normalizeMatchStatus(statusShort) === 'ht') return 'Entretiempo'
-  if (isLiveStatus(statusShort)) return minute ? `${minute}'` : 'En vivo'
+  if (isFinishedStatus(statusShort)) return t(locale, 'status.finished')
+  if (normalizeMatchStatus(statusShort) === 'ht') return t(locale, 'status.halftime')
+  if (isLiveStatus(statusShort)) return minute ? `${minute}'` : t(locale, 'status.live')
   if (isUpcomingStatus(statusShort)) return formatMatchTimeArgentina(date)
-  if (isPostponedStatus(statusShort)) return getPostponedStatusLabel(statusShort)
+  if (isPostponedStatus(statusShort)) return getPostponedStatusLabel(statusShort, locale)
 
   return statusShort
 }

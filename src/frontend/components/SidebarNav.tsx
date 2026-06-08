@@ -11,6 +11,12 @@ import {
   toggleFavoriteLeague,
 } from '@/frontend/services/favoriteLeaguesService'
 import type { SidebarSectionConfig, TournamentPageConfig } from '@/lib/tournament-pages'
+import {
+  getSectionDisplayName,
+  getTournamentDisplayName,
+  t,
+  type AppLocale,
+} from '@/shared/i18n/locales'
 import { isExcludedCompetition } from '@/shared/utils/competition-filter'
 
 type SidebarNavProps = {
@@ -18,6 +24,7 @@ type SidebarNavProps = {
   activeSectionKey?: string
   highlightedTournamentKeys?: string[]
   compact?: boolean
+  locale: AppLocale
   onNavigate?: () => void
 }
 
@@ -68,6 +75,7 @@ export default function SidebarNav({
   sections,
   highlightedTournamentKeys = [],
   compact = false,
+  locale,
   onNavigate,
 }: SidebarNavProps) {
   const { user } = useAuth()
@@ -189,6 +197,7 @@ export default function SidebarNav({
     const isHighlighted = highlighted.has(tournament.key)
     const linkClassName = 'min-w-0 flex-1 truncate px-2.5 py-2 text-sm'
     const href = `/liga/${tournament.key}`
+    const tournamentTitle = getTournamentDisplayName(tournament.key, tournament.title, locale)
 
     return (
       <div key={tournament.key} className={`group flex min-w-0 items-center gap-1 rounded-xl transition ${isHighlighted ? 'bg-[#70ff9d]/10 text-[#eaffef] shadow-[inset_0_0_0_1px_rgba(112,255,157,0.16)]' : 'text-[#bcc6d2] hover:bg-[#70ff9d]/10 hover:text-white'}`}>
@@ -199,11 +208,11 @@ export default function SidebarNav({
             onClick={onNavigate}
             className={linkClassName}
           >
-            {tournament.title}
+            {tournamentTitle}
           </ChampionsEntrySoundLink>
         ) : (
           <Link href={href} onClick={onNavigate} className={linkClassName}>
-            {tournament.title}
+            {tournamentTitle}
           </Link>
         )}
         <button
@@ -214,7 +223,9 @@ export default function SidebarNav({
             toggleFavorite(tournament.key)
           }}
           className="mr-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition hover:bg-white/8"
-          aria-label={isFavorite ? `Quitar ${tournament.title} de favoritos` : `Agregar ${tournament.title} a favoritos`}
+          aria-label={t(locale, isFavorite ? 'nav.removeFavorite' : 'nav.addFavorite', {
+            name: tournamentTitle,
+          })}
           aria-pressed={isFavorite}
         >
           <StarIcon filled={isFavorite} />
@@ -226,7 +237,7 @@ export default function SidebarNav({
   const allSections = [
     {
       key: 'favorites',
-      title: 'Mis favoritos',
+      title: t(locale, 'nav.favorites'),
       tournaments: favoriteTournaments,
       isFavorites: true,
     },
@@ -242,7 +253,9 @@ export default function SidebarNav({
           <div key={section.key} className={`overflow-hidden border border-[#70ff9d]/10 bg-[#0b1412]/90 shadow-[0_8px_24px_rgba(0,0,0,0.14)] ${compact ? 'rounded-xl' : 'rounded-2xl'}`}>
             <button type="button" onClick={() => toggleSection(section.key)} className={`flex w-full min-w-0 items-center justify-between gap-2 text-left transition hover:bg-[#70ff9d]/10 ${compact ? 'px-3 py-2' : 'px-3.5 py-2.5'}`} aria-expanded={isOpen}>
               <span className="min-w-0 truncate text-sm font-semibold text-[#e4ebf3]">
-                {section.title}
+                {section.isFavorites
+                  ? section.title
+                  : getSectionDisplayName(section.key, section.title, locale)}
               </span>
               <Chevron open={isOpen} />
             </button>
@@ -256,7 +269,7 @@ export default function SidebarNav({
                     </div>
                   ) : section.isFavorites ? (
                     <p className="px-2 py-2 text-xs leading-5 text-[#8d98a7]">
-                      Todavía no agregaste favoritos.
+                      {t(locale, 'nav.noFavorites')}
                     </p>
                   ) : null}
                 </div>

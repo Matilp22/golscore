@@ -1,13 +1,15 @@
 import Link from 'next/link'
+
 import BrandMark from '@/frontend/components/BrandMark'
+import { t, type AppLocale } from '@/shared/i18n/locales'
 
 const legalLinks = [
-  { href: '/privacy-policy', label: 'Política de Privacidad' },
-  { href: '/terms', label: 'Términos y Condiciones' },
-  { href: '/contact', label: 'Contacto' },
+  { href: '/privacy-policy', labelKey: 'footer.privacy' },
+  { href: '/terms', labelKey: 'footer.terms' },
+  { href: '/contact', labelKey: 'footer.contact' },
 ] as const
 
-export default function SiteFooter() {
+export default function SiteFooter({ locale }: { locale: AppLocale }) {
   return (
     <footer className="px-1 pb-5 sm:px-2 md:px-5 md:pb-7">
       <div className="mx-auto w-full max-w-7xl rounded-2xl border border-[#70ff9d]/12 bg-[#07100d]/92 px-4 py-4 text-white shadow-[0_18px_48px_rgba(0,0,0,0.22)] sm:px-5">
@@ -16,18 +18,17 @@ export default function SiteFooter() {
             <Link
               href="/"
               className="inline-flex max-w-full transition hover:brightness-110"
-              aria-label="HAY FULBO inicio"
+              aria-label="Hay Fulbo"
             >
               <BrandMark compact />
             </Link>
             <p className="mt-2 max-w-xl text-xs leading-5 text-[#a9b8b2]">
-              Resultados, fixtures, estadísticas y prode de fútbol. Información
-              deportiva independiente con foco en Argentina.
+              {t(locale, 'footer.description')}
             </p>
           </div>
 
           <nav
-            aria-label="Enlaces legales"
+            aria-label={t(locale, 'footer.legalLabel')}
             className="flex flex-col gap-2 text-sm font-bold text-[#dce7e2] sm:flex-row sm:flex-wrap sm:items-center sm:justify-end"
           >
             {legalLinks.map((link) => (
@@ -36,14 +37,14 @@ export default function SiteFooter() {
                 href={link.href}
                 className="rounded-xl border border-white/8 bg-white/[0.035] px-3 py-2 transition hover:border-[#70ff9d]/28 hover:bg-[#70ff9d]/10 hover:text-white"
               >
-                {link.label}
+                {t(locale, link.labelKey)}
               </Link>
             ))}
           </nav>
         </div>
 
         <div className="mt-4 flex flex-col gap-2 border-t border-white/8 pt-3 text-xs leading-5 text-[#83938d] sm:flex-row sm:items-center sm:justify-between">
-          <p>Copyright 2026 Hay Fulbo. Todos los derechos reservados.</p>
+          <p>Copyright 2026 Hay Fulbo. {t(locale, 'footer.rights')}</p>
           <p>https://hayfulbo.com</p>
         </div>
       </div>
