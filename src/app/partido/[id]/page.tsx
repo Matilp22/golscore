@@ -29,6 +29,7 @@ import {
 import { formatMatchScoreWithPenalties } from '@/shared/utils/match-display'
 import { getEventElapsedMinute, getFixtureStatusElapsedMinute } from '@/shared/utils/match-minute'
 import { isFinishedStatus } from '@/shared/utils/match-status'
+import { translateCountryNameToSpanish } from '@/shared/utils/country-names'
 import { buildMatchDetailViewModel } from '@/server/match-detail-view-model'
 import type { HeadToHeadViewModel } from '@/server/head-to-head'
 import type { MatchSummarySource } from '@/shared/utils/match-summary'
@@ -64,8 +65,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       })
     }
 
-    const homeTeam = fixture.teams.home.name
-    const awayTeam = fixture.teams.away.name
+    const homeTeam = getTeamDisplayName(fixture.teams.home.name, fixture)
+    const awayTeam = getTeamDisplayName(fixture.teams.away.name, fixture)
     const leagueName = translateLeagueName(fixture.league.name)
     const score = formatMatchScoreWithPenalties({
       goalsHome: fixture.goals.home,
@@ -211,6 +212,31 @@ function translateLeagueName(name: string) {
   }
 
   return map[name] || name
+}
+
+function isInternationalTeamFixture(fixture: MatchFixture) {
+  const leagueCountry = fixture.league.country?.toLowerCase() ?? ''
+  const leagueName = fixture.league.name.toLowerCase()
+
+  return (
+    leagueCountry === 'world' ||
+    leagueCountry === 'international' ||
+    leagueName.includes('world cup') ||
+    leagueName.includes('friendlies') ||
+    leagueName.includes('friendly') ||
+    leagueName.includes('nations league') ||
+    leagueName.includes('copa america') ||
+    leagueName.includes('euro') ||
+    leagueName.includes('qualification') ||
+    leagueName.includes('qualifiers') ||
+    leagueName.includes('eliminatoria')
+  )
+}
+
+function getTeamDisplayName(name: string, fixture: MatchFixture) {
+  if (!isInternationalTeamFixture(fixture)) return name
+
+  return translateCountryNameToSpanish(name) || name
 }
 
 function translateStatType(type: string) {
@@ -1234,6 +1260,7 @@ function MatchHistorySection({
   shareUrl,
   shareFileName,
   historyHref,
+  preferCountryTeamNames = false,
 }: {
   history: HeadToHeadViewModel
   homeTeamName: string
@@ -1244,8 +1271,11 @@ function MatchHistorySection({
   shareUrl: string
   shareFileName: string
   historyHref: string
+  preferCountryTeamNames?: boolean
 }) {
   const latestMatches = history.matches.slice(0, 5)
+  const formatHistoryTeamName = (name: string) =>
+    preferCountryTeamNames ? translateCountryNameToSpanish(name) || name : name
 
   return (
     <div id={shareId} className="hf-card w-full overflow-hidden rounded-2xl">
@@ -1296,44 +1326,49 @@ function MatchHistorySection({
           </div>
 
           <div className="mt-2 divide-y divide-white/7 overflow-hidden rounded-xl border border-white/6 bg-[#10151a]">
-            {latestMatches.map((match) => (
-              <article
-                key={`${match.fixtureExternalId ?? match.date}-${match.homeTeam.name}-${match.awayTeam.name}`}
-                className="px-2 py-2"
-              >
-                <div className="mb-1 flex items-center justify-between gap-2 text-[10px] font-semibold text-[#8d98a7]">
-                  <span className="truncate">{formatMatchDateTimeArgentina(match.date)}</span>
-                  <span className="truncate text-right">{match.leagueName}</span>
-                </div>
-                <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
-                  <div className="flex min-w-0 items-center justify-end gap-1.5 text-right">
-                    <span className="truncate text-xs font-bold text-white">{match.homeTeam.name}</span>
-                    <AssetTeamLogo
-                      src={match.homeLogoUrl}
-                      alt={match.homeTeam.name}
-                      size={22}
-                      className="h-[22px] w-[22px] object-contain"
-                      fallbackClassName="h-5 w-4"
-                      unoptimized
-                    />
+            {latestMatches.map((match) => {
+              const historyHomeName = formatHistoryTeamName(match.homeTeam.name)
+              const historyAwayName = formatHistoryTeamName(match.awayTeam.name)
+
+              return (
+                <article
+                  key={`${match.fixtureExternalId ?? match.date}-${match.homeTeam.name}-${match.awayTeam.name}`}
+                  className="px-2 py-2"
+                >
+                  <div className="mb-1 flex items-center justify-between gap-2 text-[10px] font-semibold text-[#8d98a7]">
+                    <span className="truncate">{formatMatchDateTimeArgentina(match.date)}</span>
+                    <span className="truncate text-right">{match.leagueName}</span>
                   </div>
-                  <span className="min-w-[58px] rounded-lg border border-white/8 bg-black/30 px-2 py-1 text-center text-xs font-black text-white">
-                    {match.scoreLabel}
-                  </span>
-                  <div className="flex min-w-0 items-center gap-1.5">
-                    <AssetTeamLogo
-                      src={match.awayLogoUrl}
-                      alt={match.awayTeam.name}
-                      size={22}
-                      className="h-[22px] w-[22px] object-contain"
-                      fallbackClassName="h-5 w-4"
-                      unoptimized
-                    />
-                    <span className="truncate text-xs font-bold text-white">{match.awayTeam.name}</span>
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+                    <div className="flex min-w-0 items-center justify-end gap-1.5 text-right">
+                      <span className="truncate text-xs font-bold text-white">{historyHomeName}</span>
+                      <AssetTeamLogo
+                        src={match.homeLogoUrl}
+                        alt={historyHomeName}
+                        size={22}
+                        className="h-[22px] w-[22px] object-contain"
+                        fallbackClassName="h-5 w-4"
+                        unoptimized
+                      />
+                    </div>
+                    <span className="min-w-[58px] rounded-lg border border-white/8 bg-black/30 px-2 py-1 text-center text-xs font-black text-white">
+                      {match.scoreLabel}
+                    </span>
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <AssetTeamLogo
+                        src={match.awayLogoUrl}
+                        alt={historyAwayName}
+                        size={22}
+                        className="h-[22px] w-[22px] object-contain"
+                        fallbackClassName="h-5 w-4"
+                        unoptimized
+                      />
+                      <span className="truncate text-xs font-bold text-white">{historyAwayName}</span>
+                    </div>
                   </div>
-                </div>
-              </article>
-            ))}
+                </article>
+              )
+            })}
           </div>
 
           <Link
@@ -1657,6 +1692,7 @@ function PlayerOnField({
 
 function FormationPitch({
   teamName,
+  displayName,
   teamLogo,
   formation,
   lineup,
@@ -1667,6 +1703,7 @@ function FormationPitch({
   captainReference,
 }: {
   teamName: string
+  displayName?: string
   teamLogo?: string
   formation?: string
   lineup?: MatchLineup | null
@@ -1680,13 +1717,14 @@ function FormationPitch({
   }
 }) {
   const starters = lineup?.startXI || []
+  const visibleTeamName = displayName || teamName
 
   return (
     <div className="w-full overflow-hidden rounded-2xl border border-[#25553d] bg-[linear-gradient(180deg,#163828_0%,#12281d_12%,#0f1317_100%)]">
       <div className="flex items-center justify-between gap-2 border-b border-[#25553d] bg-black/10 px-2 py-2 md:px-4 md:py-3">
         <div className="flex min-w-0 items-center gap-3">
-          <TeamLogo logo={teamLogo} name={teamName} size="sm" />
-          <span className="truncate font-bold text-white">{teamName}</span>
+          <TeamLogo logo={teamLogo} name={visibleTeamName} size="sm" />
+          <span className="truncate font-bold text-white">{visibleTeamName}</span>
         </div>
         <span className="shrink-0 text-sm font-semibold text-[#dbe7de]">
           {formation || 'Sin formación real'}
@@ -1879,6 +1917,8 @@ export default async function PartidoDetallePage({ params }: PageProps) {
 
   const homeTeam = fixture.teams.home
   const awayTeam = fixture.teams.away
+  const homeTeamDisplayName = getTeamDisplayName(homeTeam.name, fixture)
+  const awayTeamDisplayName = getTeamDisplayName(awayTeam.name, fixture)
   const goals = fixture.goals
   const penaltyScore = fixture.score?.penalty ?? { home: null, away: null }
   const status = fixture.fixture.status
@@ -1968,13 +2008,13 @@ export default async function PartidoDetallePage({ params }: PageProps) {
   const statsShareId = `match-stats-card-${fixture.fixture.id}`
   const historyShareId = `match-history-card-${fixture.fixture.id}`
   const matchDetailHref = `/partido/${id}`
-  const shareTitle = `${homeTeam.name} vs ${awayTeam.name} | Hay Fulbo`
-  const shareText = `${homeTeam.name} ${formatMatchScoreWithPenalties({
+  const shareTitle = `${homeTeamDisplayName} vs ${awayTeamDisplayName} | Hay Fulbo`
+  const shareText = `${homeTeamDisplayName} ${formatMatchScoreWithPenalties({
     goalsHome: goals.home,
     goalsAway: goals.away,
     homePenaltyScore: penaltyScore.home,
     awayPenaltyScore: penaltyScore.away,
-  })} ${awayTeam.name} - ${translateLeagueName(fixture.league.name)}`
+  })} ${awayTeamDisplayName} - ${translateLeagueName(fixture.league.name)}`
 
   if (process.env.NODE_ENV === 'development') {
     console.info('[match-detail-render]', {
@@ -2039,7 +2079,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
             <MatchTeamCard
               id={homeTeam.id}
               logo={homeTeam.logo_url ?? homeTeam.logo}
-              name={homeTeam.name}
+              name={homeTeamDisplayName}
               role="Local"
               colors={homeColors}
               side="home"
@@ -2066,7 +2106,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
             <MatchTeamCard
               id={awayTeam.id}
               logo={awayTeam.logo_url ?? awayTeam.logo}
-              name={awayTeam.name}
+              name={awayTeamDisplayName}
               role="Visitante"
               colors={awayColors}
               side="away"
@@ -2158,9 +2198,9 @@ export default async function PartidoDetallePage({ params }: PageProps) {
               {events.length || hasPenaltyShootout ? (
                 <div>
                   <div className="grid grid-cols-[1fr_56px_1fr] border-b border-white/6 bg-[#12171c] px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8d98a7] md:grid-cols-[1fr_72px_1fr] md:px-3">
-                    <div>{homeTeam.name}</div>
+                    <div>{homeTeamDisplayName}</div>
                     <div className="text-center">Min</div>
-                    <div className="text-right">{awayTeam.name}</div>
+                    <div className="text-right">{awayTeamDisplayName}</div>
                   </div>
 
                   {hasPenaltyShootout ? (
@@ -2273,6 +2313,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                       {homeHasVisualFormation && homeLineup ? (
                         <FormationPitch
                           teamName={homeTeam.name}
+                          displayName={homeTeamDisplayName}
                           teamLogo={homeTeam.logo_url ?? homeTeam.logo}
                           formation={homeLineup.formation}
                           lineup={homeLineup}
@@ -2287,6 +2328,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                       {awayHasVisualFormation && awayLineup ? (
                         <FormationPitch
                           teamName={awayTeam.name}
+                          displayName={awayTeamDisplayName}
                           teamLogo={awayTeam.logo_url ?? awayTeam.logo}
                           formation={awayLineup.formation}
                           lineup={awayLineup}
@@ -2307,14 +2349,14 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                   <LineupTabs
                     teams={[
                       {
-                        title: homeTeam.name,
+                        title: homeTeamDisplayName,
                         coachName: homeLineup?.coach?.name,
                         starters: homeStarterPlayers,
                         substitutes: homeSubstitutePlayers,
                         align: 'left',
                       },
                       {
-                        title: awayTeam.name,
+                        title: awayTeamDisplayName,
                         coachName: awayLineup?.coach?.name,
                         starters: awayStarterPlayers,
                         substitutes: awaySubstitutePlayers,
@@ -2426,14 +2468,15 @@ export default async function PartidoDetallePage({ params }: PageProps) {
 
             <MatchHistorySection
               history={data.headToHead}
-              homeTeamName={homeTeam.name}
-              awayTeamName={awayTeam.name}
+              homeTeamName={homeTeamDisplayName}
+              awayTeamName={awayTeamDisplayName}
               shareId={historyShareId}
               shareTitle={`${shareTitle} - Historial`}
               shareText={`${shareText} | Historial entre equipos`}
               shareUrl={matchDetailHref}
               shareFileName={`hay-fulbo-historial-${fixture.fixture.id}.png`}
               historyHref={matchHistoryHref}
+              preferCountryTeamNames={isInternationalTeamFixture(fixture)}
             />
           </aside>
         </div>
