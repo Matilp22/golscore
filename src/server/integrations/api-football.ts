@@ -33,6 +33,7 @@ import {
   getLeagueFinalPhaseKey,
   getLeagueRoundLabel,
   isLigaProfesionalRegularSeasonRound,
+  normalizeLeagueRound,
   normalizeRoundText,
 } from '@/shared/utils/league-rounds'
 import {
@@ -3632,6 +3633,12 @@ function improveLigaProfesionalPartition(
   }
 }
 
+function isLigaProfesionalClausuraRegularRound(round: string | null | undefined) {
+  const normalizedRound = normalizeLeagueRound(round, LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID)
+
+  return typeof normalizedRound === 'string' && /^clausura-fecha-\d+$/i.test(normalizedRound)
+}
+
 function inferLigaProfesionalPartition(fixtures: LeagueFixtureSummary[]): LigaProfesionalPartition | null {
   const regularFixtures = fixtures.filter((fixture) =>
     isLigaProfesionalRegularSeasonRound(fixture.round)
@@ -3771,11 +3778,17 @@ function updateSingleTeamStanding(
 }
 
 function buildLigaProfesionalGroupStandings(fixtures: LeagueFixtureSummary[]) {
-  const partition = inferLigaProfesionalPartition(fixtures)
+  const currentPhaseFixtures = fixtures.filter((fixture) =>
+    isLigaProfesionalClausuraRegularRound(fixture.round)
+  )
+
+  if (!currentPhaseFixtures.length) return []
+
+  const partition = inferLigaProfesionalPartition(currentPhaseFixtures)
 
   if (!partition) return []
 
-  const regularFixtures = fixtures.filter((fixture) =>
+  const regularFixtures = currentPhaseFixtures.filter((fixture) =>
     isLigaProfesionalRegularSeasonRound(fixture.round)
   )
   const groupByTeamKey = new Map<string, 'A' | 'B'>()
@@ -4280,7 +4293,7 @@ function shouldPreferOfficialStandings(
   groups: LeagueStandingGroup[]
 ) {
   if (!groups.length) return false
-  if (leagueId === LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID) return true
+  if (leagueId === LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID) return false
   if (!rule) return false
   if (rule.standingsMode === 'zones') {
     const config = ZONED_LEAGUE_STANDINGS_CONFIGS.get(leagueId)
@@ -4358,6 +4371,15 @@ export async function getLeagueStandings(
 
       return applyCachedStandingDescriptions(groups, officialStandings)
     }
+
+    console.info('[standings:supabase:liga-profesional-clausura-empty]', {
+      leagueId,
+      season,
+      fixtures: fixtures.length,
+      officialGroups: officialStandings.length,
+    })
+
+    return []
   }
 
   const zonedGroups = buildZonedLeagueStandings(leagueId, fixtures)

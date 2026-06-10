@@ -295,7 +295,7 @@ export default function PlayoffBracket({
     <section className="w-full overflow-hidden rounded-3xl border border-white/8 bg-[#0f1317]/92">
       <div className="border-b border-white/6 bg-[#13181d] px-3 py-4 md:px-5">
         <h2 className="text-base font-bold text-white md:text-lg">
-          Llaves - Torneo Apertura
+          Llaves - Torneo Clausura
         </h2>
         <p className="mt-1 text-sm text-[#8d98a7]">
           Cruces generados automáticamente según la tabla actual

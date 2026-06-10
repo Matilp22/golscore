@@ -7,7 +7,7 @@ import {
 } from '@/shared/utils/league-rounds'
 import { parseMatchDate } from '@/shared/utils/prediction-lock'
 
-export const SHOW_CLAUSURA = false
+export const SHOW_CLAUSURA = true
 
 const FIFTEEN_MINUTES_IN_MS = 15 * 60 * 1000
 
@@ -26,12 +26,12 @@ export function isVisibleProdeRound(
 
   if (!normalizedRound) return false
 
-  if (
-    leagueExternalId === LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID &&
-    !SHOW_CLAUSURA &&
-    /^clausura-fecha-\d+$/i.test(normalizedRound)
-  ) {
-    return false
+  if (leagueExternalId === LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID) {
+    const isAperturaRound = /\bapertura\b/i.test(normalizedRound)
+    const isClausuraRound = /\bclausura\b/i.test(normalizedRound)
+
+    if (SHOW_CLAUSURA && isAperturaRound) return false
+    if (!SHOW_CLAUSURA && isClausuraRound) return false
   }
 
   return true

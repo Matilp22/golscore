@@ -116,22 +116,22 @@ const PHASE_PLANS: PhasePlan[] = [
   {
     previousPhase: 'octavos',
     nextPhase: 'cuartos',
-    nextRound: 'Cuartos de final - Apertura',
-    nextPhaseLabel: 'Cuartos de final - Apertura',
+    nextRound: 'Cuartos de final - Clausura',
+    nextPhaseLabel: 'Cuartos de final - Clausura',
     pairings: [[0, 1], [2, 3], [4, 5], [6, 7]],
   },
   {
     previousPhase: 'cuartos',
     nextPhase: 'semifinal',
-    nextRound: 'Semifinal - Apertura',
-    nextPhaseLabel: 'Semifinal - Apertura',
+    nextRound: 'Semifinal - Clausura',
+    nextPhaseLabel: 'Semifinal - Clausura',
     pairings: [[0, 1], [2, 3]],
   },
   {
     previousPhase: 'semifinal',
     nextPhase: 'final',
-    nextRound: 'Final - Apertura',
-    nextPhaseLabel: 'Final - Apertura',
+    nextRound: 'Final - Clausura',
+    nextPhaseLabel: 'Final - Clausura',
     pairings: [[0, 1]],
   },
 ]
@@ -139,10 +139,10 @@ const PHASE_PLANS: PhasePlan[] = [
 const PHASE_ORDER: LeagueFinalPhaseKey[] = ['octavos', 'cuartos', 'semifinal', 'final']
 
 function getPhaseLabel(phase: LeagueFinalPhaseKey) {
-  if (phase === 'octavos') return 'Octavos de final - Apertura'
-  if (phase === 'cuartos') return 'Cuartos de final - Apertura'
-  if (phase === 'semifinal') return 'Semifinal - Apertura'
-  return 'Final - Apertura'
+  if (phase === 'octavos') return 'Octavos de final - Clausura'
+  if (phase === 'cuartos') return 'Cuartos de final - Clausura'
+  if (phase === 'semifinal') return 'Semifinal - Clausura'
+  return 'Final - Clausura'
 }
 
 function getMatchPhase(match: Pick<LigaProfesionalPlayoffMatchRow, 'round' | 'bracket_phase'>) {
@@ -155,6 +155,13 @@ function getMatchPhase(match: Pick<LigaProfesionalPlayoffMatchRow, 'round' | 'br
   }
 
   return getLeagueFinalPhaseKey(match.round)
+}
+
+function isCurrentTournamentPlayoffMatch(match: LigaProfesionalPlayoffMatchRow) {
+  const round = normalizeRoundText(match.round)
+  const derivedFromRound = normalizeRoundText(match.derived_from_round)
+
+  return round.includes('clausura') || derivedFromRound.includes('clausura')
 }
 
 function compareDbIds(a: DbId, b: DbId) {
@@ -506,7 +513,7 @@ export async function generateLigaProfesionalPlayoffs(
     }
   }
 
-  const matches = await fetchMatches(supabase, league.id)
+  const matches = (await fetchMatches(supabase, league.id)).filter(isCurrentTournamentPlayoffMatch)
   const teamsById = await fetchTeams(supabase, matches)
   const generatedQuarterFinals: GeneratedCrossing[] = []
   const generatedSemiFinals: GeneratedCrossing[] = []

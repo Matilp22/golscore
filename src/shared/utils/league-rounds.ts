@@ -166,9 +166,13 @@ export function getLeagueRoundLabel(
   const finalPhaseKey = getLeagueFinalPhaseKey(normalizedRound)
 
   if (finalPhaseKey) {
-    return leagueId === LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID
-      ? `${FINAL_PHASE_LABELS[finalPhaseKey]} - Apertura`
-      : FINAL_PHASE_LABELS[finalPhaseKey]
+    if (leagueId === LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID) {
+      const tournamentSegment = normalizedRound.includes('clausura') ? 'Clausura' : 'Apertura'
+
+      return `${FINAL_PHASE_LABELS[finalPhaseKey]} - ${tournamentSegment}`
+    }
+
+    return FINAL_PHASE_LABELS[finalPhaseKey]
   }
 
   const aperturaMatch = normalizedRound.match(/^apertura-fecha-(\d+)$/i)

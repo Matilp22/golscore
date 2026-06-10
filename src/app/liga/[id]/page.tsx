@@ -25,6 +25,7 @@ import {
   isChampionsHistoryTournamentKey,
 } from '@/server/tournament-champions'
 import {
+  buildAnnualRowsFromFixtures,
   buildLigaProfesionalPromediosStandingForSeason,
 } from '@/server/liga-profesional/promedios'
 import {
@@ -45,6 +46,7 @@ import {
 import { getTournamentConfig } from '@/lib/tournament-pages'
 import { getTournamentTheme } from '@/lib/tournament-themes'
 import {
+  LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID,
   getLeagueFinalPhaseKey,
   getLeagueRoundLabel,
   getLeagueRoundSortValue,
@@ -150,6 +152,39 @@ function formatAverage(value: number) {
 
 function normalizeRoundName(value: string) {
   return normalizeRoundText(value)
+}
+
+function isLigaProfesionalLeague(leagueExternalId?: number | null) {
+  return leagueExternalId === LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID
+}
+
+function isLigaProfesionalClausuraRound(
+  round: string | null | undefined,
+  leagueExternalId?: number | null
+) {
+  if (!isLigaProfesionalLeague(leagueExternalId)) return false
+
+  const normalizedLeagueRound = normalizeLeagueRound(round, leagueExternalId)
+
+  return typeof normalizedLeagueRound === 'string' && /\bclausura\b/i.test(normalizedLeagueRound)
+}
+
+function isLigaProfesionalClausuraRegularRound(
+  round: string | null | undefined,
+  leagueExternalId?: number | null
+) {
+  if (!isLigaProfesionalLeague(leagueExternalId)) return false
+
+  const normalizedLeagueRound = normalizeLeagueRound(round, leagueExternalId)
+  const roundNumber = getRoundNumber(String(round ?? ''))
+
+  return (
+    typeof normalizedLeagueRound === 'string' &&
+    normalizedLeagueRound.startsWith('clausura-fecha-') &&
+    roundNumber !== null &&
+    roundNumber >= 1 &&
+    roundNumber <= 16
+  )
 }
 
 function getRoundPriority(round: string, leagueExternalId?: number | null) {
@@ -1412,9 +1447,9 @@ function PromediosTable({
           <tr className="border-b border-white/6">
             <th className={`${cellPadding} font-semibold`}>#</th>
             <th className={`${cellPadding} font-semibold`}>Equipo</th>
+            <th className={`${cellPadding} text-center font-semibold`}>PROM</th>
             <th className={`${cellPadding} text-center font-semibold`}>PTS</th>
             <th className={`${cellPadding} text-center font-semibold`}>PJ</th>
-            <th className={`${cellPadding} text-center font-semibold`}>PROM</th>
             {seasons.map((season) => (
               <th
                 key={season}
@@ -1470,13 +1505,13 @@ function PromediosTable({
                   </div>
                 </td>
                 <td className={`${cellPadding} text-center font-black text-white`}>
+                  {row.average.toFixed(3)}
+                </td>
+                <td className={`${cellPadding} text-center font-semibold`}>
                   {row.totalPoints}
                 </td>
                 <td className={`${cellPadding} text-center`}>
                   {row.totalPlayed}
-                </td>
-                <td className={`${cellPadding} text-center font-semibold`}>
-                  {row.average.toFixed(3)}
                 </td>
                 {row.seasonValues.map((seasonValue) => (
                   <td
@@ -1498,7 +1533,7 @@ function PromediosTable({
 function buildKnockoutRounds(fixtures: LeagueFixtureSummary[], leagueExternalId?: number | null) {
   const knockoutFixtures = fixtures.filter((fixture) => {
     const round = normalizeRoundName(fixture.round)
-    return (
+    const isKnockout =
       isLeagueFinalPhaseRound(fixture.round, leagueExternalId) ||
       round.includes('final') ||
       round.includes('semi') ||
@@ -1514,7 +1549,12 @@ function buildKnockoutRounds(fixtures: LeagueFixtureSummary[], leagueExternalId?
       round.includes('treintaidosavos') ||
       round.includes('64th finals') ||
       round.includes('sesentaicuatroavos')
-    )
+
+    if (!isKnockout) return false
+
+    return isLigaProfesionalLeague(leagueExternalId)
+      ? isLigaProfesionalClausuraRound(fixture.round, leagueExternalId)
+      : true
   })
 
   const grouped = new Map<string, LeagueFixtureSummary[]>()
@@ -1618,6 +1658,19 @@ function getRoundBlocks(
   const includeFinalPhaseRounds = options.includeFinalPhaseRounds ?? false
   const leagueFixtures = fixtures.filter((fixture) => {
     const finalPhaseKey = getLeagueFinalPhaseKey(fixture.round)
+
+    if (isLigaProfesionalLeague(leagueExternalId)) {
+      if (finalPhaseKey) {
+        return (
+          includeFinalPhaseRounds &&
+          isLigaProfesionalClausuraRound(fixture.round, leagueExternalId)
+        )
+      }
+
+      if (isKnockoutRound(fixture.round, leagueExternalId)) return false
+
+      return isLigaProfesionalClausuraRegularRound(fixture.round, leagueExternalId)
+    }
 
     if (finalPhaseKey) return includeFinalPhaseRounds
     if (isKnockoutRound(fixture.round, leagueExternalId)) return false
@@ -2374,7 +2427,14 @@ export default async function LigaPage({ params }: PageProps) {
   const baseRows = shouldRenderStandings
     ? primaryGroups.flatMap((group) => group.rows)
     : []
-  const annualTable = displayOptions.showAnnualTable ? buildAnnualTable(baseRows) : []
+  const isLigaProfesionalPage =
+    tournament.key === 'argentina-liga-profesional' ||
+    resolvedTournament?.leagueId === LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID
+  const annualTable = displayOptions.showAnnualTable
+    ? isLigaProfesionalPage
+      ? buildAnnualRowsFromFixtures(fixtures)
+      : buildAnnualTable(baseRows)
+    : []
   if (!promedioTable.length && displayOptions.showPromedios) {
     promedioTable = buildPromediosTable(baseRows).map((row) => ({
       rank: row.rank,
