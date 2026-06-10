@@ -2,6 +2,8 @@ import { getYouTubeVideoId } from '@/shared/utils/youtube'
 
 export const SUMMARY_SOURCE_PRIORITY = [
   'espn',
+  'tyc_sports',
+  'telefe',
   'fox_sports',
   'dsports',
   'directv_sports',
@@ -129,6 +131,12 @@ export function normalizeSummaryProvider(input: SummaryProviderDetectionInput): 
 
   if (includesAny(haystack, ['espn', 'espn.com', 'espn com', 'espn.com.ar', 'espn com ar', 'espndeportes'])) {
     return 'espn'
+  }
+  if (includesAny(haystack, ['tyc sports', 'tycsports', 'tyc sports play', 'tyc play'])) {
+    return 'tyc_sports'
+  }
+  if (includesAny(haystack, ['telefe', 'telefe deportes', 'telefe noticias'])) {
+    return 'telefe'
   }
   if (includesAny(haystack, ['fox sports', 'foxsports', 'foxsports.com', 'foxsports com'])) {
     return 'fox_sports'

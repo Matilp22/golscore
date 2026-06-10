@@ -73,6 +73,26 @@ type YouTubeSearchResponse = {
   }
 }
 
+type YouTubeVideoDetailsItem = {
+  id?: string
+  status?: {
+    uploadStatus?: string
+    privacyStatus?: string
+    embeddable?: boolean
+  }
+  contentDetails?: {
+    regionRestriction?: {
+      allowed?: string[]
+      blocked?: string[]
+    }
+  }
+}
+
+type YouTubeVideoDetailsResponse = {
+  items?: YouTubeVideoDetailsItem[]
+  error?: YouTubeSearchResponse['error']
+}
+
 export type HighlightSyncOptions = {
   matchId?: string | null
   fixture?: string | null
@@ -179,8 +199,10 @@ const MAX_SYNC_LIMIT = 100
 const DEFAULT_AUDIT_LIMIT = 50
 const MAX_AUDIT_LIMIT = 100
 const YOUTUBE_SEARCH_URL = 'https://www.googleapis.com/youtube/v3/search'
+const YOUTUBE_VIDEOS_URL = 'https://www.googleapis.com/youtube/v3/videos'
 const YOUTUBE_FETCH_TIMEOUT_MS = 8000
 const YOUTUBE_RESULTS_PER_QUERY = 12
+const YOUTUBE_VIDEO_DETAILS_BATCH_SIZE = 50
 const MAX_PRIMARY_HIGHLIGHT_QUERIES = 8
 const MAX_TRUSTED_SOURCE_FALLBACK_QUERIES = 24
 const MAX_TEAM_SEARCH_NAMES = 4
@@ -254,6 +276,10 @@ const KNOWN_CHANNELS = [
   'espn deportes',
   'tyc sports',
   'tyc sports play',
+  'tyc sports argentina',
+  'telefe',
+  'telefe deportes',
+  'telefe noticias',
   'afaplay',
   'dsports',
   'd sports',
@@ -300,6 +326,10 @@ const OFFICIAL_CHANNEL_HINTS = [
 const TRUSTED_SOURCE_SEARCH_TERMS = [
   'ESPN Fans',
   'ESPN',
+  'TyC Sports',
+  'TyC Sports Play',
+  'Telefe',
+  'Telefe Deportes',
   'TNT Sports',
   'DSports',
   'DirecTV Sports',
@@ -316,10 +346,10 @@ const TRUSTED_SOURCE_SEARCH_TERMS = [
   'canal oficial resumen',
   'official highlights',
   'Fox Sports',
-  'TyC Sports',
 ]
 const COUNTRY_TEAM_SEARCH_ALIASES: Record<string, string[]> = {
   algeria: ['Argelia'],
+  argentina: ['Argentina', 'Seleccion Argentina', 'Selección Argentina'],
   austria: ['Austria'],
   belgium: ['Belgica'],
   brazil: ['Brasil'],
@@ -391,6 +421,7 @@ const STOPWORDS = new Set([
   'sc',
 ])
 const TEAM_NAME_ALIASES: Record<string, string[]> = {
+  argentina: ['seleccion argentina', 'argentina seleccion', 'albiceleste'],
   'new zealand': ['nueva zelanda', 'n zelanda'],
   usa: ['estados unidos', 'united states', 'usmnt'],
   'united states': ['estados unidos', 'usa', 'usmnt'],
@@ -412,6 +443,7 @@ const EXTRA_TEAM_NAME_ALIASES: Record<string, string[]> = {
 }
 const TEAM_SEARCH_ALIASES: Record<string, string[]> = {
   algeria: ['Argelia'],
+  argentina: ['Seleccion Argentina', 'Selección Argentina', 'Argentina'],
   denmark: ['Dinamarca'],
   'dominican republic': ['Republica Dominicana'],
   italy: ['Italia'],
@@ -897,6 +929,10 @@ export function scoreYouTubeHighlightResult(match: HighlightMatch, result: YouTu
   if (trustedChannelReason) {
     score += 3
     reasons.push(trustedChannelReason)
+    if (containsAny(normalizeText(channelTitle), ['tyc sports', 'telefe'])) {
+      score += 2
+      reasons.push('preferred-argentina-channel')
+    }
   } else {
     reasons.push('untrusted-channel')
   }
@@ -1200,6 +1236,92 @@ async function searchYouTubeHighlights(query: string, apiKey: string) {
   return payload.items ?? []
 }
 
+async function fetchYouTubeVideoDetails(videoIds: string[], apiKey: string) {
+  const uniqueIds = [...new Set(videoIds.filter(Boolean))]
+  const details = new Map<string, YouTubeVideoDetailsItem>()
+
+  for (let index = 0; index < uniqueIds.length; index += YOUTUBE_VIDEO_DETAILS_BATCH_SIZE) {
+    const chunk = uniqueIds.slice(index, index + YOUTUBE_VIDEO_DETAILS_BATCH_SIZE)
+    const url = new URL(YOUTUBE_VIDEOS_URL)
+    url.searchParams.set('part', 'status,contentDetails')
+    url.searchParams.set('id', chunk.join(','))
+    url.searchParams.set('key', apiKey)
+
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), YOUTUBE_FETCH_TIMEOUT_MS)
+    let response: Response
+
+    try {
+      response = await fetch(url, {
+        cache: 'no-store',
+        signal: controller.signal,
+      })
+    } catch (error) {
+      const aborted = error instanceof Error && error.name === 'AbortError'
+      throw new SerializableError(
+        aborted
+          ? `YouTube no respondio en ${YOUTUBE_FETCH_TIMEOUT_MS}ms`
+          : error instanceof Error
+            ? error.message
+            : 'Fallo el fetch de detalle de videos de YouTube',
+        aborted ? 'YOUTUBE_TIMEOUT' : 'YOUTUBE_VIDEO_DETAILS_FETCH_FAILED',
+        aborted ? `Timeout ${YOUTUBE_FETCH_TIMEOUT_MS}ms` : null,
+        'youtube'
+      )
+    } finally {
+      clearTimeout(timeout)
+    }
+
+    const payload = (await response.json().catch(() => ({}))) as YouTubeVideoDetailsResponse
+
+    if (!response.ok) {
+      const firstError = payload.error?.errors?.[0]
+      throw new SerializableError(
+        payload.error?.message || `YouTube devolvio ${response.status}`,
+        firstError?.reason || `YOUTUBE_${response.status}`,
+        firstError?.message || payload.error?.message || null,
+        'youtube',
+        { status: response.status }
+      )
+    }
+
+    for (const item of payload.items ?? []) {
+      if (item.id) details.set(item.id, item)
+    }
+  }
+
+  return details
+}
+
+function getStoredYouTubeVideoRejectReason(
+  videoId: string,
+  details: Map<string, YouTubeVideoDetailsItem>
+) {
+  const item = details.get(videoId)
+  if (!item) return 'stored_video_not_found'
+
+  const uploadStatus = item.status?.uploadStatus
+  if (uploadStatus && uploadStatus !== 'processed') return `stored_video_${uploadStatus}`
+
+  const privacyStatus = item.status?.privacyStatus
+  if (privacyStatus && privacyStatus !== 'public' && privacyStatus !== 'unlisted') {
+    return `stored_video_${privacyStatus}`
+  }
+
+  if (item.status?.embeddable === false) return 'stored_video_not_embeddable'
+
+  const regionRestriction = item.contentDetails?.regionRestriction
+  const blockedCountries = regionRestriction?.blocked?.map((country) => country.toUpperCase()) ?? []
+  if (blockedCountries.includes('AR')) return 'stored_video_region_blocked_ar'
+
+  const allowedCountries = regionRestriction?.allowed?.map((country) => country.toUpperCase()) ?? []
+  if (allowedCountries.length && !allowedCountries.includes('AR')) {
+    return 'stored_video_region_not_allowed_ar'
+  }
+
+  return null
+}
+
 function toResultBase(match: HighlightMatch) {
   return {
     matchId: match.id,
@@ -1226,13 +1348,46 @@ function toCandidate(item: YouTubeSearchItem, match: HighlightMatch, query: stri
   }
 }
 
-async function clearSuspiciousStoredHighlights(supabase: DbClient, matches: HighlightMatch[]) {
+async function clearSuspiciousStoredHighlights(
+  supabase: DbClient,
+  matches: HighlightMatch[],
+  apiKey: string
+) {
   const cleared = new Map<string, string>()
+  const rejectReasons = new Map<string, string>()
+  const storedVideoIds = new Map<string, string>()
 
   for (const match of matches) {
     if (!match.highlights_url) continue
 
     const rejectReason = getExistingHighlightRejectReason(match)
+    if (rejectReason) {
+      rejectReasons.set(match.id, rejectReason)
+      continue
+    }
+
+    const videoId = getYouTubeVideoId(match.highlights_url)
+    if (videoId) storedVideoIds.set(match.id, videoId)
+  }
+
+  if (storedVideoIds.size) {
+    try {
+      const details = await fetchYouTubeVideoDetails([...storedVideoIds.values()], apiKey)
+
+      for (const [matchId, videoId] of storedVideoIds.entries()) {
+        const rejectReason = getStoredYouTubeVideoRejectReason(videoId, details)
+        if (rejectReason) rejectReasons.set(matchId, rejectReason)
+      }
+    } catch (error) {
+      console.warn(
+        '[sync-match-highlights] stored-video-validation-failed',
+        serializeHighlightError(error, 'youtube')
+      )
+    }
+  }
+
+  for (const match of matches) {
+    const rejectReason = rejectReasons.get(match.id)
     if (!rejectReason) continue
 
     const { error } = await supabase
@@ -1272,7 +1427,8 @@ export async function syncMatchHighlights(supabase: DbClient, options: Highlight
         await enrichMatches(
           supabase,
           await fetchMatches(supabase, { ...options, force: true, limit: MAX_SYNC_LIMIT })
-        )
+        ),
+        apiKey
       )
   const rows = await fetchMatches(supabase, { ...options, limit })
   const matches = sortMatchesForHighlightSync(await enrichMatches(supabase, rows), options)
