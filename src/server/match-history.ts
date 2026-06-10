@@ -1,6 +1,7 @@
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { buildMatchDetailViewModel } from '@/server/match-detail-view-model'
 import { pickTeamLogoUrl } from '@/shared/utils/asset-urls'
+import { isFinishedStatus } from '@/shared/utils/match-status'
 
 type DbId = string | number
 
@@ -100,6 +101,35 @@ function getScoreLabel(match: Pick<MatchRow, 'home_score' | 'away_score' | 'stat
   if (status === 'NS' || status === 'TBD') return 'vs'
 
   return 'Sin resultado'
+}
+
+function getMatchTimestamp(date: string | null | undefined) {
+  if (!date) return 0
+
+  const timestamp = new Date(date).getTime()
+
+  return Number.isFinite(timestamp) ? timestamp : 0
+}
+
+function hasStoredMatchResult(match: Pick<MatchRow, 'home_score' | 'away_score'>) {
+  return match.home_score !== null && match.away_score !== null
+}
+
+function isPreviousStoredHistoryMatch(
+  match: MatchRow,
+  currentExternalId: string,
+  currentMatchDate: string | null | undefined
+) {
+  if (String(match.external_id ?? match.id) === currentExternalId) return false
+  if (!isFinishedStatus(match.status) && !hasStoredMatchResult(match)) return false
+
+  const matchTimestamp = getMatchTimestamp(match.match_date)
+  if (!matchTimestamp) return false
+
+  const currentTimestamp = getMatchTimestamp(currentMatchDate)
+  if (currentTimestamp) return matchTimestamp < currentTimestamp
+
+  return matchTimestamp < Date.now()
 }
 
 function getTeamFromRow(row: TeamRow | null | undefined, fallback: MatchHistoryTeam) {
@@ -248,7 +278,9 @@ export async function buildMatchHistoryViewModel(
   if (historyResponse.error) throw historyResponse.error
 
   const matches = ((historyResponse.data ?? []) as MatchRow[])
-    .filter((match) => String(match.external_id ?? match.id) !== currentExternalId)
+    .filter((match) =>
+      isPreviousStoredHistoryMatch(match, currentExternalId, fixture.fixture.date)
+    )
   const teamIds = [
     ...new Set(
       matches

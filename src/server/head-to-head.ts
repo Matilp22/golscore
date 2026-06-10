@@ -786,6 +786,10 @@ export async function syncHeadToHeadCache(input: {
     { logContext: 'head-to-head' }
   )
   const payload = apiResponse.payload
+  if (payload.errors && Object.keys(payload.errors).length > 0) {
+    throw new Error(`API-Football head-to-head error: ${JSON.stringify(payload.errors)}`)
+  }
+
   const rawMatches = payload.response ?? []
   const viewModel = buildHeadToHeadViewModel({
     currentMatch: {
