@@ -5,6 +5,12 @@ import {
   type HeadToHeadResolvedTeams,
   type HeadToHeadTeam,
 } from '@/server/head-to-head'
+import {
+  buildInternationalResultsNormalizedPayload,
+  fetchInternationalResultsHistory,
+  getInternationalResultsForPair,
+  mergeInternationalResultsIntoHeadToHeadPayload,
+} from '@/server/international-results-history'
 import { pickTeamLogoUrl } from '@/shared/utils/asset-urls'
 import { WORLD_CUP_EXTERNAL_ID } from '@/shared/utils/league-rounds'
 
@@ -38,6 +44,13 @@ type WorldCupTeamRow = {
 type HeadToHeadCacheRow = {
   cache_key: string
   last_synced_at: string | null
+}
+
+type FullHeadToHeadCacheRow = HeadToHeadCacheRow & {
+  team_a_external_id: string
+  team_b_external_id: string
+  payload: unknown
+  normalized_payload: unknown
 }
 
 export type WorldCupHeadToHeadPair = {
@@ -100,6 +113,30 @@ type WorldCupHeadToHeadSyncResult = WorldCupHeadToHeadDataset & {
   errors: string[]
 }
 
+export type WorldCupHistoricalEnrichmentResult = WorldCupHeadToHeadDataset & {
+  source: string
+  sourceRows: number
+  checked: number
+  enriched: number
+  fixturesAdded: number
+  normalizedMatchesAdded: number
+  stillEmpty: number
+  results: Array<{
+    cacheKey: string | null
+    fixtureExternalId: string | null
+    homeTeam: string
+    awayTeam: string
+    sourceMatches: number
+    fixturesAdded: number
+    normalizedBefore: number
+    normalizedAfter: number
+    renderReadiness: string
+    warnings: string[]
+    errors: string[]
+  }>
+  errors: string[]
+}
+
 const DEFAULT_WORLD_CUP_SEASON = 2026
 const DEFAULT_STALE_AFTER_HOURS = 24
 const DEFAULT_SYNC_LIMIT = 12
@@ -141,6 +178,15 @@ function isCacheStale(lastSyncedAt: string | null, staleAfterHours: number) {
   if (!timestamp) return true
 
   return Date.now() - timestamp > staleAfterHours * 60 * 60 * 1000
+}
+
+function compareExternalIds(a: string, b: string) {
+  const numberA = Number(a)
+  const numberB = Number(b)
+
+  if (Number.isFinite(numberA) && Number.isFinite(numberB)) return numberA - numberB
+
+  return a.localeCompare(b, 'es-AR', { numeric: true })
 }
 
 function teamFromStored(row: WorldCupTeamRow | null | undefined, fallbackName: string): HeadToHeadTeam {
@@ -216,6 +262,21 @@ async function fetchCacheRows(cacheKeys: string[]) {
 
   return new Map(
     ((response.data ?? []) as HeadToHeadCacheRow[]).map((row) => [row.cache_key, row])
+  )
+}
+
+async function fetchFullCacheRows(cacheKeys: string[]) {
+  if (!cacheKeys.length) return new Map<string, FullHeadToHeadCacheRow>()
+
+  const response = await getSupabaseAdminClient()
+    .from('match_head_to_head_cache')
+    .select('cache_key, team_a_external_id, team_b_external_id, payload, normalized_payload, last_synced_at')
+    .in('cache_key', cacheKeys)
+
+  if (response.error) throw response.error
+
+  return new Map(
+    ((response.data ?? []) as FullHeadToHeadCacheRow[]).map((row) => [row.cache_key, row])
   )
 }
 
@@ -440,6 +501,167 @@ export async function syncWorldCupHeadToHeadCache({
     synced,
     cacheHits,
     failed,
+    results,
+    errors,
+  }
+}
+
+function getRawFixtureCount(payload: unknown) {
+  if (Array.isArray(payload)) return payload.length
+  if (!payload || typeof payload !== 'object') return 0
+
+  const record = payload as { response?: unknown; rawFixtures?: unknown }
+
+  if (Array.isArray(record.response)) return record.response.length
+  if (Array.isArray(record.rawFixtures)) return record.rawFixtures.length
+
+  return 0
+}
+
+function getNormalizedMatchCount(payload: unknown) {
+  if (!payload || typeof payload !== 'object') return 0
+
+  const record = payload as { matches?: unknown }
+
+  return Array.isArray(record.matches) ? record.matches.length : 0
+}
+
+export async function enrichWorldCupHeadToHeadWithInternationalResults({
+  season = DEFAULT_WORLD_CUP_SEASON,
+  staleAfterHours = DEFAULT_STALE_AFTER_HOURS,
+}: {
+  season?: number
+  staleAfterHours?: number
+} = {}): Promise<WorldCupHistoricalEnrichmentResult> {
+  const audit = await getWorldCupHeadToHeadPairs({ season, staleAfterHours })
+
+  if (!audit.ok || !audit.league) {
+    return {
+      ...audit,
+      source: 'martj42/international_results',
+      sourceRows: 0,
+      checked: 0,
+      enriched: 0,
+      fixturesAdded: 0,
+      normalizedMatchesAdded: 0,
+      stillEmpty: 0,
+      results: [],
+      errors: audit.warnings,
+    }
+  }
+
+  const sourceRows = await fetchInternationalResultsHistory()
+  const cacheRows = await fetchFullCacheRows(
+    audit.pairs
+      .map((pair) => pair.cacheKey)
+      .filter((cacheKey): cacheKey is string => Boolean(cacheKey))
+  )
+  const results: WorldCupHistoricalEnrichmentResult['results'] = []
+  const errors: string[] = []
+  let enriched = 0
+  let fixturesAdded = 0
+  let normalizedMatchesAdded = 0
+
+  for (const pair of audit.pairs) {
+    if (!pair.cacheKey || !pair.homeTeam.externalId || !pair.awayTeam.externalId) continue
+
+    try {
+      const cacheRow = cacheRows.get(pair.cacheKey)
+      const sourceFixtures = getInternationalResultsForPair({
+        rows: sourceRows,
+        homeTeam: pair.homeTeam,
+        awayTeam: pair.awayTeam,
+      })
+      const rawBefore = getRawFixtureCount(cacheRow?.payload)
+      const normalizedBefore = getNormalizedMatchCount(cacheRow?.normalized_payload)
+      const payload = mergeInternationalResultsIntoHeadToHeadPayload({
+        payload: cacheRow?.payload ?? null,
+        fixtures: sourceFixtures,
+      })
+      const rawAfter = getRawFixtureCount(payload)
+      const addedForPair = Math.max(0, rawAfter - rawBefore)
+      const { viewModel, normalizedPayload } = buildInternationalResultsNormalizedPayload({
+        payload,
+        currentMatch: {
+          fixtureExternalId: pair.fixtureExternalId,
+          date: pair.matchDate,
+        },
+        homeTeam: pair.homeTeam,
+        awayTeam: pair.awayTeam,
+        cacheKey: pair.cacheKey,
+        cacheLastSyncedAt: cacheRow?.last_synced_at ?? null,
+      })
+      const normalizedAfter = viewModel.matches.length
+      const sortedExternalIds = [String(pair.homeTeam.externalId), String(pair.awayTeam.externalId)]
+        .sort(compareExternalIds)
+
+      if (addedForPair > 0 || sourceFixtures.length > 0) {
+        const upsertResponse = await getSupabaseAdminClient()
+          .from('match_head_to_head_cache')
+          .upsert(
+            {
+              cache_key: pair.cacheKey,
+              team_a_external_id: sortedExternalIds[0],
+              team_b_external_id: sortedExternalIds[1],
+              payload,
+              normalized_payload: normalizedPayload,
+              last_synced_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'cache_key' }
+          )
+
+        if (upsertResponse.error) throw upsertResponse.error
+      }
+
+      if (addedForPair > 0) enriched += 1
+      fixturesAdded += addedForPair
+      normalizedMatchesAdded += Math.max(0, normalizedAfter - normalizedBefore)
+
+      results.push({
+        cacheKey: pair.cacheKey,
+        fixtureExternalId: pair.fixtureExternalId,
+        homeTeam: pair.homeTeam.name,
+        awayTeam: pair.awayTeam.name,
+        sourceMatches: sourceFixtures.length,
+        fixturesAdded: addedForPair,
+        normalizedBefore,
+        normalizedAfter,
+        renderReadiness: viewModel.renderReadiness,
+        warnings: viewModel.warnings,
+        errors: viewModel.errors,
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'No se pudo enriquecer historial.'
+
+      errors.push(`${pair.homeTeam.name} vs ${pair.awayTeam.name}: ${message}`)
+      results.push({
+        cacheKey: pair.cacheKey,
+        fixtureExternalId: pair.fixtureExternalId,
+        homeTeam: pair.homeTeam.name,
+        awayTeam: pair.awayTeam.name,
+        sourceMatches: 0,
+        fixturesAdded: 0,
+        normalizedBefore: 0,
+        normalizedAfter: 0,
+        renderReadiness: 'error',
+        warnings: [],
+        errors: [message],
+      })
+    }
+  }
+
+  const afterAudit = await getWorldCupHeadToHeadPairs({ season, staleAfterHours })
+
+  return {
+    ...afterAudit,
+    source: 'martj42/international_results',
+    sourceRows: sourceRows.length,
+    checked: audit.pairs.length,
+    enriched,
+    fixturesAdded,
+    normalizedMatchesAdded,
+    stillEmpty: results.filter((result) => result.normalizedAfter === 0).length,
     results,
     errors,
   }

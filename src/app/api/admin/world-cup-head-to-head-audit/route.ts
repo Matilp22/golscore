@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import {
   auditWorldCupHeadToHeadCache,
+  enrichWorldCupHeadToHeadWithInternationalResults,
   syncWorldCupHeadToHeadCache,
 } from '@/server/world-cup-head-to-head'
 
@@ -53,12 +54,17 @@ export async function GET(request: Request) {
       limit: readNumber(searchParams.get('limit')),
       force: readBoolean(searchParams.get('force')),
     }
-    const result = readBoolean(searchParams.get('sync'))
-      ? await syncWorldCupHeadToHeadCache(options)
-      : await auditWorldCupHeadToHeadCache({
+    const result = readBoolean(searchParams.get('historical'))
+      ? await enrichWorldCupHeadToHeadWithInternationalResults({
           season: options.season,
           staleAfterHours: options.staleAfterHours,
         })
+      : readBoolean(searchParams.get('sync'))
+        ? await syncWorldCupHeadToHeadCache(options)
+        : await auditWorldCupHeadToHeadCache({
+            season: options.season,
+            staleAfterHours: options.staleAfterHours,
+          })
 
     return NextResponse.json(result, { headers: JSON_HEADERS })
   } catch (error) {
