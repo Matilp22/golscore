@@ -502,6 +502,18 @@ function isSupabaseErrorLike(error: unknown) {
   )
 }
 
+function isYouTubeQuotaError(error: ErrorPayload) {
+  if (error.source !== 'youtube') return false
+
+  const text = `${error.code} ${error.message} ${error.detail ?? ''}`.toLowerCase()
+
+  return (
+    text.includes('quota') ||
+    text.includes('dailylimitexceeded') ||
+    text.includes('daily limit exceeded')
+  )
+}
+
 function getMissingHighlightColumnsFromError(error: unknown) {
   const message = readErrorMessage(error)
   const missing = new Set<string>()
@@ -1435,6 +1447,7 @@ export async function syncMatchHighlights(supabase: DbClient, options: Highlight
   const results: HighlightResult[] = []
   let searched = 0
   let updated = 0
+  let stoppedReason: string | null = null
 
   for (const match of matches.slice(0, limit)) {
     let clearedExistingReason: string | null = preClearedHighlights.get(match.id) ?? null
@@ -1622,6 +1635,11 @@ export async function syncMatchHighlights(supabase: DbClient, options: Highlight
         errors: [serialized],
         error: serialized,
       })
+
+      if (isYouTubeQuotaError(serialized)) {
+        stoppedReason = serialized.code
+        break
+      }
     }
   }
 
@@ -1638,6 +1656,7 @@ export async function syncMatchHighlights(supabase: DbClient, options: Highlight
     searched,
     updated,
     clearedExisting: preClearedHighlights.size,
+    stoppedReason,
     skipped,
     failed,
     errors: failed,
