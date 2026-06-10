@@ -1,6 +1,10 @@
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { buildMatchDetailViewModel } from '@/server/match-detail-view-model'
 import { pickTeamLogoUrl } from '@/shared/utils/asset-urls'
+import {
+  getCompetitionStageDisplayLabel,
+  normalizeCompetitionDisplayName,
+} from '@/shared/utils/competition-display'
 import { isFinishedStatus } from '@/shared/utils/match-status'
 
 type DbId = string | number
@@ -68,6 +72,9 @@ function toNumber(value: string | number | null | undefined) {
 }
 
 function normalizeLeagueName(name: string | null | undefined) {
+  const translated = normalizeCompetitionDisplayName(name)
+  if (translated !== (name?.trim() || 'Competencia')) return translated
+
   const value = name?.trim() || 'Competencia'
   const lower = value.toLowerCase()
 
@@ -86,10 +93,7 @@ function normalizeLeagueName(name: string | null | undefined) {
 }
 
 function getStageLabel(leagueName: string, round: string | number | null | undefined) {
-  const competition = normalizeLeagueName(leagueName)
-
-  if (competition === 'Amistoso') return 'Amistoso'
-  return String(round ?? '').trim() || 'Partido'
+  return getCompetitionStageDisplayLabel(leagueName, round)
 }
 
 function getScoreLabel(match: Pick<MatchRow, 'home_score' | 'away_score' | 'status'>) {
@@ -183,7 +187,7 @@ export async function buildMatchHistoryViewModel(
         externalId: match.fixtureExternalId,
         date: match.date,
         competition: match.leagueName,
-        stage: match.season ? `Temporada ${match.season}` : 'Partido',
+        stage: match.stageLabel || (match.season ? `Temporada ${match.season}` : 'Partido'),
         status: match.status,
         homeTeam: {
           id: null,

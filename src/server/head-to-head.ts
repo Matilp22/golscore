@@ -4,6 +4,10 @@ import { requestFootballApi } from '@/server/integrations/football-api-client'
 import { formatMatchScoreWithPenalties } from '@/shared/utils/match-display'
 import { pickTeamLogoUrl } from '@/shared/utils/asset-urls'
 import { isFinishedStatus } from '@/shared/utils/match-status'
+import {
+  getCompetitionStageDisplayLabel,
+  normalizeCompetitionDisplayName,
+} from '@/shared/utils/competition-display'
 
 type DbId = string | number
 
@@ -51,6 +55,7 @@ type HeadToHeadApiFixture = {
   league?: {
     name?: string | null
     season?: number | string | null
+    round?: string | null
   } | null
   teams?: {
     home?: {
@@ -97,6 +102,7 @@ export type HeadToHeadMatchItem = {
   fixtureExternalId: string | null
   date: string | null
   leagueName: string
+  stageLabel: string
   season: number | null
   homeTeam: HeadToHeadTeam
   awayTeam: HeadToHeadTeam
@@ -270,6 +276,7 @@ function mapHeadToHeadFixture(match: HeadToHeadApiFixture): HeadToHeadMatchItem 
   const goalsAway = toNumber(match.goals?.away)
   const homePenaltyScore = toNumber(match.score?.penalty?.home)
   const awayPenaltyScore = toNumber(match.score?.penalty?.away)
+  const rawLeagueName = match.league?.name ?? null
 
   return {
     fixtureExternalId:
@@ -277,7 +284,8 @@ function mapHeadToHeadFixture(match: HeadToHeadApiFixture): HeadToHeadMatchItem 
         ? null
         : String(match.fixture.id),
     date: match.fixture?.date ?? null,
-    leagueName: match.league?.name?.trim() || 'Competencia',
+    leagueName: normalizeCompetitionDisplayName(rawLeagueName),
+    stageLabel: getCompetitionStageDisplayLabel(rawLeagueName, match.league?.round),
     season: toNumber(match.league?.season),
     homeTeam,
     awayTeam,

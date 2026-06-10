@@ -78,7 +78,7 @@ export default async function MatchHistoryPage({ params }: PageProps) {
                 {history.homeTeam.name} vs {history.awayTeam.name}
               </h1>
               <p className="mt-2 text-sm font-semibold text-[#c8d0da]">
-                Partidos registrados entre estos equipos, competencia e instancia.
+                Copas, eliminatorias y amistosos registrados entre estos equipos.
               </p>
             </div>
 
