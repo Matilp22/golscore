@@ -1561,7 +1561,11 @@ async function updateStoredMatchFromFixtureDetail(
   fixturePayload: ApiFixtureDetail | null,
   sections: SyncMatchDetailSections = {},
   controlColumns?: MatchDetailControlColumnStatus,
-  options: { markFinalDetailSynced?: boolean; markLineupsSynced?: boolean } = {}
+  options: {
+    markFinalDetailSynced?: boolean
+    markLineupsSynced?: boolean
+    markStatisticsSynced?: boolean
+  } = {}
 ) {
   if (!match?.id) return false
 
@@ -1574,7 +1578,9 @@ async function updateStoredMatchFromFixtureDetail(
   }
 
   if (sections.events) patch.last_events_synced_at = nowIso
-  if (sections.statistics) patch.last_statistics_synced_at = nowIso
+  if (sections.statistics && options.markStatisticsSynced !== false) {
+    patch.last_statistics_synced_at = nowIso
+  }
   if (sections.lineups && options.markLineupsSynced !== false) {
     patch.last_lineups_synced_at = nowIso
   }
@@ -4087,6 +4093,7 @@ export async function syncMatchDetail(
         {
           markFinalDetailSynced: shouldMarkFinalDetailSynced,
           markLineupsSynced: countApiLineupPlayers(lineupsForCache) > 0,
+          markStatisticsSynced: countApiStatisticsValues(statisticsForCache) > 0,
         }
       )
     } catch (error) {

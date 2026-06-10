@@ -1357,9 +1357,15 @@ async function syncSingleLiveMatch(
   }
 
   if (eventDue) controlPatch.last_events_synced_at = nowIso
-  if (statisticsDue) controlPatch.last_statistics_synced_at = nowIso
+  if (statisticsDue && detailCacheResult.statisticsCount > 0) {
+    controlPatch.last_statistics_synced_at = nowIso
+  }
   if (lineupsDue && detailCacheResult.lineupsCount > 0) {
     controlPatch.last_lineups_synced_at = nowIso
+  }
+
+  if (statisticsDue && statistics.length === 0 && detailCacheResult.statisticsCount === 0) {
+    warnings.push('API-Football no devolvio estadisticas; se reintentara en la proxima ejecucion live/final.')
   }
 
   if (lineupsDue && lineups.length === 0 && detailCacheResult.lineupsCount === 0) {
