@@ -13,6 +13,7 @@
 - `save-prediction`: guarda o actualiza una prediccion autenticada con anon key + JWT.
 - `close-predictions`: confirma el mecanismo de cierre; el bloqueo real vive en trigger y en la function de guardado.
 - `sync-matches`: sincroniza fixtures desde API-Football hacia `leagues`, `teams` y `matches`.
+- `sync-match-highlights`: busca videos de partidos finalizados sin `highlights_url` y guarda el resumen elegido en `matches`.
 - `update-results`: actualiza finales, escribe `results` y dispara recalculo de puntos.
 - `recalculate-points`: llama la RPC `recalculate_prediction_scores`.
 

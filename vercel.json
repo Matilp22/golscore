@@ -6,8 +6,12 @@
       "schedule": "0 8 * * *"
     },
     {
+      "path": "/api/cron/sync-live-matches",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/sync-match-highlights",
-      "schedule": "0 9 * * *"
+      "schedule": "0 * * * *"
     }
   ]
 }

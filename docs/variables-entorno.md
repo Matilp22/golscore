@@ -22,6 +22,7 @@ Despues de pegar o cambiar estas claves, reiniciar `npm run dev`. Next no siempr
 - `FOOTBALL_API_KEY`: key privada de API-Football. Nunca debe ir al cliente.
 - `API_FOOTBALL_KEY`: alias legacy soportado por compatibilidad local.
 - `FOOTBALL_API_BASE_URL`: URL base del proveedor, por defecto `https://v3.football.api-sports.io`.
+- `YOUTUBE_API_KEY`: key privada de YouTube Data API para buscar y guardar resumenes/highlights de partidos finalizados. Nunca debe ir al cliente.
 - `SUPABASE_SERVICE_ROLE_KEY`: key service role para jobs y Edge Functions privadas. Nunca usar en frontend, componentes React, hooks, servicios cliente ni variables `NEXT_PUBLIC_*`.
 - `CRON_SECRET`: secreto para proteger cron/jobs.
 - `JWT_SECRET`: reservado para integraciones server-side si se agregan tokens propios.

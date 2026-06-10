@@ -128,6 +128,7 @@ type HighlightResult = {
   highlightsTitle?: string
   candidatesFound?: number
   clearedExisting?: boolean
+  clearedExistingReason?: string | null
   candidates?: Array<{
     title: string
     channelTitle: string | null
@@ -181,7 +182,7 @@ const YOUTUBE_SEARCH_URL = 'https://www.googleapis.com/youtube/v3/search'
 const YOUTUBE_FETCH_TIMEOUT_MS = 8000
 const YOUTUBE_RESULTS_PER_QUERY = 12
 const MAX_PRIMARY_HIGHLIGHT_QUERIES = 8
-const MAX_TRUSTED_SOURCE_FALLBACK_QUERIES = 18
+const MAX_TRUSTED_SOURCE_FALLBACK_QUERIES = 24
 const MAX_TEAM_SEARCH_NAMES = 4
 const FINISHED_QUERY_STATUSES = ['FT', 'AET', 'PEN', 'Final', 'Finalizado', 'Finished', 'Match Finished']
 const PRIORITY_HIGHLIGHT_LEAGUES = [
@@ -204,10 +205,23 @@ const NEGATIVE_PATTERNS = [
   'previa',
   'simulacion',
   'simulation',
+  'simulator',
   'efootball',
   'pes',
   'gameplay',
+  'gameplays',
   'virtual football',
+  'ea sports fc',
+  'ea fc',
+  'fifa mobile',
+  'fc mobile',
+  'dream league soccer',
+  'pro evolution soccer',
+  'cpu vs cpu',
+  'ai vs ai',
+  'ps5',
+  'xbox',
+  'nintendo',
   'predict',
   'prediction',
   'betting',
@@ -231,6 +245,8 @@ const NEGATIVE_PATTERNS = [
 const KNOWN_CHANNELS = [
   'liga profesional',
   'afa',
+  'afa play',
+  'afa estudio',
   'conmebol',
   'espn',
   'espn fans',
@@ -238,7 +254,6 @@ const KNOWN_CHANNELS = [
   'espn deportes',
   'tyc sports',
   'tyc sports play',
-  'afa play',
   'afaplay',
   'dsports',
   'd sports',
@@ -252,6 +267,8 @@ const KNOWN_CHANNELS = [
   'dazn',
   'dazn tv',
   'fifa',
+  'fifa play',
+  'fifa plus',
   'fifa+',
   'uefa',
   'copa argentina',
@@ -272,6 +289,8 @@ const OFFICIAL_CHANNEL_HINTS = [
   'official',
   'oficial',
   'tv oficial',
+  'canal oficial',
+  'play oficial',
   'new zealand football',
   'us soccer',
   'ussoccer',
@@ -281,14 +300,22 @@ const OFFICIAL_CHANNEL_HINTS = [
 const TRUSTED_SOURCE_SEARCH_TERMS = [
   'ESPN Fans',
   'ESPN',
-  'Fox Sports',
+  'TNT Sports',
   'DSports',
   'DirecTV Sports',
-  'TNT Sports',
-  'AFA Play',
-  'canal oficial',
+  'DAZN',
   'DAZN TV',
+  'AFA Play',
+  'AFA Estudio',
+  'FIFA Play',
+  'FIFA+',
   'FIFA',
+  'CONMEBOL',
+  'Liga Profesional',
+  'canal oficial',
+  'canal oficial resumen',
+  'official highlights',
+  'Fox Sports',
   'TyC Sports',
 ]
 const COUNTRY_TEAM_SEARCH_ALIASES: Record<string, string[]> = {
@@ -690,7 +717,26 @@ function getTrustedChannelReason(channelTitle: string | null | undefined) {
 }
 
 function isFifaGameText(normalizedTextValue: string) {
-  return /\bfifa\s?\d{2}\b/.test(normalizedTextValue) || normalizedTextValue.includes('fifa gameplay')
+  return (
+    /\bfifa\s?\d{2}\b/.test(normalizedTextValue) ||
+    /\bea\s*sports\s*fc\b/.test(normalizedTextValue) ||
+    /\bea\s*fc\s?\d{2}\b/.test(normalizedTextValue) ||
+    /\bpes\s?\d{2,4}\b/.test(normalizedTextValue) ||
+    (
+      /\bfc\s?(24|25|26|27)\b/.test(normalizedTextValue) &&
+      containsAny(normalizedTextValue, ['gameplay', 'simulation', 'simulacion', 'ps5', 'xbox'])
+    ) ||
+    normalizedTextValue.includes('fifa gameplay')
+  )
+}
+
+function getExistingHighlightRejectReason(match: HighlightMatch) {
+  const text = normalizeText(`${match.highlights_title ?? ''} ${match.highlights_url ?? ''}`)
+  if (!text) return null
+
+  if (containsAny(text, NEGATIVE_PATTERNS) || isFifaGameText(text)) return 'stored_suspicious_highlight'
+
+  return null
 }
 
 function isPublishedBeforeMatch(matchDate: string | null, publishedAt: string | null) {
@@ -769,11 +815,21 @@ function buildYouTubeTrustedSourceQueries(match: HighlightMatch) {
 
   const queries = [
     ...TRUSTED_SOURCE_SEARCH_TERMS.map((source) =>
-      compactSpaces([primaryPair[0], primaryPair[1], source, 'resumen highlights', yearText].filter(Boolean).join(' '))
+      compactSpaces(
+        [
+          primaryPair[0],
+          'vs',
+          primaryPair[1],
+          source,
+          'resumen highlights',
+          match.leagueName,
+          yearText,
+        ].filter(Boolean).join(' ')
+      )
     ),
     ...TRUSTED_SOURCE_SEARCH_TERMS.flatMap((source) =>
       pairs.slice(1).map(([home, away]) =>
-        compactSpaces([home, away, source, 'resumen highlights', yearText].filter(Boolean).join(' '))
+        compactSpaces([home, 'vs', away, source, 'resumen highlights', yearText].filter(Boolean).join(' '))
       )
     ),
   ]
@@ -841,6 +897,8 @@ export function scoreYouTubeHighlightResult(match: HighlightMatch, result: YouTu
   if (trustedChannelReason) {
     score += 3
     reasons.push(trustedChannelReason)
+  } else {
+    reasons.push('untrusted-channel')
   }
 
   const distanceDays = getPublishedDistanceDays(match.match_date, publishedAt)
@@ -874,12 +932,6 @@ export function scoreYouTubeHighlightResult(match: HighlightMatch, result: YouTu
     hasTrustedChannel &&
     hasBothTeams &&
     (reasons.includes('published-close') || reasons.includes('published-near'))
-  const hasStrongUntrustedMatch =
-    hasBothTeams &&
-    hasSummaryIntent &&
-    score >= 13 &&
-    !hasNegativeKeyword &&
-    !publishedBeforeMatch
 
   return {
     score,
@@ -887,7 +939,7 @@ export function scoreYouTubeHighlightResult(match: HighlightMatch, result: YouTu
     accepted:
       score >= 10 &&
       hasBothTeams &&
-      (hasTrustedChannel || hasStrongUntrustedMatch) &&
+      hasTrustedChannel &&
       (hasSummaryIntent || hasTrustedOfficialClip) &&
       !publishedBeforeMatch &&
       !hasNegativeKeyword,
@@ -1174,6 +1226,31 @@ function toCandidate(item: YouTubeSearchItem, match: HighlightMatch, query: stri
   }
 }
 
+async function clearSuspiciousStoredHighlights(supabase: DbClient, matches: HighlightMatch[]) {
+  const cleared = new Map<string, string>()
+
+  for (const match of matches) {
+    if (!match.highlights_url) continue
+
+    const rejectReason = getExistingHighlightRejectReason(match)
+    if (!rejectReason) continue
+
+    const { error } = await supabase
+      .from('matches')
+      .update({
+        highlights_url: null,
+        highlights_title: null,
+      })
+      .eq('id', match.id)
+
+    if (error) throw error
+
+    cleared.set(match.id, rejectReason)
+  }
+
+  return cleared
+}
+
 export async function syncMatchHighlights(supabase: DbClient, options: HighlightSyncOptions) {
   const apiKey = process.env.YOUTUBE_API_KEY
   if (!apiKey) {
@@ -1188,6 +1265,15 @@ export async function syncMatchHighlights(supabase: DbClient, options: Highlight
   await assertHighlightColumns(supabase)
 
   const limit = clampLimit(options.limit, DEFAULT_SYNC_LIMIT, MAX_SYNC_LIMIT)
+  const preClearedHighlights = options.force
+    ? new Map<string, string>()
+    : await clearSuspiciousStoredHighlights(
+        supabase,
+        await enrichMatches(
+          supabase,
+          await fetchMatches(supabase, { ...options, force: true, limit: MAX_SYNC_LIMIT })
+        )
+      )
   const rows = await fetchMatches(supabase, { ...options, limit })
   const matches = sortMatchesForHighlightSync(await enrichMatches(supabase, rows), options)
   const results: HighlightResult[] = []
@@ -1195,6 +1281,44 @@ export async function syncMatchHighlights(supabase: DbClient, options: Highlight
   let updated = 0
 
   for (const match of matches.slice(0, limit)) {
+    let clearedExistingReason: string | null = preClearedHighlights.get(match.id) ?? null
+    let clearedExisting = Boolean(clearedExistingReason)
+
+    if (!options.force && match.highlights_url) {
+      const rejectReason = getExistingHighlightRejectReason(match)
+
+      if (rejectReason) {
+        const { error } = await supabase
+          .from('matches')
+          .update({
+            highlights_url: null,
+            highlights_title: null,
+          })
+          .eq('id', match.id)
+
+        if (error) {
+          const serialized = serializeHighlightError(error, 'supabase')
+
+          results.push({
+            ...toResultBase(match),
+            status: 'failed',
+            skipReason: serialized.message,
+            reason: serialized.message,
+            clearedExisting: false,
+            clearedExistingReason: rejectReason,
+            errors: [serialized],
+            error: serialized,
+          })
+          continue
+        }
+
+        match.highlights_url = null
+        match.highlights_title = null
+        clearedExisting = true
+        clearedExistingReason = rejectReason
+      }
+    }
+
     const skipReason = getPreSearchSkipReason(match, options.force)
     if (skipReason) {
       const status =
@@ -1208,6 +1332,8 @@ export async function syncMatchHighlights(supabase: DbClient, options: Highlight
         status,
         skipReason,
         reason: skipReason,
+        clearedExisting,
+        clearedExistingReason,
       })
       continue
     }
@@ -1219,6 +1345,8 @@ export async function syncMatchHighlights(supabase: DbClient, options: Highlight
         status: 'failed',
         skipReason: 'missing_search_query',
         reason: 'missing_search_query',
+        clearedExisting,
+        clearedExistingReason,
       })
       continue
     }
@@ -1267,7 +1395,8 @@ export async function syncMatchHighlights(supabase: DbClient, options: Highlight
           status: 'no_reliable_video',
           skipReason: 'no_reliable_video',
           reason: 'no_reliable_video',
-          clearedExisting: false,
+          clearedExisting,
+          clearedExistingReason,
           candidatesFound: allCandidates.length,
           candidates: allCandidates
             .sort((a, b) => b.score - a.score)
@@ -1315,6 +1444,8 @@ export async function syncMatchHighlights(supabase: DbClient, options: Highlight
         highlightsUrl,
         highlightsTitle: selected.title,
         candidatesFound: allCandidates.length,
+        clearedExisting,
+        clearedExistingReason,
       })
     } catch (error) {
       const serialized = serializeHighlightError(
@@ -1329,6 +1460,8 @@ export async function syncMatchHighlights(supabase: DbClient, options: Highlight
         status: 'failed',
         skipReason: serialized.message,
         reason: serialized.message,
+        clearedExisting,
+        clearedExistingReason,
         candidatesFound: allCandidates.length,
         errors: [serialized],
         error: serialized,
@@ -1348,6 +1481,7 @@ export async function syncMatchHighlights(supabase: DbClient, options: Highlight
     checked: matches.length,
     searched,
     updated,
+    clearedExisting: preClearedHighlights.size,
     skipped,
     failed,
     errors: failed,

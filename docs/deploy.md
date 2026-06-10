@@ -17,6 +17,7 @@ Variables minimas para desarrollo:
 ```env
 FOOTBALL_API_KEY=
 FOOTBALL_API_BASE_URL=https://v3.football.api-sports.io
+YOUTUBE_API_KEY=
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 NEXT_PUBLIC_API_URL=http://localhost:3000
@@ -38,6 +39,7 @@ Configurar estas variables en Vercel:
 
 - `FOOTBALL_API_KEY`
 - `FOOTBALL_API_BASE_URL`
+- `YOUTUBE_API_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `CRON_SECRET`
 - `NEXT_PUBLIC_SUPABASE_URL`
@@ -119,6 +121,22 @@ Si `CRON_SECRET` no esta configurado en produccion, el endpoint rechaza la ejecu
 El endpoint usa `FOOTBALL_API_KEY` y `SUPABASE_SERVICE_ROLE_KEY` solo en servidor. El frontend nunca llama a API-Football.
 
 Tambien existe la Supabase Function `sync-matches`, con el mismo parametro `competition`, para cron o ejecucion programada.
+
+## Sync de highlights
+
+El endpoint server-side para buscar resumenes de partidos finalizados es:
+
+```bash
+http://localhost:3000/api/cron/sync-match-highlights
+```
+
+En produccion se invoca con:
+
+```bash
+Authorization: Bearer <CRON_SECRET>
+```
+
+Necesita `YOUTUBE_API_KEY` en servidor. Revisa partidos finalizados sin `highlights_url`, busca en YouTube y guarda la URL seleccionada en `public.matches`. Si la busqueda principal no encuentra un video confiable, prueba fuentes como ESPN Fans, ESPN, TNT Sports, DSports, DAZN, AFA Play, FIFA Play, FIFA+, CONMEBOL, Liga Profesional y canales oficiales. Solo acepta canales confiables/oficiales y descarta gameplays o simulaciones de FIFA, EA Sports FC, eFootball, PES, PS5/Xbox y similares. En `vercel.json` esta programado cada 1 hora (`0 * * * *`).
 
 ## Chequeos posteriores
 

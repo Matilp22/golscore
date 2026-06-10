@@ -235,6 +235,8 @@ const MATCH_CONTROL_SELECT = [
 const LIVE_SYNC_STATUSES = ['LIVE', '1H', '2H', 'HT', 'ET', 'BT', 'P', 'SUSP', 'INT']
 const FINISHED_SYNC_STATUSES = ['FT', 'AET', 'PEN']
 const STALE_UNRESOLVED_LOOKBACK_MINUTES = 72 * 60
+const LINEUP_SYNC_LOOKAHEAD_MINUTES = 180
+const LINEUP_SYNC_POST_KICKOFF_MINUTES = 60
 const HARD_FINAL_STATUSES = new Set(FINISHED_SYNC_STATUSES)
 const DETAILS_RELEVANT_STATUSES = new Set([
   ...LIVE_SYNC_STATUSES,
@@ -351,8 +353,12 @@ function shouldFetchLineups(match: StoredLiveMatchRow, status: string | null | u
   const toKickoff = minutesUntil(match.match_date, now)
   if (toKickoff === null) return false
 
+  if (toKickoff <= LINEUP_SYNC_LOOKAHEAD_MINUTES && toKickoff > 90) {
+    return olderThan(match.last_lineups_synced_at, now, 45)
+  }
+
   if (toKickoff <= 90 && toKickoff > 60) {
-    return !match.last_lineups_synced_at
+    return olderThan(match.last_lineups_synced_at, now, 30)
   }
 
   if (toKickoff <= 60 && toKickoff > 30) {
@@ -360,10 +366,10 @@ function shouldFetchLineups(match: StoredLiveMatchRow, status: string | null | u
   }
 
   if (toKickoff <= 30 && toKickoff > 5) {
-    return olderThan(match.last_lineups_synced_at, now, 20)
+    return olderThan(match.last_lineups_synced_at, now, 15)
   }
 
-  if (toKickoff <= 5 && toKickoff >= -10) {
+  if (toKickoff <= 5 && toKickoff >= -LINEUP_SYNC_POST_KICKOFF_MINUTES) {
     return olderThan(match.last_lineups_synced_at, now, 10)
   }
 
@@ -376,6 +382,11 @@ function shouldRefreshFixture(match: StoredLiveMatchRow, reasons: Set<string>, n
   if (reasons.has('api-live')) return false
   if (LIVE_SYNC_STATUSES.includes((status ?? '').toUpperCase())) return true
   if (reasons.has('starting-window')) return true
+  if (reasons.has('lineup-window')) {
+    const toKickoff = minutesUntil(match.match_date, now)
+
+    return toKickoff !== null && toKickoff <= 15 && toKickoff >= -LINEUP_SYNC_POST_KICKOFF_MINUTES
+  }
   if (reasons.has('stale-unresolved')) return true
   if (reasons.has('recently-finished') && (!match.final_detail_synced_at || shouldFetchFinalFollowup(match, now))) {
     return true
@@ -666,8 +677,8 @@ async function fetchLiveMatchCandidates(
     fetchMatchesByDateWindow(
       supabase,
       {
-        fromIso: input.now.toISOString(),
-        toIso: toIsoAtOffset(input.now, 90),
+        fromIso: toIsoAtOffset(input.now, -LINEUP_SYNC_POST_KICKOFF_MINUTES),
+        toIso: toIsoAtOffset(input.now, LINEUP_SYNC_LOOKAHEAD_MINUTES),
         limit: input.limit,
       },
       warnings
@@ -1347,7 +1358,13 @@ async function syncSingleLiveMatch(
 
   if (eventDue) controlPatch.last_events_synced_at = nowIso
   if (statisticsDue) controlPatch.last_statistics_synced_at = nowIso
-  if (lineupsDue) controlPatch.last_lineups_synced_at = nowIso
+  if (lineupsDue && detailCacheResult.lineupsCount > 0) {
+    controlPatch.last_lineups_synced_at = nowIso
+  }
+
+  if (lineupsDue && lineups.length === 0 && detailCacheResult.lineupsCount === 0) {
+    warnings.push('API-Football no devolvio alineaciones; se reintentara en la proxima ejecucion cercana al partido.')
+  }
 
   const finalDetailSynced = shouldMarkFinalDetailSynced({
     status: statusAfter,
@@ -1486,7 +1503,7 @@ export async function syncLiveMatches(
       globalLiveFixtures: 'cada ejecucion',
       events: 'cada 1 minuto para partidos live/relevantes',
       statistics: 'cada 5 minutos para live; final y follow-up al terminar',
-      lineups: 'T-90, T-60, T-30, inicio, live espaciado y final',
+      lineups: 'T-180, T-90, T-60, T-30, inicio, post-inicio, live espaciado y final',
       finalFollowup: '10 minutos despues de detectar FT/AET/PEN',
     },
     liveFixturesFromApi: liveFixtures.length,
@@ -1579,7 +1596,7 @@ function estimateRequestBudget(input: {
       '1 request global /fixtures?live=all por minuto.',
       'Eventos solo para partidos live/relevantes.',
       'Estadisticas live cada 5 minutos.',
-      'Alineaciones en ventanas T-90/T-60/T-30/inicio/final.',
+      'Alineaciones en ventanas T-180/T-90/T-60/T-30/inicio/post-inicio/final.',
     ],
   }
 }
@@ -1611,8 +1628,8 @@ export async function auditLiveSync(
     fetchMatchesByDateWindow(
       supabase,
       {
-        fromIso: now.toISOString(),
-        toIso: toIsoAtOffset(now, 90),
+        fromIso: toIsoAtOffset(now, -LINEUP_SYNC_POST_KICKOFF_MINUTES),
+        toIso: toIsoAtOffset(now, LINEUP_SYNC_LOOKAHEAD_MINUTES),
         limit,
       },
       warnings

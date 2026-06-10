@@ -9,6 +9,7 @@ import {
   signUpWithEmail,
 } from '@/lib/supabase/supabaseClient'
 import BrandMark from '@/frontend/components/BrandMark'
+import { translateAuthError } from '@/shared/utils/auth-errors'
 
 type AuthFormProps = {
   mode: 'login' | 'register'
@@ -48,7 +49,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
         const { error } = await signInWithEmail(email, password)
 
         if (error) {
-          setMessage(error.message || 'No se pudo iniciar sesión.')
+          setMessage(translateAuthError(error, 'login'))
           return
         }
 
@@ -61,7 +62,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
       const { data, error } = await signUpWithEmail(email, password)
 
       if (error) {
-        setMessage(error.message || 'No se pudo registrar la cuenta.')
+        setMessage(translateAuthError(error, 'register'))
         return
       }
 

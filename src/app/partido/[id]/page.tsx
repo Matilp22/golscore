@@ -1187,6 +1187,8 @@ function MatchSummarySection({
   shareFileName?: string
   className?: string
 }) {
+  if (!isLoading && (error || !source)) return null
+
   return (
     <div id={shareId} className={`hf-card w-full overflow-hidden rounded-2xl ${className}`}>
       <div className="hf-section-head px-2 py-3 md:px-4">
@@ -2113,7 +2115,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
           </div>
         </header>
 
-        {matchIsFinished ? (
+        {matchIsFinished && summarySource ? (
           <MatchSummarySection
             source={summarySource}
             shareId={summaryShareId}

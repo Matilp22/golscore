@@ -1561,7 +1561,7 @@ async function updateStoredMatchFromFixtureDetail(
   fixturePayload: ApiFixtureDetail | null,
   sections: SyncMatchDetailSections = {},
   controlColumns?: MatchDetailControlColumnStatus,
-  options: { markFinalDetailSynced?: boolean } = {}
+  options: { markFinalDetailSynced?: boolean; markLineupsSynced?: boolean } = {}
 ) {
   if (!match?.id) return false
 
@@ -1575,7 +1575,9 @@ async function updateStoredMatchFromFixtureDetail(
 
   if (sections.events) patch.last_events_synced_at = nowIso
   if (sections.statistics) patch.last_statistics_synced_at = nowIso
-  if (sections.lineups) patch.last_lineups_synced_at = nowIso
+  if (sections.lineups && options.markLineupsSynced !== false) {
+    patch.last_lineups_synced_at = nowIso
+  }
 
   const optionalColumns = new Set([
     'final_elapsed',
@@ -3898,7 +3900,7 @@ export async function syncMatchDetailsBulk(
       fixture: '1 request por partido seleccionado para actualizar estado, minuto, marcador, penales, estadio y arbitro.',
       events: 'Solo partidos vivos/finalizados o force=true.',
       statistics: 'Solo partidos vivos/finalizados o force=true; futuros no iniciados no gastan statistics.',
-      lineups: 'Partidos vivos/finalizados, force=true o ventana T-90 a inicio.',
+      lineups: 'Partidos vivos/finalizados, force=true o ventana T-180 a post-inicio.',
       finalSkip: 'Si final_detail_synced_at existe y force=false, se salta salvo missingDetailsOnly=true.',
     },
     items,
@@ -4082,7 +4084,10 @@ export async function syncMatchDetail(
         fixturePayload,
         sections,
         input.controlColumns,
-        { markFinalDetailSynced: shouldMarkFinalDetailSynced }
+        {
+          markFinalDetailSynced: shouldMarkFinalDetailSynced,
+          markLineupsSynced: countApiLineupPlayers(lineupsForCache) > 0,
+        }
       )
     } catch (error) {
       errors.push(serializeError(error, 'supabase'))
