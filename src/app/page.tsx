@@ -1337,7 +1337,10 @@ export default async function HomePage({
   const visibleFixtureIds = visibleCompetitions.flatMap((competition) =>
     competition.matches.map((match) => match.externalId ?? match.id)
   )
-  const refreshIntervalMs = hasFastRefreshMatches ? 60000 : 300000
+  const refreshIntervalMs = hasFastRefreshMatches ? 20_000 : 300_000
+  const homeLiveSyncUrl = hasFastRefreshMatches
+    ? `/api/home/live-sync?date=${encodeURIComponent(selectedDate)}&limit=20`
+    : null
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-transparent text-white">
@@ -1357,6 +1360,8 @@ export default async function HomePage({
               intervalMs={refreshIntervalMs}
               showButton
               initialUpdatedAt={renderedAt}
+              initialSyncMinIntervalMs={20_000}
+              syncBeforeRefreshUrl={homeLiveSyncUrl}
             />
           </div>
 
@@ -1519,6 +1524,7 @@ export default async function HomePage({
         date={selectedDate}
         enabled={hasLiveMatches}
         events={liveEvents}
+        intervalMs={20_000}
         visibleFixtureIds={visibleFixtureIds}
       />
     </div>

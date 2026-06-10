@@ -2015,6 +2015,24 @@ export default async function PartidoDetallePage({ params }: PageProps) {
     homePenaltyScore: penaltyScore.home,
     awayPenaltyScore: penaltyScore.away,
   })} ${awayTeamDisplayName} - ${translateLeagueName(fixture.league.name)}`
+  const renderedAt = new Date().toISOString()
+  const renderedAtMs = Date.parse(renderedAt)
+  const matchKickoffMs = Date.parse(fixture.fixture.date)
+  const isMatchInActiveWindow =
+    Number.isFinite(matchKickoffMs) &&
+    matchKickoffMs <= renderedAtMs + 2 * 60 * 60 * 1000 &&
+    matchKickoffMs >= renderedAtMs - 36 * 60 * 60 * 1000
+  const shouldRunMatchDetailLiveSync =
+    !matchIsFinished && (headerStatusIsLive || isMatchInActiveWindow)
+  const matchDetailRefreshIntervalMs = headerStatusIsLive
+    ? 15_000
+    : shouldRunMatchDetailLiveSync
+      ? 30_000
+      : 300_000
+  const matchDetailInitialSyncMinIntervalMs = headerStatusIsLive ? 15_000 : 30_000
+  const matchDetailLiveSyncUrl = shouldRunMatchDetailLiveSync
+    ? `/api/match-detail/live-sync?fixture=${fixture.fixture.id}`
+    : null
 
   if (process.env.NODE_ENV === 'development') {
     console.info('[match-detail-render]', {
@@ -2037,9 +2055,12 @@ export default async function PartidoDetallePage({ params }: PageProps) {
         <header id={shareCardId} className="hf-hero relative mb-4 w-full overflow-hidden rounded-3xl">
           <div data-share-exclude="true">
             <AutoRefresh
-              intervalMs={headerStatusIsLive ? 30000 : 60000}
+              intervalMs={matchDetailRefreshIntervalMs}
               showButton
               className="absolute right-4 top-16 z-10 md:top-4"
+              initialUpdatedAt={renderedAt}
+              initialSyncMinIntervalMs={matchDetailInitialSyncMinIntervalMs}
+              syncBeforeRefreshUrl={matchDetailLiveSyncUrl}
             />
           </div>
 

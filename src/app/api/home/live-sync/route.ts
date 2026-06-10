@@ -6,7 +6,7 @@ import {
 } from '@/server/prode/sync-matches'
 import { getArgentinaTodayISO } from '@/shared/utils/argentina-time'
 
-const MIN_SYNC_INTERVAL_MS = 45_000
+const MIN_SYNC_INTERVAL_MS = 20_000
 const lastSyncByDate = new Map<string, number>()
 
 export async function GET(request: Request) {
@@ -33,6 +33,7 @@ export async function GET(request: Request) {
         reason: 'live sync throttled',
         date,
         catchup,
+        nextAllowedInMs: MIN_SYNC_INTERVAL_MS - (now - lastSyncAt),
       },
       {
         headers: {

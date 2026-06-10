@@ -10,12 +10,14 @@ type AutoRefreshProps = {
   className?: string
   initialUpdatedAt?: number | string | Date
   syncBeforeRefreshUrl?: string | null
+  initialSyncMinIntervalMs?: number
 }
 
 export default function AutoRefresh({
   intervalMs = 300000,
   initialUpdatedAt,
   syncBeforeRefreshUrl,
+  initialSyncMinIntervalMs = 60_000,
 }: AutoRefreshProps) {
   const router = useRouter()
 
@@ -42,7 +44,7 @@ export default function AutoRefresh({
       const syncKey = `hf-auto-sync:${syncBeforeRefreshUrl}`
       const lastSyncedAt = Number(window.sessionStorage.getItem(syncKey) ?? 0)
 
-      if (!lastSyncedAt || Date.now() - lastSyncedAt > 60_000) {
+      if (!lastSyncedAt || Date.now() - lastSyncedAt > initialSyncMinIntervalMs) {
         window.sessionStorage.setItem(syncKey, String(Date.now()))
         void refreshWithOptionalSync()
       } else {
@@ -59,7 +61,12 @@ export default function AutoRefresh({
     if (!isStandalone) return
 
     void refreshWithOptionalSync()
-  }, [refreshWithOptionalSync, syncBeforeRefreshUrl, syncWithoutRefresh])
+  }, [
+    initialSyncMinIntervalMs,
+    refreshWithOptionalSync,
+    syncBeforeRefreshUrl,
+    syncWithoutRefresh,
+  ])
 
   useAutoRefresh({
     intervalMs,

@@ -6,8 +6,10 @@ import { syncMatchDetail } from '@/server/match-detail-cache'
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 
-const MIN_SYNC_INTERVAL_MS = 60_000
-const lastSyncByFixture = new Map<string, number>()
+const MIN_FAST_SYNC_INTERVAL_MS = 15_000
+const MIN_FULL_SYNC_INTERVAL_MS = 60_000
+const lastFastSyncByFixture = new Map<string, number>()
+const lastFullSyncByFixture = new Map<string, number>()
 
 function jsonNoStore(body: unknown, init?: ResponseInit) {
   const response = NextResponse.json(body, init)
@@ -55,18 +57,19 @@ export async function GET(request: Request) {
 
   const syncKey = String(fixtureExternalId)
   const now = Date.now()
-  const lastSyncAt = lastSyncByFixture.get(syncKey) ?? 0
+  const lastFastSyncAt = lastFastSyncByFixture.get(syncKey) ?? 0
 
-  if (now - lastSyncAt < MIN_SYNC_INTERVAL_MS) {
+  if (now - lastFastSyncAt < MIN_FAST_SYNC_INTERVAL_MS) {
     return jsonNoStore({
       ok: true,
       throttled: true,
       reason: 'match detail sync throttled',
       fixtureExternalId,
+      nextAllowedInMs: MIN_FAST_SYNC_INTERVAL_MS - (now - lastFastSyncAt),
     })
   }
 
-  lastSyncByFixture.set(syncKey, now)
+  lastFastSyncByFixture.set(syncKey, now)
 
   try {
     const supabase = getSupabaseAdminClient()
@@ -83,14 +86,32 @@ export async function GET(request: Request) {
       )
     }
 
+    const lastFullSyncAt = lastFullSyncByFixture.get(syncKey) ?? 0
+    const shouldRunFullSync = now - lastFullSyncAt >= MIN_FULL_SYNC_INTERVAL_MS
+    const sections = {
+      fixture: true,
+      events: true,
+      lineups: shouldRunFullSync,
+      statistics: shouldRunFullSync,
+    }
+
+    if (shouldRunFullSync) {
+      lastFullSyncByFixture.set(syncKey, now)
+    }
+
     const result = await syncMatchDetail(supabase, {
       fixtureExternalId,
+      sections,
     })
 
     return jsonNoStore({
       ok: result.errors.length === 0,
       throttled: false,
       mode: 'match-detail-live-sync',
+      fastSyncIntervalMs: MIN_FAST_SYNC_INTERVAL_MS,
+      fullSyncIntervalMs: MIN_FULL_SYNC_INTERVAL_MS,
+      fullSync: shouldRunFullSync,
+      sections,
       result,
     })
   } catch (error) {
