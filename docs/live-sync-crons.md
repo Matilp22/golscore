@@ -1,7 +1,7 @@
 # Live sync crons
 
 Hay Fulbo expone endpoints de cron protegidos por `Authorization: Bearer CRON_SECRET`.
-Los crons de live sync y highlights quedan configurados en `vercel.json`. Si el proyecto corre en un plan de Vercel que no permite esas frecuencias, configurar los mismos endpoints en un proveedor externo y dejar Vercel como respaldo.
+Vercel Hobby solo permite crons diarios, por eso `vercel.json` queda como respaldo desplegable. La frecuencia alta debe configurarse en un proveedor externo o en Vercel Pro.
 
 ## Cron externo 1
 

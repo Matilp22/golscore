@@ -7,11 +7,11 @@
     },
     {
       "path": "/api/cron/sync-live-matches",
-      "schedule": "*/5 * * * *"
+      "schedule": "5 8 * * *"
     },
     {
       "path": "/api/cron/sync-match-highlights",
-      "schedule": "0 * * * *"
+      "schedule": "10 8 * * *"
     }
   ]
 }
