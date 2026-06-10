@@ -6,6 +6,7 @@
   type PlayerWrapper,
 } from '@/lib/api-football'
 import AutoRefresh from '@/frontend/components/AutoRefresh'
+import LiveMatchClockLabel from '@/frontend/components/LiveMatchClockLabel'
 import { TeamLogo as AssetTeamLogo } from '@/frontend/components/AssetImage'
 import LineupTabs from '@/frontend/components/LineupTabs'
 import SafeImage from '@/frontend/components/SafeImage'
@@ -147,8 +148,8 @@ function formatHeaderStatusLabel(
   if (isFinishedStatus(statusShort) || isFinishedStatus(statusLong)) {
     return elapsed ? `FINAL ${elapsed}'` : 'FINAL'
   }
-  if (elapsed) return `${elapsed}'`
   if (statusShort === 'HT') return 'ET'
+  if (elapsed) return `${elapsed}'`
   if (statusShort === 'NS') return formatMatchTime(dateString)
   if (statusShort === 'TBD') return 'A confirmar'
 
@@ -168,10 +169,16 @@ function getMaxEventElapsedMinute(events: MatchEvent[]) {
 
 function getMatchDisplayElapsed(status: MatchFixture['fixture']['status'], events: MatchEvent[]) {
   const statusMinute = getFixtureStatusElapsedMinute(status)
+  const maxEventMinute = getMaxEventElapsedMinute(events)
 
   if (isFinishedStatus(status.short) || isFinishedStatus(status.long)) {
-    const maxEventMinute = getMaxEventElapsedMinute(events)
+    if (statusMinute === null) return maxEventMinute
+    if (maxEventMinute === null) return statusMinute
 
+    return Math.max(statusMinute, maxEventMinute)
+  }
+
+  if (isHeaderLiveStatus(status.short)) {
     if (statusMinute === null) return maxEventMinute
     if (maxEventMinute === null) return statusMinute
 
@@ -1941,6 +1948,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
   const homeLineup = data.homeLineup
   const awayLineup = data.awayLineup
 
+  const renderedAt = new Date().toISOString()
   const homeColors = getTeamStyle(homeTeam.name, true, homeLineup, 'player')
   const awayColors = getTeamStyle(awayTeam.name, false, awayLineup, 'player')
   const statusDisplayElapsed = getMatchDisplayElapsed(status, events)
@@ -2015,7 +2023,6 @@ export default async function PartidoDetallePage({ params }: PageProps) {
     homePenaltyScore: penaltyScore.home,
     awayPenaltyScore: penaltyScore.away,
   })} ${awayTeamDisplayName} - ${translateLeagueName(fixture.league.name)}`
-  const renderedAt = new Date().toISOString()
   const renderedAtMs = Date.parse(renderedAt)
   const matchKickoffMs = Date.parse(fixture.fixture.date)
   const isMatchInActiveWindow =
@@ -2112,7 +2119,14 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                   headerStatusIsLive ? 'text-[#7ff0b2]' : 'text-[#dce5ef]'
                 }`}
               >
-                {headerStatusLabel}
+                <LiveMatchClockLabel
+                  statusShort={status.short}
+                  statusLong={status.long}
+                  date={fixture.fixture.date}
+                  initialElapsed={statusDisplayElapsed}
+                  initialLabel={headerStatusLabel}
+                  renderedAt={renderedAt}
+                />
               </div>
               <div className="mt-1 whitespace-nowrap text-3xl font-black leading-none tracking-normal text-white md:mt-2 md:text-6xl">
                 {formatMatchScoreWithPenalties({

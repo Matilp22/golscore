@@ -551,18 +551,18 @@ export function normalizeSubstitutionEvent(
   const assistLooksLikeStarter = playerMatchesRef(assistRef, context.starters)
   const playerLooksLikeStarter = playerMatchesRef(playerRef, context.starters)
   const assistLooksLikeSubstitute = playerMatchesRef(assistRef, context.substitutes)
-  const apiFootballShape = playerLooksLikeSubstitute && assistLooksLikeStarter
-  const reversedShape = playerLooksLikeStarter && assistLooksLikeSubstitute
+  const apiFootballShape = playerLooksLikeStarter && assistLooksLikeSubstitute
+  const reversedShape = playerLooksLikeSubstitute && assistLooksLikeStarter
   const playerInName = apiFootballShape
-    ? player?.name ?? null
+    ? getEventAssistName(event)
     : reversedShape
-      ? assist?.name ?? null
-      : getEventPlayerName(event)
-  const playerOutName = apiFootballShape
-    ? assist?.name ?? null
-    : reversedShape
-      ? player?.name ?? null
+      ? getEventPlayerName(event)
       : getEventAssistName(event)
+  const playerOutName = apiFootballShape
+    ? getEventPlayerName(event)
+    : reversedShape
+      ? getEventAssistName(event)
+      : getEventPlayerName(event)
 
   return {
     type: 'substitution' as const,
@@ -981,7 +981,7 @@ export function normalizeMatchEvent(event: FootballEventLike): NormalizedMatchEv
   else if (kind === 'yellow-card' || kind === 'red-card' || kind === 'second-yellow') {
     playerRole = 'carded'
   } else if (kind === 'substitution') {
-    playerRole = 'substituted_in'
+    playerRole = 'substituted_out'
   } else if (kind === 'var') {
     playerRole = 'var_subject'
   }
