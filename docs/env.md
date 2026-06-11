@@ -36,6 +36,25 @@ CRON_SECRET=YOUR_CRON_SECRET
 
 `YOUTUBE_API_KEY` la usa `/api/cron/sync-match-highlights` para buscar resumenes y guardar `highlights_url` en Supabase desde servidor.
 
+## Variables opcionales para abrir links en app instalada
+
+La PWA usa `manifest.json` con `scope`, `id` y `launch_handler` para mejorar el manejo de links cuando el navegador lo soporta. Para una app nativa Android/iOS tambien se publican los endpoints:
+
+```text
+/.well-known/assetlinks.json
+/.well-known/apple-app-site-association
+```
+
+Configurar estas variables solo si existe app nativa publicada:
+
+```env
+ANDROID_APP_PACKAGE_NAME=com.example.hayfulbo
+ANDROID_APP_SHA256_CERT_FINGERPRINTS=AA:BB:CC:...
+IOS_APP_IDS=TEAMID.com.example.hayfulbo
+```
+
+Sin esos identificadores, Android/iOS no pueden abrir links universales en una app nativa. En iOS tampoco se puede forzar desde la web que un link externo abra una PWA instalada; depende del soporte del navegador/sistema.
+
 ## Duplicados
 
 No debe haber `.env.local` activos dentro de `frontend/`, `src/` ni subcarpetas. Si aparecen, renombrarlos a `.env.local.backup` para preservar el contenido sin que confundan el runtime.

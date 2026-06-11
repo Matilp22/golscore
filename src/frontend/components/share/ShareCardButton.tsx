@@ -36,10 +36,14 @@ export default function ShareCardButton({
     }),
     [absoluteUrl, fileName, text, title]
   )
-  const { isGenerating, message, error, downloadImage, shareImage } = useShareCardAsImage(
-    targetId,
-    shareOptions
-  )
+  const {
+    isGenerating,
+    message,
+    error,
+    downloadImage,
+    openImage,
+    shareImage,
+  } = useShareCardAsImage(targetId, shareOptions)
   const encodedText = encodeURIComponent(`${text}\n${absoluteUrl}`)
 
   useEffect(() => {
@@ -108,7 +112,7 @@ export default function ShareCardButton({
                       Compartir imagen
                     </p>
                     <p className="mt-1 text-xs text-[#9aa7b5]">
-                      Generá una imagen de esta card.
+                      Genera una imagen de esta card.
                     </p>
                   </div>
                   <button
@@ -118,7 +122,7 @@ export default function ShareCardButton({
                     aria-label="Cerrar"
                     title="Cerrar"
                   >
-                    ×
+                    x
                   </button>
                 </div>
 
@@ -147,7 +151,7 @@ export default function ShareCardButton({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setLocalMessage('Instagram web no permite adjuntar la imagen directo. Descargá la imagen para subirla a Instagram.')}
+                    onClick={() => setLocalMessage('Instagram web no permite adjuntar la imagen directo. Descarga la imagen para subirla a Instagram.')}
                     className="hf-button-secondary h-10 rounded-xl px-3 text-left text-sm font-semibold"
                   >
                     Instagram
@@ -166,6 +170,14 @@ export default function ShareCardButton({
                     className="hf-button-secondary h-10 rounded-xl px-3 text-left text-sm font-semibold disabled:cursor-wait disabled:opacity-60"
                   >
                     Descargar PNG
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openImage}
+                    disabled={isGenerating}
+                    className="hf-button-secondary h-10 rounded-xl px-3 text-left text-sm font-semibold disabled:cursor-wait disabled:opacity-60"
+                  >
+                    Abrir PNG
                   </button>
                 </div>
                 {localMessage || message || error ? (

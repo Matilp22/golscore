@@ -1,9 +1,11 @@
-const STATIC_CACHE = 'hayfulbo-static-assets-v2'
-const PAGE_CACHE = 'hayfulbo-pages-assets-v2'
+const STATIC_CACHE = 'hayfulbo-static-assets-v3'
+const PAGE_CACHE = 'hayfulbo-pages-assets-v3'
 const STATIC_ASSETS = [
   '/manifest.json',
   '/favicon.svg',
   '/icons/hay-fulbo-icon.svg',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
   '/brand/hay-fulbo-mark.svg',
 ]
 
