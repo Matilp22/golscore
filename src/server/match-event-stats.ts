@@ -151,6 +151,14 @@ function toNumericExternalId(value?: DbId | null) {
   return Number.isFinite(numericValue) ? numericValue : undefined
 }
 
+function getMatchDateTimestamp(value?: string | null) {
+  if (!value) return 0
+
+  const timestamp = new Date(value).getTime()
+
+  return Number.isFinite(timestamp) ? timestamp : 0
+}
+
 async function fetchAllByRange<T>(
   makeQuery: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: unknown }>
 ) {
@@ -969,6 +977,7 @@ export async function syncCompetitionIncidents(input: {
         Boolean(input.force)
       )
     })
+    .sort((a, b) => getMatchDateTimestamp(b.match_date) - getMatchDateTimestamp(a.match_date))
     .slice(0, limit)
   const items: Array<{
     matchId: DbId

@@ -433,6 +433,11 @@ type BracketTree = {
   }>
 }
 
+type EmptyBracketConfig = {
+  firstStageKey: BracketStageKey
+  firstStageMatchesCount?: number
+}
+
 function groupBracketMatchesByStage(fixtures: LeagueFixtureSummary[]) {
   const groupedByStage = new Map<BracketStageKey, BracketMatchCard[]>()
   for (const fixture of fixtures) {
@@ -533,6 +538,12 @@ function placeStageMatches(
   return { matchSlots, unpositioned }
 }
 
+function getBracketStageKeysFrom(firstStageKey: BracketStageKey) {
+  const firstStageIndex = BRACKET_STAGE_ORDER.indexOf(firstStageKey)
+
+  return firstStageIndex >= 0 ? BRACKET_STAGE_ORDER.slice(firstStageIndex) : []
+}
+
 function getDerivedWinnerParticipant(slot?: BracketSlot): BracketParticipant {
   const winner = slot ? getMatchWinner(slot.match) : null
 
@@ -603,16 +614,7 @@ function createBracketSlot(
 
 function buildCopaArgentinaBracket(fixtures: LeagueFixtureSummary[]): BracketTree {
   const groupedByStage = groupBracketMatchesByStage(fixtures)
-  const actualStageKeys = BRACKET_STAGE_ORDER.filter((stageKey) => groupedByStage.has(stageKey))
-  if (!actualStageKeys.length) {
-    return {
-      columns: [],
-      slotsByPhase: new Map(),
-      unpositioned: [],
-    }
-  }
-
-  const stageKeys = BRACKET_STAGE_ORDER.slice(BRACKET_STAGE_ORDER.indexOf('r64'))
+  const stageKeys = getBracketStageKeysFrom('r64')
   const columns: BracketColumn[] = []
   const slotsByPhase = new Map<BracketStageKey, BracketSlot[]>()
   const unpositioned: BracketTree['unpositioned'] = []
@@ -670,15 +672,20 @@ function buildBracketColumns(fixtures: LeagueFixtureSummary[]): BracketColumn[] 
 
 function buildGenericBracketColumns(
   fixtures: LeagueFixtureSummary[],
-  options: { advanceWinners?: boolean } = {}
+  options: { advanceWinners?: boolean; emptyBracket?: EmptyBracketConfig } = {}
 ): BracketColumn[] {
   const groupedByStage = groupBracketMatchesByStage(fixtures)
   const actualStageKeys = BRACKET_STAGE_ORDER.filter((stageKey) => groupedByStage.has(stageKey))
-  if (!actualStageKeys.length) return []
+  const firstStageKey = actualStageKeys[0] ?? options.emptyBracket?.firstStageKey
+  if (!firstStageKey) return []
 
-  const firstStageIndex = BRACKET_STAGE_ORDER.findIndex((stageKey) => stageKey === actualStageKeys[0])
-  const stageKeys = BRACKET_STAGE_ORDER.slice(firstStageIndex)
-  const firstStageMatchesCount = groupedByStage.get(stageKeys[0])?.length || 0
+  const stageKeys = getBracketStageKeysFrom(firstStageKey)
+  if (!stageKeys.length) return []
+
+  const firstStageMatchesCount =
+    groupedByStage.get(stageKeys[0])?.length ||
+    options.emptyBracket?.firstStageMatchesCount ||
+    BRACKET_STAGE_MATCH_COUNTS[firstStageKey]
   let previousStageMatches: BracketMatchCard[] | undefined
 
   return stageKeys.map((stageKey, stageIndex) => {
@@ -2126,10 +2133,12 @@ function BracketView({
   rounds,
   useCopaArgentinaTree = false,
   advanceGenericWinners = false,
+  emptyBracket,
 }: {
   rounds: ReturnType<typeof buildKnockoutRounds>
   useCopaArgentinaTree?: boolean
   advanceGenericWinners?: boolean
+  emptyBracket?: EmptyBracketConfig
 }) {
   const bracketFixtures = rounds.flatMap((round) =>
     round.matches.map((match) => ({
@@ -2139,7 +2148,10 @@ function BracketView({
   )
   const columns = useCopaArgentinaTree
     ? buildBracketColumns(bracketFixtures)
-    : buildGenericBracketColumns(bracketFixtures, { advanceWinners: advanceGenericWinners })
+    : buildGenericBracketColumns(bracketFixtures, {
+        advanceWinners: advanceGenericWinners,
+        emptyBracket,
+      })
 
   if (!columns.length) return null
 
@@ -2458,6 +2470,22 @@ export default async function LigaPage({ params }: PageProps) {
   const knockoutRounds = displayOptions.showBracket && !isUefaLeaguePhaseTournament
     ? buildKnockoutRounds(fixtures, resolvedTournament?.leagueId ?? null)
     : []
+  const emptyBracket = tournament.key === 'argentina-liga-profesional'
+    ? {
+        firstStageKey: 'r16',
+        firstStageMatchesCount: 8,
+      } satisfies EmptyBracketConfig
+    : tournament.key === 'argentina-copa-argentina'
+      ? {
+          firstStageKey: 'r64',
+          firstStageMatchesCount: 32,
+        } satisfies EmptyBracketConfig
+      : undefined
+  const shouldRenderKnockoutBracket =
+    displayOptions.showBracket &&
+    !isUefaLeaguePhaseTournament &&
+    !showGroupStageCards &&
+    (knockoutRounds.length > 0 || Boolean(emptyBracket))
   const latestCopaArgentinaRound =
     tournament.key === 'argentina-copa-argentina'
       ? getLatestActiveCopaArgentinaRound(knockoutRounds.flatMap((round) => round.matches))
@@ -2697,11 +2725,12 @@ export default async function LigaPage({ params }: PageProps) {
             </>
           ) : null}
 
-          {!isUefaLeaguePhaseTournament && !showGroupStageCards && knockoutRounds.length ? (
+          {shouldRenderKnockoutBracket ? (
             <BracketView
               rounds={knockoutRounds}
               useCopaArgentinaTree={tournament.key === 'argentina-copa-argentina'}
               advanceGenericWinners={tournament.key === 'argentina-liga-profesional'}
+              emptyBracket={emptyBracket}
             />
           ) : null}
 

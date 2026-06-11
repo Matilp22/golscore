@@ -1,4 +1,5 @@
 export const LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID = 128
+export const COPA_ARGENTINA_EXTERNAL_ID = 130
 export const WORLD_CUP_EXTERNAL_ID = 1
 
 export type LeagueFinalPhaseKey = 'octavos' | 'cuartos' | 'semifinal' | 'final'

@@ -284,6 +284,68 @@ function getRawFixturesFromPayload(payload: unknown) {
   return []
 }
 
+function getFixtureDateKey(date: string | null | undefined) {
+  const value = date?.trim()
+  if (!value) return null
+
+  const datePart = value.slice(0, 10)
+
+  return /^\d{4}-\d{2}-\d{2}$/.test(datePart) ? datePart : value
+}
+
+function getFixtureTeamKey(input?: { id?: string | number | null; name?: string | null } | null) {
+  if (input?.id !== null && input?.id !== undefined && String(input.id).trim()) {
+    return `id:${input.id}`
+  }
+
+  const nameKey = normalizeTeamKey(input?.name)
+
+  return nameKey ? `name:${nameKey}` : null
+}
+
+function getFixtureSemanticDedupeKey(input: unknown) {
+  if (!input || typeof input !== 'object') return null
+
+  const fixture = input as {
+    fixture?: { date?: string | null } | null
+    teams?: {
+      home?: { id?: string | number | null; name?: string | null } | null
+      away?: { id?: string | number | null; name?: string | null } | null
+    } | null
+    goals?: { home?: string | number | null; away?: string | number | null } | null
+  }
+  const date = getFixtureDateKey(fixture.fixture?.date)
+  const homeTeam = getFixtureTeamKey(fixture.teams?.home)
+  const awayTeam = getFixtureTeamKey(fixture.teams?.away)
+  const homeGoals = fixture.goals?.home
+  const awayGoals = fixture.goals?.away
+
+  if (
+    !date ||
+    !homeTeam ||
+    !awayTeam ||
+    homeGoals === null ||
+    homeGoals === undefined ||
+    awayGoals === null ||
+    awayGoals === undefined
+  ) {
+    return null
+  }
+
+  const [firstTeam, secondTeam] = [homeTeam, awayTeam].sort()
+  const firstGoals = firstTeam === homeTeam ? homeGoals : awayGoals
+  const secondGoals = firstTeam === homeTeam ? awayGoals : homeGoals
+
+  return [
+    'match',
+    date,
+    firstTeam,
+    secondTeam,
+    firstGoals,
+    secondGoals,
+  ].join(':')
+}
+
 function getFixtureDedupeKey(input: unknown) {
   if (!input || typeof input !== 'object') return null
 
@@ -295,6 +357,10 @@ function getFixtureDedupeKey(input: unknown) {
     } | null
     goals?: { home?: string | number | null; away?: string | number | null } | null
   }
+  const semanticKey = getFixtureSemanticDedupeKey(input)
+
+  if (semanticKey) return semanticKey
+
   const fixtureId = fixture.fixture?.id
 
   if (fixtureId !== null && fixtureId !== undefined && String(fixtureId).trim()) {
