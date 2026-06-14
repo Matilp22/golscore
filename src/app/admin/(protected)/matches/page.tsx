@@ -5,6 +5,7 @@ import { saveMatchDetailsAction } from '@/app/admin/actions'
 import {
   getAdminMatchesPageData,
   type AdminEditableMatch,
+  type AdminMatchListMode,
 } from '@/server/admin/matches'
 import { formatDateTime } from '@/server/admin/shared'
 
@@ -16,7 +17,26 @@ type PageProps = {
     q?: string
     fixture?: string
     saved?: string
+    view?: string
   }>
+}
+
+const MATCH_LIST_MODE_LABELS: Record<AdminMatchListMode, string> = {
+  today: 'Hoy',
+  'world-cup': 'Copa del Mundo',
+  upcoming: 'Próximos',
+  recent: 'Recientes',
+  search: 'Búsqueda',
+}
+
+function normalizeMatchListMode(view: string | null | undefined, query: string): AdminMatchListMode {
+  if (view === 'world-cup' || view === 'upcoming' || view === 'recent' || view === 'search') {
+    return view
+  }
+
+  if (query.trim()) return 'search'
+
+  return 'today'
 }
 
 function formatDateTimeLocalValue(value: string | null | undefined) {
@@ -39,9 +59,15 @@ function formatDateTimeLocalValue(value: string | null | undefined) {
   return `${byType.get('year')}-${byType.get('month')}-${byType.get('day')}T${byType.get('hour')}:${byType.get('minute')}`
 }
 
-function buildMatchesPath(input: { query?: string; fixture?: string; saved?: string }) {
+function buildMatchesPath(input: {
+  query?: string
+  fixture?: string
+  saved?: string
+  view?: AdminMatchListMode
+}) {
   const params = new URLSearchParams()
 
+  if (input.view && input.view !== 'today') params.set('view', input.view)
   if (input.query) params.set('q', input.query)
   if (input.fixture) params.set('fixture', input.fixture)
   if (input.saved) params.set('saved', input.saved)
@@ -111,13 +137,29 @@ function MatchSelector({
   fixtures,
   selectedFixtureId,
   query,
+  mode,
 }: {
   fixtures: AdminEditableMatch[]
   selectedFixtureId: string | null
   query: string
+  mode: AdminMatchListMode
 }) {
   if (!fixtures.length) {
-    return <p className="text-sm text-[#9aa7b5]">No hay partidos para ese filtro.</p>
+    return (
+      <div className="rounded-xl border border-white/8 bg-black/10 p-3 text-sm text-[#9aa7b5]">
+        <p>No hay partidos para ese filtro.</p>
+        {mode === 'today' ? (
+          <p className="mt-2 text-xs">
+            Si esperabas ver partidos de hoy, revisá que el sync del día esté ejecutado.
+          </p>
+        ) : null}
+        {mode === 'world-cup' ? (
+          <p className="mt-2 text-xs">
+            Si faltan partidos del Mundial, corré el sync de la Copa del Mundo o buscá por fixture id.
+          </p>
+        ) : null}
+      </div>
+    )
   }
 
   return (
@@ -129,7 +171,7 @@ function MatchSelector({
         return (
           <Link
             key={fixture.cacheId}
-            href={buildMatchesPath({ query, fixture: fixture.fixtureExternalId })}
+            href={buildMatchesPath({ query, fixture: fixture.fixtureExternalId, view: mode })}
             className={`block rounded-xl border px-3 py-2 transition ${
               active
                 ? 'border-[#70ff9d]/35 bg-[#123022]/80 text-white'
@@ -258,11 +300,13 @@ function MatchEditor({
 export default async function AdminMatchesPage({ searchParams }: PageProps) {
   const params = await searchParams
   const query = params.q ?? ''
+  const mode = normalizeMatchListMode(params.view, query)
   const selectedFixtureId = params.fixture ?? null
-  const pageResult = await getAdminMatchesPageData(query, selectedFixtureId)
+  const pageResult = await getAdminMatchesPageData(query, selectedFixtureId, mode)
   const { fixtures, selectedMatch } = pageResult.data
   const activeFixtureId = selectedMatch?.fixtureExternalId ?? selectedFixtureId
-  const returnPath = buildMatchesPath({ query, fixture: activeFixtureId ?? undefined })
+  const returnPath = buildMatchesPath({ query, fixture: activeFixtureId ?? undefined, view: mode })
+  const modes: AdminMatchListMode[] = ['today', 'world-cup', 'upcoming', 'recent']
 
   return (
     <div className="space-y-4">
@@ -284,9 +328,30 @@ export default async function AdminMatchesPage({ searchParams }: PageProps) {
       <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
         <AdminCard
           title="Partidos"
-          description="Busca un fixture cacheado y elegilo para editar sus datos visibles."
+          description={`Filtro activo: ${MATCH_LIST_MODE_LABELS[mode]}. Busca un fixture cacheado y elegilo para editar sus datos visibles.`}
         >
+          <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-2">
+            {modes.map((item) => {
+              const active = item === mode
+
+              return (
+                <Link
+                  key={item}
+                  href={buildMatchesPath({ view: item })}
+                  className={`inline-flex min-h-10 items-center justify-center rounded-xl border px-3 text-center text-xs font-black transition ${
+                    active
+                      ? 'border-[#70ff9d]/40 bg-[#123022] text-white'
+                      : 'border-white/8 bg-black/10 text-[#cbd7e3] hover:border-[#70ff9d]/25'
+                  }`}
+                >
+                  {MATCH_LIST_MODE_LABELS[item]}
+                </Link>
+              )
+            })}
+          </div>
+
           <form className="mb-4 flex flex-col gap-2 sm:flex-row xl:flex-col" action="/admin/matches">
+            <input type="hidden" name="view" value={mode} />
             <input
               name="q"
               defaultValue={query}
@@ -302,6 +367,7 @@ export default async function AdminMatchesPage({ searchParams }: PageProps) {
             fixtures={fixtures}
             selectedFixtureId={activeFixtureId}
             query={query}
+            mode={mode}
           />
         </AdminCard>
 

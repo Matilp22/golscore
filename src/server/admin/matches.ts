@@ -1,10 +1,11 @@
 import 'server-only'
 
-import { getArgentinaDateISO, toArgentinaDate } from '@/shared/utils/argentina-time'
+import { addDaysToISO, getArgentinaDateISO, toArgentinaDate } from '@/shared/utils/argentina-time'
 import {
   asRecord,
   getAdminClient,
   matchesFixtureSearch,
+  normalizeSearch,
   serializeCachedFixture,
   toAdminDataError,
   type AdminDataResult,
@@ -57,6 +58,8 @@ export type AdminMatchesPageData = {
   fixtures: AdminEditableMatch[]
   selectedMatch: AdminEditableMatch | null
 }
+
+export type AdminMatchListMode = 'today' | 'world-cup' | 'upcoming' | 'recent' | 'search'
 
 export type AdminMatchDetailsInput = {
   fixtureExternalId: string
@@ -155,6 +158,14 @@ function getCacheRowsQuery() {
     .order('updated_at', { ascending: false })
 }
 
+function getCacheRowsAscendingQuery() {
+  return getAdminClient()
+    .from('football_fixture_cache')
+    .select('id, date, fixture_external_id, league_external_id, normalized_payload, payload, updated_at, created_at')
+    .order('date', { ascending: true })
+    .order('updated_at', { ascending: false })
+}
+
 function parseEditableMatch(row: FixtureCacheRow): AdminEditableMatch {
   const cached = serializeCachedFixture(row)
   const normalized = asRecord(row.normalized_payload)
@@ -247,6 +258,123 @@ function parseEditableMatch(row: FixtureCacheRow): AdminEditableMatch {
     highlightsTitle:
       firstText(readText(normalized, 'highlightsTitle'), readText(normalized, 'highlights_title')) ??
       null,
+  }
+}
+
+function normalizeAdminMatchListMode(
+  mode: string | null | undefined,
+  query: string | null | undefined
+): AdminMatchListMode {
+  if (mode === 'world-cup' || mode === 'upcoming' || mode === 'recent' || mode === 'search') {
+    return mode
+  }
+
+  if (query?.trim()) return 'search'
+
+  return 'today'
+}
+
+function dedupeFixtureRows(rows: FixtureCacheRow[]) {
+  const seen = new Set<string>()
+  const deduped: FixtureCacheRow[] = []
+
+  for (const row of rows) {
+    const key = String(row.fixture_external_id || row.id)
+    if (seen.has(key)) continue
+
+    seen.add(key)
+    deduped.push(row)
+  }
+
+  return deduped
+}
+
+function isWorldCupFixture(fixture: AdminEditableMatch) {
+  if (fixture.leagueExternalId === '1') return true
+
+  const haystack = normalizeSearch([
+    fixture.leagueName,
+    fixture.country,
+    fixture.round,
+  ].filter(Boolean).join(' '))
+  const looksLikeWorldCup =
+    haystack.includes('world cup') ||
+    haystack.includes('fifa world cup') ||
+    haystack.includes('copa del mundo') ||
+    haystack.includes('mundial')
+  const looksLikeQualifier =
+    haystack.includes('qualification') ||
+    haystack.includes('qualifier') ||
+    haystack.includes('eliminatoria') ||
+    haystack.includes('play off') ||
+    haystack.includes('playoff')
+
+  return looksLikeWorldCup && !looksLikeQualifier
+}
+
+async function getRowsForAdminMatchesMode(mode: AdminMatchListMode) {
+  const today = getArgentinaDateISO()
+
+  if (mode === 'today') {
+    const { data, error } = await getCacheRowsAscendingQuery()
+      .eq('date', today)
+      .limit(600)
+
+    return {
+      data: (data ?? []) as FixtureCacheRow[],
+      error,
+    }
+  }
+
+  if (mode === 'upcoming') {
+    const { data, error } = await getCacheRowsAscendingQuery()
+      .gte('date', today)
+      .lte('date', addDaysToISO(today, 14))
+      .limit(900)
+
+    return {
+      data: (data ?? []) as FixtureCacheRow[],
+      error,
+    }
+  }
+
+  if (mode === 'world-cup') {
+    const byLeague = await getCacheRowsAscendingQuery()
+      .eq('league_external_id', '1')
+      .limit(300)
+    const byDateWindow = await getCacheRowsAscendingQuery()
+      .gte('date', '2026-06-01')
+      .lte('date', '2026-07-31')
+      .limit(2500)
+
+    if (byLeague.error) {
+      return {
+        data: [] as FixtureCacheRow[],
+        error: byLeague.error,
+      }
+    }
+
+    if (byDateWindow.error) {
+      return {
+        data: [] as FixtureCacheRow[],
+        error: byDateWindow.error,
+      }
+    }
+
+    return {
+      data: dedupeFixtureRows([
+        ...((byLeague.data ?? []) as FixtureCacheRow[]),
+        ...((byDateWindow.data ?? []) as FixtureCacheRow[]),
+      ]),
+      error: null,
+    }
+  }
+
+  const { data, error } = await getCacheRowsQuery().limit(mode === 'search' ? 2500 : 600)
+
+  return {
+    data: (data ?? []) as FixtureCacheRow[],
+    error,
   }
 }
 
@@ -449,7 +577,8 @@ async function updateStoredMatch(input: AdminMatchDetailsInput) {
 
 export async function getAdminMatchesPageData(
   query: string | null | undefined,
-  selectedFixtureId?: string | null
+  selectedFixtureId?: string | null,
+  mode?: string | null
 ): Promise<AdminDataResult<AdminMatchesPageData>> {
   const fallback: AdminMatchesPageData = {
     fixtures: [],
@@ -457,7 +586,8 @@ export async function getAdminMatchesPageData(
   }
 
   try {
-    const { data, error } = await getCacheRowsQuery().limit(350)
+    const listMode = normalizeAdminMatchListMode(mode, query)
+    const { data, error } = await getRowsForAdminMatchesMode(listMode)
 
     if (error) {
       return {
@@ -467,15 +597,24 @@ export async function getAdminMatchesPageData(
     }
 
     const rows = (data ?? []) as FixtureCacheRow[]
-    const allFixtures = rows.map(parseEditableMatch)
+    const allFixtures = rows
+      .map(parseEditableMatch)
+      .filter((fixture) => (listMode === 'world-cup' ? isWorldCupFixture(fixture) : true))
     const fixtures = allFixtures
       .filter((fixture) => matchesFixtureSearch(fixture, query ?? ''))
       .slice(0, 120)
-    const selectedMatch =
-      (selectedFixtureId
+    const selectedMatchFromList =
+      selectedFixtureId
         ? allFixtures.find((fixture) => fixture.fixtureExternalId === selectedFixtureId) ??
           fixtures.find((fixture) => fixture.fixtureExternalId === selectedFixtureId)
-        : null) ??
+        : null
+    const selectedRow =
+      selectedFixtureId && !selectedMatchFromList
+        ? await findFixtureCacheRow(selectedFixtureId)
+        : null
+    const selectedMatch =
+      selectedMatchFromList ??
+      (selectedRow ? parseEditableMatch(selectedRow) : null) ??
       fixtures[0] ??
       null
 
