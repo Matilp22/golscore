@@ -81,6 +81,27 @@ function sanitizeAdminReturnPath(value: string) {
   return value
 }
 
+function withAdminMatchStatus(
+  returnPath: string,
+  status: {
+    saved?: boolean
+    error?: string
+  }
+) {
+  const [pathname, rawQuery = ''] = returnPath.split('?')
+  const params = new URLSearchParams(rawQuery)
+
+  params.delete('saved')
+  params.delete('error')
+
+  if (status.saved) params.set('saved', '1')
+  if (status.error) params.set('error', status.error)
+
+  const queryString = params.toString()
+
+  return `${pathname}${queryString ? `?${queryString}` : ''}`
+}
+
 function getActionErrorMessage(error: unknown) {
   if (error instanceof AdminAuthError) return error.message
   if (error instanceof Error) return error.message
@@ -185,34 +206,40 @@ export async function saveMatchDetailsAction(formData: FormData) {
   await requireAdmin()
 
   const fixtureExternalId = readString(formData, 'fixtureExternalId')
+  const returnPath = sanitizeAdminReturnPath(readString(formData, 'returnPath'))
 
-  await updateAdminMatchDetails({
-    fixtureExternalId,
-    leagueExternalId: readOptionalString(formData, 'leagueExternalId'),
-    leagueName: readOptionalString(formData, 'leagueName'),
-    country: readOptionalString(formData, 'country'),
-    season: readNullableInteger(formData, 'season'),
-    round: readOptionalString(formData, 'round'),
-    date: readOptionalString(formData, 'date'),
-    homeTeam: readOptionalString(formData, 'homeTeam'),
-    awayTeam: readOptionalString(formData, 'awayTeam'),
-    homeLogo: readOptionalString(formData, 'homeLogo'),
-    awayLogo: readOptionalString(formData, 'awayLogo'),
-    goalsHome: readNullableInteger(formData, 'goalsHome'),
-    goalsAway: readNullableInteger(formData, 'goalsAway'),
-    homePenaltyScore: readNullableInteger(formData, 'homePenaltyScore'),
-    awayPenaltyScore: readNullableInteger(formData, 'awayPenaltyScore'),
-    minute: readNullableInteger(formData, 'minute'),
-    statusShort: readOptionalString(formData, 'statusShort'),
-    statusLong: readOptionalString(formData, 'statusLong'),
-    venueName: readOptionalString(formData, 'venueName'),
-    venueCity: readOptionalString(formData, 'venueCity'),
-    referee: readOptionalString(formData, 'referee'),
-    tv: readOptionalString(formData, 'tv'),
-    broadcastLogoUrl: readOptionalString(formData, 'broadcastLogoUrl'),
-    highlightsUrl: readOptionalString(formData, 'highlightsUrl'),
-    highlightsTitle: readOptionalString(formData, 'highlightsTitle'),
-  })
+  try {
+    await updateAdminMatchDetails({
+      fixtureExternalId,
+      leagueExternalId: readOptionalString(formData, 'leagueExternalId'),
+      leagueName: readOptionalString(formData, 'leagueName'),
+      country: readOptionalString(formData, 'country'),
+      season: readNullableInteger(formData, 'season'),
+      round: readOptionalString(formData, 'round'),
+      date: readOptionalString(formData, 'date'),
+      homeTeam: readOptionalString(formData, 'homeTeam'),
+      awayTeam: readOptionalString(formData, 'awayTeam'),
+      homeLogo: readOptionalString(formData, 'homeLogo'),
+      awayLogo: readOptionalString(formData, 'awayLogo'),
+      goalsHome: readNullableInteger(formData, 'goalsHome'),
+      goalsAway: readNullableInteger(formData, 'goalsAway'),
+      homePenaltyScore: readNullableInteger(formData, 'homePenaltyScore'),
+      awayPenaltyScore: readNullableInteger(formData, 'awayPenaltyScore'),
+      minute: readNullableInteger(formData, 'minute'),
+      statusShort: readOptionalString(formData, 'statusShort'),
+      statusLong: readOptionalString(formData, 'statusLong'),
+      venueName: readOptionalString(formData, 'venueName'),
+      venueCity: readOptionalString(formData, 'venueCity'),
+      referee: readOptionalString(formData, 'referee'),
+      tv: readOptionalString(formData, 'tv'),
+      broadcastLogoUrl: readOptionalString(formData, 'broadcastLogoUrl'),
+      highlightsUrl: readOptionalString(formData, 'highlightsUrl'),
+      highlightsTitle: readOptionalString(formData, 'highlightsTitle'),
+    })
+  } catch (error) {
+    console.error('[admin-matches] Failed to save match details.', error)
+    redirect(withAdminMatchStatus(returnPath, { error: getActionErrorMessage(error) }))
+  }
 
   revalidatePath('/admin')
   revalidatePath('/admin/matches')
@@ -220,8 +247,7 @@ export async function saveMatchDetailsAction(formData: FormData) {
   revalidatePath(`/partido/${fixtureExternalId}`)
   revalidatePath('/liga', 'layout')
 
-  const returnPath = sanitizeAdminReturnPath(readString(formData, 'returnPath'))
-  redirect(returnPath.includes('?') ? `${returnPath}&saved=1` : `${returnPath}?saved=1`)
+  redirect(withAdminMatchStatus(returnPath, { saved: true }))
 }
 
 export async function saveAdSlotAction(formData: FormData) {

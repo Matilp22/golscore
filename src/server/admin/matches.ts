@@ -27,6 +27,13 @@ type MatchRow = {
   id: string | number
 }
 
+type MatchPatch = Record<string, string | number | null>
+
+type SupabaseSchemaError = {
+  code?: unknown
+  message?: unknown
+}
+
 export type AdminEditableMatch = CachedFixture & {
   leagueName: string | null
   leagueExternalId: string | null
@@ -148,6 +155,28 @@ function normalizeDateForStorage(value: string | null | undefined) {
 
 function toIntegerOrNull(value: number | null | undefined) {
   return Number.isFinite(value) ? Math.trunc(value as number) : null
+}
+
+function getMissingMatchColumnFromError(error: unknown) {
+  const record = typeof error === 'object' && error !== null ? (error as SupabaseSchemaError) : null
+  const code = typeof record?.code === 'string' ? record.code : null
+  const message = typeof record?.message === 'string' ? record.message : ''
+  const lowerMessage = message.toLowerCase()
+
+  if (
+    code !== 'PGRST204' &&
+    code !== '42703' &&
+    !lowerMessage.includes('schema cache') &&
+    !lowerMessage.includes('column')
+  ) {
+    return null
+  }
+
+  return (
+    message.match(/'([^']+)' column/i)?.[1] ??
+    message.match(/column "([^"]+)"/i)?.[1] ??
+    null
+  )
 }
 
 function getCacheRowsQuery() {
@@ -550,7 +579,7 @@ async function updateStoredMatch(input: AdminMatchDetailsInput) {
   const match = data as MatchRow | null
   if (!match) return
 
-  const patch = {
+  const patch: MatchPatch = {
     round: cleanText(input.round),
     match_date: normalizeDateForStorage(input.date),
     status: cleanText(input.statusShort),
@@ -567,12 +596,36 @@ async function updateStoredMatch(input: AdminMatchDetailsInput) {
     highlights_url: cleanText(input.highlightsUrl),
     highlights_title: cleanText(input.highlightsTitle),
   }
-  const { error: updateError } = await supabase
-    .from('matches')
-    .update(patch)
-    .eq('id', String(match.id))
 
-  if (updateError) throw updateError
+  const remainingPatch: MatchPatch = { ...patch }
+  let lastUpdateError: unknown = null
+
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    if (Object.keys(remainingPatch).length === 0) return
+
+    const { error: updateError } = await supabase
+      .from('matches')
+      .update(remainingPatch)
+      .eq('id', String(match.id))
+
+    if (!updateError) return
+
+    lastUpdateError = updateError
+
+    const missingColumn = getMissingMatchColumnFromError(updateError)
+    if (missingColumn && Object.prototype.hasOwnProperty.call(remainingPatch, missingColumn)) {
+      delete remainingPatch[missingColumn]
+      console.warn('[admin-matches] Optional matches column missing in production schema; skipping it.', {
+        fixtureExternalId,
+        missingColumn,
+      })
+      continue
+    }
+
+    throw updateError
+  }
+
+  throw lastUpdateError
 }
 
 export async function getAdminMatchesPageData(

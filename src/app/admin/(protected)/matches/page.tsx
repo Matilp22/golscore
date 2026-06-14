@@ -17,6 +17,7 @@ type PageProps = {
     q?: string
     fixture?: string
     saved?: string
+    error?: string
     view?: string
   }>
 }
@@ -314,6 +315,14 @@ export default async function AdminMatchesPage({ searchParams }: PageProps) {
         <AdminNotice
           title="Cambios guardados"
           message="El partido fue actualizado y las rutas principales quedaron revalidadas."
+        />
+      ) : null}
+
+      {params.error ? (
+        <AdminNotice
+          title="No se pudo guardar"
+          message={params.error}
+          tone="danger"
         />
       ) : null}
 
