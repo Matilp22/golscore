@@ -722,6 +722,8 @@ type HomeMatchBroadcastRow = {
 
 type CachedHomeFixtureRow = {
   date?: string | null
+  fixture_external_id?: string | number | null
+  league_external_id?: string | number | null
   normalized_payload: unknown
 }
 
@@ -873,7 +875,10 @@ function mergeHomeMatchesByExternalId(
   return [...mergedByExternalId.values()].sort(compareHomeMatchesByDateAndId)
 }
 
-function mapCachedHomeFixturePayload(payload: unknown): MatchListItem | null {
+function mapCachedHomeFixturePayload(
+  payload: unknown,
+  rowMeta?: Pick<CachedHomeFixtureRow, 'date' | 'fixture_external_id' | 'league_external_id'>
+): MatchListItem | null {
   if (!payload || typeof payload !== 'object') return null
 
   const row = payload as Record<string, unknown>
@@ -888,6 +893,33 @@ function mapCachedHomeFixturePayload(payload: unknown): MatchListItem | null {
   const date = getStringFromCachedValue(row.date)
 
   if (!id || !externalId || !league || !home || !away || !date) return null
+
+  if (
+    rowMeta?.fixture_external_id !== null &&
+    rowMeta?.fixture_external_id !== undefined &&
+    String(rowMeta.fixture_external_id) !== String(externalId)
+  ) {
+    console.warn('[home-cache] Ignoring fixture cache row with mismatched external id.', {
+      rowFixtureExternalId: rowMeta.fixture_external_id,
+      payloadExternalId: externalId,
+      home,
+      away,
+    })
+    return null
+  }
+
+  const payloadArgentinaDate = getArgentinaDateKey(date)
+  if (rowMeta?.date && payloadArgentinaDate !== rowMeta.date) {
+    console.warn('[home-cache] Ignoring fixture cache row with mismatched date.', {
+      rowDate: rowMeta.date,
+      payloadDate: date,
+      payloadArgentinaDate,
+      externalId,
+      home,
+      away,
+    })
+    return null
+  }
 
   const excludedReason = getHomeMatchVisibility({
     leagueId,
@@ -941,7 +973,7 @@ async function fetchCachedHomeFixtures(
   ]
   const response = await supabase
     .from('football_fixture_cache')
-    .select('date, normalized_payload')
+    .select('date, fixture_external_id, league_external_id, normalized_payload')
     .in('date', cacheDates)
     .order('fixture_external_id', { ascending: true })
 
@@ -959,7 +991,7 @@ async function fetchCachedHomeFixtures(
   }
 
   return ((response.data ?? []) as CachedHomeFixtureRow[])
-    .map((row) => mapCachedHomeFixturePayload(row.normalized_payload))
+    .map((row) => mapCachedHomeFixturePayload(row.normalized_payload, row))
     .filter((match): match is MatchListItem => Boolean(match))
     .filter((match) => getArgentinaDateKey(match.date) === date)
     .sort(compareHomeMatchesByDateAndId)

@@ -160,6 +160,24 @@ function isInternationalSeniorFriendly(match: ApiMatch) {
   )
 }
 
+function isMainWorldCup2026Match(match: ApiMatch) {
+  const league = leagueText(match)
+
+  return (
+    isExactLeagueId(match, 1) &&
+    (
+      league === 'world cup' ||
+      league === 'fifa world cup' ||
+      league.includes('copa del mundo')
+    ) &&
+    !league.includes('qualification') &&
+    !league.includes('qualifier') &&
+    !league.includes('club') &&
+    !isYouthLeague(match) &&
+    !isWomenLeague(match)
+  )
+}
+
 function isExactLeagueId(match: ApiMatch, leagueId: number) {
   return match.leagueId === leagueId
 }
@@ -951,15 +969,7 @@ const LEAGUE_RULES: LeagueRule[] = [
     sectionKey: 'selecciones',
     sectionTitle: 'Selecciones',
     baseTitle: 'Copa del Mundo 2026',
-    match: (match) => {
-      const league = leagueText(match)
-      return (
-        league.includes('world cup') &&
-        !league.includes('club') &&
-        !league.includes('qualification') &&
-        !league.includes('u20')
-      )
-    },
+    match: isMainWorldCup2026Match,
   },
   {
     key: 'selecciones-sudamericano-sub20',
