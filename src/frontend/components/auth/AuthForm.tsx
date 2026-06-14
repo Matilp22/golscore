@@ -13,12 +13,20 @@ import { translateAuthError } from '@/shared/utils/auth-errors'
 
 type AuthFormProps = {
   mode: 'login' | 'register'
+  defaultNext?: string
+  loginDescription?: string
+  showModeSwitch?: boolean
 }
 
-export default function AuthForm({ mode }: AuthFormProps) {
+export default function AuthForm({
+  mode,
+  defaultNext = '/prode',
+  loginDescription = 'Entra con tu email y contrasena para usar el prode.',
+  showModeSwitch = true,
+}: AuthFormProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const nextPath = searchParams.get('next') || '/prode'
+  const nextPath = searchParams.get('next') || defaultNext
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -87,7 +95,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
       </h1>
       <p className="mt-2 text-sm text-[#8d98a7]">
         {isLogin
-          ? 'Entra con tu email y contrasena para usar el prode.'
+          ? loginDescription
           : 'Crea tu cuenta para guardar predicciones y sumar puntos.'}
       </p>
 
@@ -142,6 +150,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
         </p>
       ) : null}
 
+      {showModeSwitch ? (
       <div className="mt-4 text-sm text-[#8d98a7]">
         {isLogin ? 'No tenes cuenta?' : 'Ya tenes cuenta?'}{' '}
         <Link
@@ -155,6 +164,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
           {isLogin ? 'Registrate' : 'Iniciá sesión'}
         </Link>
       </div>
+      ) : null}
     </div>
   )
 }

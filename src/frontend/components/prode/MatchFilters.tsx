@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslations } from '@/frontend/components/LocaleProvider'
 import type { League, RoundOption } from '@/frontend/types/prode'
+import { getTournamentDisplayName } from '@/shared/i18n/locales'
 
 type MatchFiltersProps = {
   leagues: League[]
@@ -141,20 +143,22 @@ export default function MatchFilters({
   onRoundChange,
   onGroupChange,
 }: MatchFiltersProps) {
+  const { locale, t } = useTranslations()
   const leagueOptions = useMemo(
     () =>
       leagues.map((league) => {
-        const normalizedName = league.name.trim().toLowerCase()
+        const displayName = getTournamentDisplayName(league.slug ?? '', league.name, locale)
+        const normalizedName = displayName.trim().toLowerCase()
         const seasonLabel = String(league.season)
 
         return {
           value: league.id,
           label: normalizedName.endsWith(seasonLabel.toLowerCase())
-            ? league.name
-            : `${league.name} ${league.season}`,
+            ? displayName
+            : `${displayName} ${league.season}`,
         }
       }),
-    [leagues]
+    [leagues, locale]
   )
 
   const roundOptions = useMemo(
@@ -178,25 +182,25 @@ export default function MatchFilters({
     <div className={`hf-card grid w-full min-w-0 gap-3 rounded-2xl p-3 md:p-4 ${
       showGroupFilter ? 'md:grid-cols-2 2xl:grid-cols-3' : 'md:grid-cols-2'
     }`}>
-      <FilterSelect
-        label="Liga"
+        <FilterSelect
+        label={t('prode.league')}
         value={selectedLeagueId}
-        placeholder="Elegir torneo"
+        placeholder={t('prode.chooseTournament')}
         options={leagueOptions}
         onChange={onLeagueChange}
       />
       <FilterSelect
-        label="Fecha / Fase"
+        label={t('prode.roundPhase')}
         value={selectedRound}
-        placeholder="Sin fecha disponible"
+        placeholder={t('prode.noRound')}
         options={roundOptions}
         onChange={onRoundChange}
       />
       {showGroupFilter ? (
         <FilterSelect
-          label="Grupo"
+          label={t('prode.group')}
           value={selectedGroup}
-          placeholder="Sin grupo disponible"
+          placeholder={t('prode.noGroup')}
           options={groupOptions}
           onChange={(group) => onGroupChange?.(group)}
         />

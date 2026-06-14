@@ -1,10 +1,13 @@
-﻿'use client'
+'use client'
 
 import { useMemo, useState, useTransition } from 'react'
+
 import { TeamLogo as AssetTeamLogo } from '@/frontend/components/AssetImage'
+import { useTranslations } from '@/frontend/components/LocaleProvider'
 import type { Match, Prediction } from '@/frontend/types/prode'
 import { getMatchPredictionLockState } from '@/frontend/types/prode'
 import { isFinalMatchStatus, isLiveStatus } from '@/shared/utils/match-status'
+import { getTeamDisplayName } from '@/shared/utils/team-display'
 
 type PredictionFormProps = {
   match: Match
@@ -61,19 +64,17 @@ function TeamLabel({
   name: string
   role: string
 }) {
-  const content = (
-    <>
-      <TeamLogo logoUrl={logoUrl} name={name} />
-      <div className={`min-w-0 ${align === 'right' ? 'text-right' : ''}`}>
-        <p className="break-words text-sm font-bold leading-tight text-white md:truncate">
-          {name}
-        </p>
-        <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8d98a7]">
-          {role}
-        </p>
-      </div>
-    </>
+  const textNode = (
+    <div className={`min-w-0 ${align === 'right' ? 'text-right' : ''}`}>
+      <p className="break-words text-sm font-bold leading-tight text-white md:truncate">
+        {name}
+      </p>
+      <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8d98a7]">
+        {role}
+      </p>
+    </div>
   )
+  const logoNode = <TeamLogo logoUrl={logoUrl} name={name} />
 
   return (
     <div
@@ -81,18 +82,14 @@ function TeamLabel({
     >
       {align === 'right' ? (
         <>
-          <div className="min-w-0 text-right">
-            <p className="break-words text-sm font-bold leading-tight text-white md:truncate">
-              {name}
-            </p>
-            <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8d98a7]">
-              {role}
-            </p>
-          </div>
-          <TeamLogo logoUrl={logoUrl} name={name} />
+          {textNode}
+          {logoNode}
         </>
       ) : (
-        content
+        <>
+          {logoNode}
+          {textNode}
+        </>
       )}
     </div>
   )
@@ -108,15 +105,12 @@ export default function PredictionForm({
   onDraftChange,
   onSave,
 }: PredictionFormProps) {
+  const { locale, t } = useTranslations()
   const hasExistingPrediction = Boolean(prediction)
   const persistedHome = prediction ? toScoreInputValue(prediction.predictedHomeScore) : ''
   const persistedAway = prediction ? toScoreInputValue(prediction.predictedAwayScore) : ''
-  const [home, setHome] = useState(
-    draft?.home ?? persistedHome
-  )
-  const [away, setAway] = useState(
-    draft?.away ?? persistedAway
-  )
+  const [home, setHome] = useState(draft?.home ?? persistedHome)
+  const [away, setAway] = useState(draft?.away ?? persistedAway)
   const [message, setMessage] = useState('')
   const [isPending, startTransition] = useTransition()
   const hasLocalDraft = Boolean(draft)
@@ -131,7 +125,13 @@ export default function PredictionForm({
   const homeValue = shouldUseDraftValue ? home : persistedHome
   const awayValue = shouldUseDraftValue ? away : persistedAway
   const actionLabel =
-    isUnscheduled ? 'A programar' : locked ? 'Bloqueado' : hasExistingPrediction && !isFormEditing ? 'Editar' : 'Guardar'
+    isUnscheduled
+      ? t('common.unscheduled')
+      : locked
+        ? t('prode.locked')
+        : hasExistingPrediction && !isFormEditing
+          ? t('prode.edit')
+          : t('prode.save')
   const predictedHomeScore = homeValue.trim() === '' ? NaN : Number(homeValue)
   const predictedAwayScore = awayValue.trim() === '' ? NaN : Number(awayValue)
   const hasValidScores = useMemo(
@@ -154,12 +154,24 @@ export default function PredictionForm({
   const buttonDisabled = canEnterEditMode ? false : !canSavePrediction
   const hasRealScore = match.homeScore !== null && match.awayScore !== null
   const realScoreStatus = isFinalMatchStatus(match.status)
-    ? 'Final'
+    ? t('common.final')
     : isLiveStatus(match.status)
-      ? 'En vivo'
-      : 'Real'
+      ? t('common.live')
+      : t('common.real')
   const predictionGridClass =
     'grid min-w-0 grid-cols-[minmax(0,1fr)_48px_48px_minmax(0,1fr)] items-center gap-2 md:grid-cols-[minmax(140px,1fr)_58px_24px_58px_minmax(140px,1fr)_104px] md:gap-3'
+  const homeTeamName = getTeamDisplayName({
+    name: match.homeTeam?.name ?? t('prode.home'),
+    league: match.league?.name,
+    country: match.league?.country,
+    locale,
+  })
+  const awayTeamName = getTeamDisplayName({
+    name: match.awayTeam?.name ?? t('prode.away'),
+    league: match.league?.name,
+    country: match.league?.country,
+    locale,
+  })
 
   const handleSave = () => {
     setMessage('')
@@ -174,16 +186,12 @@ export default function PredictionForm({
     }
 
     if (!isAuthenticated) {
-      setMessage('Iniciá sesión para guardar tu predicción.')
+      setMessage(t('prode.signInToSave'))
       return
     }
 
     if (locked) {
-      setMessage(
-        isUnscheduled
-          ? 'El partido todavía no tiene fecha y hora oficial para pronosticar.'
-          : 'La predicción está bloqueada para este partido.'
-      )
+      setMessage(isUnscheduled ? t('prode.unscheduledLock') : t('prode.predictionLocked'))
       return
     }
 
@@ -193,7 +201,7 @@ export default function PredictionForm({
       predictedHomeScore < 0 ||
       predictedAwayScore < 0
     ) {
-      setMessage('Ingresá dos marcadores válidos.')
+      setMessage(t('prode.invalidScores'))
       return
     }
 
@@ -207,9 +215,9 @@ export default function PredictionForm({
         setIsEditing(false)
         setHasUserEdited(false)
         onEditingChange?.(match.id, false)
-        setMessage('Predicción guardada.')
+        setMessage(t('prode.predictionSaved'))
       } catch (error) {
-        setMessage(error instanceof Error ? error.message : 'No se pudo guardar.')
+        setMessage(error instanceof Error ? error.message : t('prode.saveFailed'))
       }
     })
   }
@@ -219,9 +227,7 @@ export default function PredictionForm({
       {hasRealScore ? (
         <div className={`${predictionGridClass} mb-1`}>
           <div className="col-start-2 col-span-2 justify-self-center text-center md:col-start-2 md:col-span-3">
-            <div
-              className="inline-flex flex-col items-center gap-0.5 text-center leading-none text-[#aab5c1]"
-            >
+            <div className="inline-flex flex-col items-center gap-0.5 text-center leading-none text-[#aab5c1]">
               <span
                 className={`text-[10px] font-semibold ${
                   isLiveStatus(match.status) ? 'text-[#7ff0b2]' : 'text-[#8d98a7]'
@@ -239,9 +245,9 @@ export default function PredictionForm({
       <div className={predictionGridClass}>
         <TeamLabel
           className="col-start-1"
-          name={match.homeTeam?.name ?? 'Local'}
+          name={homeTeamName}
           logoUrl={match.homeTeam?.logoUrl}
-          role="Local"
+          role={t('prode.home')}
         />
         <input
           type="number"
@@ -262,7 +268,7 @@ export default function PredictionForm({
             onDraftChange?.(match.id, { home: nextHome, away })
             if (message) setMessage('')
           }}
-          aria-label="Pronóstico local"
+          aria-label={t('prode.homePredictionLabel')}
           className="h-11 w-full min-w-0 rounded-xl border border-[#70ff9d]/20 bg-[#eef5ef] text-center text-base font-black text-[#07110b] outline-none transition focus:border-[#70ff9d] focus:ring-2 focus:ring-[#70ff9d]/20 disabled:bg-[#26303a] disabled:text-[#9aa7b5] disabled:opacity-80"
         />
         <span className="hidden text-center text-xs font-black uppercase text-[#8d98a7] md:block">vs</span>
@@ -285,14 +291,14 @@ export default function PredictionForm({
             onDraftChange?.(match.id, { home, away: nextAway })
             if (message) setMessage('')
           }}
-          aria-label="Pronóstico visitante"
+          aria-label={t('prode.awayPredictionLabel')}
           className="h-11 w-full min-w-0 rounded-xl border border-[#70ff9d]/20 bg-[#eef5ef] text-center text-base font-black text-[#07110b] outline-none transition focus:border-[#70ff9d] focus:ring-2 focus:ring-[#70ff9d]/20 disabled:bg-[#26303a] disabled:text-[#9aa7b5] disabled:opacity-80"
         />
         <TeamLabel
           align="right"
-          name={match.awayTeam?.name ?? 'Visitante'}
+          name={awayTeamName}
           logoUrl={match.awayTeam?.logoUrl}
-          role="Visitante"
+          role={t('prode.away')}
         />
         <button
           type="button"
@@ -300,12 +306,12 @@ export default function PredictionForm({
           onClick={handleSave}
           className="hf-button col-span-4 h-11 rounded-xl px-4 text-sm font-black disabled:cursor-not-allowed disabled:opacity-45 md:col-span-1"
         >
-          {isPending ? 'Guardando' : actionLabel}
+          {isPending ? t('prode.saving') : actionLabel}
         </button>
       </div>
       {isAuthLoading ? (
         <p className="mt-2 text-xs font-semibold text-[#8d98a7]">
-          Verificando sesión...
+          {t('prode.verifyingSession')}
         </p>
       ) : null}
       {message ? (

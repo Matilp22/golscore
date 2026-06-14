@@ -24,6 +24,7 @@ Despues de pegar o cambiar estas claves, reiniciar `npm run dev`. Next no siempr
 - `FOOTBALL_API_BASE_URL`: URL base del proveedor, por defecto `https://v3.football.api-sports.io`.
 - `YOUTUBE_API_KEY`: key privada de YouTube Data API para buscar y guardar resumenes/highlights de partidos finalizados. Nunca debe ir al cliente.
 - `SUPABASE_SERVICE_ROLE_KEY`: key service role para jobs y Edge Functions privadas. Nunca usar en frontend, componentes React, hooks, servicios cliente ni variables `NEXT_PUBLIC_*`.
+- `ADMIN_EMAILS`: lista separada por comas de emails habilitados para entrar a `/admin`. Ejemplo: `miemail@gmail.com,otro@email.com`.
 - `CRON_SECRET`: secreto para proteger cron/jobs.
 - `JWT_SECRET`: reservado para integraciones server-side si se agregan tokens propios.
 
@@ -53,6 +54,7 @@ Importante: si una key estuvo expuesta fuera de `.env.local`, conviene rotarla.
 - No exponer service role con prefijo `NEXT_PUBLIC_`.
 - Los clientes del navegador deben usar solamente `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 - Si una tarea necesita service role, debe vivir en Supabase Functions o en codigo server-side que nunca se empaquete al cliente.
+- `/admin` valida sesion con Supabase Auth y autoriza por email contra `ADMIN_EMAILS` en servidor. No usar `user_metadata` para permisos.
 
 ## Cliente unico del navegador
 

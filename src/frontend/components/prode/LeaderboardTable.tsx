@@ -1,6 +1,8 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+
+import { useTranslations } from '@/frontend/components/LocaleProvider'
 import type { LeaderboardRow, RoundOption } from '@/frontend/types/prode'
 
 type LeaderboardTableProps = {
@@ -17,9 +19,20 @@ type LeaderboardTableProps = {
 type RankingRowsProps = {
   rows: LeaderboardRow[]
   emptyMessage: string
+  exactsLabel: string
+  partialsLabel: string
+  playedLabel: string
+  pointsLabel: string
 }
 
-function RankingRows({ rows, emptyMessage }: RankingRowsProps) {
+function RankingRows({
+  rows,
+  emptyMessage,
+  exactsLabel,
+  partialsLabel,
+  playedLabel,
+  pointsLabel,
+}: RankingRowsProps) {
   if (!rows.length) {
     return (
       <div className="p-4 text-sm text-[#8d98a7]">
@@ -42,13 +55,13 @@ function RankingRows({ rows, emptyMessage }: RankingRowsProps) {
             <div className="min-w-0">
               <p className="break-words font-bold text-white">{row.name}</p>
               <p className="mt-0.5 text-xs leading-5 text-[#8d98a7]">
-                Exactos {row.exactHits} {'\u00b7'} Parciales {row.partialHits}{' '}
-                {'\u00b7'} PJ {row.played}
+                {exactsLabel} {row.exactHits} {'\u00b7'} {partialsLabel} {row.partialHits}{' '}
+                {'\u00b7'} {playedLabel} {row.played}
               </p>
             </div>
           </div>
           <span className="hf-badge shrink-0 rounded-lg px-2 py-0.5 text-base font-black">
-            {row.points} pts
+            {row.points} {pointsLabel}
           </span>
         </div>
       ))}
@@ -66,6 +79,7 @@ export default function LeaderboardTable({
   roundMessage,
   onRoundChange,
 }: LeaderboardTableProps) {
+  const { t } = useTranslations()
   const [activeTab, setActiveTab] = useState<'total' | 'round'>('total')
   const selectedRoundOption = useMemo(
     () => rounds.find((round) => round.value === selectedRound) ?? rounds[0] ?? null,
@@ -75,18 +89,18 @@ export default function LeaderboardTable({
   const activeRows = activeTab === 'total' ? rows : roundRows
   const emptyMessage =
     activeTab === 'total'
-      ? totalMessage || 'Todavía no hay puntos computados.'
-      : roundMessage || 'Todavía no hay puntos para esta fecha.'
+      ? totalMessage || t('prode.noPointsTotal')
+      : roundMessage || t('prode.noPointsRound')
 
   return (
     <aside className="hf-card h-fit w-full min-w-0 overflow-hidden rounded-2xl">
       <div className="hf-section-head px-3 py-3 sm:px-4">
         <div className="flex min-w-0 flex-col gap-3">
-          <h2 className="text-lg font-black text-white">Ranking del Prode</h2>
+          <h2 className="text-lg font-black text-white">{t('prode.rankingTitle')}</h2>
           <div className="grid grid-cols-2 gap-1 rounded-xl border border-white/8 bg-black/25 p-1">
             {[
-              { key: 'total', label: 'Total' },
-              { key: 'round', label: 'Por fecha' },
+              { key: 'total', label: t('prode.total') },
+              { key: 'round', label: t('prode.byRound') },
             ].map((tab) => {
               const isActive = activeTab === tab.key
 
@@ -121,7 +135,7 @@ export default function LeaderboardTable({
                   </option>
                 ))
               ) : (
-                <option value="">Sin fecha disponible</option>
+                <option value="">{t('prode.noRound')}</option>
               )}
             </select>
           ) : null}
@@ -129,9 +143,16 @@ export default function LeaderboardTable({
       </div>
 
       {activeTab === 'round' && isRoundLoading ? (
-        <div className="p-4 text-sm text-[#8d98a7]">Cargando fecha...</div>
+        <div className="p-4 text-sm text-[#8d98a7]">{t('prode.loadingRound')}</div>
       ) : (
-        <RankingRows rows={activeRows} emptyMessage={emptyMessage} />
+        <RankingRows
+          rows={activeRows}
+          emptyMessage={emptyMessage}
+          exactsLabel={t('common.exacts')}
+          partialsLabel={t('common.partials')}
+          playedLabel={t('common.playedShort')}
+          pointsLabel={t('common.pointsAbbr')}
+        />
       )}
     </aside>
   )

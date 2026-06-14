@@ -7,6 +7,7 @@ import MatchList from '@/frontend/components/prode/MatchList'
 import PointsSummary from '@/frontend/components/prode/PointsSummary'
 import PredictionCard from '@/frontend/components/prode/PredictionCard'
 import WorldCupGroupStandings from '@/frontend/components/prode/WorldCupGroupStandings'
+import { useTranslations } from '@/frontend/components/LocaleProvider'
 import { useAuth } from '@/frontend/hooks/useAuth'
 import { useAutoRefresh } from '@/frontend/hooks/useAutoRefresh'
 import { getLeaderboard } from '@/frontend/services/leaderboardService'
@@ -41,6 +42,7 @@ import type {
 } from '@/frontend/types/prode'
 
 export default function ProdePanel() {
+  const { t } = useTranslations()
   const SHOW_MY_PREDICTIONS = false
   const PRODE_REFRESH_INTERVAL_MS = 180000
   const { user, isLoading: isAuthLoading } = useAuth()
@@ -245,7 +247,7 @@ export default function ProdePanel() {
         setMessage(
           error instanceof Error && error.message
             ? error.message
-            : 'No se pudieron cargar las tablas de grupos.'
+            : t('prode.noGroupStandings')
         )
       })
       .finally(() => {
@@ -255,7 +257,7 @@ export default function ProdePanel() {
     return () => {
       active = false
     }
-  }, [isWorldCupLeague, selectedLeagueId])
+  }, [isWorldCupLeague, selectedLeagueId, t])
 
   useEffect(() => {
     if (process.env.NODE_ENV !== 'development') return
@@ -319,7 +321,7 @@ export default function ProdePanel() {
           setMessage(
             error instanceof Error && error.message
               ? error.message
-              : 'No se pudieron cargar los partidos.'
+              : t('home.dataError')
           )
         }
 
@@ -330,7 +332,7 @@ export default function ProdePanel() {
         }
       }
     },
-    [selectedLeagueId]
+    [selectedLeagueId, t]
   )
 
   const loadLeaderboard = useCallback(async () => {
@@ -346,9 +348,9 @@ export default function ProdePanel() {
       setRankingMessage('')
     } catch {
       setLeaderboard([])
-      setRankingMessage('Todavía no hay puntos calculados.')
+      setRankingMessage(t('prode.noPointsTotal'))
     }
-  }, [selectedLeagueId])
+  }, [selectedLeagueId, t])
 
   const loadRoundLeaderboard = useCallback(async () => {
     if (!selectedLeagueId || !selectedLeaderboardRound) {
@@ -369,11 +371,11 @@ export default function ProdePanel() {
       setRoundRankingMessage('')
     } catch {
       setRoundLeaderboard([])
-      setRoundRankingMessage('Todavía no hay puntos para esta fecha.')
+      setRoundRankingMessage(t('prode.noPointsRound'))
     } finally {
       setIsRoundLeaderboardLoading(false)
     }
-  }, [selectedLeagueId, selectedLeaderboardRound])
+  }, [selectedLeagueId, selectedLeaderboardRound, t])
 
   const loadPredictions = useCallback(
     async ({ silent = false } = {}) => {
@@ -398,13 +400,11 @@ export default function ProdePanel() {
         )
       } catch (error: unknown) {
         if (!silent) {
-          setMessage(
-            error instanceof Error ? error.message : 'No se pudieron cargar tus predicciones.'
-          )
+          setMessage(error instanceof Error ? error.message : t('home.dataError'))
         }
       }
     },
-    [selectedLeagueId, user]
+    [selectedLeagueId, t, user]
   )
 
   const { markUpdatedNow } = useAutoRefresh({
@@ -457,7 +457,7 @@ export default function ProdePanel() {
         setMessage(
           error instanceof Error && error.message
             ? error.message
-            : 'No se pudieron cargar los torneos.'
+            : t('home.dataError')
         )
       })
       .finally(() => {
@@ -467,7 +467,7 @@ export default function ProdePanel() {
     return () => {
       active = false
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     let active = true
@@ -581,7 +581,7 @@ export default function ProdePanel() {
       loadRoundLeaderboard(),
     ])
     setPredictions(freshPredictions)
-    setMessage('Predicción guardada.')
+    setMessage(t('prode.predictionSaved'))
   }
 
   const handleEditingChange = useCallback((matchId: string, isEditing: boolean) => {
@@ -665,8 +665,8 @@ export default function ProdePanel() {
           />
           {isLeaguesLoading || isMatchesLoading || isAuthLoading ? (
             <div className="hf-card w-full rounded-2xl p-4">
-              <h2 className="text-lg font-black text-white">Partidos</h2>
-              <p className="mt-2 text-sm text-[#8d98a7]">Cargando partidos...</p>
+              <h2 className="text-lg font-black text-white">{t('prode.matches')}</h2>
+              <p className="mt-2 text-sm text-[#8d98a7]">{t('prode.loadingMatches')}</p>
             </div>
           ) : (
             <MatchList
@@ -711,24 +711,24 @@ export default function ProdePanel() {
           />
           <section className="hf-card w-full rounded-2xl">
             <div className="hf-section-head px-3 py-3 sm:px-4">
-              <h2 className="text-lg font-black text-white">Reglas del prode</h2>
+              <h2 className="text-lg font-black text-white">{t('prode.rulesTitle')}</h2>
             </div>
             <div className="p-3">
               <ul className="grid gap-2 text-sm text-[#dce7f2]">
                 <li className="flex items-center justify-between gap-3 rounded-xl border border-white/7 bg-black/20 px-3 py-2">
-                  <span>Resultado exacto</span>
+                  <span>{t('prode.ruleExact')}</span>
                   <span className="font-black text-[#7ff0b2]">3 pts</span>
                 </li>
                 <li className="flex items-center justify-between gap-3 rounded-xl border border-white/7 bg-black/20 px-3 py-2">
-                  <span>Ganador o empate</span>
+                  <span>{t('prode.ruleWinnerOrDraw')}</span>
                   <span className="font-black text-[#7ff0b2]">1 pt</span>
                 </li>
                 <li className="flex items-center justify-between gap-3 rounded-xl border border-white/7 bg-black/20 px-3 py-2">
-                  <span>Incorrecto</span>
+                  <span>{t('prode.ruleIncorrect')}</span>
                   <span className="font-black text-[#8d98a7]">0 pts</span>
                 </li>
                 <li className="rounded-xl border border-white/7 bg-black/20 px-3 py-2 text-[#9aa7b5]">
-                  Bloqueo 15 minutos antes del inicio.
+                  {t('prode.ruleLock')}
                 </li>
               </ul>
             </div>
@@ -736,7 +736,7 @@ export default function ProdePanel() {
           {SHOW_MY_PREDICTIONS ? (
             <section className="w-full rounded-2xl border border-white/8 bg-[#111418]">
               <div className="border-b border-white/8 px-4 py-3">
-                <h2 className="text-lg font-black text-white">Mis predicciones</h2>
+                <h2 className="text-lg font-black text-white">{t('prode.myPredictions')}</h2>
               </div>
               <div className="space-y-2 p-4">
                 {user ? (
@@ -751,17 +751,17 @@ export default function ProdePanel() {
                       ))
                     ) : (
                       <p className="text-sm text-[#8d98a7]">
-                        No hay predicciones para el torneo o la fecha seleccionada.
+                        {t('prode.noPredictionsForSelection')}
                       </p>
                     )
                   ) : (
                     <p className="text-sm text-[#8d98a7]">
-                      Todavía no guardaste predicciones.
+                      {t('prode.noPredictionsYet')}
                     </p>
                   )
                 ) : (
                   <p className="text-sm text-[#8d98a7]">
-                    Iniciá sesión para ver tus predicciones.
+                    {t('prode.signInToSeePredictions')}
                   </p>
                 )}
               </div>

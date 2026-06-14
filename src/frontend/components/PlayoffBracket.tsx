@@ -1,6 +1,10 @@
+'use client'
+
 import type { ReactNode } from 'react'
 import { TeamLogo } from '@/frontend/components/AssetImage'
+import { useTranslations } from '@/frontend/components/LocaleProvider'
 import type { LeagueStandingRow } from '@/lib/api-football'
+import type { MessageKey } from '@/shared/i18n/locales'
 
 type ZoneName = 'Zona A' | 'Zona B'
 
@@ -49,14 +53,14 @@ type SeedMatchRef = {
   away: SeedRef
 }
 
-const PHASE_TITLES = [
-  'Octavos de final',
-  'Cuartos de final',
-  'Semifinal',
-  'Final',
-  'Semifinal',
-  'Cuartos de final',
-  'Octavos de final',
+const PHASE_TITLE_KEYS: MessageKey[] = [
+  'bracket.roundOf16',
+  'bracket.quarterFinals',
+  'bracket.semiFinal',
+  'bracket.final',
+  'bracket.semiFinal',
+  'bracket.quarterFinals',
+  'bracket.roundOf16',
 ]
 
 const LEFT_ROUND_OF_16: SeedMatchRef[] = [
@@ -222,13 +226,15 @@ function MatchCard({ match }: { match: PlayoffMatch }) {
 }
 
 function PendingTeamSlot() {
+  const { t } = useTranslations()
+
   return (
     <div className="grid min-w-0 grid-cols-[18px_minmax(0,1fr)_22px] items-center gap-1.5 rounded-lg border border-white/7 bg-[#111820]/88 px-2 py-1.5">
       <span className="h-[18px] w-[15px] bg-[#6f7884] [clip-path:polygon(50%_0,92%_16%,84%_72%,50%_100%,16%_72%,8%_16%)]" />
       <div className="min-w-0">
-        <p className="truncate text-[12px] font-bold text-white">A confirmar</p>
+        <p className="truncate text-[12px] font-bold text-white">{t('bracket.pendingTeam')}</p>
         <p className="truncate text-[9px] font-semibold uppercase tracking-[0.06em] text-[#8d98a7]">
-          Pendiente
+          {t('bracket.pending')}
         </p>
       </div>
       <span className="flex h-6 w-[22px] items-center justify-center rounded-md border border-white/8 bg-[#0d1217] text-[11px] font-black text-[#c7d0da]">
@@ -239,6 +245,8 @@ function PendingTeamSlot() {
 }
 
 function PendingMatchCard({ final = false }: { final?: boolean }) {
+  const { t } = useTranslations()
+
   return (
     <div
       className={`min-h-[84px] rounded-xl border bg-[linear-gradient(180deg,rgba(19,32,25,0.9),rgba(15,19,23,0.92))] p-1.5 shadow-[inset_0_1px_0_rgba(127,240,178,0.08)] ${
@@ -249,7 +257,7 @@ function PendingMatchCard({ final = false }: { final?: boolean }) {
     >
       {final ? (
         <div className="mb-1 text-center text-[9px] font-black uppercase tracking-[0.12em] text-[#7ff0b2]">
-          Final
+          {t('bracket.final')}
         </div>
       ) : null}
       <div className="space-y-1.5">
@@ -287,6 +295,8 @@ export default function PlayoffBracket({
   zoneAStandings,
   zoneBStandings,
 }: PlayoffBracketProps) {
+  const { t } = useTranslations()
+
   if (!zoneAStandings || !zoneBStandings) return <SkeletonBracket />
 
   const bracket = generatePlayoffBracket(zoneAStandings, zoneBStandings)
@@ -295,28 +305,28 @@ export default function PlayoffBracket({
     <section className="w-full overflow-hidden rounded-3xl border border-white/8 bg-[#0f1317]/92">
       <div className="border-b border-white/6 bg-[#13181d] px-3 py-4 md:px-5">
         <h2 className="text-base font-bold text-white md:text-lg">
-          Llaves - Torneo Clausura
+          {t('bracket.clausuraTitle')}
         </h2>
         <p className="mt-1 text-sm text-[#8d98a7]">
-          Cruces generados automáticamente según la tabla actual
+          {t('bracket.description')}
         </p>
       </div>
 
       <div className="p-3 md:p-4">
         {!bracket.available ? (
           <div className="rounded-2xl border border-[#25553d]/35 bg-[#101820] px-4 py-5 text-sm font-medium text-[#c7d0da]">
-            {bracket.message}
+            {t('bracket.notEnoughTeams')}
           </div>
         ) : (
           <div className="overflow-x-auto pb-3 lg:overflow-x-visible">
             <div className="min-w-[840px] rounded-2xl border border-white/8 bg-[linear-gradient(180deg,#11161b_0%,#0d1217_100%)] p-2.5 shadow-[inset_0_0_0_1px_rgba(127,240,178,0.05)] lg:min-w-0">
               <div className="grid grid-cols-7 gap-2">
-                {PHASE_TITLES.map((title, index) => (
+                {PHASE_TITLE_KEYS.map((titleKey, index) => (
                   <h3
-                    key={`${title}-${index}`}
+                    key={`${titleKey}-${index}`}
                     className="min-h-7 text-center text-[10px] font-black uppercase leading-tight tracking-[0.08em] text-[#7ff0b2]"
                   >
-                    {title}
+                    {t(titleKey)}
                   </h3>
                 ))}
               </div>

@@ -2,6 +2,8 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+
+import { useTranslations } from '@/frontend/components/LocaleProvider'
 import PrivateTournamentChat from '@/frontend/components/prode/private-tournaments/PrivateTournamentChat'
 import { useAuth } from '@/frontend/hooks/useAuth'
 import {
@@ -22,8 +24,15 @@ type PrivateTournamentDetailPageProps = {
 
 type RankingMode = 'total' | 'round'
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat('es-AR', {
+const DATE_LOCALE: Record<string, string> = {
+  es: 'es-AR',
+  en: 'en-US',
+  pt: 'pt-BR',
+  fr: 'fr-FR',
+}
+
+function formatDate(value: string, locale: string) {
+  return new Intl.DateTimeFormat(DATE_LOCALE[locale] ?? locale, {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -40,9 +49,18 @@ function EmptyState({ children }: { children: string }) {
 function RankingTable({
   rows,
   emptyMessage,
+  labels,
 }: {
   rows: PrivateTournamentRankingRow[]
   emptyMessage: string
+  labels: {
+    position: string
+    user: string
+    points: string
+    exacts: string
+    partials: string
+    played: string
+  }
 }) {
   if (!rows.length) {
     return <EmptyState>{emptyMessage}</EmptyState>
@@ -53,12 +71,12 @@ function RankingTable({
       <table className="hf-table w-full table-fixed border-separate border-spacing-0 text-left text-[11px] sm:text-sm">
         <thead className="text-xs uppercase text-[#8d98a7]">
           <tr>
-            <th className="px-3 py-2 font-black">Pos.</th>
-            <th className="px-3 py-2 font-black">Usuario</th>
-            <th className="px-3 py-2 text-right font-black">Pts</th>
-            <th className="px-3 py-2 text-right font-black">Exactos</th>
-            <th className="px-3 py-2 text-right font-black">Parciales</th>
-            <th className="px-3 py-2 text-right font-black">PJ</th>
+            <th className="px-3 py-2 font-black">{labels.position}</th>
+            <th className="px-3 py-2 font-black">{labels.user}</th>
+            <th className="px-3 py-2 text-right font-black">{labels.points}</th>
+            <th className="px-3 py-2 text-right font-black">{labels.exacts}</th>
+            <th className="px-3 py-2 text-right font-black">{labels.partials}</th>
+            <th className="px-3 py-2 text-right font-black">{labels.played}</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-white/6">
@@ -88,10 +106,16 @@ function HonorBadge({
   label,
   row,
   variant,
+  pointsLabel,
+  exactsLabel,
+  partialsLabel,
 }: {
   label: string
   row: PrivateTournamentRankingRow
   variant: 'gold' | 'silver' | 'fun'
+  pointsLabel: string
+  exactsLabel: string
+  partialsLabel: string
 }) {
   const styles = {
     gold: 'border-amber-300/30 bg-amber-300/10 text-amber-200',
@@ -104,7 +128,8 @@ function HonorBadge({
       <p className="text-[11px] font-black uppercase tracking-[0.04em]">{label}</p>
       <p className="mt-1 break-words text-sm font-black text-white">{row.username}</p>
       <p className="mt-0.5 text-xs opacity-85">
-        {row.points} pts · {row.exactHits} exactos · {row.partialHits} parciales
+        {row.points} {pointsLabel} {'\u00b7'} {row.exactHits} {exactsLabel} {'\u00b7'}{' '}
+        {row.partialHits} {partialsLabel}
       </p>
     </div>
   )
@@ -121,12 +146,13 @@ function InviteModal({
   onMessage: (message: string) => void
   onError: (message: string) => void
 }) {
+  const { t } = useTranslations()
   const [invite, setInvite] = useState<PrivateTournamentInvite | null>(null)
   const [email, setEmail] = useState('')
   const [isCreating, setIsCreating] = useState(false)
   const canUseWebShare = typeof navigator !== 'undefined' && 'share' in navigator
 
-  const createInvite = async (nextEmail?: string) => {
+  const createInvite = useCallback(async (nextEmail?: string) => {
     setIsCreating(true)
 
     try {
@@ -134,36 +160,39 @@ function InviteModal({
         email: nextEmail?.trim() || undefined,
       })
       setInvite(nextInvite)
-      onMessage(nextEmail ? 'Invitación lista para enviar por mail.' : 'Link de invitación creado.')
+      onMessage(
+        nextEmail
+          ? t('privateTournaments.inviteEmailReady')
+          : t('privateTournaments.inviteLinkCreated')
+      )
       return nextInvite
     } catch (caughtError) {
       const message =
-        caughtError instanceof Error ? caughtError.message : 'No se pudo crear la invitación.'
+        caughtError instanceof Error ? caughtError.message : t('privateTournaments.inviteCreateError')
       onError(message)
       return null
     } finally {
       setIsCreating(false)
     }
-  }
+  }, [onError, onMessage, t, tournamentId])
 
   useEffect(() => {
     void createInvite()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [createInvite])
 
   const copyLink = async () => {
     if (!invite?.inviteUrl) return
 
     await navigator.clipboard?.writeText(invite.inviteUrl)
-    onMessage('Link copiado.')
+    onMessage(t('privateTournaments.linkCopied'))
   }
 
   const shareLink = async () => {
     if (!invite?.inviteUrl || !canUseWebShare) return
 
     await navigator.share({
-      title: 'Invitación al Prode de Hay Fulbo',
-      text: 'Te invito a jugar este torneo privado del Prode.',
+      title: t('privateTournaments.inviteShareTitle'),
+      text: t('privateTournaments.inviteShareText'),
       url: invite.inviteUrl,
     })
   }
@@ -180,9 +209,9 @@ function InviteModal({
       <div className="hf-card w-full max-w-lg rounded-2xl p-4 shadow-[0_24px_80px_rgba(0,0,0,0.5)]">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-lg font-black text-white">Invitar al torneo</h2>
+            <h2 className="text-lg font-black text-white">{t('privateTournaments.inviteTitle')}</h2>
             <p className="mt-1 text-sm text-[#9aa7b5]">
-              Compartí un link o prepará un mail con la invitación.
+              {t('privateTournaments.inviteDescription')}
             </p>
           </div>
           <button
@@ -190,16 +219,16 @@ function InviteModal({
             onClick={onClose}
             className="hf-button-secondary h-9 rounded-xl px-3 text-sm font-black"
           >
-            Cerrar
+            {t('common.close')}
           </button>
         </div>
 
         <div className="mt-4 space-y-3">
           <label className="block text-xs font-black uppercase tracking-[0.12em] text-[#8d98a7]">
-            Link
+            {t('common.link')}
           </label>
           <div className="rounded-xl border border-white/8 bg-black/25 p-3 text-sm text-[#dce7f2]">
-            {isCreating && !invite ? 'Generando link...' : invite?.inviteUrl ?? 'No disponible'}
+            {isCreating && !invite ? t('privateTournaments.generatingLink') : invite?.inviteUrl ?? t('common.notAvailable')}
           </div>
           <div className="grid grid-cols-2 gap-2">
             <button
@@ -208,7 +237,7 @@ function InviteModal({
               disabled={!invite}
               className="hf-button h-10 rounded-xl px-3 text-sm font-black disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Copiar link
+              {t('common.copyLink')}
             </button>
             <button
               type="button"
@@ -216,13 +245,13 @@ function InviteModal({
               disabled={!invite || !canUseWebShare}
               className="hf-button-secondary h-10 rounded-xl px-3 text-sm font-black disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Compartir
+              {t('common.share')}
             </button>
           </div>
 
           <div className="space-y-2">
             <label className="block text-xs font-black uppercase tracking-[0.12em] text-[#8d98a7]">
-              Enviar por mail
+              {t('common.email')}
             </label>
             <input
               type="email"
@@ -237,7 +266,7 @@ function InviteModal({
               disabled={isCreating}
               className="hf-button-secondary h-10 w-full rounded-xl px-3 text-sm font-black disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Enviar por mail
+              {t('common.email')}
             </button>
           </div>
         </div>
@@ -249,6 +278,7 @@ function InviteModal({
 export default function PrivateTournamentDetailPage({
   tournamentId,
 }: PrivateTournamentDetailPageProps) {
+  const { locale, t } = useTranslations()
   const { user, isLoading: isAuthLoading } = useAuth()
   const [tournament, setTournament] = useState<PrivateTournamentDetail | null>(null)
   const [mode, setMode] = useState<RankingMode>('total')
@@ -316,12 +346,12 @@ export default function PrivateTournamentDetailPage({
       )
     } catch (caughtError) {
       setError(
-        caughtError instanceof Error ? caughtError.message : 'No se pudo cargar el torneo.'
+        caughtError instanceof Error ? caughtError.message : t('privateTournaments.loadTournamentError')
       )
     } finally {
       setIsLoading(false)
     }
-  }, [tournamentId, user])
+  }, [t, tournamentId, user])
 
   useEffect(() => {
     if (isAuthLoading) return
@@ -351,12 +381,12 @@ export default function PrivateTournamentDetailPage({
           ? current
           : nextTournament.roundRankings[0]?.value ?? ''
       )
-      setMessage(action === 'approve' ? 'Solicitud aprobada.' : 'Solicitud rechazada.')
+      setMessage(action === 'approve' ? t('privateTournaments.approved') : t('privateTournaments.rejected'))
     } catch (caughtError) {
       setError(
         caughtError instanceof Error
           ? caughtError.message
-          : 'No se pudo revisar la solicitud.'
+          : t('privateTournaments.reviewError')
       )
     } finally {
       setReviewingRequestId(null)
@@ -366,7 +396,7 @@ export default function PrivateTournamentDetailPage({
   if (isAuthLoading || isLoading) {
     return (
       <section className="hf-card rounded-2xl p-4 text-sm text-[#9aa7b5]">
-        Cargando torneo...
+        {t('privateTournaments.loadingTournament')}
       </section>
     )
   }
@@ -374,9 +404,9 @@ export default function PrivateTournamentDetailPage({
   if (!user) {
     return (
       <section className="hf-card rounded-2xl p-4">
-        <h2 className="text-lg font-black text-white">Torneo privado</h2>
+        <h2 className="text-lg font-black text-white">{t('privateTournaments.detailTitle')}</h2>
         <p className="mt-2 text-sm text-[#9aa7b5]">
-          Iniciá sesión para ver este torneo privado.
+          {t('privateTournaments.detailLoginRequired')}
         </p>
       </section>
     )
@@ -385,13 +415,13 @@ export default function PrivateTournamentDetailPage({
   if (error && !tournament) {
     return (
       <section className="hf-card rounded-2xl p-4">
-        <h2 className="text-lg font-black text-white">Torneo privado</h2>
+        <h2 className="text-lg font-black text-white">{t('privateTournaments.detailTitle')}</h2>
         <p className="mt-2 text-sm text-red-200">{error}</p>
         <Link
           href="/prode/torneos"
           className="hf-button-secondary mt-4 inline-flex h-10 items-center justify-center rounded-xl px-4 text-sm font-black"
         >
-          Volver a torneos
+          {t('privateTournaments.backToTournaments')}
         </Link>
       </section>
     )
@@ -400,6 +430,14 @@ export default function PrivateTournamentDetailPage({
   if (!tournament) return null
 
   const isOwner = tournament.currentUserRole === 'owner'
+  const rankingLabels = {
+    position: t('common.position'),
+    user: t('common.user'),
+    points: t('common.pointsAbbr'),
+    exacts: t('common.exacts'),
+    partials: t('common.partials'),
+    played: t('common.playedShort'),
+  }
 
   return (
     <div className="space-y-3 md:space-y-4">
@@ -410,7 +448,7 @@ export default function PrivateTournamentDetailPage({
               {tournament.displayName}
             </h1>
             <p className="mt-2 text-sm text-[#9aa7b5]">
-              {tournament.memberCount} participantes
+              {tournament.memberCount} {t('common.participants')}
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
@@ -420,14 +458,14 @@ export default function PrivateTournamentDetailPage({
                 onClick={() => setIsInviteModalOpen(true)}
                 className="hf-button inline-flex h-10 items-center justify-center rounded-xl px-4 text-sm font-black"
               >
-                Invitar
+                {t('privateTournaments.invite')}
               </button>
             ) : null}
             <Link
               href="/prode/torneos"
               className="hf-button-secondary inline-flex h-10 items-center justify-center rounded-xl px-4 text-sm font-black"
             >
-              Volver
+              {t('common.back')}
             </Link>
           </div>
         </div>
@@ -438,11 +476,11 @@ export default function PrivateTournamentDetailPage({
           <div className="hf-section-head px-3 py-3 sm:px-4">
             <div className="flex min-w-0 flex-col gap-3">
               <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <h2 className="text-lg font-black text-white">Tabla del torneo</h2>
+                <h2 className="text-lg font-black text-white">{t('privateTournaments.tournamentTable')}</h2>
                 <div className="grid w-full grid-cols-2 gap-1 rounded-xl border border-white/8 bg-black/25 p-1 sm:w-56">
                   {[
-                    { key: 'total', label: 'Total' },
-                    { key: 'round', label: 'Por fecha' },
+                    { key: 'total', label: t('prode.total') },
+                    { key: 'round', label: t('prode.byRound') },
                   ].map((tab) => {
                     const isActive = mode === tab.key
 
@@ -481,7 +519,7 @@ export default function PrivateTournamentDetailPage({
                       </option>
                     ))
                   ) : (
-                    <option value="">Sin fecha disponible</option>
+                    <option value="">{t('prode.noRound')}</option>
                   )}
                 </select>
               ) : null}
@@ -490,10 +528,11 @@ export default function PrivateTournamentDetailPage({
 
           <RankingTable
             rows={activeRows}
+            labels={rankingLabels}
             emptyMessage={
               mode === 'total'
-                ? 'Todavía no hay puntos computados.'
-                : 'Todavía no hay puntos para esta fecha.'
+                ? t('prode.noPointsTotal')
+                : t('prode.noPointsRound')
             }
           />
         </section>
@@ -506,7 +545,7 @@ export default function PrivateTournamentDetailPage({
 
           <section className="hf-card overflow-hidden rounded-2xl">
             <div className="hf-section-head px-3 py-3 sm:px-4">
-              <h2 className="text-lg font-black text-white">Menciones honoríficas</h2>
+              <h2 className="text-lg font-black text-white">{t('privateTournaments.honorsTitle')}</h2>
               {selectedHonorRoundRanking ? (
                 <p className="mt-1 text-xs font-semibold text-[#8d98a7]">
                   {selectedHonorRoundRanking.label}
@@ -527,19 +566,40 @@ export default function PrivateTournamentDetailPage({
                     </option>
                   ))
                 ) : (
-                  <option value="">Sin fecha disponible</option>
+                  <option value="">{t('prode.noRound')}</option>
                 )}
               </select>
               {honorRows.first ? (
-                <HonorBadge label="El Pichichi" row={honorRows.first} variant="gold" />
+                <HonorBadge
+                  label={t('privateTournaments.honorFirst')}
+                  row={honorRows.first}
+                  variant="gold"
+                  pointsLabel={t('common.pointsAbbr')}
+                  exactsLabel={t('common.exacts').toLowerCase()}
+                  partialsLabel={t('common.partials').toLowerCase()}
+                />
               ) : (
-                <EmptyState>Todavía no hay puntos computados en esta fecha.</EmptyState>
+                <EmptyState>{t('privateTournaments.noHonorPoints')}</EmptyState>
               )}
               {honorRows.second ? (
-                <HonorBadge label="Casi casi" row={honorRows.second} variant="silver" />
+                <HonorBadge
+                  label={t('privateTournaments.honorSecond')}
+                  row={honorRows.second}
+                  variant="silver"
+                  pointsLabel={t('common.pointsAbbr')}
+                  exactsLabel={t('common.exacts').toLowerCase()}
+                  partialsLabel={t('common.partials').toLowerCase()}
+                />
               ) : null}
               {honorRows.last ? (
-                <HonorBadge label="Troncazo" row={honorRows.last} variant="fun" />
+                <HonorBadge
+                  label={t('privateTournaments.honorLast')}
+                  row={honorRows.last}
+                  variant="fun"
+                  pointsLabel={t('common.pointsAbbr')}
+                  exactsLabel={t('common.exacts').toLowerCase()}
+                  partialsLabel={t('common.partials').toLowerCase()}
+                />
               ) : null}
             </div>
           </section>
@@ -547,7 +607,7 @@ export default function PrivateTournamentDetailPage({
           {isOwner ? (
             <section className="hf-card overflow-hidden rounded-2xl">
               <div className="hf-section-head px-3 py-3 sm:px-4">
-                <h2 className="text-lg font-black text-white">Solicitudes de ingreso</h2>
+                <h2 className="text-lg font-black text-white">{t('privateTournaments.joinRequests')}</h2>
               </div>
               {tournament.pendingRequests.length ? (
                 <div className="divide-y divide-white/6">
@@ -560,7 +620,9 @@ export default function PrivateTournamentDetailPage({
                         </p>
                       ) : null}
                       <p className="mt-1 text-xs text-[#8d98a7]">
-                        Solicitó acceso: {formatDate(request.requestedAt)}
+                        {t('privateTournaments.requestedAccess', {
+                          date: formatDate(request.requestedAt, locale),
+                        })}
                       </p>
                       <div className="mt-3 grid grid-cols-2 gap-2">
                         <button
@@ -569,7 +631,7 @@ export default function PrivateTournamentDetailPage({
                           disabled={reviewingRequestId === request.id}
                           className="hf-button h-9 rounded-xl px-3 text-xs font-black disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          Aceptar
+                          {t('privateTournaments.approve')}
                         </button>
                         <button
                           type="button"
@@ -577,21 +639,21 @@ export default function PrivateTournamentDetailPage({
                           disabled={reviewingRequestId === request.id}
                           className="hf-button-secondary h-9 rounded-xl px-3 text-xs font-black disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          Rechazar
+                          {t('privateTournaments.reject')}
                         </button>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <EmptyState>No hay solicitudes pendientes.</EmptyState>
+                <EmptyState>{t('privateTournaments.noPendingRequests')}</EmptyState>
               )}
             </section>
           ) : null}
 
           <section className="hf-card overflow-hidden rounded-2xl">
             <div className="hf-section-head px-3 py-3 sm:px-4">
-              <h2 className="text-lg font-black text-white">Miembros</h2>
+              <h2 className="text-lg font-black text-white">{t('privateTournaments.members')}</h2>
             </div>
             <div className="divide-y divide-white/6">
               {tournament.members.map((member) => (
@@ -604,11 +666,13 @@ export default function PrivateTournamentDetailPage({
                       {member.username}
                     </p>
                     <p className="mt-0.5 text-xs text-[#8d98a7]">
-                      Desde {formatDate(member.joinedAt)}
+                      {t('privateTournaments.memberSince', {
+                        date: formatDate(member.joinedAt, locale),
+                      })}
                     </p>
                   </div>
                   <span className="shrink-0 rounded-full border border-white/8 bg-white/[0.03] px-2 py-0.5 text-[11px] font-black uppercase text-[#9aa7b5]">
-                    {member.role === 'owner' ? 'Owner' : 'Miembro'}
+                    {member.role === 'owner' ? t('common.owner') : t('common.member')}
                   </span>
                 </div>
               ))}

@@ -30,7 +30,9 @@ import {
 import { formatMatchScoreWithPenalties } from '@/shared/utils/match-display'
 import { getEventElapsedMinute, getFixtureStatusElapsedMinute } from '@/shared/utils/match-minute'
 import { isFinishedStatus } from '@/shared/utils/match-status'
-import { translateCountryNameToSpanish } from '@/shared/utils/country-names'
+import { getRequestLocale } from '@/server/request-locale'
+import { t, type AppLocale } from '@/shared/i18n/locales'
+import { translateCountryName } from '@/shared/utils/country-names'
 import { buildMatchDetailViewModel } from '@/server/match-detail-view-model'
 import type { HeadToHeadViewModel } from '@/server/head-to-head'
 import type { MatchSummarySource } from '@/shared/utils/match-summary'
@@ -49,6 +51,7 @@ export const fetchCache = 'force-no-store'
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params
+  const locale = await getRequestLocale()
 
   try {
     const data = await buildMatchDetailViewModel({
@@ -66,8 +69,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       })
     }
 
-    const homeTeam = getTeamDisplayName(fixture.teams.home.name, fixture)
-    const awayTeam = getTeamDisplayName(fixture.teams.away.name, fixture)
+    const homeTeam = getTeamDisplayName(fixture.teams.home.name, fixture, locale)
+    const awayTeam = getTeamDisplayName(fixture.teams.away.name, fixture, locale)
     const leagueName = translateLeagueName(fixture.league.name)
     const score = formatMatchScoreWithPenalties({
       goalsHome: fixture.goals.home,
@@ -120,19 +123,30 @@ function formatMatchTime(dateString: string) {
   return formatMatchTimeArgentina(dateString)
 }
 
-function formatHeaderDateTime(dateString: string) {
+function getIntlLocale(locale: AppLocale) {
+  return {
+    es: 'es-AR',
+    en: 'en-US',
+    pt: 'pt-BR',
+    fr: 'fr-FR',
+  }[locale]
+}
+
+function formatHeaderDateTime(dateString: string, locale: AppLocale) {
   const timeLabel = formatMatchTimeArgentina(dateString)
 
-  if (timeLabel === 'A confirmar') return 'A confirmar'
+  if (timeLabel === 'A confirmar') return t(locale, 'common.unscheduled')
 
-  const dateLabel = new Intl.DateTimeFormat('es-AR', {
+  const intlLocale = getIntlLocale(locale)
+
+  const dateLabel = new Intl.DateTimeFormat(intlLocale, {
     timeZone: ARGENTINA_TIME_ZONE,
     weekday: 'long',
     day: '2-digit',
     month: 'long',
   }).format(toArgentinaDate(dateString))
 
-  return `${dateLabel.charAt(0).toLocaleUpperCase('es-AR')}${dateLabel.slice(1)} · ${timeLabel}`
+  return `${dateLabel.charAt(0).toLocaleUpperCase(intlLocale)}${dateLabel.slice(1)} · ${timeLabel}`
 }
 
 function isHeaderLiveStatus(statusShort: string) {
@@ -240,10 +254,10 @@ function isInternationalTeamFixture(fixture: MatchFixture) {
   )
 }
 
-function getTeamDisplayName(name: string, fixture: MatchFixture) {
+function getTeamDisplayName(name: string, fixture: MatchFixture, locale: AppLocale = 'es') {
   if (!isInternationalTeamFixture(fixture)) return name
 
-  return translateCountryNameToSpanish(name) || name
+  return translateCountryName(name, locale) || name
 }
 
 function translateStatType(type: string) {
@@ -293,8 +307,8 @@ function formatStatValue(value: string | number | null | undefined) {
   return String(value)
 }
 
-function formatReferee(referee?: string | null) {
-  if (!referee) return 'No disponible'
+function formatReferee(referee: string | null | undefined, locale: AppLocale) {
+  if (!referee) return t(locale, 'common.notAvailable')
 
   const parts = referee
     .split(',')
@@ -307,10 +321,10 @@ function formatReferee(referee?: string | null) {
   return `${name} (${nationalityParts.join(', ')})`
 }
 
-function formatVenue(venue?: { name?: string; city?: string } | null) {
-  if (!venue?.name && !venue?.city) return 'No disponible'
+function formatVenue(venue: { name?: string; city?: string } | null | undefined, locale: AppLocale) {
+  if (!venue?.name && !venue?.city) return t(locale, 'common.notAvailable')
   if (venue.name && venue.city) return `${venue.name} (${venue.city})`
-  return venue.name || venue.city || 'No disponible'
+  return venue.name || venue.city || t(locale, 'common.notAvailable')
 }
 
 function normalizeTeamRefName(value?: string | null) {
@@ -1154,7 +1168,7 @@ function MatchTeamCard({
   id?: number
   logo?: string
   name: string
-  role: 'Local' | 'Visitante'
+  role: string
   colors: TeamStyle
   side: 'home' | 'away'
 }) {
@@ -1203,6 +1217,7 @@ function MatchSummarySection({
   source,
   isLoading = false,
   error,
+  locale,
   shareId,
   shareTitle,
   shareText,
@@ -1213,6 +1228,7 @@ function MatchSummarySection({
   source: MatchSummarySource | null
   isLoading?: boolean
   error?: unknown
+  locale: AppLocale
   shareId?: string
   shareTitle?: string
   shareText?: string
@@ -1227,7 +1243,7 @@ function MatchSummarySection({
       <div className="hf-section-head px-2 py-3 md:px-4">
         <div className="flex items-center justify-between gap-3">
           <span aria-hidden="true" className="h-10 w-10" />
-          <h2 className="text-base font-bold text-white">Resumen del partido</h2>
+          <h2 className="text-base font-bold text-white">{t(locale, 'match.summaryTitle')}</h2>
           {shareId && shareTitle && shareText && shareUrl && shareFileName ? (
             <ShareCardButton
               targetId={shareId}
@@ -1249,12 +1265,15 @@ function MatchSummarySection({
   )
 }
 
-function getHeadToHeadEmptyMessage(readiness: HeadToHeadViewModel['renderReadiness']) {
+function getHeadToHeadEmptyMessage(
+  readiness: HeadToHeadViewModel['renderReadiness'],
+  locale: AppLocale
+) {
   if (readiness === 'missing_home_external_id' || readiness === 'missing_away_external_id') {
-    return 'Historial no disponible para estos equipos.'
+    return t(locale, 'match.historyUnavailable')
   }
 
-  return 'No hay enfrentamientos recientes disponibles.'
+  return t(locale, 'match.noRecentHeadToHead')
 }
 
 function MatchHistorySection({
@@ -1267,6 +1286,7 @@ function MatchHistorySection({
   shareUrl,
   shareFileName,
   historyHref,
+  locale,
   preferCountryTeamNames = false,
 }: {
   history: HeadToHeadViewModel
@@ -1278,11 +1298,12 @@ function MatchHistorySection({
   shareUrl: string
   shareFileName: string
   historyHref: string
+  locale: AppLocale
   preferCountryTeamNames?: boolean
 }) {
   const latestMatches = history.matches.slice(0, 5)
   const formatHistoryTeamName = (name: string) =>
-    preferCountryTeamNames ? translateCountryNameToSpanish(name) || name : name
+    preferCountryTeamNames ? translateCountryName(name, locale) || name : name
 
   return (
     <div id={shareId} className="hf-card w-full overflow-hidden rounded-2xl">
@@ -1290,9 +1311,11 @@ function MatchHistorySection({
         <div className="flex items-center justify-between gap-3">
           <span aria-hidden="true" className="h-10 w-10" />
           <div className="min-w-0 text-center">
-            <h2 className="text-lg font-bold tracking-[0.01em] text-white">Historial</h2>
+            <h2 className="text-lg font-bold tracking-[0.01em] text-white">
+              {t(locale, 'match.historyTitle')}
+            </h2>
             <p className="mt-0.5 truncate text-[11px] font-semibold text-[#8d98a7]">
-              Últimos enfrentamientos entre estos equipos
+              {t(locale, 'match.historySubtitle')}
             </p>
           </div>
           <ShareCardButton
@@ -1317,7 +1340,7 @@ function MatchHistorySection({
             <div className="rounded-xl border border-white/6 bg-[#13181d] px-2 py-2 text-center">
               <p className="text-lg font-black text-white">{history.summary.draws}</p>
               <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#8d98a7]">
-                Empates
+                {t(locale, 'match.draws')}
               </p>
             </div>
             <div className="rounded-xl border border-white/6 bg-[#13181d] px-2 py-2 text-center">
@@ -1329,7 +1352,7 @@ function MatchHistorySection({
           </div>
 
           <div className="mt-2 rounded-xl border border-white/6 bg-[#13181d] px-3 py-2 text-center text-xs font-semibold text-[#c8d0da]">
-            {history.summary.total} partidos · Goles {homeTeamName}: {history.summary.homePerspectiveGoals} · {awayTeamName}: {history.summary.awayPerspectiveGoals}
+            {history.summary.total} {t(locale, 'home.matchPlural')} · {t(locale, 'match.goals')} {homeTeamName}: {history.summary.homePerspectiveGoals} · {awayTeamName}: {history.summary.awayPerspectiveGoals}
           </div>
 
           <div className="mt-2 divide-y divide-white/7 overflow-hidden rounded-xl border border-white/6 bg-[#10151a]">
@@ -1384,12 +1407,12 @@ function MatchHistorySection({
             data-share-exclude="true"
             data-share-ignore="true"
           >
-            Ver historial completo
+            {t(locale, 'match.fullHistory')}
           </Link>
         </div>
       ) : (
         <div className="px-3 py-5 text-sm text-[#8d98a7] md:px-4">
-          <p>{getHeadToHeadEmptyMessage(history.renderReadiness)}</p>
+          <p>{getHeadToHeadEmptyMessage(history.renderReadiness, locale)}</p>
           {history.cacheKey ? (
             <p className="mt-2 text-xs text-[#607083]">
               Cache: {history.cacheKey}
@@ -1880,6 +1903,7 @@ function hasVisualFormation(lineup?: MatchLineup | null) {
 
 export default async function PartidoDetallePage({ params }: PageProps) {
   const { id } = await params
+  const locale = await getRequestLocale()
   let data: Awaited<ReturnType<typeof buildMatchDetailViewModel>>
 
   try {
@@ -1893,13 +1917,13 @@ export default async function PartidoDetallePage({ params }: PageProps) {
       message: error instanceof Error ? error.message : String(error),
     })
 
-    const message = 'Datos temporalmente no disponibles. Intentá nuevamente en unos minutos.'
+    const message = t(locale, 'home.dataError')
 
     return (
       <div className="min-h-screen text-white">
         <div className="mx-0 w-full max-w-none px-0 py-3 md:mx-auto md:max-w-6xl md:px-4 md:py-10">
           <div className="w-full rounded-2xl border border-[#5a2a2a] bg-[#3b1919] p-4 md:p-6">
-            <h1 className="text-2xl font-black">Detalle no disponible</h1>
+            <h1 className="text-2xl font-black">{t(locale, 'match.detailUnavailable')}</h1>
             <p className="mt-2 text-[#ffd5d5]">{message}</p>
           </div>
         </div>
@@ -1924,8 +1948,8 @@ export default async function PartidoDetallePage({ params }: PageProps) {
 
   const homeTeam = fixture.teams.home
   const awayTeam = fixture.teams.away
-  const homeTeamDisplayName = getTeamDisplayName(homeTeam.name, fixture)
-  const awayTeamDisplayName = getTeamDisplayName(awayTeam.name, fixture)
+  const homeTeamDisplayName = getTeamDisplayName(homeTeam.name, fixture, locale)
+  const awayTeamDisplayName = getTeamDisplayName(awayTeam.name, fixture, locale)
   const goals = fixture.goals
   const penaltyScore = fixture.score?.penalty ?? { home: null, away: null }
   const status = fixture.fixture.status
@@ -1970,10 +1994,10 @@ export default async function PartidoDetallePage({ params }: PageProps) {
     data.renderCounts.startersCount + data.renderCounts.substitutesCount
   const matchIsFinished = isFinishedStatus(status.short) || isFinishedStatus(status.long)
   const lineupStatusLabel = confirmedLineupPlayers > 0
-    ? 'Alineación confirmada'
+    ? t(locale, 'match.lineupConfirmed')
     : matchIsFinished
-      ? 'Formación no disponible'
-      : 'Alineación no confirmada'
+      ? t(locale, 'match.lineupUnavailable')
+      : t(locale, 'match.lineupUnconfirmed')
   const homeStarterPlayers = buildPanelPlayers({
     players: homeLineup?.startXI || [],
     events: lineupEvents,
@@ -2081,7 +2105,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                   {translateLeagueName(fixture.league.name)}
                 </h1>
                 <p className="mt-2 inline-flex rounded-xl border border-[#25553d] bg-[#163828] px-3 py-1.5 text-xs font-black text-[#b8f7d2] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
-                  {formatHeaderDateTime(fixture.fixture.date)}
+                  {formatHeaderDateTime(fixture.fixture.date, locale)}
                 </p>
               </div>
               <div className="flex flex-wrap items-center justify-end gap-2">
@@ -2108,7 +2132,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
               id={homeTeam.id}
               logo={homeTeam.logo_url ?? homeTeam.logo}
               name={homeTeamDisplayName}
-              role="Local"
+              role={t(locale, 'prode.home')}
               colors={homeColors}
               side="home"
             />
@@ -2142,7 +2166,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
               id={awayTeam.id}
               logo={awayTeam.logo_url ?? awayTeam.logo}
               name={awayTeamDisplayName}
-              role="Visitante"
+              role={t(locale, 'prode.away')}
               colors={awayColors}
               side="away"
             />
@@ -2151,10 +2175,10 @@ export default async function PartidoDetallePage({ params }: PageProps) {
           <div className="relative z-10 grid grid-cols-3 gap-1.5 border-t border-white/6 bg-black/20 px-2 py-2 text-center text-[#c8d0da] md:gap-2 md:px-4">
             <div className="min-w-0 rounded-lg border border-white/6 bg-white/[0.025] px-1.5 py-2">
               <span className="block truncate text-[clamp(0.58rem,2vw,0.68rem)] font-black uppercase tracking-[0.08em] text-[#8d98a7]">
-                Estadio
+                {t(locale, 'match.stadium')}
               </span>
               <strong className="mt-1 block min-w-0 overflow-hidden text-[clamp(0.72rem,2.7vw,0.88rem)] font-semibold leading-tight text-white [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] [overflow-wrap:anywhere]">
-                {formatVenue(fixture.fixture.venue)}
+                {formatVenue(fixture.fixture.venue, locale)}
               </strong>
             </div>
             <div className="min-w-0 rounded-lg border border-white/6 bg-white/[0.025] px-1.5 py-2">
@@ -2175,16 +2199,16 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                   />
                 ) : null}
                 <strong className="block min-w-0 overflow-hidden text-[clamp(0.72rem,2.7vw,0.88rem)] font-semibold leading-tight text-white [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] [overflow-wrap:anywhere]">
-                  {broadcastLabel || 'No disponible'}
+                  {broadcastLabel || t(locale, 'common.notAvailable')}
                 </strong>
               </div>
             </div>
             <div className="min-w-0 rounded-lg border border-white/6 bg-white/[0.025] px-1.5 py-2">
               <span className="block truncate text-[clamp(0.58rem,2vw,0.68rem)] font-black uppercase tracking-[0.08em] text-[#8d98a7]">
-                Árbitro
+                {t(locale, 'match.referee')}
               </span>
               <strong className="mt-1 block min-w-0 overflow-hidden text-[clamp(0.72rem,2.7vw,0.88rem)] font-semibold leading-tight text-white [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] [overflow-wrap:anywhere]">
-                {formatReferee(fixture.fixture.referee)}
+                {formatReferee(fixture.fixture.referee, locale)}
               </strong>
             </div>
           </div>
@@ -2193,9 +2217,10 @@ export default async function PartidoDetallePage({ params }: PageProps) {
         {matchIsFinished && summarySource ? (
           <MatchSummarySection
             source={summarySource}
+            locale={locale}
             shareId={summaryShareId}
-            shareTitle={`${shareTitle} - Resumen del partido`}
-            shareText={`${shareText} | Resumen del partido`}
+            shareTitle={`${shareTitle} - ${t(locale, 'match.summaryTitle')}`}
+            shareText={`${shareText} | ${t(locale, 'match.summaryTitle')}`}
             shareUrl={matchDetailHref}
             shareFileName={`hay-fulbo-resumen-${fixture.fixture.id}.png`}
             className="mb-4"
@@ -2470,7 +2495,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                 </div>
               ) : (
                 <div className="space-y-3 px-2 py-5 text-sm text-[#8d98a7] md:px-4">
-                  <p>Estadísticas no disponibles para este partido.</p>
+                  <p>{t(locale, 'match.statsUnavailable')}</p>
 
                   {disciplinePairs.length ? (
                     <div className="rounded-xl border border-white/6 bg-[#13181d] p-3">
@@ -2506,11 +2531,12 @@ export default async function PartidoDetallePage({ params }: PageProps) {
               homeTeamName={homeTeamDisplayName}
               awayTeamName={awayTeamDisplayName}
               shareId={historyShareId}
-              shareTitle={`${shareTitle} - Historial`}
-              shareText={`${shareText} | Historial entre equipos`}
+              shareTitle={`${shareTitle} - ${t(locale, 'match.historyTitle')}`}
+              shareText={`${shareText} | ${t(locale, 'match.historySubtitle')}`}
               shareUrl={matchDetailHref}
               shareFileName={`hay-fulbo-historial-${fixture.fixture.id}.png`}
               historyHref={matchHistoryHref}
+              locale={locale}
               preferCountryTeamNames={isInternationalTeamFixture(fixture)}
             />
           </aside>

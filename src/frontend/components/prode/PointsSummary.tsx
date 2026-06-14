@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslations } from '@/frontend/components/LocaleProvider'
 import type { LeaderboardRow, Prediction } from '@/frontend/types/prode'
 
 type PointsSummaryProps = {
@@ -11,6 +12,7 @@ export default function PointsSummary({
   myRanking,
   predictions,
 }: PointsSummaryProps) {
+  const { t } = useTranslations()
   const localPoints = predictions.reduce((sum, prediction) => sum + (prediction.points ?? 0), 0)
   const localExactHits = predictions.filter((prediction) => prediction.exactHit).length
   const hasLoadedPredictions = predictions.length > 0
@@ -25,9 +27,9 @@ export default function PointsSummary({
       ? myRanking?.exactHits ?? 0
       : 0
   const summaryItems = [
-    { label: 'Puntos', value: points, highlight: true },
-    { label: 'Predicciones', value: predictions.length },
-    { label: 'Exactos', value: exactHits },
+    { label: t('prode.points'), value: points, highlight: true },
+    { label: t('prode.predictions'), value: predictions.length },
+    { label: t('prode.exactHits'), value: exactHits },
   ]
 
   return (

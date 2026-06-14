@@ -3,6 +3,8 @@
 import type { ReactNode } from 'react'
 import { useState } from 'react'
 
+import { useTranslations } from '@/frontend/components/LocaleProvider'
+
 export type GroupStageTab = 'table' | 'fixtures'
 
 export type GroupStageGridItem = {
@@ -18,9 +20,10 @@ type GroupTabsProps = {
 }
 
 export function GroupTabs({ activeTab, onChange }: GroupTabsProps) {
+  const { t } = useTranslations()
   const tabs: Array<{ key: GroupStageTab; label: string }> = [
-    { key: 'table', label: 'Tabla' },
-    { key: 'fixtures', label: 'Partidos' },
+    { key: 'table', label: t('stage.table') },
+    { key: 'fixtures', label: t('stage.fixtures') },
   ]
 
   return (

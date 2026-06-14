@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import BackButton from '@/frontend/components/BackButton'
 import BrandMark from '@/frontend/components/BrandMark'
-import LanguageSelector from '@/frontend/components/LanguageSelector'
+import { LocaleProvider } from '@/frontend/components/LocaleProvider'
 import SiteFooter from '@/frontend/components/SiteFooter'
 import SidebarNav from '@/frontend/components/SidebarNav'
 import { useAuth } from '@/frontend/hooks/useAuth'
@@ -202,6 +202,7 @@ export default function AppShell({ auth, children, locale }: AppShellProps) {
   const [isOpen, setIsOpen] = useState(false)
   const pathname = usePathname()
   const isHome = pathname === '/'
+  const isAdmin = pathname?.startsWith('/admin') ?? false
 
   useEffect(() => {
     if (!isOpen) return
@@ -219,6 +220,17 @@ export default function AppShell({ auth, children, locale }: AppShellProps) {
     }
   }, [isOpen])
 
+  if (isAdmin) {
+    return (
+      <LocaleProvider locale={locale}>
+        <main className="mx-auto w-full max-w-7xl px-2 py-4 sm:px-4 md:px-5 md:py-6">
+          {children}
+        </main>
+        <SiteFooter locale={locale} />
+      </LocaleProvider>
+    )
+  }
+
   const sidebar = (
     <SidebarNav
       sections={SIDEBAR_SECTION_CONFIGS}
@@ -229,7 +241,7 @@ export default function AppShell({ auth, children, locale }: AppShellProps) {
   )
 
   return (
-    <>
+    <LocaleProvider locale={locale}>
       <header className="hf-shell-top sticky top-0 z-40 border-b backdrop-blur-xl">
         <div className="mx-auto flex min-h-14 w-full max-w-7xl flex-nowrap items-center justify-between gap-2 px-2 py-2 sm:px-4 lg:min-h-16 lg:px-5 lg:py-0">
           <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
@@ -269,7 +281,6 @@ export default function AppShell({ auth, children, locale }: AppShellProps) {
             >
               Prode
             </Link>
-            <LanguageSelector locale={locale} compact />
             <div className="hidden lg:block">
               {auth}
             </div>
@@ -303,9 +314,6 @@ export default function AppShell({ auth, children, locale }: AppShellProps) {
               <div className="mb-2">
                 <MobileAccountSection locale={locale} onNavigate={() => setIsOpen(false)} />
               </div>
-              <div className="mb-2">
-                <LanguageSelector locale={locale} />
-              </div>
               {sidebar}
             </div>
           </aside>
@@ -321,6 +329,6 @@ export default function AppShell({ auth, children, locale }: AppShellProps) {
         </div>
       </div>
       <SiteFooter locale={locale} />
-    </>
+    </LocaleProvider>
   )
 }

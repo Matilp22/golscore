@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 
+import { useTranslations } from '@/frontend/components/LocaleProvider'
 import { formatEventMinute } from '@/shared/utils/event-minute'
 
 type TeamStyle = {
@@ -182,6 +183,7 @@ export default function FormationTeamPanel({
   showTabs = true,
   framed = true,
 }: FormationTeamPanelProps) {
+  const { t } = useTranslations()
   const defaultTab = starters.length ? 'starters' : 'substitutes'
   const [internalActiveTab, setInternalActiveTab] = useState<LineupPanelTab>(defaultTab)
   const selectedTab = activeTab ?? internalActiveTab
@@ -201,9 +203,9 @@ export default function FormationTeamPanel({
       </div>
 
       <div className="mt-2 rounded-xl border border-white/6 bg-[#161a20] px-2 py-1.5 md:mt-3 md:px-3 md:py-2">
-        <p className="text-[11px] uppercase tracking-wide text-[#8d98a7]">DT</p>
+        <p className="text-[11px] uppercase tracking-wide text-[#8d98a7]">{t('lineup.coach')}</p>
         <p className="mt-1 truncate text-xs font-semibold text-white sm:text-sm">
-          {coachName || 'No disponible'}
+          {coachName || t('common.notAvailable')}
         </p>
       </div>
 
@@ -216,13 +218,13 @@ export default function FormationTeamPanel({
           >
             <LineupTabButton
               active={selectedTab === 'starters'}
-              label="Titulares"
+              label={t('lineup.starters')}
               count={starters.length}
               onClick={() => setSelectedTab('starters')}
             />
             <LineupTabButton
               active={selectedTab === 'substitutes'}
-              label="Suplentes"
+              label={t('lineup.substitutes')}
               count={substitutes.length}
               onClick={() => setSelectedTab('substitutes')}
             />
@@ -273,6 +275,8 @@ function PlayerSection({
   players: FormationPanelPlayer[]
   align: 'left' | 'right'
 }) {
+  const { t } = useTranslations()
+
   return (
     <section>
       <div className="space-y-1.5">
@@ -282,7 +286,7 @@ function PlayerSection({
           ))
         ) : (
           <p className="rounded-xl border border-white/6 bg-[#161a20] px-2 py-2 text-sm text-[#8d98a7]">
-            No hay jugadores disponibles.
+            {t('lineup.noPlayers')}
           </p>
         )}
       </div>

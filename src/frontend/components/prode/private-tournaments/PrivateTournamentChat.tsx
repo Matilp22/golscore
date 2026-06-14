@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { useTranslations } from '@/frontend/components/LocaleProvider'
 import { useAuth } from '@/frontend/hooks/useAuth'
 import type { ProdeChatSticker } from '@/shared/config/prode-chat-stickers'
 
@@ -24,15 +25,22 @@ type PrivateTournamentChatProps = {
   tournamentName: string
 }
 
-function formatTime(value: string) {
-  return new Intl.DateTimeFormat('es-AR', {
+const DATE_LOCALE: Record<string, string> = {
+  es: 'es-AR',
+  en: 'en-US',
+  pt: 'pt-BR',
+  fr: 'fr-FR',
+}
+
+function formatTime(value: string, locale: string) {
+  return new Intl.DateTimeFormat(DATE_LOCALE[locale] ?? locale, {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
   }).format(new Date(value))
 }
 
-function renderSticker(stickerUrl: string | null, label: string | null) {
+function renderSticker(stickerUrl: string | null, label: string | null, fallbackAlt: string) {
   if (!stickerUrl) return <span className="text-4xl">🙂</span>
   if (stickerUrl.startsWith('emoji:')) {
     return <span className="text-4xl leading-none">{stickerUrl.replace('emoji:', '')}</span>
@@ -42,7 +50,7 @@ function renderSticker(stickerUrl: string | null, label: string | null) {
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={stickerUrl}
-      alt={label ?? 'Sticker'}
+      alt={label ?? fallbackAlt}
       className="h-16 w-16 object-contain"
       loading="lazy"
     />
@@ -53,9 +61,11 @@ export default function PrivateTournamentChat({
   tournamentId,
   tournamentName,
 }: PrivateTournamentChatProps) {
+  const { locale, t } = useTranslations()
   const { user, isLoading: isAuthLoading } = useAuth()
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const shouldStickToBottomRef = useRef(true)
+  const hasInitializedReadStateRef = useRef(false)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [stickers, setStickers] = useState<ProdeChatSticker[]>([])
   const [currentUserCanWrite, setCurrentUserCanWrite] = useState(false)
@@ -66,6 +76,7 @@ export default function PrivateTournamentChat({
   const [error, setError] = useState('')
   const [isStickerPanelOpen, setIsStickerPanelOpen] = useState(false)
   const [isMobileOpen, setIsMobileOpen] = useState(false)
+  const [lastSeenMessageId, setLastSeenMessageId] = useState<string | null>(null)
 
   const loadChat = useCallback(async (silent = false) => {
     if (isAuthLoading) return
@@ -89,7 +100,7 @@ export default function PrivateTournamentChat({
       const payload = await response.json().catch(() => ({}))
 
       if (!response.ok) {
-        throw new Error(payload.error || 'No se pudo cargar el chat.')
+        throw new Error(payload.error || t('privateChat.loadError'))
       }
 
       setMessages(payload.messages ?? [])
@@ -97,13 +108,13 @@ export default function PrivateTournamentChat({
       setCurrentUserCanWrite(Boolean(payload.currentUserCanWrite))
       setCurrentUserCanModerate(Boolean(payload.currentUserCanModerate))
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : 'No se pudo cargar el chat.')
+      setError(caughtError instanceof Error ? caughtError.message : t('privateChat.loadError'))
       setCurrentUserCanWrite(false)
       setCurrentUserCanModerate(false)
     } finally {
       if (!silent) setIsLoading(false)
     }
-  }, [isAuthLoading, tournamentId, user])
+  }, [isAuthLoading, t, tournamentId, user])
 
   useEffect(() => {
     void loadChat()
@@ -124,6 +135,32 @@ export default function PrivateTournamentChat({
 
     element.scrollTop = element.scrollHeight
   }, [messages])
+
+  useEffect(() => {
+    const latestMessageId = messages.at(-1)?.id ?? null
+
+    if (!latestMessageId) {
+      hasInitializedReadStateRef.current = false
+      setLastSeenMessageId(null)
+      return
+    }
+
+    if (!hasInitializedReadStateRef.current || isMobileOpen) {
+      hasInitializedReadStateRef.current = true
+      setLastSeenMessageId(latestMessageId)
+    }
+  }, [isMobileOpen, messages])
+
+  const unreadCount = useMemo(() => {
+    if (isMobileOpen || !messages.length || !lastSeenMessageId) return 0
+
+    const lastSeenIndex = messages.findIndex((chatMessage) => chatMessage.id === lastSeenMessageId)
+    const unreadMessages = lastSeenIndex === -1
+      ? messages
+      : messages.slice(lastSeenIndex + 1)
+
+    return unreadMessages.filter((chatMessage) => chatMessage.userId !== user?.id).length
+  }, [isMobileOpen, lastSeenMessageId, messages, user?.id])
 
   const groupedStickers = useMemo(() => {
     return stickers.reduce<Record<string, ProdeChatSticker[]>>((groups, sticker) => {
@@ -164,15 +201,16 @@ export default function PrivateTournamentChat({
       const payload = await response.json().catch(() => ({}))
 
       if (!response.ok) {
-        throw new Error(payload.error || 'No se pudo enviar el mensaje.')
+        throw new Error(payload.error || t('privateChat.sendError'))
       }
 
       setMessages((current) => [...current, payload.message])
+      setLastSeenMessageId(payload.message?.id ?? null)
       setMessage('')
       setIsStickerPanelOpen(false)
       shouldStickToBottomRef.current = true
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : 'No se pudo enviar el mensaje.')
+      setError(caughtError instanceof Error ? caughtError.message : t('privateChat.sendError'))
     } finally {
       setIsSending(false)
     }
@@ -186,11 +224,11 @@ export default function PrivateTournamentChat({
       )
       const payload = await response.json().catch(() => ({}))
 
-      if (!response.ok) throw new Error(payload.error || 'No se pudo borrar el mensaje.')
+      if (!response.ok) throw new Error(payload.error || t('privateChat.deleteError'))
 
       setMessages((current) => current.filter((chatMessage) => chatMessage.id !== messageId))
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : 'No se pudo borrar el mensaje.')
+      setError(caughtError instanceof Error ? caughtError.message : t('privateChat.deleteError'))
     }
   }
 
@@ -206,11 +244,11 @@ export default function PrivateTournamentChat({
       <div className="hf-section-head shrink-0 px-3 py-3 sm:px-4">
         <div className="flex min-w-0 items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="text-lg font-black text-white">Chat del torneo</h2>
+            <h2 className="text-lg font-black text-white">{t('privateChat.title')}</h2>
             <p className="mt-1 truncate text-xs text-[#8d98a7]">{tournamentName}</p>
           </div>
           <span className="rounded-full border border-[#70ff9d]/20 bg-[#70ff9d]/10 px-2 py-1 text-[10px] font-black uppercase text-[#70ff9d]">
-            En vivo
+            {t('privateChat.live')}
           </span>
         </div>
       </div>
@@ -221,7 +259,7 @@ export default function PrivateTournamentChat({
         className="min-h-0 flex-1 overflow-y-auto border-y border-white/6 bg-[#080f0d] px-3 py-3"
       >
         {isLoading || isAuthLoading ? (
-          <p className="text-sm text-[#8d98a7]">Cargando chat...</p>
+          <p className="text-sm text-[#8d98a7]">{t('privateChat.loading')}</p>
         ) : messages.length ? (
           <div className="space-y-2">
             {messages.map((chatMessage) => {
@@ -239,7 +277,7 @@ export default function PrivateTournamentChat({
                         {chatMessage.username}
                       </span>
                       <span className="text-[10px] text-[#6f7a86]">
-                        {formatTime(chatMessage.createdAt)}
+                        {formatTime(chatMessage.createdAt, locale)}
                       </span>
                       {canDelete ? (
                         <button
@@ -247,13 +285,13 @@ export default function PrivateTournamentChat({
                           onClick={() => void deleteMessage(chatMessage.id)}
                           className="ml-auto text-[10px] font-bold text-[#6f7a86] opacity-0 transition hover:text-red-200 group-hover:opacity-100"
                         >
-                          Borrar
+                          {t('privateChat.delete')}
                         </button>
                       ) : null}
                     </div>
                     {chatMessage.messageType === 'sticker' ? (
                       <div className="mt-1 inline-flex rounded-xl border border-white/8 bg-white/[0.03] p-2">
-                        {renderSticker(chatMessage.stickerUrl, chatMessage.stickerLabel)}
+                        {renderSticker(chatMessage.stickerUrl, chatMessage.stickerLabel, t('privateChat.stickerAlt'))}
                       </div>
                     ) : (
                       <p className="mt-0.5 break-words leading-relaxed text-[#dce7f2]">
@@ -267,7 +305,7 @@ export default function PrivateTournamentChat({
           </div>
         ) : (
           <p className="text-sm text-[#8d98a7]">
-            Todavía no hay mensajes. Sé el primero en escribir.
+            {t('privateChat.empty')}
           </p>
         )}
       </div>
@@ -275,11 +313,11 @@ export default function PrivateTournamentChat({
       <div className="shrink-0 space-y-2 p-3">
         {!user && !isAuthLoading ? (
           <p className="rounded-xl border border-white/8 bg-black/20 px-3 py-2 text-sm text-[#9aa7b5]">
-            Iniciá sesión para participar del chat.
+            {t('privateChat.signIn')}
           </p>
         ) : user && !currentUserCanWrite ? (
           <p className="rounded-xl border border-white/8 bg-black/20 px-3 py-2 text-sm text-[#9aa7b5]">
-            No tenés acceso a este chat.
+            {t('privateChat.noAccess')}
           </p>
         ) : null}
 
@@ -331,7 +369,7 @@ export default function PrivateTournamentChat({
             }}
             disabled={!currentUserCanWrite || isSending}
             rows={1}
-            placeholder="Escribí en el chat..."
+            placeholder={t('privateChat.placeholder')}
             className="hf-input min-h-11 flex-1 resize-none rounded-xl px-3 py-2 text-sm font-semibold outline-none disabled:cursor-not-allowed disabled:opacity-60"
           />
           <button
@@ -340,12 +378,12 @@ export default function PrivateTournamentChat({
             disabled={!currentUserCanWrite || isSending || !message.trim()}
             className="hf-button h-11 rounded-xl px-4 text-sm font-black disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Enviar
+            {t('privateChat.send')}
           </button>
         </div>
         <div className="flex items-center justify-between gap-2 text-[10px] font-semibold text-[#6f7a86]">
           <span>{message.length}/500</span>
-          <span>Enter envía · Shift+Enter salta línea</span>
+          <span>{t('privateChat.shortcut')}</span>
         </div>
         {error ? <p className="text-xs font-semibold text-red-200">{error}</p> : null}
       </div>
@@ -357,10 +395,24 @@ export default function PrivateTournamentChat({
       <div className="lg:hidden">
         <button
           type="button"
-          onClick={() => setIsMobileOpen(true)}
-          className="hf-button flex h-11 w-full items-center justify-center rounded-xl px-4 text-sm font-black"
+          onClick={() => {
+            setIsMobileOpen(true)
+            setLastSeenMessageId(messages.at(-1)?.id ?? null)
+          }}
+          className="hf-button relative flex h-11 w-full items-center justify-center rounded-xl px-4 text-sm font-black"
+          aria-label={
+            unreadCount
+              ? `${t('privateChat.title')} - ${t('privateChat.unreadMessages', { count: String(unreadCount) })}`
+              : t('privateChat.title')
+          }
         >
-          Chat
+          {t('privateChat.title')}
+          {unreadCount ? (
+            <span className="absolute right-2 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 rounded-full border border-amber-300/35 bg-amber-300 px-2 py-0.5 text-[10px] font-black text-[#221505] shadow-[0_0_16px_rgba(251,191,36,0.28)]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#221505]" aria-hidden="true" />
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          ) : null}
         </button>
       </div>
 
@@ -372,21 +424,21 @@ export default function PrivateTournamentChat({
         <div className="fixed inset-0 z-50 lg:hidden">
           <button
             type="button"
-            aria-label="Cerrar chat"
+            aria-label={t('privateChat.close')}
             className="absolute inset-0 bg-black/80 backdrop-blur-sm"
             onClick={() => setIsMobileOpen(false)}
           />
           <div className="absolute inset-x-0 bottom-0 h-[82vh] rounded-t-3xl border border-white/10 bg-[#070b09] p-3 shadow-[0_-24px_80px_rgba(0,0,0,0.55)]">
             <div className="mb-2 flex items-center justify-between gap-3">
               <p className="text-sm font-black uppercase tracking-[0.12em] text-[#8d98a7]">
-                Chat
+                {t('privateChat.title')}
               </p>
               <button
                 type="button"
                 onClick={() => setIsMobileOpen(false)}
                 className="hf-button-secondary h-9 rounded-xl px-3 text-xs font-black"
               >
-                Cerrar
+                {t('common.close')}
               </button>
             </div>
             <div className="h-[calc(82vh-4rem)]">{chatSurface}</div>

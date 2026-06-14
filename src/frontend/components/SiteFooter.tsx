@@ -1,6 +1,7 @@
 import Link from 'next/link'
 
 import BrandMark from '@/frontend/components/BrandMark'
+import LanguageSelector from '@/frontend/components/LanguageSelector'
 import { t, type AppLocale } from '@/shared/i18n/locales'
 
 const legalLinks = [
@@ -27,20 +28,23 @@ export default function SiteFooter({ locale }: { locale: AppLocale }) {
             </p>
           </div>
 
-          <nav
-            aria-label={t(locale, 'footer.legalLabel')}
-            className="flex flex-col gap-2 text-sm font-bold text-[#dce7e2] sm:flex-row sm:flex-wrap sm:items-center sm:justify-end"
-          >
-            {legalLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="rounded-xl border border-white/8 bg-white/[0.035] px-3 py-2 transition hover:border-[#70ff9d]/28 hover:bg-[#70ff9d]/10 hover:text-white"
-              >
-                {t(locale, link.labelKey)}
-              </Link>
-            ))}
-          </nav>
+          <div className="flex flex-col gap-2 sm:items-start md:items-end">
+            <nav
+              aria-label={t(locale, 'footer.legalLabel')}
+              className="flex flex-col gap-2 text-sm font-bold text-[#dce7e2] sm:flex-row sm:flex-wrap sm:items-center sm:justify-end"
+            >
+              {legalLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="rounded-xl border border-white/8 bg-white/[0.035] px-3 py-2 transition hover:border-[#70ff9d]/28 hover:bg-[#70ff9d]/10 hover:text-white"
+                >
+                  {t(locale, link.labelKey)}
+                </Link>
+              ))}
+            </nav>
+            <LanguageSelector locale={locale} />
+          </div>
         </div>
 
         <div className="mt-4 flex flex-col gap-2 border-t border-white/8 pt-3 text-xs leading-5 text-[#83938d] sm:flex-row sm:items-center sm:justify-between">

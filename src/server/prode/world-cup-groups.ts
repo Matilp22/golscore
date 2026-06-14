@@ -47,6 +47,16 @@ export type WorldCupFixtureGroupInference = {
   warnings: string[]
 }
 
+// Corrección acotada al Prode: la fuente actual llega con los grupos C y D invertidos.
+const PRODE_WORLD_CUP_GROUP_KEY_OVERRIDES: Partial<Record<WorldCupGroupKey, WorldCupGroupKey>> = {
+  C: 'D',
+  D: 'C',
+}
+
+function normalizeProdeWorldCupGroupKey(group: WorldCupGroupKey) {
+  return PRODE_WORLD_CUP_GROUP_KEY_OVERRIDES[group] ?? group
+}
+
 function teamIdentityKeys(input: { externalId?: string | number | null; name?: string | null }) {
   const keys: string[] = []
 
@@ -127,9 +137,11 @@ class TeamUnionFind {
 function mapGroups(groups: LeagueStandingGroup[]) {
   return groups
     .map((group) => {
-      const groupKey = getWorldCupGroupKey(group.name)
+      const parsedGroupKey = getWorldCupGroupKey(group.name)
 
-      if (!groupKey) return null
+      if (!parsedGroupKey) return null
+
+      const groupKey = normalizeProdeWorldCupGroupKey(parsedGroupKey)
 
       return {
         group: groupKey,
@@ -227,7 +239,7 @@ export function inferWorldCupGroupsFromFixtures(
 
   const teamGroupIndex: WorldCupTeamGroupIndex = new Map()
   const groups = sortedComponents.map((component, index) => {
-    const group = WORLD_CUP_GROUP_KEYS[index]
+    const group = normalizeProdeWorldCupGroupKey(WORLD_CUP_GROUP_KEYS[index])
 
     for (const primaryKey of component.keys) {
       const team = teamByPrimaryKey.get(primaryKey)
@@ -270,7 +282,7 @@ export function resolveWorldCupMatchGroup(
   teamGroupIndex: WorldCupTeamGroupIndex
 ) {
   const roundGroup = getWorldCupGroupKeyFromRound(match.round)
-  if (roundGroup) return roundGroup
+  if (roundGroup) return normalizeProdeWorldCupGroupKey(roundGroup)
 
   if (!isWorldCupGroupStageRound(match.round, match.leagueExternalId)) return null
 

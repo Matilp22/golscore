@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 
+import { useTranslations } from '@/frontend/components/LocaleProvider'
 import { useAuth } from '@/frontend/hooks/useAuth'
 import {
   acceptPrivateTournamentInvite,
@@ -17,6 +18,7 @@ type PrivateTournamentInvitePageProps = {
 export default function PrivateTournamentInvitePage({
   token,
 }: PrivateTournamentInvitePageProps) {
+  const { t } = useTranslations()
   const { user, isLoading: isAuthLoading } = useAuth()
   const [data, setData] = useState<PrivateTournamentInviteInfo | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -36,7 +38,7 @@ export default function PrivateTournamentInvitePage({
         if (isMounted) setData(invite)
       } catch (caughtError) {
         if (isMounted) {
-          setError(caughtError instanceof Error ? caughtError.message : 'No se pudo cargar la invitación.')
+          setError(caughtError instanceof Error ? caughtError.message : t('privateTournaments.inviteLoadError'))
         }
       } finally {
         if (isMounted) setIsLoading(false)
@@ -48,7 +50,7 @@ export default function PrivateTournamentInvitePage({
     return () => {
       isMounted = false
     }
-  }, [token, user?.id])
+  }, [t, token, user?.id])
 
   const acceptInvite = async () => {
     setIsAccepting(true)
@@ -58,9 +60,9 @@ export default function PrivateTournamentInvitePage({
     try {
       const nextData = await acceptPrivateTournamentInvite(token)
       setData(nextData)
-      setMessage('Invitación aceptada. Ya participás de este torneo.')
+      setMessage(t('privateTournaments.inviteAccepted'))
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : 'No se pudo aceptar la invitación.')
+      setError(caughtError instanceof Error ? caughtError.message : t('privateTournaments.inviteAcceptError'))
     } finally {
       setIsAccepting(false)
     }
@@ -69,7 +71,7 @@ export default function PrivateTournamentInvitePage({
   if (isLoading || isAuthLoading) {
     return (
       <section className="hf-card rounded-2xl p-4 text-sm text-[#9aa7b5]">
-        Cargando invitación...
+        {t('privateTournaments.invitePageLoading')}
       </section>
     )
   }
@@ -77,13 +79,13 @@ export default function PrivateTournamentInvitePage({
   if (error && !data) {
     return (
       <section className="hf-card rounded-2xl p-4">
-        <h1 className="text-xl font-black text-white">Invitación no disponible</h1>
+        <h1 className="text-xl font-black text-white">{t('privateTournaments.inviteUnavailable')}</h1>
         <p className="mt-2 text-sm text-red-200">{error}</p>
         <Link
           href="/prode/torneos"
           className="hf-button-secondary mt-4 inline-flex h-10 items-center justify-center rounded-xl px-4 text-sm font-black"
         >
-          Ir a torneos
+          {t('privateTournaments.goToTournaments')}
         </Link>
       </section>
     )
@@ -97,20 +99,21 @@ export default function PrivateTournamentInvitePage({
   return (
     <section className="hf-card mx-auto max-w-xl rounded-2xl p-4 sm:p-5">
       <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7ff0b2]">
-        Invitación al Prode
+        {t('privateTournaments.invitePageTitle')}
       </p>
       <h1 className="mt-2 text-2xl font-black text-white">{data.tournament.displayName}</h1>
       <p className="mt-2 text-sm text-[#9aa7b5]">
-        {data.tournament.leagueName} · {data.tournament.memberCount} participantes · Owner:{' '}
-        {data.tournament.creatorName}
+        {data.tournament.leagueName} {'\u00b7'} {data.tournament.memberCount}{' '}
+        {t('common.participants')} {'\u00b7'}{' '}
+        {t('privateTournaments.ownerLabel', { name: data.tournament.creatorName })}
       </p>
 
       <div className="mt-4 rounded-xl border border-white/8 bg-black/25 p-3 text-sm text-[#dce7f2]">
         {isInactive
-          ? 'Esta invitación ya no está disponible.'
+          ? t('privateTournaments.inviteInactive')
           : alreadyAccepted
-            ? 'Ya participás de este torneo.'
-            : 'Aceptá la invitación para sumarte al torneo privado.'}
+            ? t('privateTournaments.inviteAlreadyAccepted')
+            : t('privateTournaments.inviteAcceptDescription')}
       </div>
 
       {!user ? (
@@ -119,13 +122,13 @@ export default function PrivateTournamentInvitePage({
             href="/login"
             className="hf-button inline-flex h-11 items-center justify-center rounded-xl px-4 text-sm font-black"
           >
-            Iniciar sesión para aceptar
+            {t('privateTournaments.signInToAccept')}
           </Link>
           <Link
             href="/register"
             className="hf-button-secondary inline-flex h-11 items-center justify-center rounded-xl px-4 text-sm font-black"
           >
-            Crear cuenta
+            {t('account.createAccount')}
           </Link>
         </div>
       ) : alreadyAccepted ? (
@@ -133,7 +136,7 @@ export default function PrivateTournamentInvitePage({
           href={`/prode/torneos/${data.tournament.id}`}
           className="hf-button mt-4 inline-flex h-11 items-center justify-center rounded-xl px-4 text-sm font-black"
         >
-          Ver torneo
+          {t('privateTournaments.viewTournament')}
         </Link>
       ) : (
         <button
@@ -142,7 +145,7 @@ export default function PrivateTournamentInvitePage({
           disabled={isInactive || isAccepting}
           className="hf-button mt-4 h-11 w-full rounded-xl px-4 text-sm font-black disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {isAccepting ? 'Aceptando...' : 'Aceptar invitación'}
+          {isAccepting ? t('privateTournaments.acceptingInvite') : t('privateTournaments.acceptInvite')}
         </button>
       )}
 
@@ -159,4 +162,3 @@ export default function PrivateTournamentInvitePage({
     </section>
   )
 }
-

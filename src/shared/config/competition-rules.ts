@@ -900,11 +900,11 @@ export const COMPETITION_RULES: CompetitionRule[] = [
     showBracket: true,
     qualificationRules: [
       { from: 1, to: 2, label: 'Fase eliminatoria', tone: 'champions' },
-      { from: 3, to: 3, label: 'Mejores terceros', tone: 'champions' },
+      { from: 3, to: 3, label: 'Mejores terceros', tone: 'playoff' },
     ],
     legendItems: [
       { label: 'Fase eliminatoria', tone: 'champions' },
-      { label: 'Mejores terceros', tone: 'champions' },
+      { label: 'Mejores terceros', tone: 'playoff' },
     ],
     playoffRules: ['Grupos y eliminatorias según formato FIFA y rounds de API.'],
     roundLabels: ['Grupos', 'Dieciseisavos', 'Octavos', 'Cuartos', 'Semifinales', 'Final'],

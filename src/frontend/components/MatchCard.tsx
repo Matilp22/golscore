@@ -1,5 +1,9 @@
+'use client'
+
 import Link from 'next/link'
 import { TeamLogo } from '@/frontend/components/AssetImage'
+import { useTranslations } from '@/frontend/components/LocaleProvider'
+import { translateCountryName } from '@/shared/utils/country-names'
 
 type MatchCardProps = {
   id?: number | string
@@ -42,6 +46,9 @@ export default function MatchCard({
   score,
   status,
 }: MatchCardProps) {
+  const { locale, t } = useTranslations()
+  const countryLabel = country ? translateCountryName(country, locale) || country : null
+
   return (
     <Link
       href={`/partido/${id}`}
@@ -50,7 +57,7 @@ export default function MatchCard({
       <div className="mb-2 flex items-center justify-between gap-2">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">{league}</p>
-          <p className="mt-0.5 text-[10px] text-zinc-500">{country || minute || time}</p>
+          <p className="mt-0.5 text-[10px] text-zinc-500">{countryLabel || minute || time}</p>
         </div>
         <Chip label={status} />
       </div>
@@ -94,7 +101,7 @@ export default function MatchCard({
       </div>
 
       <div className="mt-2 border-t border-white/5 pt-2 text-[10px] text-zinc-500">
-        Ver detalle del partido
+        {t('match.viewDetail')}
       </div>
     </Link>
   )

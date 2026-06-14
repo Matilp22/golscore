@@ -40,6 +40,7 @@ FOOTBALL_API_BASE_URL=https://v3.football.api-sports.io
 YOUTUBE_API_KEY=tu_youtube_data_api_key
 NEXT_PUBLIC_SUPABASE_URL=https://gzqapeavjpzgmdhrizqy.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_anon_key
+ADMIN_EMAILS=tu-email-admin@example.com
 ```
 
 La app consume API-Football y YouTube solo desde el servidor. Las keys no se exponen al cliente. La URL de Supabase debe ser la base del proyecto, sin `/rest/v1`.

@@ -85,7 +85,9 @@ import {
 import { WORLD_CUP_2026_LOGO_URL } from '@/shared/utils/asset-urls'
 import type { ConmebolCompetitionType } from '@/shared/utils/conmebol-rounds'
 import { buildSeoMetadata } from '@/shared/seo'
-import { translateCountryNameToSpanish } from '@/shared/utils/country-names'
+import { getRequestLocale } from '@/server/request-locale'
+import { getTournamentDisplayName } from '@/shared/i18n/locales'
+import { translateCountryName } from '@/shared/utils/country-names'
 
 type PageProps = {
   params: Promise<{ id: string }>
@@ -1269,6 +1271,13 @@ function buildHistoricalPromediosTable(
 
 type StandingsVariant = 'positions' | 'annual' | 'promedios'
 
+const WORLD_CUP_THIRD_PLACE_QUALIFIER_COUNT = 8
+const WORLD_CUP_THIRD_PLACE_QUALIFIER_ROW_CLASS = ROW_TONE_CLASSES.playoff
+const WORLD_CUP_THIRD_PLACE_QUALIFIER_LEGEND = {
+  label: 'Clasifican a 16vos',
+  tone: LEGEND_TONE_CLASSES.playoff,
+}
+
 function getRowAccent(
   row: LeagueStandingRow,
   index: number,
@@ -1345,6 +1354,12 @@ function getRowAccent(
   return 'border-l-transparent'
 }
 
+function getThirdPlaceTableRowAccent(index: number) {
+  return index < WORLD_CUP_THIRD_PLACE_QUALIFIER_COUNT
+    ? WORLD_CUP_THIRD_PLACE_QUALIFIER_ROW_CLASS
+    : 'border-l-transparent'
+}
+
 function TableLegend({
   items,
 }: {
@@ -1372,8 +1387,10 @@ function getConfiguredLegendItems(items: Array<{ label: string; tone: RuleTone }
 function getTableLegendItems(
   rows: LeagueStandingRow[],
   rule: CompetitionRule | null,
-  protectedCompetition: boolean
+  protectedCompetition: boolean,
+  thirdPlaceTable = false
 ) {
+  if (thirdPlaceTable) return [WORLD_CUP_THIRD_PLACE_QUALIFIER_LEGEND]
   if (protectedCompetition) return []
   if (rule?.legendItems?.length) return getConfiguredLegendItems(rule.legendItems)
 
@@ -2090,7 +2107,11 @@ function StandingsTable({
           {rows.map((row, index) => (
             <tr
               key={`${row.teamId || row.teamName}-${index}`}
-              className={`border-b border-l-2 border-white/6 text-[#dce5ef] last:border-b-0 ${getRowAccent(row, index, rows.length, variant, relegatedTeamIds, rule, allowLegacyFallback, preferConfiguredRules)}`}
+              className={`border-b border-l-2 border-white/6 text-[#dce5ef] last:border-b-0 ${
+                thirdPlaceTable
+                  ? getThirdPlaceTableRowAccent(index)
+                  : getRowAccent(row, index, rows.length, variant, relegatedTeamIds, rule, allowLegacyFallback, preferConfiguredRules)
+              }`}
             >
               <td className={`${cellPadding} font-semibold`}>{row.rank || index + 1}</td>
               <td className={cellPadding}>
@@ -2269,6 +2290,7 @@ function BracketView({
 
 export default async function LigaPage({ params }: PageProps) {
   const { id } = await params
+  const locale = await getRequestLocale()
   const tournament = getTournamentConfig(id)
 
   if (!tournament) {
@@ -2507,10 +2529,13 @@ export default async function LigaPage({ params }: PageProps) {
     ? new Set([promedioRelegatedTeamId])
     : new Set<string>()
   const compactSummaryTables = annualTable.length > 0 && promedioTable.length > 0
-  const visibleTournamentTitle = displayOptions.visibleNameEs
+  const visibleTournamentTitle = locale === 'es'
+    ? displayOptions.visibleNameEs
+    : getTournamentDisplayName(id, displayOptions.visibleNameEs, locale)
   const visibleTournamentCountry =
-    displayOptions.countryNameEs ||
-    translateCountryNameToSpanish(resolvedTournament?.country || tournament.country)
+    locale === 'es' && displayOptions.countryNameEs
+      ? displayOptions.countryNameEs
+      : translateCountryName(resolvedTournament?.country || tournament.country, locale)
   const isWorldCupTournament = tournament.key === 'selecciones-mundial'
   const hasTournamentData =
     fixtures.length > 0 ||
@@ -2680,12 +2705,13 @@ export default async function LigaPage({ params }: PageProps) {
                 <GroupStageGrid
                   groups={displayPrimaryGroups.map((group, index) => {
                     const groupId = getGroupId(group)
+                    const thirdPlaceTable = isThirdPlaceRankingGroup(group.name)
                     const tableLegendItems = getTableLegendItems(
                       group.rows,
                       displayOptions.rule,
-                      displayOptions.protected
+                      displayOptions.protected,
+                      thirdPlaceTable
                     )
-                    const thirdPlaceTable = isThirdPlaceRankingGroup(group.name)
 
                     return {
                       id: `${groupId}-${index}`,
@@ -2762,12 +2788,13 @@ export default async function LigaPage({ params }: PageProps) {
                 <GroupStageGrid
                   groups={displayPrimaryGroups.map((group, index) => {
                     const groupId = getGroupId(group)
+                    const thirdPlaceTable = isThirdPlaceRankingGroup(group.name)
                     const tableLegendItems = getTableLegendItems(
                       group.rows,
                       displayOptions.rule,
-                      displayOptions.protected
+                      displayOptions.protected,
+                      thirdPlaceTable
                     )
-                    const thirdPlaceTable = isThirdPlaceRankingGroup(group.name)
 
                     return {
                       id: `${groupId}-${index}`,
@@ -2802,12 +2829,13 @@ export default async function LigaPage({ params }: PageProps) {
             ) : (
               <div className={compactGroups ? 'grid gap-4 md:grid-cols-2' : 'space-y-4'}>
                 {displayPrimaryGroups.map((group) => {
+                  const thirdPlaceTable = isThirdPlaceRankingGroup(group.name)
                   const tableLegendItems = getTableLegendItems(
                     group.rows,
                     displayOptions.rule,
-                    displayOptions.protected
+                    displayOptions.protected,
+                    thirdPlaceTable
                   )
-                  const thirdPlaceTable = isThirdPlaceRankingGroup(group.name)
 
                   return (
                     <SectionCard
@@ -2848,12 +2876,13 @@ export default async function LigaPage({ params }: PageProps) {
           {visibleSecondaryGroups.length ? (
             <div className="space-y-4">
               {visibleSecondaryGroups.map((group) => {
+                const thirdPlaceTable = isThirdPlaceRankingGroup(group.name)
                 const tableLegendItems = getTableLegendItems(
                   group.rows,
                   displayOptions.rule,
-                  displayOptions.protected
+                  displayOptions.protected,
+                  thirdPlaceTable
                 )
-                const thirdPlaceTable = isThirdPlaceRankingGroup(group.name)
 
                 return (
                   <SectionCard

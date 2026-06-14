@@ -1,6 +1,7 @@
 'use client'
 
 import { TeamLogo } from '@/frontend/components/AssetImage'
+import { useTranslations } from '@/frontend/components/LocaleProvider'
 import type { GroupStanding } from '@/frontend/types/prode'
 import {
   LEGEND_TONE_CLASSES,
@@ -10,6 +11,7 @@ import {
   getStandingRuleForRank,
   type RuleTone,
 } from '@/shared/config/competition-rules'
+import { translateCountryName } from '@/shared/utils/country-names'
 
 type WorldCupGroupStandingsProps = {
   group: GroupStanding | null
@@ -21,6 +23,24 @@ const worldCupLegendItems = getCompetitionLegendItems(worldCupRule).map((item) =
   label: item.label,
   tone: LEGEND_TONE_CLASSES[item.tone as RuleTone],
 }))
+
+function translateLegendLabel(label: string, locale: string) {
+  const normalized = label.toLowerCase()
+
+  if (normalized.includes('octavos')) {
+    if (locale === 'en') return 'Qualifies for round of 16'
+    if (locale === 'pt') return 'Classifica para as oitavas'
+    if (locale === 'fr') return 'Qualifié pour les huitièmes'
+  }
+
+  if (normalized.includes('tercer')) {
+    if (locale === 'en') return 'Best third-placed teams'
+    if (locale === 'pt') return 'Melhores terceiros'
+    if (locale === 'fr') return 'Meilleurs troisiemes'
+  }
+
+  return label
+}
 
 function getRowAccent(rank: number) {
   const rule = getStandingRuleForRank(worldCupRule, rank)
@@ -47,11 +67,17 @@ export default function WorldCupGroupStandings({
   group,
   isLoading = false,
 }: WorldCupGroupStandingsProps) {
+  const { locale, t } = useTranslations()
+  const legendItems = worldCupLegendItems.map((item) => ({
+    ...item,
+    label: translateLegendLabel(item.label, locale),
+  }))
+
   if (isLoading) {
     return (
       <section className="hf-card w-full rounded-2xl p-4">
-        <h2 className="text-lg font-black text-white">Tabla de posiciones</h2>
-        <p className="mt-2 text-sm text-[#8d98a7]">Cargando tabla del grupo...</p>
+        <h2 className="text-lg font-black text-white">{t('prode.groupStandingsTitle')}</h2>
+        <p className="mt-2 text-sm text-[#8d98a7]">{t('prode.loadingGroupStandings')}</p>
       </section>
     )
   }
@@ -60,13 +86,13 @@ export default function WorldCupGroupStandings({
     <section className="hf-card w-full min-w-0 overflow-hidden rounded-2xl">
       <div className="hf-section-head px-3 py-3 sm:px-4">
         <h2 className="text-lg font-black text-white">
-          Tabla de posiciones{group ? ` - ${group.label}` : ''}
+          {t('prode.groupStandingsTitle')}{group ? ` - ${group.label}` : ''}
         </h2>
       </div>
 
       {!group?.rows.length ? (
         <div className="p-4">
-          <p className="text-sm text-[#8d98a7]">No hay tabla disponible para este grupo.</p>
+          <p className="text-sm text-[#8d98a7]">{t('prode.noGroupStandings')}</p>
         </div>
       ) : (
         <div className="p-0">
@@ -87,7 +113,7 @@ export default function WorldCupGroupStandings({
               <thead className="text-left text-[#8d98a7]">
                 <tr className="border-b border-white/6">
                   <th className="px-0.5 py-1.5 font-semibold sm:px-1">#</th>
-                  <th className="px-0.5 py-1.5 font-semibold sm:px-1">Equipo</th>
+                  <th className="px-0.5 py-1.5 font-semibold sm:px-1">{t('prode.team')}</th>
                   <th className="px-0.5 py-1.5 text-center font-semibold sm:px-1">PTS</th>
                   <th className="px-0.5 py-1.5 text-center font-semibold sm:px-1">PJ</th>
                   <th className="px-0.5 py-1.5 text-center font-semibold sm:px-1">PG</th>
@@ -111,14 +137,14 @@ export default function WorldCupGroupStandings({
                       <div className="flex min-w-0 items-center gap-1">
                         <TeamLogo
                           src={row.teamLogo}
-                          alt={row.teamName}
+                          alt={translateCountryName(row.teamName, locale)}
                           size={16}
                           className="h-4 w-4 object-contain"
                           fallbackClassName="h-3.5 w-3"
                           unoptimized
                         />
                         <span className="min-w-0 truncate font-medium text-[10.5px] sm:text-[12px]">
-                          {row.teamName}
+                          {translateCountryName(row.teamName, locale)}
                         </span>
                       </div>
                     </td>
@@ -139,7 +165,7 @@ export default function WorldCupGroupStandings({
           </div>
 
           <div className="px-3 pb-3 sm:px-4">
-            <TableLegend items={worldCupLegendItems} />
+            <TableLegend items={legendItems} />
           </div>
         </div>
       )}

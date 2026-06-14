@@ -2,6 +2,8 @@
 
 import Link from 'next/link'
 import { FormEvent, useCallback, useEffect, useState } from 'react'
+
+import { useTranslations } from '@/frontend/components/LocaleProvider'
 import { useAuth } from '@/frontend/hooks/useAuth'
 import {
   createPrivateTournament,
@@ -14,12 +16,13 @@ import type {
   PrivateTournamentSearchResult,
   PrivateTournamentSummary,
 } from '@/frontend/types/private-tournaments'
+import { getTournamentDisplayName, type AppLocale } from '@/shared/i18n/locales'
 
-function getRequestLabel(status: JoinRequestStatus | null) {
-  if (status === 'pending') return 'Solicitud pendiente'
-  if (status === 'approved') return 'Solicitud aprobada'
-  if (status === 'rejected') return 'Solicitud rechazada'
-  if (status === 'cancelled') return 'Solicitud cancelada'
+function getRequestLabel(status: JoinRequestStatus | null, translate: ReturnType<typeof useTranslations>['t']) {
+  if (status === 'pending') return translate('privateTournaments.joinStatusPending')
+  if (status === 'approved') return translate('privateTournaments.joinStatusApproved')
+  if (status === 'rejected') return translate('privateTournaments.joinStatusRejected')
+  if (status === 'cancelled') return translate('privateTournaments.joinStatusCancelled')
   return null
 }
 
@@ -32,12 +35,17 @@ function EmptyState({ children }: { children: string }) {
 }
 
 const PRODE_TOURNAMENT_OPTIONS = [
-  { externalId: '1', name: 'Copa del Mundo 2026' },
-  { externalId: '128', name: 'Liga Profesional Argentina' },
-  { externalId: '129', name: 'Primera Nacional' },
+  { externalId: '1', key: 'selecciones-mundial', fallback: 'Copa del Mundo 2026' },
+  { externalId: '128', key: 'argentina-liga-profesional', fallback: 'Liga Profesional Argentina' },
+  { externalId: '129', key: 'argentina-primera-nacional', fallback: 'Primera Nacional' },
 ]
 
+function getTournamentOptionName(option: (typeof PRODE_TOURNAMENT_OPTIONS)[number], locale: AppLocale) {
+  return getTournamentDisplayName(option.key, option.fallback, locale)
+}
+
 export default function PrivateTournamentsPage() {
+  const { locale, t } = useTranslations()
   const { user, isLoading: isAuthLoading } = useAuth()
   const [tournaments, setTournaments] = useState<PrivateTournamentSummary[]>([])
   const [createName, setCreateName] = useState('')
@@ -70,12 +78,12 @@ export default function PrivateTournamentsPage() {
       setError(
         caughtError instanceof Error
           ? caughtError.message
-          : 'No se pudieron cargar tus torneos.'
+          : t('privateTournaments.loadError')
       )
     } finally {
       setIsLoading(false)
     }
-  }, [user])
+  }, [t, user])
 
   useEffect(() => {
     if (isAuthLoading) return
@@ -95,11 +103,11 @@ export default function PrivateTournamentsPage() {
         leagueExternalId: createLeagueExternalId,
       })
       setCreateName('')
-      setMessage('Torneo creado. Ya participás automáticamente.')
+      setMessage(t('privateTournaments.created'))
       await loadTournaments()
     } catch (caughtError) {
       setError(
-        caughtError instanceof Error ? caughtError.message : 'No se pudo crear el torneo.'
+        caughtError instanceof Error ? caughtError.message : t('privateTournaments.createError')
       )
     } finally {
       setIsCreating(false)
@@ -120,7 +128,7 @@ export default function PrivateTournamentsPage() {
       setSearchDone(true)
     } catch (caughtError) {
       setError(
-        caughtError instanceof Error ? caughtError.message : 'No se pudo buscar el torneo.'
+        caughtError instanceof Error ? caughtError.message : t('privateTournaments.searchError')
       )
     } finally {
       setIsSearching(false)
@@ -141,12 +149,12 @@ export default function PrivateTournamentsPage() {
         requestStatus: 'pending',
         canRequest: false,
       })
-      setMessage('Solicitud enviada. El administrador debe aprobar tu ingreso.')
+      setMessage(t('privateTournaments.requestSent'))
     } catch (caughtError) {
       setError(
         caughtError instanceof Error
           ? caughtError.message
-          : 'No se pudo solicitar acceso.'
+          : t('privateTournaments.requestError')
       )
     } finally {
       setIsRequesting(false)
@@ -156,7 +164,7 @@ export default function PrivateTournamentsPage() {
   if (isAuthLoading) {
     return (
       <section className="hf-card rounded-2xl p-4 text-sm text-[#9aa7b5]">
-        Cargando sesión...
+        {t('privateTournaments.loadingSession')}
       </section>
     )
   }
@@ -164,9 +172,9 @@ export default function PrivateTournamentsPage() {
   if (!user) {
     return (
       <section className="hf-card rounded-2xl p-4">
-        <h2 className="text-lg font-black text-white">Torneos privados</h2>
+        <h2 className="text-lg font-black text-white">{t('privateTournaments.title')}</h2>
         <p className="mt-2 text-sm text-[#9aa7b5]">
-          Iniciá sesión para crear torneos, solicitar acceso y ver rankings privados.
+          {t('privateTournaments.loginRequired')}
         </p>
       </section>
     )
@@ -176,11 +184,11 @@ export default function PrivateTournamentsPage() {
     <div className="grid w-full min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-4">
       <section className="hf-card min-w-0 rounded-2xl">
         <div className="hf-section-head px-3 py-3 sm:px-4">
-          <h2 className="text-lg font-black text-white">Torneos en los que participo</h2>
+          <h2 className="text-lg font-black text-white">{t('privateTournaments.myTournaments')}</h2>
         </div>
         <div className="space-y-3 p-3 sm:p-4">
           {isLoading ? (
-            <EmptyState>Cargando torneos...</EmptyState>
+            <EmptyState>{t('privateTournaments.loadingTournaments')}</EmptyState>
           ) : tournaments.length ? (
             tournaments.map((tournament) => (
               <Link
@@ -194,23 +202,24 @@ export default function PrivateTournamentsPage() {
                       {tournament.displayName}
                     </h3>
                     <p className="mt-1 text-sm text-[#9aa7b5]">
-                      {tournament.memberCount} participantes
+                      {tournament.memberCount} {t('common.participants')}
                     </p>
                     <p className="mt-2 text-sm font-semibold text-[#dce7f2]">
+                      {t('privateTournaments.myPosition')}:{' '}
                       {tournament.myPosition
-                        ? `Mi posición: #${tournament.myPosition}`
-                        : 'Mi posición: sin puntos todavía'}{' '}
-                      · {tournament.myPoints} pts
+                        ? `#${tournament.myPosition}`
+                        : t('privateTournaments.noPointsYet')}{' '}
+                      {'\u00b7'} {tournament.myPoints} {t('common.pointsAbbr')}
                     </p>
                   </div>
                   <span className="hf-button inline-flex h-10 shrink-0 items-center justify-center rounded-xl px-4 text-sm font-black transition">
-                    Ver torneo
+                    {t('privateTournaments.viewTournament')}
                   </span>
                 </div>
               </Link>
             ))
           ) : (
-            <EmptyState>Todavía no participás en ningún torneo privado.</EmptyState>
+            <EmptyState>{t('privateTournaments.noTournaments')}</EmptyState>
           )}
         </div>
       </section>
@@ -218,13 +227,13 @@ export default function PrivateTournamentsPage() {
       <aside className="min-w-0 space-y-3">
         <section className="hf-card rounded-2xl">
           <div className="hf-section-head px-3 py-3 sm:px-4">
-            <h2 className="text-lg font-black text-white">Crear torneo</h2>
+            <h2 className="text-lg font-black text-white">{t('privateTournaments.createTitle')}</h2>
           </div>
           <form onSubmit={handleCreate} className="space-y-3 p-3 sm:p-4">
             <input
               value={createName}
               onChange={(event) => setCreateName(event.target.value)}
-              placeholder="Nombre del torneo"
+              placeholder={t('privateTournaments.namePlaceholder')}
               className="hf-input h-11 w-full rounded-xl px-3 text-sm font-semibold outline-none transition placeholder:text-[#657384]"
             />
             <select
@@ -234,7 +243,7 @@ export default function PrivateTournamentsPage() {
             >
               {PRODE_TOURNAMENT_OPTIONS.map((option) => (
                 <option key={option.externalId} value={option.externalId}>
-                  {option.name}
+                  {getTournamentOptionName(option, locale)}
                 </option>
               ))}
             </select>
@@ -243,20 +252,20 @@ export default function PrivateTournamentsPage() {
               disabled={isCreating}
               className="hf-button h-11 w-full rounded-xl px-4 text-sm font-black disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isCreating ? 'Creando...' : 'Crear torneo'}
+              {isCreating ? t('privateTournaments.creating') : t('privateTournaments.createAction')}
             </button>
           </form>
         </section>
 
         <section className="hf-card rounded-2xl">
           <div className="hf-section-head px-3 py-3 sm:px-4">
-            <h2 className="text-lg font-black text-white">Buscar torneo</h2>
+            <h2 className="text-lg font-black text-white">{t('privateTournaments.searchTitle')}</h2>
           </div>
           <form onSubmit={handleSearch} className="space-y-3 p-3 sm:p-4">
             <input
               value={searchName}
               onChange={(event) => setSearchName(event.target.value)}
-              placeholder="Nombre exacto del torneo"
+              placeholder={t('privateTournaments.exactNamePlaceholder')}
               className="hf-input h-11 w-full rounded-xl px-3 text-sm font-semibold outline-none transition placeholder:text-[#657384]"
             />
             <button
@@ -264,12 +273,12 @@ export default function PrivateTournamentsPage() {
               disabled={isSearching}
               className="hf-button-secondary h-11 w-full rounded-xl px-4 text-sm font-black disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isSearching ? 'Buscando...' : 'Buscar'}
+              {isSearching ? t('privateTournaments.searching') : t('privateTournaments.searchAction')}
             </button>
           </form>
           <div className="px-3 pb-3 sm:px-4 sm:pb-4">
             {searchDone && !searchResult ? (
-              <EmptyState>No se encontró un torneo con ese nombre.</EmptyState>
+              <EmptyState>{t('privateTournaments.notFound')}</EmptyState>
             ) : null}
 
             {searchResult ? (
@@ -278,13 +287,14 @@ export default function PrivateTournamentsPage() {
                   {searchResult.displayName}
                 </h3>
                 <p className="mt-1 text-sm text-[#9aa7b5]">
-                  {searchResult.leagueName} · {searchResult.memberCount} participantes
+                  {searchResult.leagueName} {'\u00b7'} {searchResult.memberCount}{' '}
+                  {t('common.participants')}
                 </p>
                 <p className="mt-2 text-sm font-semibold text-[#dce7f2]">
                   {searchResult.isMember
-                    ? 'Ya participás en este torneo.'
-                    : getRequestLabel(searchResult.requestStatus) ??
-                      'Podés solicitar acceso.'}
+                    ? t('privateTournaments.alreadyMember')
+                    : getRequestLabel(searchResult.requestStatus, t) ??
+                      t('privateTournaments.canRequest')}
                 </p>
                 {searchResult.canRequest ? (
                   <button
@@ -294,10 +304,10 @@ export default function PrivateTournamentsPage() {
                     className="hf-button mt-3 h-10 w-full rounded-xl px-4 text-sm font-black disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {isRequesting
-                      ? 'Enviando...'
+                      ? t('privateTournaments.requesting')
                       : searchResult.requestStatus === 'rejected'
-                        ? 'Volver a solicitar'
-                        : 'Solicitar acceso'}
+                        ? t('privateTournaments.requestAgain')
+                        : t('privateTournaments.requestAccess')}
                   </button>
                 ) : null}
               </div>

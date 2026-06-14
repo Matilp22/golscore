@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useState } from 'react'
 
 import { PlayerPhoto } from '@/frontend/components/AssetImage'
+import { useTranslations } from '@/frontend/components/LocaleProvider'
 import type { LeaderStatType, TopPlayerRow } from '@/lib/api-football'
 
 type LeaderListInteractiveProps = {
@@ -23,6 +24,7 @@ export default function LeaderListInteractive({
   season,
   statType,
 }: LeaderListInteractiveProps) {
+  const { t } = useTranslations()
   const [showAll, setShowAll] = useState(false)
   const visibleRows = showAll ? rows : rows.slice(0, 10)
   const hasMoreRows = rows.length > 10
@@ -33,7 +35,7 @@ export default function LeaderListInteractive({
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-base font-bold text-white md:text-lg">{title}</h2>
           <span className="text-[11px] uppercase tracking-[0.14em] text-[#8d98a7]">
-            {rows.length} jugadores
+            {rows.length} {t('common.players')}
           </span>
         </div>
       </div>
@@ -62,7 +64,7 @@ export default function LeaderListInteractive({
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-white">{row.name}</p>
                       <p className="truncate text-xs text-[#8d98a7]">
-                        {row.teamName || 'Sin equipo'}
+                        {row.teamName || t('common.noTeam')}
                       </p>
                       {row.details ? (
                         <p className="truncate text-[11px] font-semibold text-[#b9c4cf]">
@@ -105,7 +107,7 @@ export default function LeaderListInteractive({
                   className="hf-button-secondary flex w-full items-center justify-between rounded-2xl px-4 py-3 text-sm font-semibold"
                   aria-expanded={showAll}
                 >
-                  <span>{showAll ? 'Mostrar solo 10 jugadores' : 'Ver todos los jugadores'}</span>
+                  <span>{showAll ? t('common.showOnlyTenPlayers') : t('common.showAllPlayers')}</span>
                   <span className={`text-[#8fa0b1] transition ${showAll ? 'rotate-180' : ''}`}>
                     ▾
                   </span>
@@ -114,7 +116,7 @@ export default function LeaderListInteractive({
             ) : null}
           </div>
         ) : (
-          <p className="text-sm text-[#8d98a7]">No hay datos disponibles para este ranking.</p>
+          <p className="text-sm text-[#8d98a7]">{t('common.noRankingData')}</p>
         )}
       </div>
     </section>

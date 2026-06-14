@@ -1,4 +1,6 @@
 import PrivateTournamentDetailPage from '@/frontend/components/prode/private-tournaments/PrivateTournamentDetailPage'
+import { getRequestLocale } from '@/server/request-locale'
+import { t } from '@/shared/i18n/locales'
 import { buildNoIndexMetadata } from '@/shared/seo'
 
 type ProdeTournamentDetailPageProps = {
@@ -9,10 +11,11 @@ type ProdeTournamentDetailPageProps = {
 
 export async function generateMetadata({ params }: ProdeTournamentDetailPageProps) {
   const { id } = await params
+  const locale = await getRequestLocale()
 
   return buildNoIndexMetadata(
-    'Torneo Privado del Prode | Hay Fulbo',
-    'Detalle privado de un torneo del Prode de Hay Fulbo.',
+    `${t(locale, 'privateTournaments.detailTitle')} | Hay Fulbo`,
+    t(locale, 'privateTournaments.tournamentTable'),
     `/prode/torneos/${id}`
   )
 }

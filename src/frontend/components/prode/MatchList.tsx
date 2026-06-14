@@ -1,7 +1,8 @@
 'use client'
 
-import type { Match, Prediction } from '@/frontend/types/prode'
+import { useTranslations } from '@/frontend/components/LocaleProvider'
 import MatchCard from '@/frontend/components/prode/MatchCard'
+import type { Match, Prediction } from '@/frontend/types/prode'
 import {
   getProdeRoundLabel,
   normalizeProdeRound,
@@ -29,10 +30,17 @@ type MatchGroup = {
   matches: Match[]
 }
 
-function formatGroupDate(value: string | null) {
-  if (!value) return 'A programar'
+const DATE_LOCALE: Record<string, string> = {
+  es: 'es-AR',
+  en: 'en-US',
+  pt: 'pt-BR',
+  fr: 'fr-FR',
+}
 
-  return new Intl.DateTimeFormat('es-AR', {
+function formatGroupDate(value: string | null, locale: string, unscheduledLabel: string) {
+  if (!value) return unscheduledLabel
+
+  return new Intl.DateTimeFormat(DATE_LOCALE[locale] ?? locale, {
     timeZone: 'America/Argentina/Buenos_Aires',
     weekday: 'long',
     day: '2-digit',
@@ -40,12 +48,12 @@ function formatGroupDate(value: string | null) {
   }).format(parseMatchDate(value))
 }
 
-function getGroupLabel(match: Match) {
+function getGroupLabel(match: Match, locale: string, unscheduledLabel: string) {
   const label = getProdeRoundLabel(match.round, match.league?.externalId)
 
   if (label) return label
 
-  return formatGroupDate(match.matchDate)
+  return formatGroupDate(match.matchDate, locale, unscheduledLabel)
 }
 
 function getMatchSortTime(match: Match) {
@@ -54,11 +62,11 @@ function getMatchSortTime(match: Match) {
   return Number.isFinite(timestamp) ? timestamp : Number.MAX_SAFE_INTEGER
 }
 
-function groupMatches(matches: Match[]): MatchGroup[] {
+function groupMatches(matches: Match[], locale: string, unscheduledLabel: string): MatchGroup[] {
   const groups = new Map<string, MatchGroup>()
 
   for (const match of matches) {
-    const label = getGroupLabel(match)
+    const label = getGroupLabel(match, locale, unscheduledLabel)
     const normalizedRound = normalizeProdeRound(match.round, match.league?.externalId)
     const key = normalizedRound
       ? `round-${normalizedRound}`
@@ -98,14 +106,15 @@ export default function MatchList({
   onDraftChange,
   onSavePrediction,
 }: MatchListProps) {
-  const groups = groupMatches(matches)
+  const { locale, t } = useTranslations()
+  const groups = groupMatches(matches, locale, t('common.unscheduled'))
 
   if (!matches.length) {
     return (
       <div className="hf-card w-full rounded-2xl p-4">
-        <h2 className="text-lg font-black text-white">Partidos</h2>
+        <h2 className="text-lg font-black text-white">{t('prode.matches')}</h2>
         <p className="mt-2 text-sm text-[#8d98a7]">
-          No hay partidos cargados para los filtros seleccionados.
+          {t('prode.noMatchesForFilters')}
         </p>
       </div>
     )

@@ -20,6 +20,10 @@ Convencion final:
 - `results`: resultado final normalizado por partido.
 - `points`: tabla final de puntos por prediccion.
 - `leaderboards`: ranking materializado por usuario.
+- `admin_featured_matches`: overrides privados para partidos destacados.
+- `admin_broadcast_overrides`: overrides privados de canales por fixture.
+- `admin_ad_slots`: configuracion privada de slots de publicidad.
+- `admin_visibility_rules`: reglas privadas de visibilidad preparadas para una v2.
 
 Campos principales del prode:
 
@@ -40,6 +44,8 @@ Campos principales del prode:
 RLS queda activo. Los usuarios pueden leer datos publicos de competiciones, ligas, equipos, partidos, resultados y ranking. Cada usuario solo puede leer/modificar su propio `profile`, sus propias `predictions` y sus propios `points`. El bloqueo de 15 minutos esta reforzado por trigger en `predictions`.
 
 Las escrituras de partidos, resultados y recalculo de puntos deben hacerse con service role desde jobs/functions, no desde el cliente.
+
+Las tablas `admin_*` tienen RLS activo, no tienen acceso para `anon` ni `authenticated`, y se escriben solo desde Server Actions protegidas por `ADMIN_EMAILS` + Supabase Auth.
 
 ## Migraciones
 

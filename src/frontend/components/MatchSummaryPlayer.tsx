@@ -1,3 +1,6 @@
+'use client'
+
+import { useTranslations } from '@/frontend/components/LocaleProvider'
 import type { MatchSummarySource } from '@/shared/utils/match-summary'
 
 type MatchSummaryPlayerProps = {
@@ -11,6 +14,8 @@ export default function MatchSummaryPlayer({
   isLoading = false,
   error,
 }: MatchSummaryPlayerProps) {
+  const { t } = useTranslations()
+
   if (isLoading) {
     return (
       <div className="aspect-video w-full overflow-hidden rounded-xl border border-white/10 bg-[#10151a]">
@@ -25,9 +30,9 @@ export default function MatchSummaryPlayer({
         className="flex aspect-video w-full flex-col items-center justify-center rounded-xl border border-dashed border-white/10 bg-[#13181d] px-4 py-5 text-center"
         data-match-summary-state={error ? 'error' : 'empty'}
       >
-        <p className="text-sm font-bold text-white">Resumen no disponible</p>
+        <p className="text-sm font-bold text-white">{t('match.summaryUnavailable')}</p>
         <p className="mt-1 max-w-[260px] text-xs leading-relaxed text-[#8d98a7]">
-          Cuando se cargue un video, va a aparecer acá.
+          {t('match.summaryWillAppear')}
         </p>
       </div>
     )
@@ -42,7 +47,7 @@ export default function MatchSummaryPlayer({
       <div className="aspect-video w-full overflow-hidden bg-black">
         {source.type === 'iframe' ? (
           <iframe
-            title={source.title || 'Resumen del partido'}
+            title={source.title || t('match.summaryTitle')}
             src={source.src}
             className="h-full w-full border-0"
             loading="lazy"
@@ -57,7 +62,7 @@ export default function MatchSummaryPlayer({
             controls
             playsInline
             preload="metadata"
-            aria-label={source.title || 'Resumen del partido'}
+            aria-label={source.title || t('match.summaryTitle')}
           />
         )}
       </div>

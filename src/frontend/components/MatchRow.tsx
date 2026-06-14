@@ -133,7 +133,13 @@ function formatGoalScorer(goal: MatchGoalScorer) {
   return `${formatEventMinute(goal.minute, goal.extraMinute)} ${goal.player}${suffix}`
 }
 
-function GoalScorersLine({ goalScorers }: { goalScorers?: MatchGoalScorers }) {
+function GoalScorersLine({
+  goalScorers,
+  locale,
+}: {
+  goalScorers?: MatchGoalScorers
+  locale: AppLocale
+}) {
   const homeGoals = goalScorers?.home.map(formatGoalScorer).join('; ') || ''
   const awayGoals = goalScorers?.away.map(formatGoalScorer).join('; ') || ''
   const unassignedGoals = goalScorers?.unassigned?.map(formatGoalScorer).join('; ') || ''
@@ -143,7 +149,7 @@ function GoalScorersLine({ goalScorers }: { goalScorers?: MatchGoalScorers }) {
   if (unassignedGoals && !homeGoals && !awayGoals) {
     return (
       <div className="mt-1 min-w-0 break-words text-[10px] leading-tight text-[#8d98a7]">
-        Goles: {unassignedGoals}
+        {t(locale, 'match.goals')}: {unassignedGoals}
       </div>
     )
   }
@@ -161,7 +167,7 @@ function GoalScorersLine({ goalScorers }: { goalScorers?: MatchGoalScorers }) {
       </div>
       {unassignedGoals ? (
         <div className="min-w-0 break-words">
-          Goles: {unassignedGoals}
+          {t(locale, 'match.goals')}: {unassignedGoals}
         </div>
       ) : null}
     </div>
@@ -237,7 +243,7 @@ export default function MatchRow({
         </div>
       ) : null}
 
-      <GoalScorersLine goalScorers={goalScorers} />
+      <GoalScorersLine goalScorers={goalScorers} locale={locale} />
     </Link>
   )
 }

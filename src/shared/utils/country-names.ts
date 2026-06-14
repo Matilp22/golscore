@@ -6,18 +6,27 @@ type CountryCode = string | SpecialCountryCode
 const DEFAULT_COUNTRY_LOCALE: AppLocale = 'es'
 
 const MOJIBAKE_FIXES: Record<string, string> = {
+  'EspaÃƒÆ’Ã‚Â±a': 'España',
   'EspaÃƒÂ±a': 'España',
   'EspaÃ±a': 'España',
+  'MÃƒÆ’Ã‚Â©xico': 'México',
   'MÃƒÂ©xico': 'México',
   'MÃ©xico': 'México',
+  'CanadÃƒÆ’Ã‚Â¡': 'Canadá',
   'CanadÃƒÂ¡': 'Canadá',
   'CanadÃ¡': 'Canadá',
+  'PaÃƒÆ’Ã‚Â­ses Bajos': 'Países Bajos',
   'PaÃƒÂ­ses Bajos': 'Países Bajos',
   'PaÃ­ses Bajos': 'Países Bajos',
+  'PerÃƒÂº': 'Perú',
   'PerÃº': 'Perú',
+  'BÃƒÂ©lgica': 'Bélgica',
   'BÃ©lgica': 'Bélgica',
+  'JapÃƒÂ³n': 'Japón',
   'JapÃ³n': 'Japón',
+  'SudÃƒÂ¡frica': 'Sudáfrica',
   'SudÃ¡frica': 'Sudáfrica',
+  'TurquÃƒÂ­a': 'Turquía',
   'TurquÃ­a': 'Turquía',
 }
 
@@ -47,7 +56,7 @@ const COUNTRY_CODE_BY_NAME: Record<string, CountryCode> = {
   cameroon: 'CM',
   camerun: 'CM',
   canada: 'CA',
-  canadaa: 'CA',
+  canadá: 'CA',
   chile: 'CL',
   china: 'CN',
   colombia: 'CO',
@@ -79,6 +88,7 @@ const COUNTRY_CODE_BY_NAME: Record<string, CountryCode> = {
   hungary: 'HU',
   hungria: 'HU',
   iceland: 'IS',
+  islandia: 'IS',
   india: 'IN',
   indonesia: 'ID',
   iran: 'IR',
@@ -93,6 +103,7 @@ const COUNTRY_CODE_BY_NAME: Record<string, CountryCode> = {
   jamaica: 'JM',
   japan: 'JP',
   japon: 'JP',
+  japón: 'JP',
   jordan: 'JO',
   kazakhstan: 'KZ',
   kyrgyzstan: 'KG',
@@ -110,6 +121,7 @@ const COUNTRY_CODE_BY_NAME: Record<string, CountryCode> = {
   mauritania: 'MR',
   malta: 'MT',
   mexico: 'MX',
+  méxico: 'MX',
   mejico: 'MX',
   moldova: 'MD',
   monaco: 'MC',
@@ -121,6 +133,7 @@ const COUNTRY_CODE_BY_NAME: Record<string, CountryCode> = {
   holland: 'NL',
   holanda: 'NL',
   'paises bajos': 'NL',
+  'países bajos': 'NL',
   'new zealand': 'NZ',
   'nueva zelanda': 'NZ',
   niger: 'NE',
@@ -134,8 +147,10 @@ const COUNTRY_CODE_BY_NAME: Record<string, CountryCode> = {
   pakistan: 'PK',
   palestine: 'PS',
   panama: 'PA',
+  panamá: 'PA',
   paraguay: 'PY',
   peru: 'PE',
+  perú: 'PE',
   philippines: 'PH',
   poland: 'PL',
   polonia: 'PL',
@@ -155,10 +170,12 @@ const COUNTRY_CODE_BY_NAME: Record<string, CountryCode> = {
   slovenia: 'SI',
   'south africa': 'ZA',
   sudafrica: 'ZA',
+  sudáfrica: 'ZA',
   'south korea': 'KR',
   'corea del sur': 'KR',
   spain: 'ES',
   espana: 'ES',
+  españa: 'ES',
   sweden: 'SE',
   suecia: 'SE',
   switzerland: 'CH',
@@ -171,6 +188,7 @@ const COUNTRY_CODE_BY_NAME: Record<string, CountryCode> = {
   turkmenistan: 'TM',
   turkey: 'TR',
   turquia: 'TR',
+  turquía: 'TR',
   ukraine: 'UA',
   ucrania: 'UA',
   'united arab emirates': 'AE',
@@ -248,7 +266,7 @@ function normalizeKey(value: string) {
 export function normalizeCountryName(country: string | null | undefined) {
   if (!country) return ''
 
-  let normalized = country.replace(/\uFFFD/g, '').replace(/Ã‚/g, '').trim()
+  let normalized = country.replace(/\uFFFD/g, '').replace(/Ãƒâ€š/g, '').trim()
 
   for (const [broken, fixed] of Object.entries(MOJIBAKE_FIXES)) {
     normalized = normalized.replaceAll(broken, fixed)
@@ -295,7 +313,7 @@ export function translateCountryNameToSpanish(country: string | null | undefined
 export function hasCountryMojibake(value: string | null | undefined) {
   if (!value) return false
 
-  return /Ãƒ|Ã‚|Ã|�/.test(value) || Object.keys(MOJIBAKE_FIXES).some((broken) => value.includes(broken))
+  return /ÃƒÆ’|Ãƒâ€š|Ãƒ|ï¿½/.test(value) || Object.keys(MOJIBAKE_FIXES).some((broken) => value.includes(broken))
 }
 
 export function hasCountryTranslation(country: string | null | undefined) {
