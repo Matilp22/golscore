@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { addDaysToISO, getArgentinaDateISO, toArgentinaDate } from '@/shared/utils/argentina-time'
+import { upsertMatchBroadcast } from '@/server/broadcasts/admin'
 import {
   asRecord,
   getAdminClient,
@@ -176,6 +177,22 @@ function getMissingMatchColumnFromError(error: unknown) {
     message.match(/'([^']+)' column/i)?.[1] ??
     message.match(/column "([^"]+)"/i)?.[1] ??
     null
+  )
+}
+
+function isMissingOptionalBroadcastStore(error: unknown) {
+  const record = typeof error === 'object' && error !== null ? (error as SupabaseSchemaError) : null
+  const code = typeof record?.code === 'string' ? record.code : null
+  const message = typeof record?.message === 'string' ? record.message.toLowerCase() : ''
+
+  return (
+    code === '42P01' ||
+    code === '42703' ||
+    code === 'PGRST204' ||
+    code === 'PGRST205' ||
+    message.includes('match_broadcasts') ||
+    message.includes('source') ||
+    message.includes('schema cache')
   )
 }
 
@@ -461,7 +478,9 @@ function patchNormalizedPayload(row: FixtureCacheRow, input: AdminMatchDetailsIn
   normalized.referee = referee
   normalized.tv = tv
   normalized.broadcastChannel = tv
+  normalized.broadcast_channel = tv
   normalized.broadcastLogoUrl = broadcastLogoUrl
+  normalized.broadcast_logo_url = broadcastLogoUrl
   normalized.highlightsUrl = highlightsUrl
   normalized.highlightsTitle = highlightsTitle
 
@@ -601,14 +620,20 @@ async function updateStoredMatch(input: AdminMatchDetailsInput) {
   let lastUpdateError: unknown = null
 
   for (let attempt = 0; attempt < 16; attempt += 1) {
-    if (Object.keys(remainingPatch).length === 0) return
+    if (Object.keys(remainingPatch).length === 0) {
+      await replaceManualMatchBroadcast(match.id, input)
+      return
+    }
 
     const { error: updateError } = await supabase
       .from('matches')
       .update(remainingPatch)
       .eq('id', String(match.id))
 
-    if (!updateError) return
+    if (!updateError) {
+      await replaceManualMatchBroadcast(match.id, input)
+      return
+    }
 
     lastUpdateError = updateError
 
@@ -626,6 +651,52 @@ async function updateStoredMatch(input: AdminMatchDetailsInput) {
   }
 
   throw lastUpdateError
+}
+
+async function replaceManualMatchBroadcast(
+  matchId: string | number,
+  input: AdminMatchDetailsInput
+) {
+  const broadcasterName = cleanText(input.tv)
+  const broadcasterLogoUrl = cleanText(input.broadcastLogoUrl)
+  const country = cleanText(input.country)
+  const supabase = getAdminClient()
+
+  try {
+    const deleteResponse = await supabase
+      .from('match_broadcasts')
+      .delete()
+      .eq('match_id', String(matchId))
+      .eq('source', 'manual')
+
+    if (deleteResponse.error) {
+      if (isMissingOptionalBroadcastStore(deleteResponse.error)) {
+        console.warn('[admin-matches] Manual broadcast cleanup not available in current schema.', {
+          matchId,
+        })
+      } else {
+        throw deleteResponse.error
+      }
+    }
+
+    if (!broadcasterName) return
+
+    await upsertMatchBroadcast(supabase, {
+      matchId,
+      broadcasterName,
+      broadcasterLogoUrl,
+      country,
+    })
+  } catch (error) {
+    if (isMissingOptionalBroadcastStore(error)) {
+      console.warn('[admin-matches] Optional match_broadcasts store not available; TV remains only in normalized cache.', {
+        matchId,
+      })
+      return
+    }
+
+    throw error
+  }
 }
 
 export async function getAdminMatchesPageData(
