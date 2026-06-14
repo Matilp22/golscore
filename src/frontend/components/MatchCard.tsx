@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { TeamLogo } from '@/frontend/components/AssetImage'
 import { useTranslations } from '@/frontend/components/LocaleProvider'
 import { translateCountryName } from '@/shared/utils/country-names'
+import { getTeamDisplayName } from '@/shared/utils/team-display'
 
 type MatchCardProps = {
   id?: number | string
@@ -48,6 +49,8 @@ export default function MatchCard({
 }: MatchCardProps) {
   const { locale, t } = useTranslations()
   const countryLabel = country ? translateCountryName(country, locale) || country : null
+  const homeDisplayName = getTeamDisplayName({ name: home, league, country, locale })
+  const awayDisplayName = getTeamDisplayName({ name: away, league, country, locale })
 
   return (
     <Link
@@ -68,13 +71,13 @@ export default function MatchCard({
             <div className="flex h-7 w-7 items-center justify-center overflow-hidden">
               <TeamLogo
                 src={homeLogo}
-                alt={home}
+                alt={homeDisplayName}
                 size={28}
                 className="h-7 w-7 object-contain"
                 fallbackClassName="h-6 w-5"
               />
             </div>
-            <span className="text-xs font-medium text-white md:text-sm">{home}</span>
+            <span className="text-xs font-medium text-white md:text-sm">{homeDisplayName}</span>
           </div>
           <span className="text-base font-extrabold tracking-wide text-white">
             {score.split(' - ')[0] || '-'}
@@ -86,13 +89,13 @@ export default function MatchCard({
             <div className="flex h-7 w-7 items-center justify-center overflow-hidden">
               <TeamLogo
                 src={awayLogo}
-                alt={away}
+                alt={awayDisplayName}
                 size={28}
                 className="h-7 w-7 object-contain"
                 fallbackClassName="h-6 w-5"
               />
             </div>
-            <span className="text-xs font-medium text-white md:text-sm">{away}</span>
+            <span className="text-xs font-medium text-white md:text-sm">{awayDisplayName}</span>
           </div>
           <span className="text-base font-extrabold tracking-wide text-white">
             {score.split(' - ')[1] || '-'}

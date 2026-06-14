@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
 import { AdminAuthError, requireAdmin } from '@/server/admin/auth'
 import { updateAdSlot } from '@/server/admin/ads'
 import {
@@ -9,6 +10,7 @@ import {
   updateBroadcastOverride,
 } from '@/server/admin/broadcasts'
 import { upsertFeaturedMatch } from '@/server/admin/featured-matches'
+import { updateAdminMatchDetails } from '@/server/admin/matches'
 import { clampInteger } from '@/server/admin/shared'
 import { runManualFixtureSync } from '@/server/admin/sync'
 import {
@@ -59,6 +61,24 @@ function readInteger(
   const parsed = Number(readString(formData, key))
 
   return clampInteger(parsed, fallback, min, max)
+}
+
+function readNullableInteger(formData: FormData, key: string) {
+  const value = readString(formData, key)
+  if (!value) return null
+
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`Valor numerico invalido para ${key}.`)
+  }
+
+  return Math.trunc(parsed)
+}
+
+function sanitizeAdminReturnPath(value: string) {
+  if (!value.startsWith('/admin/matches')) return '/admin/matches'
+
+  return value
 }
 
 function getActionErrorMessage(error: unknown) {
@@ -159,6 +179,49 @@ export async function deleteBroadcastOverrideAction(formData: FormData) {
   await deleteBroadcastOverride(readString(formData, 'id'))
 
   revalidatePath('/admin/broadcasts')
+}
+
+export async function saveMatchDetailsAction(formData: FormData) {
+  await requireAdmin()
+
+  const fixtureExternalId = readString(formData, 'fixtureExternalId')
+
+  await updateAdminMatchDetails({
+    fixtureExternalId,
+    leagueExternalId: readOptionalString(formData, 'leagueExternalId'),
+    leagueName: readOptionalString(formData, 'leagueName'),
+    country: readOptionalString(formData, 'country'),
+    season: readNullableInteger(formData, 'season'),
+    round: readOptionalString(formData, 'round'),
+    date: readOptionalString(formData, 'date'),
+    homeTeam: readOptionalString(formData, 'homeTeam'),
+    awayTeam: readOptionalString(formData, 'awayTeam'),
+    homeLogo: readOptionalString(formData, 'homeLogo'),
+    awayLogo: readOptionalString(formData, 'awayLogo'),
+    goalsHome: readNullableInteger(formData, 'goalsHome'),
+    goalsAway: readNullableInteger(formData, 'goalsAway'),
+    homePenaltyScore: readNullableInteger(formData, 'homePenaltyScore'),
+    awayPenaltyScore: readNullableInteger(formData, 'awayPenaltyScore'),
+    minute: readNullableInteger(formData, 'minute'),
+    statusShort: readOptionalString(formData, 'statusShort'),
+    statusLong: readOptionalString(formData, 'statusLong'),
+    venueName: readOptionalString(formData, 'venueName'),
+    venueCity: readOptionalString(formData, 'venueCity'),
+    referee: readOptionalString(formData, 'referee'),
+    tv: readOptionalString(formData, 'tv'),
+    broadcastLogoUrl: readOptionalString(formData, 'broadcastLogoUrl'),
+    highlightsUrl: readOptionalString(formData, 'highlightsUrl'),
+    highlightsTitle: readOptionalString(formData, 'highlightsTitle'),
+  })
+
+  revalidatePath('/admin')
+  revalidatePath('/admin/matches')
+  revalidatePath('/')
+  revalidatePath(`/partido/${fixtureExternalId}`)
+  revalidatePath('/liga', 'layout')
+
+  const returnPath = sanitizeAdminReturnPath(readString(formData, 'returnPath'))
+  redirect(returnPath.includes('?') ? `${returnPath}&saved=1` : `${returnPath}?saved=1`)
 }
 
 export async function saveAdSlotAction(formData: FormData) {

@@ -11,7 +11,7 @@ export type GroupStageGridItem = {
   id: string
   title: string
   table: ReactNode
-  fixtures: ReactNode
+  fixtures?: ReactNode | null
 }
 
 type GroupTabsProps = {
@@ -59,10 +59,14 @@ export function GroupStageCard({
 }: {
   title: string
   table: ReactNode
-  fixtures: ReactNode
+  fixtures?: ReactNode | null
   defaultTab?: GroupStageTab
 }) {
-  const [activeTab, setActiveTab] = useState<GroupStageTab>(defaultTab)
+  const hasFixtures = Boolean(fixtures)
+  const [activeTab, setActiveTab] = useState<GroupStageTab>(
+    hasFixtures ? defaultTab : 'table'
+  )
+  const visibleTab = hasFixtures ? activeTab : 'table'
 
   return (
     <section className="min-w-0 overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
@@ -70,11 +74,11 @@ export function GroupStageCard({
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-sm font-semibold text-white md:text-base md:font-bold">{title}</h2>
         </div>
-        <GroupTabs activeTab={activeTab} onChange={setActiveTab} />
+        {hasFixtures ? <GroupTabs activeTab={activeTab} onChange={setActiveTab} /> : null}
       </div>
 
       <div className="p-2 md:p-2.5">
-        {activeTab === 'table' ? table : fixtures}
+        {visibleTab === 'table' ? table : fixtures}
       </div>
     </section>
   )

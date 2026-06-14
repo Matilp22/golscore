@@ -86,7 +86,7 @@ import { WORLD_CUP_2026_LOGO_URL } from '@/shared/utils/asset-urls'
 import type { ConmebolCompetitionType } from '@/shared/utils/conmebol-rounds'
 import { buildSeoMetadata } from '@/shared/seo'
 import { getRequestLocale } from '@/server/request-locale'
-import { getTournamentDisplayName } from '@/shared/i18n/locales'
+import { getTournamentDisplayName, type AppLocale } from '@/shared/i18n/locales'
 import { translateCountryName } from '@/shared/utils/country-names'
 
 type PageProps = {
@@ -787,8 +787,32 @@ function isThirdPlaceRankingGroup(value?: string | null) {
   )
 }
 
-function getDisplayGroupName(value: string) {
-  if (isThirdPlaceRankingGroup(value)) {
+function isWorldCupThirdPlaceAggregateGroup(
+  group: Pick<LeagueStandingGroup, 'name' | 'rows'>,
+  isWorldCupTournament: boolean
+) {
+  if (!isWorldCupTournament || getGroupKeyFromText(group.name)) return false
+
+  const normalized = normalizeGroupName(group.name || '')
+  const compact = normalized.replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
+  const rowCount = group.rows.length
+
+  return (
+    (compact === 'group stage' || compact === 'fase de grupos') &&
+    rowCount > WORLD_CUP_THIRD_PLACE_QUALIFIER_COUNT &&
+    rowCount <= GROUP_STAGE_ORDER.length
+  )
+}
+
+function isThirdPlaceTableGroup(
+  group: Pick<LeagueStandingGroup, 'name' | 'rows'>,
+  isWorldCupTournament: boolean
+) {
+  return isThirdPlaceRankingGroup(group.name) || isWorldCupThirdPlaceAggregateGroup(group, isWorldCupTournament)
+}
+
+function getDisplayGroupName(value: string, options: { thirdPlaceTable?: boolean } = {}) {
+  if (options.thirdPlaceTable || isThirdPlaceRankingGroup(value)) {
     return 'Tabla de terceros'
   }
 
@@ -1968,16 +1992,21 @@ function FixtureTeamLabel({
   name,
   logo,
   side,
+  locale,
+  translateTeamNames = false,
 }: {
   name: string
   logo?: string
   side: 'home' | 'away'
+  locale: AppLocale
+  translateTeamNames?: boolean
 }) {
-  const shortCode = getTeamShortCode(name)
+  const displayName = translateTeamNames ? translateCountryName(name, locale) || name : name
+  const shortCode = getTeamShortCode(displayName)
   const logoElement = (
     <TeamLogo
       src={logo}
-      alt={name}
+      alt={displayName}
       size={16}
       className="h-4 w-4 shrink-0 object-contain"
       fallbackClassName="h-3.5 w-3.5"
@@ -1993,13 +2022,21 @@ function FixtureTeamLabel({
     >
       {side === 'home' ? logoElement : null}
       <span className="shrink-0 font-black leading-none text-[#dce5ef] md:hidden">{shortCode}</span>
-      <span className="hidden min-w-0 truncate font-semibold text-[#dce5ef] md:inline">{name}</span>
+      <span className="hidden min-w-0 truncate font-semibold text-[#dce5ef] md:inline">{displayName}</span>
       {side === 'away' ? logoElement : null}
     </div>
   )
 }
 
-function GroupFixtures({ fixtures }: { fixtures: LeagueFixtureSummary[] }) {
+function GroupFixtures({
+  fixtures,
+  locale,
+  translateTeamNames = false,
+}: {
+  fixtures: LeagueFixtureSummary[]
+  locale: AppLocale
+  translateTeamNames?: boolean
+}) {
   if (!fixtures.length) {
     return (
       <div className="rounded-xl border border-white/8 bg-[#10151a] px-3 py-4 text-center text-sm text-[#8d98a7]">
@@ -2019,14 +2056,26 @@ function GroupFixtures({ fixtures }: { fixtures: LeagueFixtureSummary[] }) {
           className="block w-full min-w-0 overflow-hidden rounded-xl border border-white/8 bg-[#11161b] p-1.5 text-[11px] transition hover:border-[#2a5c46] hover:bg-[#151b21] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7ff0b2]/60 sm:p-2 md:p-3 md:text-sm"
         >
           <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1 md:gap-2">
-            <FixtureTeamLabel name={fixture.home} logo={fixture.homeLogo} side="home" />
+            <FixtureTeamLabel
+              name={fixture.home}
+              logo={fixture.homeLogo}
+              side="home"
+              locale={locale}
+              translateTeamNames={translateTeamNames}
+            />
 
             <span className="min-w-[32px] shrink-0 rounded-md border border-white/8 bg-[#0d1216] px-1 py-0.5 text-center text-[10.5px] font-black leading-none text-white md:min-w-[52px] md:rounded-lg md:px-2 md:py-1 md:text-xs">
               <span className="md:hidden">{getGroupFixtureCompactScoreLabel(fixture)}</span>
               <span className="hidden md:inline">{getGroupFixtureScoreLabel(fixture)}</span>
             </span>
 
-            <FixtureTeamLabel name={fixture.away} logo={fixture.awayLogo} side="away" />
+            <FixtureTeamLabel
+              name={fixture.away}
+              logo={fixture.awayLogo}
+              side="away"
+              locale={locale}
+              translateTeamNames={translateTeamNames}
+            />
           </div>
 
           <div className="mt-1 text-center text-[10.5px] font-semibold text-[#9eacb8] md:mt-1.5 md:text-xs">
@@ -2049,6 +2098,8 @@ function StandingsTable({
   allowLegacyFallback = true,
   preferConfiguredRules = false,
   thirdPlaceTable = false,
+  translateTeamNames = false,
+  locale = 'es',
 }: {
   rows: Array<LeagueStandingRow & { average?: number }>
   showAverage?: boolean
@@ -2060,15 +2111,18 @@ function StandingsTable({
   allowLegacyFallback?: boolean
   preferConfiguredRules?: boolean
   thirdPlaceTable?: boolean
+  translateTeamNames?: boolean
+  locale?: AppLocale
 }) {
   const cellPadding = compact
     ? fitNarrow
       ? 'px-0.5 py-1.5 sm:px-1'
       : 'px-0.5 py-1.5 sm:px-1.5'
     : 'px-0.5 py-1.5 sm:px-1.5 sm:py-2'
-  const teamColumnWidth = showAverage ? '28%' : '35%'
+  const teamColumnWidth = thirdPlaceTable ? '40%' : showAverage ? '28%' : '35%'
   const rankColumnWidth = showAverage ? '6%' : '7%'
-  const metricColumnWidth = showAverage ? '7.3%' : '7.25%'
+  const visibleMetricCount = thirdPlaceTable ? (showAverage ? 8 : 7) : showAverage ? 9 : 8
+  const metricColumnWidth = `${(100 - Number.parseFloat(rankColumnWidth) - Number.parseFloat(teamColumnWidth)) / visibleMetricCount}%`
 
   return (
     <div className="w-full overflow-hidden">
@@ -2077,7 +2131,7 @@ function StandingsTable({
           <col style={{ width: rankColumnWidth }} />
           <col style={{ width: teamColumnWidth }} />
           <col style={{ width: metricColumnWidth }} />
-          <col style={{ width: metricColumnWidth }} />
+          {thirdPlaceTable ? null : <col style={{ width: metricColumnWidth }} />}
           <col style={{ width: metricColumnWidth }} />
           <col style={{ width: metricColumnWidth }} />
           <col style={{ width: metricColumnWidth }} />
@@ -2091,7 +2145,9 @@ function StandingsTable({
             <th className={`${cellPadding} font-semibold`}>#</th>
             <th className={`${cellPadding} font-semibold`}>Equipo</th>
             <th className={`${cellPadding} font-semibold text-center`}>{thirdPlaceTable ? 'Pts' : 'PTS'}</th>
-            <th className={`${cellPadding} font-semibold text-center`}>PJ</th>
+            {thirdPlaceTable ? null : (
+              <th className={`${cellPadding} font-semibold text-center`}>PJ</th>
+            )}
             <th className={`${cellPadding} font-semibold text-center`}>{thirdPlaceTable ? 'G' : 'PG'}</th>
             <th className={`${cellPadding} font-semibold text-center`}>{thirdPlaceTable ? 'E' : 'PE'}</th>
             <th className={`${cellPadding} font-semibold text-center`}>{thirdPlaceTable ? 'P' : 'PP'}</th>
@@ -2104,46 +2160,54 @@ function StandingsTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, index) => (
-            <tr
-              key={`${row.teamId || row.teamName}-${index}`}
-              className={`border-b border-l-2 border-white/6 text-[#dce5ef] last:border-b-0 ${
-                thirdPlaceTable
-                  ? getThirdPlaceTableRowAccent(index)
-                  : getRowAccent(row, index, rows.length, variant, relegatedTeamIds, rule, allowLegacyFallback, preferConfiguredRules)
-              }`}
-            >
-              <td className={`${cellPadding} font-semibold`}>{row.rank || index + 1}</td>
-              <td className={cellPadding}>
-                <div className={`flex min-w-0 items-center ${compact ? 'gap-1' : 'gap-1.5'}`}>
-                  <TeamLogo
-                    src={row.teamLogo}
-                    alt={row.teamName}
-                    size={compact ? 16 : 18}
-                    className={`${compact ? 'h-4 w-4' : 'h-[18px] w-[18px]'} object-contain`}
-                    fallbackClassName={compact ? 'h-3.5 w-3' : 'h-4 w-3'}
-                    unoptimized
-                  />
-                  <span className={`min-w-0 truncate font-medium ${compact ? 'text-[10.5px] sm:text-[12px]' : 'text-[10.5px] sm:text-[13px]'}`}>
-                    {row.teamName}
-                  </span>
-                </div>
-              </td>
-              <td className={`${cellPadding} text-center font-black text-white`}>{row.points}</td>
-              <td className={`${cellPadding} text-center`}>{row.played}</td>
-              <td className={`${cellPadding} text-center`}>{row.won}</td>
-              <td className={`${cellPadding} text-center`}>{row.drawn}</td>
-              <td className={`${cellPadding} text-center`}>{row.lost}</td>
-              <td className={`${cellPadding} text-center`}>{row.goalsFor}</td>
-              <td className={`${cellPadding} text-center`}>{row.goalsAgainst}</td>
-              <td className={`${cellPadding} text-center`}>{row.goalDifference}</td>
-              {showAverage ? (
-                <td className={`${cellPadding} text-center font-semibold`}>
-                  {formatAverage(row.average || 0)}
+          {rows.map((row, index) => {
+            const displayTeamName = translateTeamNames
+              ? translateCountryName(row.teamName, locale) || row.teamName
+              : row.teamName
+
+            return (
+              <tr
+                key={`${row.teamId || row.teamName}-${index}`}
+                className={`border-b border-l-2 border-white/6 text-[#dce5ef] last:border-b-0 ${
+                  thirdPlaceTable
+                    ? getThirdPlaceTableRowAccent(index)
+                    : getRowAccent(row, index, rows.length, variant, relegatedTeamIds, rule, allowLegacyFallback, preferConfiguredRules)
+                }`}
+              >
+                <td className={`${cellPadding} font-semibold`}>{row.rank || index + 1}</td>
+                <td className={cellPadding}>
+                  <div className={`flex min-w-0 items-center ${compact ? 'gap-1' : 'gap-1.5'}`}>
+                    <TeamLogo
+                      src={row.teamLogo}
+                      alt={displayTeamName}
+                      size={compact ? 16 : 18}
+                      className={`${compact ? 'h-4 w-4' : 'h-[18px] w-[18px]'} object-contain`}
+                      fallbackClassName={compact ? 'h-3.5 w-3' : 'h-4 w-3'}
+                      unoptimized
+                    />
+                    <span className={`min-w-0 truncate font-medium ${compact ? 'text-[10.5px] sm:text-[12px]' : 'text-[10.5px] sm:text-[13px]'}`}>
+                      {displayTeamName}
+                    </span>
+                  </div>
                 </td>
-              ) : null}
-            </tr>
-          ))}
+                <td className={`${cellPadding} text-center font-black text-white`}>{row.points}</td>
+                {thirdPlaceTable ? null : (
+                  <td className={`${cellPadding} text-center`}>{row.played}</td>
+                )}
+                <td className={`${cellPadding} text-center`}>{row.won}</td>
+                <td className={`${cellPadding} text-center`}>{row.drawn}</td>
+                <td className={`${cellPadding} text-center`}>{row.lost}</td>
+                <td className={`${cellPadding} text-center`}>{row.goalsFor}</td>
+                <td className={`${cellPadding} text-center`}>{row.goalsAgainst}</td>
+                <td className={`${cellPadding} text-center`}>{row.goalDifference}</td>
+                {showAverage ? (
+                  <td className={`${cellPadding} text-center font-semibold`}>
+                    {formatAverage(row.average || 0)}
+                  </td>
+                ) : null}
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>
@@ -2155,11 +2219,15 @@ function BracketView({
   useCopaArgentinaTree = false,
   advanceGenericWinners = false,
   emptyBracket,
+  locale = 'es',
+  translateTeamNames = false,
 }: {
   rounds: ReturnType<typeof buildKnockoutRounds>
   useCopaArgentinaTree?: boolean
   advanceGenericWinners?: boolean
   emptyBracket?: EmptyBracketConfig
+  locale?: AppLocale
+  translateTeamNames?: boolean
 }) {
   const bracketFixtures = rounds.flatMap((round) =>
     round.matches.map((match) => ({
@@ -2246,33 +2314,39 @@ function BracketView({
                           }`}
                         >
                           <div className="flex h-full flex-col justify-center gap-[2px]">
-                            {match.participants.map((team, participantIndex) => (
-                              <div
-                                key={`${match.id}-${participantIndex}`}
-                                className={`flex h-[17px] items-center justify-between gap-2 rounded-md px-1.5 py-0.5 ${
-                                  team.isWinner
-                                    ? 'bg-[#143624] text-[#7ff0b2] shadow-[inset_0_0_0_1px_rgba(127,240,178,0.2)]'
-                                    : 'bg-[#121a20]'
-                                }`}
-                              >
-                                <div className="flex min-w-0 items-center gap-2">
-                                  <TeamLogo
-                                    src={team.logo}
-                                    alt={team.team}
-                                    size={12}
-                                    className="h-[12px] w-[12px] object-contain"
-                                    fallbackClassName="h-[12px] w-[10px]"
-                                    unoptimized
-                                  />
-                                  <span className={`truncate text-[10.5px] font-semibold ${team.isPlaceholder ? 'text-[#98a5b3]' : team.isWinner ? 'text-[#7ff0b2]' : 'text-[#edf2f7]'}`}>
-                                    {team.team}
+                            {match.participants.map((team, participantIndex) => {
+                              const displayTeamName = translateTeamNames
+                                ? translateCountryName(team.team, locale) || team.team
+                                : team.team
+
+                              return (
+                                <div
+                                  key={`${match.id}-${participantIndex}`}
+                                  className={`flex h-[17px] items-center justify-between gap-2 rounded-md px-1.5 py-0.5 ${
+                                    team.isWinner
+                                      ? 'bg-[#143624] text-[#7ff0b2] shadow-[inset_0_0_0_1px_rgba(127,240,178,0.2)]'
+                                      : 'bg-[#121a20]'
+                                  }`}
+                                >
+                                  <div className="flex min-w-0 items-center gap-2">
+                                    <TeamLogo
+                                      src={team.logo}
+                                      alt={displayTeamName}
+                                      size={12}
+                                      className="h-[12px] w-[12px] object-contain"
+                                      fallbackClassName="h-[12px] w-[10px]"
+                                      unoptimized
+                                    />
+                                    <span className={`truncate text-[10.5px] font-semibold ${team.isPlaceholder ? 'text-[#98a5b3]' : team.isWinner ? 'text-[#7ff0b2]' : 'text-[#edf2f7]'}`}>
+                                      {displayTeamName}
+                                    </span>
+                                  </div>
+                                  <span className={`text-[10.5px] font-black ${team.isPlaceholder ? 'text-[#6f7d8b]' : team.isWinner ? 'text-[#7ff0b2]' : 'text-[#dce5ef]'}`}>
+                                    {getBracketParticipantScoreLabel(match, participantIndex)}
                                   </span>
                                 </div>
-                                <span className={`text-[10.5px] font-black ${team.isPlaceholder ? 'text-[#6f7d8b]' : team.isWinner ? 'text-[#7ff0b2]' : 'text-[#dce5ef]'}`}>
-                                  {getBracketParticipantScoreLabel(match, participantIndex)}
-                                </span>
-                              </div>
-                            ))}
+                              )
+                            })}
                           </div>
                         </Link>
                       </div>
@@ -2705,7 +2779,7 @@ export default async function LigaPage({ params }: PageProps) {
                 <GroupStageGrid
                   groups={displayPrimaryGroups.map((group, index) => {
                     const groupId = getGroupId(group)
-                    const thirdPlaceTable = isThirdPlaceRankingGroup(group.name)
+                    const thirdPlaceTable = isThirdPlaceTableGroup(group, isWorldCupTournament)
                     const tableLegendItems = getTableLegendItems(
                       group.rows,
                       displayOptions.rule,
@@ -2715,7 +2789,7 @@ export default async function LigaPage({ params }: PageProps) {
 
                     return {
                       id: `${groupId}-${index}`,
-                      title: getDisplayGroupName(group.name),
+                      title: getDisplayGroupName(group.name, { thirdPlaceTable }),
                       table: (
                         <>
                           <StandingsTable
@@ -2726,14 +2800,20 @@ export default async function LigaPage({ params }: PageProps) {
                             allowLegacyFallback={false}
                             preferConfiguredRules
                             thirdPlaceTable={thirdPlaceTable}
+                            translateTeamNames={isWorldCupTournament}
+                            locale={locale}
                           />
                           {tableLegendItems.length ? (
                             <TableLegend items={tableLegendItems} />
                           ) : null}
                         </>
                       ),
-                      fixtures: (
-                        <GroupFixtures fixtures={fixturesByGroup.get(groupId) || []} />
+                      fixtures: thirdPlaceTable ? null : (
+                        <GroupFixtures
+                          fixtures={fixturesByGroup.get(groupId) || []}
+                          locale={locale}
+                          translateTeamNames={isWorldCupTournament}
+                        />
                       ),
                     }
                   })}
@@ -2757,6 +2837,8 @@ export default async function LigaPage({ params }: PageProps) {
               useCopaArgentinaTree={tournament.key === 'argentina-copa-argentina'}
               advanceGenericWinners={tournament.key === 'argentina-liga-profesional'}
               emptyBracket={emptyBracket}
+              locale={locale}
+              translateTeamNames={isWorldCupTournament}
             />
           ) : null}
 
@@ -2779,6 +2861,8 @@ export default async function LigaPage({ params }: PageProps) {
             <CurrentRoundNavigator
               rounds={currentRoundBlocks}
               initialIndex={currentRoundInitialIndex}
+              locale={locale}
+              translateTeamNames={isWorldCupTournament}
             />
           ) : null}
 
@@ -2788,7 +2872,7 @@ export default async function LigaPage({ params }: PageProps) {
                 <GroupStageGrid
                   groups={displayPrimaryGroups.map((group, index) => {
                     const groupId = getGroupId(group)
-                    const thirdPlaceTable = isThirdPlaceRankingGroup(group.name)
+                    const thirdPlaceTable = isThirdPlaceTableGroup(group, isWorldCupTournament)
                     const tableLegendItems = getTableLegendItems(
                       group.rows,
                       displayOptions.rule,
@@ -2798,7 +2882,7 @@ export default async function LigaPage({ params }: PageProps) {
 
                     return {
                       id: `${groupId}-${index}`,
-                      title: getDisplayGroupName(group.name),
+                      title: getDisplayGroupName(group.name, { thirdPlaceTable }),
                       table: (
                         <>
                           <StandingsTable
@@ -2809,27 +2893,37 @@ export default async function LigaPage({ params }: PageProps) {
                             allowLegacyFallback={false}
                             preferConfiguredRules
                             thirdPlaceTable={thirdPlaceTable}
+                            translateTeamNames={isWorldCupTournament}
+                            locale={locale}
                           />
                           {tableLegendItems.length ? (
                             <TableLegend items={tableLegendItems} />
                           ) : null}
                         </>
                       ),
-                      fixtures: (
-                        <GroupFixtures fixtures={fixturesByGroup.get(groupId) || []} />
+                      fixtures: thirdPlaceTable ? null : (
+                        <GroupFixtures
+                          fixtures={fixturesByGroup.get(groupId) || []}
+                          locale={locale}
+                          translateTeamNames={isWorldCupTournament}
+                        />
                       ),
                     }
                   })}
                 />
 
                 {knockoutRounds.length ? (
-                  <BracketView rounds={knockoutRounds} />
+                  <BracketView
+                    rounds={knockoutRounds}
+                    locale={locale}
+                    translateTeamNames={isWorldCupTournament}
+                  />
                 ) : null}
               </>
             ) : (
               <div className={compactGroups ? 'grid gap-4 md:grid-cols-2' : 'space-y-4'}>
                 {displayPrimaryGroups.map((group) => {
-                  const thirdPlaceTable = isThirdPlaceRankingGroup(group.name)
+                  const thirdPlaceTable = isThirdPlaceTableGroup(group, isWorldCupTournament)
                   const tableLegendItems = getTableLegendItems(
                     group.rows,
                     displayOptions.rule,
@@ -2840,7 +2934,7 @@ export default async function LigaPage({ params }: PageProps) {
                   return (
                     <SectionCard
                       key={group.name}
-                      title={getDisplayGroupName(group.name)}
+                      title={getDisplayGroupName(group.name, { thirdPlaceTable })}
                       subtitle={
                         thirdPlaceTable
                           ? 'Los mejores terceros avanzan a fase eliminatoria según el formato FIFA.'
@@ -2853,6 +2947,8 @@ export default async function LigaPage({ params }: PageProps) {
                         rule={displayOptions.rule}
                         allowLegacyFallback={displayOptions.protected}
                         thirdPlaceTable={thirdPlaceTable}
+                        translateTeamNames={isWorldCupTournament}
+                        locale={locale}
                       />
                       {tableLegendItems.length ? (
                         <TableLegend items={tableLegendItems} />
@@ -2876,7 +2972,7 @@ export default async function LigaPage({ params }: PageProps) {
           {visibleSecondaryGroups.length ? (
             <div className="space-y-4">
               {visibleSecondaryGroups.map((group) => {
-                const thirdPlaceTable = isThirdPlaceRankingGroup(group.name)
+                const thirdPlaceTable = isThirdPlaceTableGroup(group, isWorldCupTournament)
                 const tableLegendItems = getTableLegendItems(
                   group.rows,
                   displayOptions.rule,
@@ -2887,7 +2983,7 @@ export default async function LigaPage({ params }: PageProps) {
                 return (
                   <SectionCard
                     key={group.name}
-                    title={getDisplayGroupName(group.name)}
+                    title={getDisplayGroupName(group.name, { thirdPlaceTable })}
                     subtitle={
                       thirdPlaceTable
                         ? 'Los mejores terceros avanzan a fase eliminatoria según el formato FIFA.'
@@ -2899,6 +2995,8 @@ export default async function LigaPage({ params }: PageProps) {
                       rule={displayOptions.rule}
                       allowLegacyFallback={displayOptions.protected}
                       thirdPlaceTable={thirdPlaceTable}
+                      translateTeamNames={isWorldCupTournament}
+                      locale={locale}
                     />
                     {tableLegendItems.length ? (
                       <TableLegend items={tableLegendItems} />
@@ -2955,6 +3053,7 @@ export default async function LigaPage({ params }: PageProps) {
               statType="scorers"
               leagueId={resolvedTournament?.leagueId}
               season={resolvedTournament?.season}
+              translateTeamNames={isWorldCupTournament}
             />
             <LeaderListInteractive
               title="Asistencias"
@@ -2963,6 +3062,7 @@ export default async function LigaPage({ params }: PageProps) {
               statType="assists"
               leagueId={resolvedTournament?.leagueId}
               season={resolvedTournament?.season}
+              translateTeamNames={isWorldCupTournament}
             />
             <LeaderListInteractive
               title="Tarjetas amarillas"
@@ -2971,6 +3071,7 @@ export default async function LigaPage({ params }: PageProps) {
               statType="yellowCards"
               leagueId={resolvedTournament?.leagueId}
               season={resolvedTournament?.season}
+              translateTeamNames={isWorldCupTournament}
             />
             <LeaderListInteractive
               title="Tarjetas rojas"
@@ -2979,6 +3080,7 @@ export default async function LigaPage({ params }: PageProps) {
               statType="redCards"
               leagueId={resolvedTournament?.leagueId}
               season={resolvedTournament?.season}
+              translateTeamNames={isWorldCupTournament}
             />
           </div>
         </main>

@@ -10,6 +10,7 @@ export const fetchCache = 'force-no-store'
 
 const quickLinks = [
   { href: '/admin/sync', label: 'Sincronizacion' },
+  { href: '/admin/matches', label: 'Editor de partidos' },
   { href: '/admin/featured-matches', label: 'Partidos destacados' },
   { href: '/admin/broadcasts', label: 'TV manual' },
   { href: '/admin/ads', label: 'Publicidad' },

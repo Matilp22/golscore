@@ -251,13 +251,19 @@ export async function GET(request: Request) {
   )
   const worldCupSeason = worldCupLeague?.season ?? 2026
   const worldCupGroups = worldCupLeague
-    ? await getWorldCupGroupStandings(worldCupSeason).catch((error) => {
-        console.warn('[prode-matches] No se pudieron leer standings del Mundial.', {
-          error: error instanceof Error ? error.message : String(error),
-        })
+    ? await getWorldCupGroupStandings(worldCupSeason)
+        .then((groups) =>
+          groups.length
+            ? groups
+            : getWorldCupGroupStandings(worldCupSeason, { includeOfficialFallback: true })
+        )
+        .catch((error) => {
+          console.warn('[prode-matches] No se pudieron leer standings del Mundial.', {
+            error: error instanceof Error ? error.message : String(error),
+          })
 
-        return []
-      })
+          return []
+        })
     : []
   const standingsWorldCupTeamGroupIndex = buildWorldCupTeamGroupIndex(worldCupGroups)
   const inferredWorldCupGroups =

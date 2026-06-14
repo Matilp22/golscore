@@ -1,5 +1,5 @@
-const STATIC_CACHE = 'hayfulbo-static-assets-v3'
-const PAGE_CACHE = 'hayfulbo-pages-assets-v3'
+const STATIC_CACHE = 'hayfulbo-static-assets-v4'
+const PAGE_CACHE = 'hayfulbo-pages-assets-v4'
 const STATIC_ASSETS = [
   '/manifest.json',
   '/favicon.svg',
@@ -27,12 +27,8 @@ function isDynamicRequest(url) {
   )
 }
 
-function isStaticAsset(request, url) {
+function isStaticAsset(url) {
   return (
-    request.destination === 'script' ||
-    request.destination === 'style' ||
-    request.destination === 'font' ||
-    url.pathname.startsWith('/_next/static/') ||
     url.pathname.startsWith('/icons/') ||
     url.pathname.startsWith('/brand/') ||
     url.pathname === '/favicon.svg' ||
@@ -109,7 +105,7 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  if (isStaticAsset(request, url)) {
+  if (isStaticAsset(url)) {
     event.respondWith(staleWhileRevalidate(request))
   }
 })

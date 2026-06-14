@@ -5,6 +5,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { TeamLogo } from '@/frontend/components/AssetImage'
 import type { LeagueFixtureSummary } from '@/lib/api-football'
+import type { AppLocale } from '@/shared/i18n/locales'
+import { translateCountryName } from '@/shared/utils/country-names'
 import { formatMatchScoreWithPenalties } from '@/shared/utils/match-display'
 import { parseMatchDate } from '@/shared/utils/prediction-lock'
 
@@ -17,6 +19,8 @@ type RoundBlock = {
 type CurrentRoundNavigatorProps = {
   rounds: RoundBlock[]
   initialIndex: number
+  locale?: AppLocale
+  translateTeamNames?: boolean
 }
 
 function formatFixtureTime(date: string | null) {
@@ -77,6 +81,8 @@ function ChevronIcon({ open }: { open: boolean }) {
 export default function CurrentRoundNavigator({
   rounds,
   initialIndex,
+  locale = 'es',
+  translateTeamNames = false,
 }: CurrentRoundNavigatorProps) {
   const [selectedIndex, setSelectedIndex] = useState(initialIndex)
   const [isOpen, setIsOpen] = useState(false)
@@ -205,6 +211,12 @@ export default function CurrentRoundNavigator({
               </div>
 
               {matches.map((match) => {
+                const homeDisplayName = translateTeamNames
+                  ? translateCountryName(match.home, locale) || match.home
+                  : match.home
+                const awayDisplayName = translateTeamNames
+                  ? translateCountryName(match.away, locale) || match.away
+                  : match.away
                 const rowClassName =
                   'grid grid-cols-[58px_minmax(0,1fr)] items-center border-b border-white/8 text-xs transition last:border-b-0 md:grid-cols-[64px_minmax(0,1fr)]'
                 const rowContent = (
@@ -216,10 +228,10 @@ export default function CurrentRoundNavigator({
                     <div className="px-2 py-1.5">
                       <div className="grid grid-cols-[minmax(0,1fr)_minmax(86px,max-content)_minmax(0,1fr)] items-center gap-1.5">
                         <div className="flex items-center justify-end gap-1.5 text-right">
-                          <span className="truncate font-semibold text-[#dce5ef]">{match.home}</span>
+                          <span className="truncate font-semibold text-[#dce5ef]">{homeDisplayName}</span>
                           <TeamLogo
                             src={match.homeLogo}
-                            alt={match.home}
+                            alt={homeDisplayName}
                             size={16}
                             className="h-4 w-4 object-contain"
                             fallbackClassName="h-3.5 w-3"
@@ -233,12 +245,12 @@ export default function CurrentRoundNavigator({
                         <div className="flex items-center gap-1.5">
                           <TeamLogo
                             src={match.awayLogo}
-                            alt={match.away}
+                            alt={awayDisplayName}
                             size={16}
                             className="h-4 w-4 object-contain"
                             fallbackClassName="h-3.5 w-3"
                           />
-                          <span className="truncate font-semibold text-[#dce5ef]">{match.away}</span>
+                          <span className="truncate font-semibold text-[#dce5ef]">{awayDisplayName}</span>
                         </div>
                       </div>
                     </div>

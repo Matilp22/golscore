@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { PlayerPhoto } from '@/frontend/components/AssetImage'
 import { useTranslations } from '@/frontend/components/LocaleProvider'
 import type { LeaderStatType, TopPlayerRow } from '@/lib/api-football'
+import { translateCountryName } from '@/shared/utils/country-names'
 
 type LeaderListInteractiveProps = {
   title: string
@@ -14,6 +15,7 @@ type LeaderListInteractiveProps = {
   leagueId?: number
   season?: number
   statType: LeaderStatType
+  translateTeamNames?: boolean
 }
 
 export default function LeaderListInteractive({
@@ -23,8 +25,9 @@ export default function LeaderListInteractive({
   leagueId,
   season,
   statType,
+  translateTeamNames = false,
 }: LeaderListInteractiveProps) {
-  const { t } = useTranslations()
+  const { locale, t } = useTranslations()
   const [showAll, setShowAll] = useState(false)
   const visibleRows = showAll ? rows : rows.slice(0, 10)
   const hasMoreRows = rows.length > 10
@@ -49,6 +52,11 @@ export default function LeaderListInteractive({
                 row.playerId && leagueId && season
                   ? `/jugador/${row.playerId}?leagueId=${leagueId}&season=${season}&statType=${statType}&expectedCount=${row.value}&name=${encodeURIComponent(row.name)}&photo=${encodeURIComponent(row.photo || '')}&teamId=${row.teamId || ''}&teamName=${encodeURIComponent(row.teamName || '')}&teamLogo=${encodeURIComponent(row.teamLogo || '')}`
                   : null
+              const displayTeamName = row.teamName
+                ? translateTeamNames
+                  ? translateCountryName(row.teamName, locale) || row.teamName
+                  : row.teamName
+                : t('common.noTeam')
 
               const content = (
                 <>
@@ -64,7 +72,7 @@ export default function LeaderListInteractive({
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-white">{row.name}</p>
                       <p className="truncate text-xs text-[#8d98a7]">
-                        {row.teamName || t('common.noTeam')}
+                        {displayTeamName}
                       </p>
                       {row.details ? (
                         <p className="truncate text-[11px] font-semibold text-[#b9c4cf]">
