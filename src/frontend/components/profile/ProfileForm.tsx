@@ -4,10 +4,7 @@ import { useEffect, useState, useTransition, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/frontend/hooks/useAuth'
 import { getSupabaseBrowserClient } from '@/lib/supabase/supabaseClient'
-
-function normalizeUsername(value: string) {
-  return value.trim().replace(/\s+/g, ' ')
-}
+import { normalizeUsername } from '@/shared/utils/usernames'
 
 type ProfileQuery = {
   select: (columns: string) => {

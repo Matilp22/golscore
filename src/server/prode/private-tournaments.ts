@@ -7,6 +7,7 @@ import {
   isVisibleProdeRound,
   normalizeProdeRound,
 } from '@/shared/config/prode-rounds'
+import { SITE_URL } from '@/shared/seo'
 import { isFinalMatchStatus } from '@/shared/utils/match-status'
 
 export type PrivateTournamentRole = 'owner' | 'member'
@@ -1149,8 +1150,46 @@ function createInviteToken() {
   return randomBytes(32).toString('base64url')
 }
 
+function getOrigin(value: string | null | undefined) {
+  if (!value) return null
+
+  try {
+    return new URL(value).origin.replace(/\/$/, '')
+  } catch {
+    return null
+  }
+}
+
+function isLocalOrigin(origin: string) {
+  try {
+    const hostname = new URL(origin).hostname
+
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0'
+  } catch {
+    return false
+  }
+}
+
+function getCanonicalAppOrigin() {
+  return (
+    getOrigin(process.env.NEXT_PUBLIC_SITE_URL) ??
+    getOrigin(process.env.NEXT_PUBLIC_APP_URL) ??
+    getOrigin(process.env.SITE_URL) ??
+    getOrigin(SITE_URL) ??
+    SITE_URL.replace(/\/$/, '')
+  )
+}
+
+function getInviteOrigin(requestOrigin: string) {
+  const origin = getOrigin(requestOrigin)
+
+  if (origin && isLocalOrigin(origin)) return origin
+
+  return getCanonicalAppOrigin()
+}
+
 function buildInviteUrl(origin: string, token: string) {
-  return `${origin.replace(/\/$/, '')}/prode/torneos/invitacion/${encodeURIComponent(token)}`
+  return `${getInviteOrigin(origin)}/prode/torneos/invitacion/${encodeURIComponent(token)}`
 }
 
 function buildMailtoUrl(email: string | null | undefined, inviteUrl: string) {

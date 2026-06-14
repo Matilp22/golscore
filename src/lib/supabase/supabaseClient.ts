@@ -130,6 +130,36 @@ type BrowserSupabaseClient = ReturnType<typeof createBrowserClient<Database>>
 
 let browserClient: BrowserSupabaseClient | undefined
 
+type SignUpProfileInput = {
+  username?: string | null
+  displayName?: string | null
+  emailRedirectTo?: string | null
+}
+
+type UpsertUserProfileInput = {
+  id: string
+  email?: string | null
+  username: string
+  displayName?: string | null
+}
+
+type ProfileMutationError = {
+  message: string
+  code?: string
+  details?: string | null
+}
+
+type ProfileUpsertQuery = {
+  upsert: (
+    value: Database['public']['Tables']['profiles']['Insert'],
+    options: { onConflict: string }
+  ) => Promise<{ error: ProfileMutationError | null }>
+}
+
+function profilesQuery() {
+  return getSupabaseBrowserClient().from('profiles' as 'leagues') as unknown as ProfileUpsertQuery
+}
+
 export function getSupabaseBrowserClient() {
   if (browserClient) return browserClient
 
@@ -157,19 +187,47 @@ export async function getCurrentSession() {
   return session
 }
 
-export async function signUpWithEmail(email: string, password: string) {
+export async function signUpWithEmail(
+  email: string,
+  password: string,
+  profile: SignUpProfileInput = {}
+) {
   const supabase = getSupabaseBrowserClient()
-  const username = email.split('@')[0] || 'usuario'
+  const cleanEmail = email.trim()
+  const fallbackUsername = cleanEmail.split('@')[0] || 'usuario'
+  const username = profile.username?.trim() || fallbackUsername
+  const displayName = profile.displayName?.trim() || username
 
   return supabase.auth.signUp({
-    email,
+    email: cleanEmail,
     password,
     options: {
+      emailRedirectTo: profile.emailRedirectTo?.trim() || undefined,
       data: {
         username,
+        display_name: displayName,
       },
     },
   })
+}
+
+export async function upsertUserProfile({
+  id,
+  email,
+  username,
+  displayName,
+}: UpsertUserProfileInput) {
+  const cleanUsername = username.trim()
+
+  return profilesQuery().upsert(
+    {
+      id,
+      email: email?.trim() || null,
+      username: cleanUsername,
+      display_name: displayName?.trim() || cleanUsername,
+    },
+    { onConflict: 'id' }
+  )
 }
 
 export async function signInWithEmail(email: string, password: string) {

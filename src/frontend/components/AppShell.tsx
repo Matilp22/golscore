@@ -8,6 +8,7 @@ import BrandMark from '@/frontend/components/BrandMark'
 import { LocaleProvider } from '@/frontend/components/LocaleProvider'
 import SiteFooter from '@/frontend/components/SiteFooter'
 import SidebarNav from '@/frontend/components/SidebarNav'
+import GoogleAdSlot from '@/frontend/components/ads/GoogleAdSlot'
 import { useAuth } from '@/frontend/hooks/useAuth'
 import { SIDEBAR_SECTION_CONFIGS } from '@/lib/tournament-pages'
 import {
@@ -326,6 +327,7 @@ export default function AppShell({ auth, children, locale }: AppShellProps) {
         </aside>
         <div className="min-w-0">
           {children}
+          <GoogleAdSlot className="mt-4" />
         </div>
       </div>
       <SiteFooter locale={locale} />

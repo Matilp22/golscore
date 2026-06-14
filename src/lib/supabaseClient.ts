@@ -4,4 +4,5 @@ export {
   signInWithEmail,
   signOut,
   signUpWithEmail,
+  upsertUserProfile,
 } from '@/lib/supabase/supabaseClient'

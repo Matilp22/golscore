@@ -22,7 +22,7 @@ export default async function AdminAdsPage() {
 
       <AdminCard
         title="Publicidad"
-        description="Configuracion interna para AdSense y futuros sponsors directos. No renderiza anuncios visibles."
+        description="Configuracion interna para AdSense y futuros sponsors directos. Los anuncios publicos se renderizan cuando NEXT_PUBLIC_ADSENSE_DISPLAY_SLOT_ID esta configurado."
       >
         {slots.length ? (
           <div className="space-y-3">

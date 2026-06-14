@@ -7,15 +7,30 @@ import {
   getSupabaseBrowserClient,
   signInWithEmail,
   signUpWithEmail,
+  upsertUserProfile,
 } from '@/lib/supabase/supabaseClient'
 import BrandMark from '@/frontend/components/BrandMark'
 import { translateAuthError } from '@/shared/utils/auth-errors'
+import { validateUsername } from '@/shared/utils/usernames'
 
 type AuthFormProps = {
   mode: 'login' | 'register'
   defaultNext?: string
   loginDescription?: string
   showModeSwitch?: boolean
+}
+
+function getSafeNextPath(value: string | null, fallback: string) {
+  if (!value) return fallback
+  if (!value.startsWith('/') || value.startsWith('//')) return fallback
+
+  return value
+}
+
+function getRedirectUrl(path: string) {
+  if (typeof window === 'undefined') return undefined
+
+  return new URL(path, window.location.origin).toString()
 }
 
 export default function AuthForm({
@@ -26,8 +41,9 @@ export default function AuthForm({
 }: AuthFormProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const nextPath = searchParams.get('next') || defaultNext
+  const nextPath = getSafeNextPath(searchParams.get('next'), defaultNext)
 
+  const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState('')
@@ -52,9 +68,10 @@ export default function AuthForm({
       }
 
       const supabase = getSupabaseBrowserClient()
+      const cleanEmail = email.trim()
 
       if (isLogin) {
-        const { error } = await signInWithEmail(email, password)
+        const { error } = await signInWithEmail(cleanEmail, password)
 
         if (error) {
           setMessage(translateAuthError(error, 'login'))
@@ -67,11 +84,39 @@ export default function AuthForm({
         return
       }
 
-      const { data, error } = await signUpWithEmail(email, password)
+      const { username: cleanUsername, error: usernameError } = validateUsername(username)
+
+      if (usernameError) {
+        setMessage(usernameError)
+        return
+      }
+
+      const { data, error } = await signUpWithEmail(cleanEmail, password, {
+        username: cleanUsername,
+        displayName: cleanUsername,
+        emailRedirectTo: getRedirectUrl(nextPath),
+      })
 
       if (error) {
         setMessage(translateAuthError(error, 'register'))
         return
+      }
+
+      if (data.session && data.user) {
+        const { error: profileError } = await upsertUserProfile({
+          id: data.user.id,
+          email: data.user.email ?? cleanEmail,
+          username: cleanUsername,
+          displayName: cleanUsername,
+        })
+
+        if (profileError) {
+          console.warn('[auth/register] No se pudo asegurar el perfil inicial', {
+            message: profileError.message,
+            code: profileError.code ?? null,
+            details: profileError.details ?? null,
+          })
+        }
       }
 
       if (!data.session) {
@@ -100,6 +145,25 @@ export default function AuthForm({
       </p>
 
       <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+        {!isLogin ? (
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-[#c8d0da]">
+              Nombre de usuario
+            </label>
+            <input
+              type="text"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              required
+              minLength={3}
+              maxLength={40}
+              autoComplete="username"
+              className="hf-input h-11 w-full rounded-xl px-3 text-sm outline-none transition"
+              placeholder="Tu nombre en el Prode"
+            />
+          </div>
+        ) : null}
+
         <div>
           <label className="mb-2 block text-sm font-semibold text-[#c8d0da]">
             Email

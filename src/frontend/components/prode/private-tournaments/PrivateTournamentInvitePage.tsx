@@ -95,6 +95,8 @@ export default function PrivateTournamentInvitePage({
 
   const isInactive = data.invite.expired || data.invite.status === 'revoked'
   const alreadyAccepted = data.invite.status === 'accepted' || data.isMember
+  const invitePath = `/prode/torneos/invitacion/${encodeURIComponent(token)}`
+  const authNextParam = encodeURIComponent(invitePath)
 
   return (
     <section className="hf-card mx-auto max-w-xl rounded-2xl p-4 sm:p-5">
@@ -119,13 +121,13 @@ export default function PrivateTournamentInvitePage({
       {!user ? (
         <div className="mt-4 grid gap-2 sm:grid-cols-2">
           <Link
-            href="/login"
+            href={`/login?next=${authNextParam}`}
             className="hf-button inline-flex h-11 items-center justify-center rounded-xl px-4 text-sm font-black"
           >
             {t('privateTournaments.signInToAccept')}
           </Link>
           <Link
-            href="/register"
+            href={`/register?next=${authNextParam}`}
             className="hf-button-secondary inline-flex h-11 items-center justify-center rounded-xl px-4 text-sm font-black"
           >
             {t('account.createAccount')}
