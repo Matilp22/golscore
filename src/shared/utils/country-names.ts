@@ -56,7 +56,9 @@ const COUNTRY_CODE_BY_NAME: Record<string, CountryCode> = {
   cameroon: 'CM',
   camerun: 'CM',
   'cape verde': 'CV',
+  'cape verde islands': 'CV',
   'cabo verde': 'CV',
+  'cabo verde islands': 'CV',
   canada: 'CA',
   canadá: 'CA',
   chile: 'CL',
@@ -257,6 +259,21 @@ const SPECIAL_COUNTRY_NAMES: Record<SpecialCountryCode, Record<AppLocale, string
   },
 }
 
+const COUNTRY_DISPLAY_NAME_OVERRIDES: Record<string, Partial<Record<AppLocale, string>>> = {
+  CI: {
+    es: 'Costa de Marfil',
+    en: 'Ivory Coast',
+    pt: 'Costa do Marfim',
+    fr: "Cote d'Ivoire",
+  },
+  CV: {
+    es: 'Cabo Verde',
+    en: 'Cape Verde',
+    pt: 'Cabo Verde',
+    fr: 'Cap-Vert',
+  },
+}
+
 const FALLBACK_COUNTRY_NAMES_ES: Record<string, string> = {
   mexico: 'México',
   panama: 'Panamá',
@@ -296,6 +313,9 @@ function isSpecialCountryCode(code: CountryCode): code is SpecialCountryCode {
 
 function getDisplayNameForCode(code: CountryCode, locale: AppLocale) {
   if (isSpecialCountryCode(code)) return SPECIAL_COUNTRY_NAMES[code][locale]
+
+  const override = COUNTRY_DISPLAY_NAME_OVERRIDES[code]?.[locale]
+  if (override) return override
 
   try {
     return new Intl.DisplayNames([locale], { type: 'region' }).of(code) ?? null
