@@ -189,6 +189,17 @@ export type MatchBroadcaster = {
   verified?: boolean | null
 }
 
+export type MatchTeamKitColors = {
+  home: {
+    primary: string | null
+    secondary: string | null
+  }
+  away: {
+    primary: string | null
+    secondary: string | null
+  }
+}
+
 export type HomeLiveEvent = {
   id: string
   matchId: number | string
@@ -761,6 +772,60 @@ function getNumberFromCachedValue(value: unknown) {
 
 function getStringFromCachedValue(value: unknown) {
   return typeof value === 'string' && value.trim() ? value : null
+}
+
+function getHexColorFromCachedValue(value: unknown) {
+  if (typeof value !== 'string') return null
+
+  const cleaned = value.trim().replace(/^#/, '')
+
+  return /^[0-9a-fA-F]{6}$/.test(cleaned) ? `#${cleaned.toLowerCase()}` : null
+}
+
+function getCachedKitColorSide(value: unknown) {
+  const record = readRecord(value)
+
+  return {
+    primary: getHexColorFromCachedValue(record?.primary),
+    secondary: getHexColorFromCachedValue(record?.secondary),
+  }
+}
+
+function getCachedTeamKitColors(row: Record<string, unknown>): MatchTeamKitColors | null {
+  const teamKitColors = readRecord(row.teamKitColors)
+  const homeKitColors = getCachedKitColorSide(teamKitColors?.home)
+  const awayKitColors = getCachedKitColorSide(teamKitColors?.away)
+  const homePrimary =
+    homeKitColors.primary ??
+    getHexColorFromCachedValue(row.homePrimaryColor) ??
+    getHexColorFromCachedValue(row.home_primary_color)
+  const homeSecondary =
+    homeKitColors.secondary ??
+    getHexColorFromCachedValue(row.homeSecondaryColor) ??
+    getHexColorFromCachedValue(row.home_secondary_color)
+  const awayPrimary =
+    awayKitColors.primary ??
+    getHexColorFromCachedValue(row.awayPrimaryColor) ??
+    getHexColorFromCachedValue(row.away_primary_color)
+  const awaySecondary =
+    awayKitColors.secondary ??
+    getHexColorFromCachedValue(row.awaySecondaryColor) ??
+    getHexColorFromCachedValue(row.away_secondary_color)
+
+  if (!homePrimary && !homeSecondary && !awayPrimary && !awaySecondary) {
+    return null
+  }
+
+  return {
+    home: {
+      primary: homePrimary,
+      secondary: homeSecondary,
+    },
+    away: {
+      primary: awayPrimary,
+      secondary: awaySecondary,
+    },
+  }
 }
 
 function getNullableStringFromCachedValue(value: unknown) {
@@ -2403,6 +2468,7 @@ type CachedFixtureSummary = {
   statusLong?: string
   broadcastChannel?: string | null
   broadcastLogoUrl?: string | null
+  teamKitColors?: MatchTeamKitColors | null
 }
 
 function isMissingOptionalMatchDetailCache(error: { code?: string; message?: string } | null | undefined) {
@@ -2520,6 +2586,7 @@ function mapCachedFixtureSummaryPayload(payload: unknown): CachedFixtureSummary 
     broadcastLogoUrl:
       getStringFromCachedValue(row.broadcastLogoUrl) ??
       getStringFromCachedValue(row.broadcast_logo_url),
+    teamKitColors: getCachedTeamKitColors(row),
   }
 }
 
@@ -2891,6 +2958,7 @@ export async function getMatchDetail(id: number) {
       broadcasters: [],
       highlightsUrl: null,
       highlightsTitle: null,
+      teamKitColors: null,
     }
   }
 
@@ -2968,6 +3036,7 @@ export async function getMatchDetail(id: number) {
     broadcasters: resolvedBroadcast.broadcasters,
     highlightsUrl: match.highlights_url ?? highlights.url,
     highlightsTitle: match.highlights_title ?? highlights.title,
+    teamKitColors: fixtureSummary?.teamKitColors ?? null,
   }
 }
 

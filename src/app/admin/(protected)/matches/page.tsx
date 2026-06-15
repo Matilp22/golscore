@@ -1,9 +1,12 @@
 import Link from 'next/link'
 import AdminCard from '@/components/admin/AdminCard'
+import AdminMatchBroadcastFields from '@/components/admin/AdminMatchBroadcastFields'
+import AdminMatchTeamKitFields from '@/components/admin/AdminMatchTeamKitFields'
 import AdminNotice from '@/components/admin/AdminNotice'
 import { saveMatchDetailsAction } from '@/app/admin/actions'
 import {
   getAdminMatchesPageData,
+  type AdminBroadcastOption,
   type AdminEditableMatch,
   type AdminMatchListMode,
 } from '@/server/admin/matches'
@@ -196,9 +199,11 @@ function MatchSelector({
 function MatchEditor({
   match,
   returnPath,
+  broadcastOptions,
 }: {
   match: AdminEditableMatch
   returnPath: string
+  broadcastOptions: AdminBroadcastOption[]
 }) {
   return (
     <form action={saveMatchDetailsAction} className="space-y-4">
@@ -259,6 +264,14 @@ function MatchEditor({
           <MatchField label="Penal local" name="homePenaltyScore" type="number" value={match.homePenaltyScore} />
           <MatchField label="Penal visitante" name="awayPenaltyScore" type="number" value={match.awayPenaltyScore} />
         </div>
+        <AdminMatchTeamKitFields
+          homeTeamName={match.homeTeam}
+          awayTeamName={match.awayTeam}
+          homePrimaryColor={match.homePrimaryColor}
+          homeSecondaryColor={match.homeSecondaryColor}
+          awayPrimaryColor={match.awayPrimaryColor}
+          awaySecondaryColor={match.awaySecondaryColor}
+        />
       </section>
 
       <section className="space-y-3">
@@ -270,10 +283,11 @@ function MatchEditor({
           <MatchField label="Ciudad" name="venueCity" value={match.venueCity} />
           <MatchField label="Arbitro" name="referee" value={match.referee} />
         </div>
-        <div className="grid gap-3 md:grid-cols-2">
-          <MatchField label="TV" name="tv" value={match.tv} placeholder="TV Publica / TyC Sports..." />
-          <MatchTextarea label="Logo TV" name="broadcastLogoUrl" value={match.broadcastLogoUrl} />
-        </div>
+        <AdminMatchBroadcastFields
+          tv={match.tv}
+          broadcastLogoUrl={match.broadcastLogoUrl}
+          options={broadcastOptions}
+        />
       </section>
 
       <section className="space-y-3">
@@ -304,7 +318,7 @@ export default async function AdminMatchesPage({ searchParams }: PageProps) {
   const mode = normalizeMatchListMode(params.view, query)
   const selectedFixtureId = params.fixture ?? null
   const pageResult = await getAdminMatchesPageData(query, selectedFixtureId, mode)
-  const { fixtures, selectedMatch } = pageResult.data
+  const { fixtures, selectedMatch, broadcastOptions } = pageResult.data
   const activeFixtureId = selectedMatch?.fixtureExternalId ?? selectedFixtureId
   const returnPath = buildMatchesPath({ query, fixture: activeFixtureId ?? undefined, view: mode })
   const modes: AdminMatchListMode[] = ['today', 'world-cup', 'upcoming', 'recent']
@@ -385,7 +399,11 @@ export default async function AdminMatchesPage({ searchParams }: PageProps) {
           description="Datos usados por home, liga y pantalla de detalle cuando el fixture esta cacheado."
         >
           {selectedMatch ? (
-            <MatchEditor match={selectedMatch} returnPath={returnPath} />
+            <MatchEditor
+              match={selectedMatch}
+              returnPath={returnPath}
+              broadcastOptions={broadcastOptions}
+            />
           ) : (
             <p className="text-sm text-[#9aa7b5]">
               Selecciona un partido para editarlo.

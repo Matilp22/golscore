@@ -5,6 +5,7 @@ import { upsertMatchBroadcast } from '@/server/broadcasts/admin'
 import {
   asRecord,
   getAdminClient,
+  isMissingRelationError,
   matchesFixtureSearch,
   normalizeSearch,
   serializeCachedFixture,
@@ -35,6 +36,11 @@ type SupabaseSchemaError = {
   message?: unknown
 }
 
+type BroadcastLogoRow = {
+  broadcaster_name?: string | null
+  broadcaster_logo_url?: string | null
+}
+
 export type AdminEditableMatch = CachedFixture & {
   leagueName: string | null
   leagueExternalId: string | null
@@ -46,6 +52,10 @@ export type AdminEditableMatch = CachedFixture & {
   awayTeam: string | null
   homeLogo: string | null
   awayLogo: string | null
+  homePrimaryColor: string | null
+  homeSecondaryColor: string | null
+  awayPrimaryColor: string | null
+  awaySecondaryColor: string | null
   goalsHome: number | null
   goalsAway: number | null
   homePenaltyScore: number | null
@@ -65,6 +75,12 @@ export type AdminEditableMatch = CachedFixture & {
 export type AdminMatchesPageData = {
   fixtures: AdminEditableMatch[]
   selectedMatch: AdminEditableMatch | null
+  broadcastOptions: AdminBroadcastOption[]
+}
+
+export type AdminBroadcastOption = {
+  name: string
+  logoUrl: string | null
 }
 
 export type AdminMatchListMode = 'today' | 'world-cup' | 'upcoming' | 'recent' | 'search'
@@ -81,6 +97,10 @@ export type AdminMatchDetailsInput = {
   awayTeam?: string | null
   homeLogo?: string | null
   awayLogo?: string | null
+  homePrimaryColor?: string | null
+  homeSecondaryColor?: string | null
+  awayPrimaryColor?: string | null
+  awaySecondaryColor?: string | null
   goalsHome?: number | null
   goalsAway?: number | null
   homePenaltyScore?: number | null
@@ -96,6 +116,29 @@ export type AdminMatchDetailsInput = {
   highlightsUrl?: string | null
   highlightsTitle?: string | null
 }
+
+const ADMIN_TV_OPTION_DEFINITIONS = [
+  {
+    name: 'TyC Sports',
+    aliases: ['tyc sports', 'tyc', 'tyc sports play'],
+  },
+  {
+    name: 'D Sports',
+    aliases: ['d sports', 'dsports', 'directv sports', 'directv'],
+  },
+  {
+    name: 'Fox Sports',
+    aliases: ['fox sports', 'foxsports'],
+  },
+  {
+    name: 'ESPN',
+    aliases: ['espn', 'espn premium'],
+  },
+  {
+    name: 'Telefe',
+    aliases: ['telefe'],
+  },
+] as const
 
 function readText(source: Record<string, unknown> | null, key: string) {
   const value = source?.[key]
@@ -143,6 +186,56 @@ function cleanText(value: string | null | undefined) {
   const trimmed = value?.trim()
 
   return trimmed || null
+}
+
+function cleanHexColor(value: string | null | undefined) {
+  const text = cleanText(value)
+  if (!text) return null
+
+  const cleaned = text.replace(/^#/, '')
+
+  return /^[0-9a-fA-F]{6}$/.test(cleaned) ? `#${cleaned.toLowerCase()}` : null
+}
+
+function readHexColor(source: Record<string, unknown> | null, key: string) {
+  return cleanHexColor(readText(source, key))
+}
+
+function getBroadcastOptionName(value: string | null | undefined) {
+  const normalizedValue = normalizeSearch(value)
+  if (!normalizedValue) return null
+
+  for (const option of ADMIN_TV_OPTION_DEFINITIONS) {
+    const normalizedName = normalizeSearch(option.name)
+    if (normalizedValue === normalizedName || normalizedValue.includes(normalizedName)) {
+      return option.name
+    }
+
+    if (
+      option.aliases.some((alias) => {
+        const normalizedAlias = normalizeSearch(alias)
+
+        return normalizedValue === normalizedAlias || normalizedValue.includes(normalizedAlias)
+      })
+    ) {
+      return option.name
+    }
+  }
+
+  return null
+}
+
+function addBroadcastLogoOption(
+  logoByName: Map<string, string>,
+  broadcasterName: string | null | undefined,
+  broadcasterLogoUrl: string | null | undefined
+) {
+  const optionName = getBroadcastOptionName(broadcasterName)
+  const logoUrl = cleanText(broadcasterLogoUrl)
+
+  if (!optionName || !logoUrl || logoByName.has(optionName)) return
+
+  logoByName.set(optionName, logoUrl)
 }
 
 function normalizeDateForStorage(value: string | null | undefined) {
@@ -238,6 +331,12 @@ function parseEditableMatch(row: FixtureCacheRow): AdminEditableMatch {
   const detailGoals = asRecord(detailFixturePayload?.goals)
   const detailScore = asRecord(detailFixturePayload?.score)
   const detailPenalty = asRecord(asRecord(detailScore?.penalty))
+  const normalizedKitColors = asRecord(normalized?.teamKitColors)
+  const detailKitColors = asRecord(detail?.teamKitColors)
+  const normalizedHomeKitColors = asRecord(normalizedKitColors?.home)
+  const normalizedAwayKitColors = asRecord(normalizedKitColors?.away)
+  const detailHomeKitColors = asRecord(detailKitColors?.home)
+  const detailAwayKitColors = asRecord(detailKitColors?.away)
 
   return {
     ...cached,
@@ -270,6 +369,34 @@ function parseEditableMatch(row: FixtureCacheRow): AdminEditableMatch {
     awayLogo:
       firstText(readText(normalized, 'awayLogo'), readText(detailAway, 'logo'), readText(rawAway, 'logo')) ??
       null,
+    homePrimaryColor:
+      firstText(
+        readHexColor(normalized, 'homePrimaryColor'),
+        readHexColor(normalized, 'home_primary_color'),
+        readHexColor(normalizedHomeKitColors, 'primary'),
+        readHexColor(detailHomeKitColors, 'primary')
+      ) ?? null,
+    homeSecondaryColor:
+      firstText(
+        readHexColor(normalized, 'homeSecondaryColor'),
+        readHexColor(normalized, 'home_secondary_color'),
+        readHexColor(normalizedHomeKitColors, 'secondary'),
+        readHexColor(detailHomeKitColors, 'secondary')
+      ) ?? null,
+    awayPrimaryColor:
+      firstText(
+        readHexColor(normalized, 'awayPrimaryColor'),
+        readHexColor(normalized, 'away_primary_color'),
+        readHexColor(normalizedAwayKitColors, 'primary'),
+        readHexColor(detailAwayKitColors, 'primary')
+      ) ?? null,
+    awaySecondaryColor:
+      firstText(
+        readHexColor(normalized, 'awaySecondaryColor'),
+        readHexColor(normalized, 'away_secondary_color'),
+        readHexColor(normalizedAwayKitColors, 'secondary'),
+        readHexColor(detailAwayKitColors, 'secondary')
+      ) ?? null,
     goalsHome: firstNumber(readNumber(normalized, 'goalsHome'), readNumber(detailGoals, 'home'), readNumber(rawGoals, 'home')),
     goalsAway: firstNumber(readNumber(normalized, 'goalsAway'), readNumber(detailGoals, 'away'), readNumber(rawGoals, 'away')),
     homePenaltyScore:
@@ -439,6 +566,10 @@ function patchNormalizedPayload(row: FixtureCacheRow, input: AdminMatchDetailsIn
   const awayTeam = cleanText(input.awayTeam)
   const homeLogo = cleanText(input.homeLogo)
   const awayLogo = cleanText(input.awayLogo)
+  const homePrimaryColor = cleanHexColor(input.homePrimaryColor)
+  const homeSecondaryColor = cleanHexColor(input.homeSecondaryColor)
+  const awayPrimaryColor = cleanHexColor(input.awayPrimaryColor)
+  const awaySecondaryColor = cleanHexColor(input.awaySecondaryColor)
   const goalsHome = toIntegerOrNull(input.goalsHome)
   const goalsAway = toIntegerOrNull(input.goalsAway)
   const homePenaltyScore = toIntegerOrNull(input.homePenaltyScore)
@@ -466,6 +597,14 @@ function patchNormalizedPayload(row: FixtureCacheRow, input: AdminMatchDetailsIn
   normalized.away = awayTeam
   normalized.homeLogo = homeLogo
   normalized.awayLogo = awayLogo
+  normalized.homePrimaryColor = homePrimaryColor
+  normalized.homeSecondaryColor = homeSecondaryColor
+  normalized.awayPrimaryColor = awayPrimaryColor
+  normalized.awaySecondaryColor = awaySecondaryColor
+  normalized.home_primary_color = homePrimaryColor
+  normalized.home_secondary_color = homeSecondaryColor
+  normalized.away_primary_color = awayPrimaryColor
+  normalized.away_secondary_color = awaySecondaryColor
   normalized.goalsHome = goalsHome
   normalized.goalsAway = goalsAway
   normalized.homePenaltyScore = homePenaltyScore
@@ -483,6 +622,22 @@ function patchNormalizedPayload(row: FixtureCacheRow, input: AdminMatchDetailsIn
   normalized.broadcast_logo_url = broadcastLogoUrl
   normalized.highlightsUrl = highlightsUrl
   normalized.highlightsTitle = highlightsTitle
+
+  const currentKitColors = asRecord(normalized.teamKitColors)
+  const teamKitColors = {
+    ...(currentKitColors ?? {}),
+    home: {
+      ...(asRecord(currentKitColors?.home) ?? {}),
+      primary: homePrimaryColor,
+      secondary: homeSecondaryColor,
+    },
+    away: {
+      ...(asRecord(currentKitColors?.away) ?? {}),
+      primary: awayPrimaryColor,
+      secondary: awaySecondaryColor,
+    },
+  }
+  normalized.teamKitColors = teamKitColors
 
   const matchDetail = {
     ...(asRecord(normalized.matchDetail) ?? {}),
@@ -558,6 +713,7 @@ function patchNormalizedPayload(row: FixtureCacheRow, input: AdminMatchDetailsIn
     },
     score,
   }
+  matchDetail.teamKitColors = teamKitColors
   normalized.matchDetail = matchDetail
 
   return {
@@ -607,6 +763,10 @@ async function updateStoredMatch(input: AdminMatchDetailsInput) {
     away_score: toIntegerOrNull(input.goalsAway),
     home_penalty_score: toIntegerOrNull(input.homePenaltyScore),
     away_penalty_score: toIntegerOrNull(input.awayPenaltyScore),
+    home_primary_color: cleanHexColor(input.homePrimaryColor),
+    home_secondary_color: cleanHexColor(input.homeSecondaryColor),
+    away_primary_color: cleanHexColor(input.awayPrimaryColor),
+    away_secondary_color: cleanHexColor(input.awaySecondaryColor),
     venue_name: cleanText(input.venueName),
     venue_city: cleanText(input.venueCity),
     referee: cleanText(input.referee),
@@ -699,6 +859,64 @@ async function replaceManualMatchBroadcast(
   }
 }
 
+function buildAdminBroadcastOptions(logoByName: Map<string, string>): AdminBroadcastOption[] {
+  return ADMIN_TV_OPTION_DEFINITIONS.map((option) => ({
+    name: option.name,
+    logoUrl: logoByName.get(option.name) ?? null,
+  }))
+}
+
+async function addBroadcastLogoOptionsFromTable(
+  logoByName: Map<string, string>,
+  table: 'admin_broadcast_overrides' | 'broadcast_rules' | 'match_broadcasts',
+  options: {
+    activeOnly?: boolean
+  } = {}
+) {
+  const supabase = getAdminClient()
+  let query = supabase
+    .from(table)
+    .select('broadcaster_name, broadcaster_logo_url')
+    .not('broadcaster_logo_url', 'is', null)
+    .limit(500)
+
+  if (options.activeOnly) {
+    query = query.eq('active', true)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    if (isMissingRelationError(error) || isMissingOptionalBroadcastStore(error)) {
+      return
+    }
+
+    throw error
+  }
+
+  for (const row of (data ?? []) as BroadcastLogoRow[]) {
+    addBroadcastLogoOption(logoByName, row.broadcaster_name, row.broadcaster_logo_url)
+  }
+}
+
+async function getAdminBroadcastOptions(fixtures: AdminEditableMatch[] = []) {
+  const logoByName = new Map<string, string>()
+
+  await addBroadcastLogoOptionsFromTable(logoByName, 'admin_broadcast_overrides', {
+    activeOnly: true,
+  })
+  await addBroadcastLogoOptionsFromTable(logoByName, 'broadcast_rules', {
+    activeOnly: true,
+  })
+  await addBroadcastLogoOptionsFromTable(logoByName, 'match_broadcasts')
+
+  for (const fixture of fixtures) {
+    addBroadcastLogoOption(logoByName, fixture.tv, fixture.broadcastLogoUrl)
+  }
+
+  return buildAdminBroadcastOptions(logoByName)
+}
+
 export async function getAdminMatchesPageData(
   query: string | null | undefined,
   selectedFixtureId?: string | null,
@@ -707,6 +925,7 @@ export async function getAdminMatchesPageData(
   const fallback: AdminMatchesPageData = {
     fixtures: [],
     selectedMatch: null,
+    broadcastOptions: buildAdminBroadcastOptions(new Map()),
   }
 
   try {
@@ -724,6 +943,7 @@ export async function getAdminMatchesPageData(
     const allFixtures = rows
       .map(parseEditableMatch)
       .filter((fixture) => (listMode === 'world-cup' ? isWorldCupFixture(fixture) : true))
+    const broadcastOptions = await getAdminBroadcastOptions(allFixtures)
     const fixtures = allFixtures
       .filter((fixture) => matchesFixtureSearch(fixture, query ?? ''))
       .slice(0, 120)
@@ -746,6 +966,7 @@ export async function getAdminMatchesPageData(
       data: {
         fixtures,
         selectedMatch,
+        broadcastOptions,
       },
       error: null,
     }

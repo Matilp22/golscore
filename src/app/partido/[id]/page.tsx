@@ -3,6 +3,7 @@
   type MatchEvent,
   type MatchFixture,
   type MatchLineup,
+  type MatchTeamKitColors,
   type PlayerWrapper,
 } from '@/lib/api-football'
 import AutoRefresh from '@/frontend/components/AutoRefresh'
@@ -838,7 +839,9 @@ type TeamStyle = {
   border: string
 }
 
-function normalizeHexColor(value?: string) {
+type TeamKitColorOverride = MatchTeamKitColors['home']
+
+function normalizeHexColor(value?: string | null) {
   if (!value) return undefined
 
   const cleaned = value.trim().replace('#', '')
@@ -875,8 +878,24 @@ function getTeamStyle(
   teamName: string,
   isHome: boolean,
   lineup?: MatchLineup | null,
-  role: 'player' | 'goalkeeper' = 'player'
+  role: 'player' | 'goalkeeper' = 'player',
+  kitColors?: TeamKitColorOverride | null
 ): TeamStyle {
+  const overridePrimary = normalizeHexColor(kitColors?.primary)
+  const overrideSecondary = normalizeHexColor(kitColors?.secondary)
+
+  if (overridePrimary || overrideSecondary) {
+    const shirt = overridePrimary || (isHome ? '#14532d' : '#f3f4f6')
+    const secondary = overrideSecondary || overridePrimary
+
+    return ensureReadableTeamStyle({
+      shirt,
+      secondary,
+      text: isLightColor(shirt) ? '#111827' : '#ffffff',
+      border: secondary || (isHome ? '#93c5fd' : '#9ca3af'),
+    })
+  }
+
   const lineupColors = lineup?.team?.colors?.[role]
 
   const primary = normalizeHexColor(lineupColors?.primary)
@@ -1444,10 +1463,11 @@ function getStyleForPlayer(
   playerWrap: PlayerWrapper,
   teamName: string,
   isHome: boolean,
-  lineup?: MatchLineup | null
+  lineup?: MatchLineup | null,
+  kitColors?: TeamKitColorOverride | null
 ) {
   const role = playerWrap.player?.pos === 'G' ? 'goalkeeper' : 'player'
-  return getTeamStyle(teamName, isHome, lineup, role)
+  return getTeamStyle(teamName, isHome, lineup, role, kitColors)
 }
 
 function isCaptainFlag(value: boolean | string | undefined) {
@@ -1634,6 +1654,7 @@ function PlayerOnField({
   teamId,
   isHome,
   lineup,
+  kitColors,
   events,
   captainReference,
   playerIndex,
@@ -1647,6 +1668,7 @@ function PlayerOnField({
   teamId?: number | string | null
   isHome: boolean
   lineup?: MatchLineup | null
+  kitColors?: TeamKitColorOverride | null
   events: MatchEvent[]
   captainReference?: {
     id?: number
@@ -1658,7 +1680,7 @@ function PlayerOnField({
 }) {
   const pos = getPlayerPosition(playerWrap, formation, side, playerIndex, lineupPlayers, fullField)
   const player = playerWrap.player || {}
-  const style = getStyleForPlayer(playerWrap, teamName, isHome, lineup)
+  const style = getStyleForPlayer(playerWrap, teamName, isHome, lineup, kitColors)
   const substitutionContext = {
     starters: (lineup?.startXI || []).map((entry) => ({
       id: entry.player?.id ?? null,
@@ -1729,6 +1751,7 @@ function FormationPitch({
   teamId,
   side,
   isHome,
+  kitColors,
   events,
   captainReference,
 }: {
@@ -1740,6 +1763,7 @@ function FormationPitch({
   teamId?: number | string | null
   side: 'top' | 'bottom'
   isHome: boolean
+  kitColors?: TeamKitColorOverride | null
   events: MatchEvent[]
   captainReference?: {
     id?: number
@@ -1781,6 +1805,7 @@ function FormationPitch({
             teamId={teamId}
             isHome={isHome}
             lineup={lineup}
+            kitColors={kitColors}
             lineupPlayers={starters}
             events={events}
             captainReference={captainReference}
@@ -1800,6 +1825,7 @@ function buildPanelPlayers({
   teamId,
   isHome,
   lineup,
+  kitColors,
   captainReference,
 }: {
   players: PlayerWrapper[]
@@ -1808,6 +1834,7 @@ function buildPanelPlayers({
   teamId?: number | string | null
   isHome: boolean
   lineup?: MatchLineup | null
+  kitColors?: TeamKitColorOverride | null
   captainReference?: {
     id?: number
     name?: string
@@ -1871,7 +1898,7 @@ function buildPanelPlayers({
       number: player.number,
       position: player.pos,
       photo: player.photo,
-      style: getStyleForPlayer(playerWrap, teamName, isHome, lineup),
+      style: getStyleForPlayer(playerWrap, teamName, isHome, lineup, kitColors),
       isCaptain,
       goals,
       penaltyGoals,
@@ -1971,10 +1998,12 @@ export default async function PartidoDetallePage({ params }: PageProps) {
   const lineupEvents = data.lineupEvents
   const homeLineup = data.homeLineup
   const awayLineup = data.awayLineup
+  const homeKitColors = data.teamKitColors?.home ?? null
+  const awayKitColors = data.teamKitColors?.away ?? null
 
   const renderedAt = new Date().toISOString()
-  const homeColors = getTeamStyle(homeTeam.name, true, homeLineup, 'player')
-  const awayColors = getTeamStyle(awayTeam.name, false, awayLineup, 'player')
+  const homeColors = getTeamStyle(homeTeam.name, true, homeLineup, 'player', homeKitColors)
+  const awayColors = getTeamStyle(awayTeam.name, false, awayLineup, 'player', awayKitColors)
   const statusDisplayElapsed = getMatchDisplayElapsed(status, events)
   const headerStatusLabel = formatHeaderStatusLabel(
     status.short,
@@ -2005,6 +2034,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
     teamId: homeLineupTeamId,
     isHome: true,
     lineup: homeLineup,
+    kitColors: homeKitColors,
     captainReference: homeCaptainReference,
   })
   const awayStarterPlayers = buildPanelPlayers({
@@ -2014,6 +2044,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
     teamId: awayLineupTeamId,
     isHome: false,
     lineup: awayLineup,
+    kitColors: awayKitColors,
     captainReference: awayCaptainReference,
   })
   const homeSubstitutePlayers = buildPanelPlayers({
@@ -2023,6 +2054,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
     teamId: homeLineupTeamId,
     isHome: true,
     lineup: homeLineup,
+    kitColors: homeKitColors,
   })
   const awaySubstitutePlayers = buildPanelPlayers({
     players: awayLineup?.substitutes || [],
@@ -2031,6 +2063,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
     teamId: awayLineupTeamId,
     isHome: false,
     lineup: awayLineup,
+    kitColors: awayKitColors,
   })
   const matchHistoryHref = `/partido/${id}/historial`
   const shareCardId = `match-share-card-${fixture.fixture.id}`
@@ -2380,6 +2413,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                           teamId={homeLineupTeamId}
                           side="top"
                           isHome
+                          kitColors={homeKitColors}
                           events={lineupEvents}
                           captainReference={homeCaptainReference}
                         />
@@ -2395,6 +2429,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                           teamId={awayLineupTeamId}
                           side="bottom"
                           isHome={false}
+                          kitColors={awayKitColors}
                           events={lineupEvents}
                           captainReference={awayCaptainReference}
                         />

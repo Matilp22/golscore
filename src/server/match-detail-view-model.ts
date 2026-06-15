@@ -165,6 +165,7 @@ function createEmptyMatchDetailPayload(): MatchDetailPayload {
     broadcasters: [],
     highlightsUrl: null,
     highlightsTitle: null,
+    teamKitColors: null,
   }
 }
 
