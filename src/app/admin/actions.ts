@@ -75,12 +75,14 @@ function readNullableInteger(formData: FormData, key: string) {
   return Math.trunc(parsed)
 }
 
-function readCaptainFormValue(formData: FormData, key: string) {
+function readCaptainFormValue(formData: FormData, key: string, manualNameKey: string) {
   const value = readString(formData, key)
   if (!value) {
+    const manualName = readOptionalString(formData, manualNameKey)
+
     return {
       playerId: null,
-      playerName: null,
+      playerName: manualName,
     }
   }
 
@@ -242,8 +244,16 @@ export async function saveMatchDetailsAction(formData: FormData) {
 
   const fixtureExternalId = readString(formData, 'fixtureExternalId')
   const returnPath = sanitizeAdminReturnPath(readString(formData, 'returnPath'))
-  const homeCaptain = readCaptainFormValue(formData, 'homeCaptainPlayerRef')
-  const awayCaptain = readCaptainFormValue(formData, 'awayCaptainPlayerRef')
+  const homeCaptain = readCaptainFormValue(
+    formData,
+    'homeCaptainPlayerRef',
+    'homeCaptainPlayerNameManual'
+  )
+  const awayCaptain = readCaptainFormValue(
+    formData,
+    'awayCaptainPlayerRef',
+    'awayCaptainPlayerNameManual'
+  )
 
   try {
     await updateAdminMatchDetails({

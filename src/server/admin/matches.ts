@@ -47,6 +47,11 @@ type AdminMatchDetailOverrideRow = {
   active?: boolean | null
 }
 
+type MatchDetailLineupsRow = {
+  fixture_external_id: string
+  lineups: unknown
+}
+
 export type AdminEditableMatch = CachedFixture & {
   leagueName: string | null
   leagueExternalId: string | null
@@ -525,7 +530,8 @@ function getCacheRowsAscendingQuery() {
 
 function parseEditableMatch(
   row: FixtureCacheRow,
-  overridePayload?: Record<string, unknown> | null
+  overridePayload?: Record<string, unknown> | null,
+  detailCacheLineups?: unknown
 ): AdminEditableMatch {
   const cached = serializeCachedFixture(row)
   const normalized = asRecord(row.normalized_payload)
@@ -561,7 +567,7 @@ function parseEditableMatch(
   const detailAwayKitColors = asRecord(detailKitColors?.away)
   const resolvedHomeTeam = resolveTextOverride(overrides, 'homeTeam', readText(normalized, 'home'), readText(normalized, 'homeTeam'), readText(detailHome, 'name'), readText(rawHome, 'name'))
   const resolvedAwayTeam = resolveTextOverride(overrides, 'awayTeam', readText(normalized, 'away'), readText(normalized, 'awayTeam'), readText(detailAway, 'name'), readText(rawAway, 'name'))
-  const detailLineups = readAdminLineups(detail?.lineups, normalized?.lineups)
+  const detailLineups = readAdminLineups(detailCacheLineups, detail?.lineups, normalized?.lineups)
   const homeLineup = findAdminLineup(detailLineups, resolvedHomeTeam, 0)
   const awayLineup = findAdminLineup(detailLineups, resolvedAwayTeam, 1)
   const homeApiCaptain = getAdminCaptainFromLineup(homeLineup)
@@ -1318,6 +1324,24 @@ function isMissingOptionalMatchOverrideStore(error: unknown) {
   )
 }
 
+function isMissingOptionalMatchDetailLineupsStore(error: unknown) {
+  const record = typeof error === 'object' && error !== null ? (error as SupabaseSchemaError) : null
+  const code = typeof record?.code === 'string' ? record.code : null
+  const message = typeof record?.message === 'string' ? record.message.toLowerCase() : ''
+
+  return (
+    code === '42P01' ||
+    code === 'PGRST205' ||
+    code === '42703' ||
+    code === 'PGRST204' ||
+    message.includes('does not exist') ||
+    message.includes('no existe') ||
+    message.includes('football_match_detail_cache') ||
+    message.includes('lineups') ||
+    message.includes('schema cache')
+  )
+}
+
 function buildAdminMatchOverridePayload(input: AdminMatchDetailsInput) {
   const homePrimaryColor = cleanHexColor(input.homePrimaryColor)
   const homeSecondaryColor = cleanHexColor(input.homeSecondaryColor)
@@ -1456,6 +1480,38 @@ async function getAdminMatchDetailOverridesByFixtureIds(fixtureExternalIds: stri
   return overridesByFixtureId
 }
 
+async function getAdminMatchDetailLineupsByFixtureIds(fixtureExternalIds: string[]) {
+  const ids = [
+    ...new Set(
+      fixtureExternalIds
+        .map((id) => cleanText(id))
+        .filter((id): id is string => Boolean(id))
+    ),
+  ]
+  const lineupsByFixtureId = new Map<string, unknown>()
+
+  if (!ids.length) return lineupsByFixtureId
+
+  const { data, error } = await getAdminClient()
+    .from('football_match_detail_cache')
+    .select('fixture_external_id, lineups')
+    .in('fixture_external_id', ids)
+
+  if (error) {
+    if (isMissingOptionalMatchDetailLineupsStore(error)) return lineupsByFixtureId
+
+    throw error
+  }
+
+  for (const row of (data ?? []) as MatchDetailLineupsRow[]) {
+    if (!row.fixture_external_id) continue
+
+    lineupsByFixtureId.set(String(row.fixture_external_id), row.lineups)
+  }
+
+  return lineupsByFixtureId
+}
+
 async function upsertAdminMatchDetailOverride(input: AdminMatchDetailsInput) {
   const fixtureExternalId = cleanText(input.fixtureExternalId)
   if (!fixtureExternalId) return
@@ -1506,11 +1562,17 @@ export async function getAdminMatchesPageData(
     }
 
     const rows = (data ?? []) as FixtureCacheRow[]
-    const overridesByFixtureId = await getAdminMatchDetailOverridesByFixtureIds(
-      rows.map((row) => String(row.fixture_external_id))
-    )
+    const fixtureExternalIds = rows.map((row) => String(row.fixture_external_id))
+    const [overridesByFixtureId, lineupsByFixtureId] = await Promise.all([
+      getAdminMatchDetailOverridesByFixtureIds(fixtureExternalIds),
+      getAdminMatchDetailLineupsByFixtureIds(fixtureExternalIds),
+    ])
     const allFixtures = rows
-      .map((row) => parseEditableMatch(row, overridesByFixtureId.get(String(row.fixture_external_id))))
+      .map((row) => parseEditableMatch(
+        row,
+        overridesByFixtureId.get(String(row.fixture_external_id)),
+        lineupsByFixtureId.get(String(row.fixture_external_id))
+      ))
       .filter((fixture) => (listMode === 'world-cup' ? isWorldCupFixture(fixture) : true))
     const broadcastOptions = await getAdminBroadcastOptions(allFixtures)
     const fixtures = allFixtures
@@ -1529,9 +1591,13 @@ export async function getAdminMatchesPageData(
       selectedRow && selectedFixtureId
         ? (await getAdminMatchDetailOverridesByFixtureIds([selectedFixtureId])).get(selectedFixtureId)
         : null
+    const selectedLineups =
+      selectedRow && selectedFixtureId
+        ? (await getAdminMatchDetailLineupsByFixtureIds([selectedFixtureId])).get(selectedFixtureId)
+        : null
     const selectedMatch =
       selectedMatchFromList ??
-      (selectedRow ? parseEditableMatch(selectedRow, selectedOverride) : null) ??
+      (selectedRow ? parseEditableMatch(selectedRow, selectedOverride, selectedLineups) : null) ??
       fixtures[0] ??
       null
 

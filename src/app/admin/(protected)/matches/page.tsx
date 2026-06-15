@@ -184,12 +184,14 @@ function getCaptainOptionsWithCurrent(
 function CaptainSelect({
   label,
   name,
+  manualNameName,
   playerId,
   playerName,
   options,
 }: {
   label: string
   name: string
+  manualNameName: string
   playerId: string | null
   playerName: string | null
   options: AdminCaptainOption[]
@@ -199,34 +201,47 @@ function CaptainSelect({
   const disabled = optionsWithCurrent.length === 0
 
   return (
-    <label className="block min-w-0">
-      <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.08em] text-[#90a0ae]">
-        {label}
-      </span>
-      {disabled ? <input type="hidden" name={name} value="" /> : null}
-      <select
-        name={name}
-        defaultValue={selectedValue}
-        disabled={disabled}
-        className="hf-input h-11 w-full rounded-xl px-3 text-sm disabled:opacity-60"
-      >
-        <option value="">
-          {disabled ? 'Sin alineacion cargada' : 'Sin capitan manual'}
-        </option>
-        {optionsWithCurrent.map((option) => {
-          const value = buildCaptainSelectValue(option.playerId, option.playerName)
+    <div className="min-w-0 space-y-2">
+      <label className="block min-w-0">
+        <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.08em] text-[#90a0ae]">
+          {label}
+        </span>
+        {disabled ? <input type="hidden" name={name} value="" /> : null}
+        <select
+          name={name}
+          defaultValue={selectedValue}
+          disabled={disabled}
+          className="hf-input h-11 w-full rounded-xl px-3 text-sm disabled:opacity-60"
+        >
+          <option value="">
+            {disabled ? 'Sin alineacion cargada' : 'Sin capitan manual'}
+          </option>
+          {optionsWithCurrent.map((option) => {
+            const value = buildCaptainSelectValue(option.playerId, option.playerName)
 
-          return (
-            <option
-              key={`${option.list}-${option.playerId ?? option.playerName}`}
-              value={value}
-            >
-              {getCaptainOptionLabel(option)}
-            </option>
-          )
-        })}
-      </select>
-    </label>
+            return (
+              <option
+                key={`${option.list}-${option.playerId ?? option.playerName}`}
+                value={value}
+              >
+                {getCaptainOptionLabel(option)}
+              </option>
+            )
+          })}
+        </select>
+      </label>
+      <label className="block min-w-0">
+        <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.08em] text-[#90a0ae]">
+          Nombre manual
+        </span>
+        <input
+          name={manualNameName}
+          defaultValue=""
+          placeholder={playerName ?? 'Nombre exacto del jugador'}
+          className="hf-input h-11 w-full rounded-xl px-3 text-sm"
+        />
+      </label>
+    </div>
   )
 }
 
@@ -247,6 +262,7 @@ function AdminMatchCaptainFields({ match }: { match: AdminEditableMatch }) {
         <CaptainSelect
           label={`Capitan ${match.homeTeam ?? 'local'}`}
           name="homeCaptainPlayerRef"
+          manualNameName="homeCaptainPlayerNameManual"
           playerId={match.homeCaptainPlayerId}
           playerName={match.homeCaptainPlayerName}
           options={match.homeCaptainOptions}
@@ -254,6 +270,7 @@ function AdminMatchCaptainFields({ match }: { match: AdminEditableMatch }) {
         <CaptainSelect
           label={`Capitan ${match.awayTeam ?? 'visitante'}`}
           name="awayCaptainPlayerRef"
+          manualNameName="awayCaptainPlayerNameManual"
           playerId={match.awayCaptainPlayerId}
           playerName={match.awayCaptainPlayerName}
           options={match.awayCaptainOptions}
