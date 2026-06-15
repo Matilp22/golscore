@@ -554,7 +554,7 @@ function readFixtureCacheRecord(value: unknown) {
     : null
 }
 
-async function readExistingFixtureMatchDetail(
+async function readExistingFixturePreservedPayload(
   supabase: SupabaseClient,
   fixtureExternalId: number
 ) {
@@ -579,7 +579,16 @@ async function readExistingFixtureMatchDetail(
   const normalizedPayload = readFixtureCacheRecord(
     (response.data as { normalized_payload?: unknown } | null)?.normalized_payload
   )
-  return normalizedPayload?.matchDetail ?? null
+  const matchDetail = readFixtureCacheRecord(normalizedPayload?.matchDetail)
+  const teamKitColors =
+    normalizedPayload?.teamKitColors ??
+    matchDetail?.teamKitColors ??
+    null
+
+  return {
+    matchDetail: normalizedPayload?.matchDetail ?? null,
+    teamKitColors,
+  }
 }
 
 function isMissingFixtureCacheTable(error: { code?: string; message?: string } | null) {
@@ -600,12 +609,20 @@ async function upsertFixtureCache(
   fixture: ApiFixture,
   debug?: boolean
 ) {
-  const existingMatchDetail = await readExistingFixtureMatchDetail(
+  const preservedPayload = await readExistingFixturePreservedPayload(
     supabase,
     fixture.fixture.id
   )
+  const preservedMatchDetail = readFixtureCacheRecord(preservedPayload?.matchDetail)
+  const existingMatchDetail = preservedMatchDetail && preservedPayload?.teamKitColors
+    ? {
+        ...preservedMatchDetail,
+        teamKitColors: preservedPayload.teamKitColors,
+      }
+    : preservedPayload?.matchDetail
   const normalizedPayload = {
     ...getFixtureCachePayload(fixture),
+    ...(preservedPayload?.teamKitColors ? { teamKitColors: preservedPayload.teamKitColors } : {}),
     ...(existingMatchDetail ? { matchDetail: existingMatchDetail } : {}),
   }
   const cacheDate = getArgentinaDateKey(fixture.fixture.date)

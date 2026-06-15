@@ -265,6 +265,7 @@ function MatchEditor({
           <MatchField label="Penal visitante" name="awayPenaltyScore" type="number" value={match.awayPenaltyScore} />
         </div>
         <AdminMatchTeamKitFields
+          key={match.fixtureExternalId}
           homeTeamName={match.homeTeam}
           awayTeamName={match.awayTeam}
           homePrimaryColor={match.homePrimaryColor}

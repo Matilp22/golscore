@@ -1428,9 +1428,20 @@ async function upsertFixtureCacheDetailFallback(
   if (existing.error) return false
 
   const existingRow = (existing.data as FixtureCacheDetailRow | null) ?? null
+  const existingNormalizedPayload = asRecord(existingRow?.normalized_payload)
+  const existingMatchDetail = asRecord(existingNormalizedPayload?.matchDetail)
+  const existingTeamKitColors =
+    existingNormalizedPayload?.teamKitColors ??
+    existingMatchDetail?.teamKitColors ??
+    null
+  const matchDetailPayload = {
+    ...buildMatchDetailPayload(input),
+    ...(existingTeamKitColors ? { teamKitColors: existingTeamKitColors } : {}),
+  }
   const normalizedPayload = {
-    ...(asRecord(existingRow?.normalized_payload) ?? {}),
-    matchDetail: buildMatchDetailPayload(input),
+    ...(existingNormalizedPayload ?? {}),
+    ...(existingTeamKitColors ? { teamKitColors: existingTeamKitColors } : {}),
+    matchDetail: matchDetailPayload,
   }
   const fixtureDate = input.fixturePayload?.fixture?.date ?? null
   const cacheDate = existingRow?.date ?? (fixtureDate ? getArgentinaDateISO(fixtureDate) : null)

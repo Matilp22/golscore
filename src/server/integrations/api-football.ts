@@ -787,8 +787,11 @@ function getStringFromCachedValue(value: unknown) {
   return typeof value === 'string' && value.trim() ? value : null
 }
 
-function hasRecordKey(source: Record<string, unknown> | null, key: string) {
-  return Boolean(source && Object.prototype.hasOwnProperty.call(source, key))
+function readAdminMatchOverridePayload(value: unknown) {
+  const record = readRecord(value)
+  if (!record) return null
+
+  return readRecord(record.overrides) ?? record
 }
 
 function getHexColorFromCachedValue(value: unknown) {
@@ -928,6 +931,48 @@ function getCachedTeamKitColors(row: Record<string, unknown>): MatchTeamKitColor
         number: awayGoalkeeperNumber,
       },
     },
+  }
+}
+
+function mergeKitRoleColors(
+  base: MatchKitRoleColors | null | undefined,
+  override: MatchKitRoleColors | null | undefined
+): MatchKitRoleColors {
+  return {
+    primary: override?.primary ?? base?.primary ?? null,
+    secondary: override?.secondary ?? base?.secondary ?? null,
+    number: override?.number ?? base?.number ?? null,
+  }
+}
+
+function mergeKitSideColors(
+  base: MatchTeamSideKitColors | null | undefined,
+  override: MatchTeamSideKitColors | null | undefined
+): MatchTeamSideKitColors {
+  const player = mergeKitRoleColors(
+    base?.player ?? base,
+    override?.player ?? override
+  )
+  const goalkeeper = mergeKitRoleColors(base?.goalkeeper, override?.goalkeeper)
+
+  return {
+    primary: player.primary,
+    secondary: player.secondary,
+    number: player.number,
+    player,
+    goalkeeper,
+  }
+}
+
+function mergeTeamKitColors(
+  base: MatchTeamKitColors | null | undefined,
+  override: MatchTeamKitColors | null | undefined
+) {
+  if (!base && !override) return null
+
+  return {
+    home: mergeKitSideColors(base?.home, override?.home),
+    away: mergeKitSideColors(base?.away, override?.away),
   }
 }
 
@@ -3153,11 +3198,10 @@ export async function getMatchDetail(id: number) {
   ])
   const cachedFixture = readCachedFixturePayload(detailCache?.fixture_payload)
   const fixture = mapStoredMatchToFixture(match, league, teamsById, fixtureExternalId, fixtureSummary, cachedFixture)
-  const adminOverrideRecord = readRecord(adminOverride)
+  const adminOverrideRecord = readAdminMatchOverridePayload(adminOverride)
   const adminBroadcastChannel = getStringFromCachedValue(adminOverrideRecord?.tv)
   const adminBroadcastLogoUrl = getStringFromCachedValue(adminOverrideRecord?.broadcastLogoUrl)
   const adminTeamKitColors = adminOverrideRecord ? getCachedTeamKitColors(adminOverrideRecord) : null
-  const hasAdminTeamKitColors = hasRecordKey(adminOverrideRecord, 'teamKitColors')
   const cachedBroadcastChannel = adminBroadcastChannel || fixtureSummary?.broadcastChannel?.trim() || null
   const cachedBroadcastLogoUrl = adminBroadcastLogoUrl || fixtureSummary?.broadcastLogoUrl || null
   const resolvedBroadcast = broadcast.channel || !cachedBroadcastChannel
@@ -3227,9 +3271,7 @@ export async function getMatchDetail(id: number) {
       getStringFromCachedValue(adminOverrideRecord?.highlightsTitle) ??
       match.highlights_title ??
       highlights.title,
-    teamKitColors: hasAdminTeamKitColors
-      ? adminTeamKitColors
-      : fixtureSummary?.teamKitColors ?? null,
+    teamKitColors: mergeTeamKitColors(fixtureSummary?.teamKitColors, adminTeamKitColors),
   }
 }
 
