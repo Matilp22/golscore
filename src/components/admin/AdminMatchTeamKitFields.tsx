@@ -7,8 +7,16 @@ type AdminMatchTeamKitFieldsProps = {
   awayTeamName?: string | null
   homePrimaryColor?: string | null
   homeSecondaryColor?: string | null
+  homeNumberColor?: string | null
+  homeGoalkeeperPrimaryColor?: string | null
+  homeGoalkeeperSecondaryColor?: string | null
+  homeGoalkeeperNumberColor?: string | null
   awayPrimaryColor?: string | null
   awaySecondaryColor?: string | null
+  awayNumberColor?: string | null
+  awayGoalkeeperPrimaryColor?: string | null
+  awayGoalkeeperSecondaryColor?: string | null
+  awayGoalkeeperNumberColor?: string | null
 }
 
 type ColorControlProps = {
@@ -69,32 +77,89 @@ function TeamKitCard({
   primaryValue,
   secondaryName,
   secondaryValue,
+  numberName,
+  numberValue,
+  goalkeeperPrimaryName,
+  goalkeeperPrimaryValue,
+  goalkeeperSecondaryName,
+  goalkeeperSecondaryValue,
+  goalkeeperNumberName,
+  goalkeeperNumberValue,
   primaryFallback,
   secondaryFallback,
+  numberFallback,
+  goalkeeperPrimaryFallback,
+  goalkeeperSecondaryFallback,
+  goalkeeperNumberFallback,
 }: {
   title: string
   primaryName: string
   primaryValue?: string | null
   secondaryName: string
   secondaryValue?: string | null
+  numberName: string
+  numberValue?: string | null
+  goalkeeperPrimaryName: string
+  goalkeeperPrimaryValue?: string | null
+  goalkeeperSecondaryName: string
+  goalkeeperSecondaryValue?: string | null
+  goalkeeperNumberName: string
+  goalkeeperNumberValue?: string | null
   primaryFallback: string
   secondaryFallback: string
+  numberFallback: string
+  goalkeeperPrimaryFallback: string
+  goalkeeperSecondaryFallback: string
+  goalkeeperNumberFallback: string
 }) {
   return (
     <div className="rounded-xl border border-white/8 bg-black/10 p-3">
       <p className="mb-3 truncate text-sm font-black text-white">{title}</p>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="mb-3 text-[11px] font-black uppercase tracking-[0.08em] text-[#7ff0b2]">
+        Jugadores
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
         <ColorControl
-          label="Primario"
+          label="Camiseta"
           name={primaryName}
           value={primaryValue}
           fallback={primaryFallback}
         />
         <ColorControl
-          label="Secundario"
+          label="Detalle"
           name={secondaryName}
           value={secondaryValue}
           fallback={secondaryFallback}
+        />
+        <ColorControl
+          label="Numero"
+          name={numberName}
+          value={numberValue}
+          fallback={numberFallback}
+        />
+      </div>
+
+      <div className="mb-3 mt-4 text-[11px] font-black uppercase tracking-[0.08em] text-[#7ff0b2]">
+        Arquero
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <ColorControl
+          label="Camiseta"
+          name={goalkeeperPrimaryName}
+          value={goalkeeperPrimaryValue}
+          fallback={goalkeeperPrimaryFallback}
+        />
+        <ColorControl
+          label="Detalle"
+          name={goalkeeperSecondaryName}
+          value={goalkeeperSecondaryValue}
+          fallback={goalkeeperSecondaryFallback}
+        />
+        <ColorControl
+          label="Numero"
+          name={goalkeeperNumberName}
+          value={goalkeeperNumberValue}
+          fallback={goalkeeperNumberFallback}
         />
       </div>
     </div>
@@ -106,8 +171,16 @@ export default function AdminMatchTeamKitFields({
   awayTeamName,
   homePrimaryColor,
   homeSecondaryColor,
+  homeNumberColor,
+  homeGoalkeeperPrimaryColor,
+  homeGoalkeeperSecondaryColor,
+  homeGoalkeeperNumberColor,
   awayPrimaryColor,
   awaySecondaryColor,
+  awayNumberColor,
+  awayGoalkeeperPrimaryColor,
+  awayGoalkeeperSecondaryColor,
+  awayGoalkeeperNumberColor,
 }: AdminMatchTeamKitFieldsProps) {
   return (
     <div className="grid gap-3 xl:grid-cols-2">
@@ -117,8 +190,20 @@ export default function AdminMatchTeamKitFields({
         primaryValue={homePrimaryColor}
         secondaryName="homeSecondaryColor"
         secondaryValue={homeSecondaryColor}
+        numberName="homeNumberColor"
+        numberValue={homeNumberColor}
+        goalkeeperPrimaryName="homeGoalkeeperPrimaryColor"
+        goalkeeperPrimaryValue={homeGoalkeeperPrimaryColor}
+        goalkeeperSecondaryName="homeGoalkeeperSecondaryColor"
+        goalkeeperSecondaryValue={homeGoalkeeperSecondaryColor}
+        goalkeeperNumberName="homeGoalkeeperNumberColor"
+        goalkeeperNumberValue={homeGoalkeeperNumberColor}
         primaryFallback="#14532d"
         secondaryFallback="#2563eb"
+        numberFallback="#ffffff"
+        goalkeeperPrimaryFallback="#f59e0b"
+        goalkeeperSecondaryFallback="#111827"
+        goalkeeperNumberFallback="#111827"
       />
       <TeamKitCard
         title={`Visitante - ${awayTeamName || 'Sin equipo'}`}
@@ -126,8 +211,20 @@ export default function AdminMatchTeamKitFields({
         primaryValue={awayPrimaryColor}
         secondaryName="awaySecondaryColor"
         secondaryValue={awaySecondaryColor}
+        numberName="awayNumberColor"
+        numberValue={awayNumberColor}
+        goalkeeperPrimaryName="awayGoalkeeperPrimaryColor"
+        goalkeeperPrimaryValue={awayGoalkeeperPrimaryColor}
+        goalkeeperSecondaryName="awayGoalkeeperSecondaryColor"
+        goalkeeperSecondaryValue={awayGoalkeeperSecondaryColor}
+        goalkeeperNumberName="awayGoalkeeperNumberColor"
+        goalkeeperNumberValue={awayGoalkeeperNumberColor}
         primaryFallback="#f3f4f6"
         secondaryFallback="#9ca3af"
+        numberFallback="#111827"
+        goalkeeperPrimaryFallback="#38bdf8"
+        goalkeeperSecondaryFallback="#0f172a"
+        goalkeeperNumberFallback="#0f172a"
       />
     </div>
   )

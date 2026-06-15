@@ -874,6 +874,21 @@ function ensureReadableTeamStyle(style: TeamStyle) {
   }
 }
 
+function getKitRoleOverride(
+  kitColors: TeamKitColorOverride | null | undefined,
+  role: 'player' | 'goalkeeper'
+) {
+  const roleColors = role === 'goalkeeper'
+    ? kitColors?.goalkeeper
+    : kitColors?.player
+
+  return {
+    primary: normalizeHexColor(roleColors?.primary ?? (role === 'player' ? kitColors?.primary : null)),
+    secondary: normalizeHexColor(roleColors?.secondary ?? (role === 'player' ? kitColors?.secondary : null)),
+    number: normalizeHexColor(roleColors?.number ?? (role === 'player' ? kitColors?.number : null)),
+  }
+}
+
 function getTeamStyle(
   teamName: string,
   isHome: boolean,
@@ -881,19 +896,22 @@ function getTeamStyle(
   role: 'player' | 'goalkeeper' = 'player',
   kitColors?: TeamKitColorOverride | null
 ): TeamStyle {
-  const overridePrimary = normalizeHexColor(kitColors?.primary)
-  const overrideSecondary = normalizeHexColor(kitColors?.secondary)
+  const roleOverride = getKitRoleOverride(kitColors, role)
+  const overridePrimary = roleOverride.primary
+  const overrideSecondary = roleOverride.secondary
+  const overrideNumber = roleOverride.number
 
-  if (overridePrimary || overrideSecondary) {
+  if (overridePrimary || overrideSecondary || overrideNumber) {
     const shirt = overridePrimary || (isHome ? '#14532d' : '#f3f4f6')
     const secondary = overrideSecondary || overridePrimary
-
-    return ensureReadableTeamStyle({
+    const style = {
       shirt,
       secondary,
-      text: isLightColor(shirt) ? '#111827' : '#ffffff',
+      text: overrideNumber || (isLightColor(shirt) ? '#111827' : '#ffffff'),
       border: secondary || (isHome ? '#93c5fd' : '#9ca3af'),
-    })
+    }
+
+    return overrideNumber ? style : ensureReadableTeamStyle(style)
   }
 
   const lineupColors = lineup?.team?.colors?.[role]

@@ -41,6 +41,12 @@ type BroadcastLogoRow = {
   broadcaster_logo_url?: string | null
 }
 
+type AdminMatchDetailOverrideRow = {
+  fixture_external_id: string
+  overrides: unknown
+  active?: boolean | null
+}
+
 export type AdminEditableMatch = CachedFixture & {
   leagueName: string | null
   leagueExternalId: string | null
@@ -54,8 +60,16 @@ export type AdminEditableMatch = CachedFixture & {
   awayLogo: string | null
   homePrimaryColor: string | null
   homeSecondaryColor: string | null
+  homeNumberColor: string | null
+  homeGoalkeeperPrimaryColor: string | null
+  homeGoalkeeperSecondaryColor: string | null
+  homeGoalkeeperNumberColor: string | null
   awayPrimaryColor: string | null
   awaySecondaryColor: string | null
+  awayNumberColor: string | null
+  awayGoalkeeperPrimaryColor: string | null
+  awayGoalkeeperSecondaryColor: string | null
+  awayGoalkeeperNumberColor: string | null
   goalsHome: number | null
   goalsAway: number | null
   homePenaltyScore: number | null
@@ -99,8 +113,16 @@ export type AdminMatchDetailsInput = {
   awayLogo?: string | null
   homePrimaryColor?: string | null
   homeSecondaryColor?: string | null
+  homeNumberColor?: string | null
+  homeGoalkeeperPrimaryColor?: string | null
+  homeGoalkeeperSecondaryColor?: string | null
+  homeGoalkeeperNumberColor?: string | null
   awayPrimaryColor?: string | null
   awaySecondaryColor?: string | null
+  awayNumberColor?: string | null
+  awayGoalkeeperPrimaryColor?: string | null
+  awayGoalkeeperSecondaryColor?: string | null
+  awayGoalkeeperNumberColor?: string | null
   goalsHome?: number | null
   goalsAway?: number | null
   homePenaltyScore?: number | null
@@ -199,6 +221,74 @@ function cleanHexColor(value: string | null | undefined) {
 
 function readHexColor(source: Record<string, unknown> | null, key: string) {
   return cleanHexColor(readText(source, key))
+}
+
+function hasRecordKey(source: Record<string, unknown> | null, key: string) {
+  return Boolean(source && Object.prototype.hasOwnProperty.call(source, key))
+}
+
+function readOverrideText(source: Record<string, unknown> | null, key: string) {
+  if (!hasRecordKey(source, key)) return undefined
+
+  return cleanText(readText(source, key))
+}
+
+function readOverrideNumber(source: Record<string, unknown> | null, key: string) {
+  if (!hasRecordKey(source, key)) return undefined
+
+  return toIntegerOrNull(readNumber(source, key))
+}
+
+function readOverrideHexColor(source: Record<string, unknown> | null, key: string) {
+  if (!hasRecordKey(source, key)) return undefined
+
+  return cleanHexColor(readText(source, key))
+}
+
+function resolveTextOverride(
+  overrides: Record<string, unknown> | null,
+  key: string,
+  ...fallback: Array<string | number | null | undefined>
+) {
+  const override = readOverrideText(overrides, key)
+
+  return override !== undefined ? override : firstText(...fallback) ?? null
+}
+
+function resolveNumberOverride(
+  overrides: Record<string, unknown> | null,
+  key: string,
+  ...fallback: Array<number | string | null | undefined>
+) {
+  const override = readOverrideNumber(overrides, key)
+
+  return override !== undefined ? override : firstNumber(...fallback)
+}
+
+function resolveHexOverride(
+  overrides: Record<string, unknown> | null,
+  key: string,
+  ...fallback: Array<string | null | undefined>
+) {
+  const override = readOverrideHexColor(overrides, key)
+
+  return override !== undefined ? override : firstText(...fallback) ?? null
+}
+
+function readKitColor(
+  source: Record<string, unknown> | null,
+  side: 'home' | 'away',
+  role: 'player' | 'goalkeeper',
+  key: 'primary' | 'secondary' | 'number'
+) {
+  const teamKitColors = asRecord(source?.teamKitColors)
+  const sideKitColors = asRecord(teamKitColors?.[side])
+  const roleKitColors = asRecord(sideKitColors?.[role])
+
+  return (
+    readHexColor(roleKitColors, key) ??
+    (role === 'player' ? readHexColor(sideKitColors, key) : null)
+  )
 }
 
 function getBroadcastOptionName(value: string | null | undefined) {
@@ -305,9 +395,13 @@ function getCacheRowsAscendingQuery() {
     .order('updated_at', { ascending: false })
 }
 
-function parseEditableMatch(row: FixtureCacheRow): AdminEditableMatch {
+function parseEditableMatch(
+  row: FixtureCacheRow,
+  overridePayload?: Record<string, unknown> | null
+): AdminEditableMatch {
   const cached = serializeCachedFixture(row)
   const normalized = asRecord(row.normalized_payload)
+  const overrides = overridePayload ?? null
   const raw = asRecord(row.payload)
   const rawFixture = asRecord(raw?.fixture)
   const rawFixtureStatus = asRecord(rawFixture?.status)
@@ -341,96 +435,168 @@ function parseEditableMatch(row: FixtureCacheRow): AdminEditableMatch {
   return {
     ...cached,
     leagueExternalId:
-      firstText(row.league_external_id, readText(normalized, 'leagueId'), readText(rawLeague, 'id')) ??
-      null,
+      resolveTextOverride(overrides, 'leagueExternalId', row.league_external_id, readText(normalized, 'leagueId'), readText(rawLeague, 'id')),
     leagueName:
-      firstText(readText(normalized, 'league'), readText(normalized, 'leagueName'), readText(detailLeague, 'name'), readText(rawLeague, 'name')) ??
-      null,
+      resolveTextOverride(overrides, 'leagueName', readText(normalized, 'league'), readText(normalized, 'leagueName'), readText(detailLeague, 'name'), readText(rawLeague, 'name')),
     country:
-      firstText(readText(normalized, 'country'), readText(detailLeague, 'country'), readText(rawLeague, 'country')) ??
-      null,
+      resolveTextOverride(overrides, 'country', readText(normalized, 'country'), readText(detailLeague, 'country'), readText(rawLeague, 'country')),
     season:
-      firstNumber(readNumber(normalized, 'season'), readNumber(detailLeague, 'season'), readNumber(rawLeague, 'season')),
+      resolveNumberOverride(overrides, 'season', readNumber(normalized, 'season'), readNumber(detailLeague, 'season'), readNumber(rawLeague, 'season')),
     round:
-      firstText(readText(normalized, 'round'), readText(detailLeague, 'round'), readText(rawLeague, 'round')) ??
-      null,
+      resolveTextOverride(overrides, 'round', readText(normalized, 'round'), readText(detailLeague, 'round'), readText(rawLeague, 'round')),
     date:
-      firstText(readText(normalized, 'date'), readText(detailFixture, 'date'), readText(rawFixture, 'date'), row.date) ??
-      null,
+      resolveTextOverride(overrides, 'date', readText(normalized, 'date'), readText(detailFixture, 'date'), readText(rawFixture, 'date'), row.date),
     homeTeam:
-      firstText(readText(normalized, 'home'), readText(normalized, 'homeTeam'), readText(detailHome, 'name'), readText(rawHome, 'name')) ??
-      null,
+      resolveTextOverride(overrides, 'homeTeam', readText(normalized, 'home'), readText(normalized, 'homeTeam'), readText(detailHome, 'name'), readText(rawHome, 'name')),
     awayTeam:
-      firstText(readText(normalized, 'away'), readText(normalized, 'awayTeam'), readText(detailAway, 'name'), readText(rawAway, 'name')) ??
-      null,
+      resolveTextOverride(overrides, 'awayTeam', readText(normalized, 'away'), readText(normalized, 'awayTeam'), readText(detailAway, 'name'), readText(rawAway, 'name')),
     homeLogo:
-      firstText(readText(normalized, 'homeLogo'), readText(detailHome, 'logo'), readText(rawHome, 'logo')) ??
-      null,
+      resolveTextOverride(overrides, 'homeLogo', readText(normalized, 'homeLogo'), readText(detailHome, 'logo'), readText(rawHome, 'logo')),
     awayLogo:
-      firstText(readText(normalized, 'awayLogo'), readText(detailAway, 'logo'), readText(rawAway, 'logo')) ??
-      null,
+      resolveTextOverride(overrides, 'awayLogo', readText(normalized, 'awayLogo'), readText(detailAway, 'logo'), readText(rawAway, 'logo')),
     homePrimaryColor:
-      firstText(
+      resolveHexOverride(
+        overrides,
+        'homePrimaryColor',
+        readKitColor(overrides, 'home', 'player', 'primary'),
         readHexColor(normalized, 'homePrimaryColor'),
         readHexColor(normalized, 'home_primary_color'),
+        readKitColor(normalized, 'home', 'player', 'primary'),
         readHexColor(normalizedHomeKitColors, 'primary'),
         readHexColor(detailHomeKitColors, 'primary')
-      ) ?? null,
+      ),
     homeSecondaryColor:
-      firstText(
+      resolveHexOverride(
+        overrides,
+        'homeSecondaryColor',
+        readKitColor(overrides, 'home', 'player', 'secondary'),
         readHexColor(normalized, 'homeSecondaryColor'),
         readHexColor(normalized, 'home_secondary_color'),
+        readKitColor(normalized, 'home', 'player', 'secondary'),
         readHexColor(normalizedHomeKitColors, 'secondary'),
         readHexColor(detailHomeKitColors, 'secondary')
-      ) ?? null,
+      ),
+    homeNumberColor:
+      resolveHexOverride(
+        overrides,
+        'homeNumberColor',
+        readKitColor(overrides, 'home', 'player', 'number'),
+        readHexColor(normalized, 'homeNumberColor'),
+        readHexColor(normalized, 'home_number_color'),
+        readKitColor(normalized, 'home', 'player', 'number'),
+        readHexColor(detailHomeKitColors, 'number')
+      ),
+    homeGoalkeeperPrimaryColor:
+      resolveHexOverride(
+        overrides,
+        'homeGoalkeeperPrimaryColor',
+        readKitColor(overrides, 'home', 'goalkeeper', 'primary'),
+        readHexColor(normalized, 'homeGoalkeeperPrimaryColor'),
+        readHexColor(normalized, 'home_goalkeeper_primary_color'),
+        readKitColor(normalized, 'home', 'goalkeeper', 'primary')
+      ),
+    homeGoalkeeperSecondaryColor:
+      resolveHexOverride(
+        overrides,
+        'homeGoalkeeperSecondaryColor',
+        readKitColor(overrides, 'home', 'goalkeeper', 'secondary'),
+        readHexColor(normalized, 'homeGoalkeeperSecondaryColor'),
+        readHexColor(normalized, 'home_goalkeeper_secondary_color'),
+        readKitColor(normalized, 'home', 'goalkeeper', 'secondary')
+      ),
+    homeGoalkeeperNumberColor:
+      resolveHexOverride(
+        overrides,
+        'homeGoalkeeperNumberColor',
+        readKitColor(overrides, 'home', 'goalkeeper', 'number'),
+        readHexColor(normalized, 'homeGoalkeeperNumberColor'),
+        readHexColor(normalized, 'home_goalkeeper_number_color'),
+        readKitColor(normalized, 'home', 'goalkeeper', 'number')
+      ),
     awayPrimaryColor:
-      firstText(
+      resolveHexOverride(
+        overrides,
+        'awayPrimaryColor',
+        readKitColor(overrides, 'away', 'player', 'primary'),
         readHexColor(normalized, 'awayPrimaryColor'),
         readHexColor(normalized, 'away_primary_color'),
+        readKitColor(normalized, 'away', 'player', 'primary'),
         readHexColor(normalizedAwayKitColors, 'primary'),
         readHexColor(detailAwayKitColors, 'primary')
-      ) ?? null,
+      ),
     awaySecondaryColor:
-      firstText(
+      resolveHexOverride(
+        overrides,
+        'awaySecondaryColor',
+        readKitColor(overrides, 'away', 'player', 'secondary'),
         readHexColor(normalized, 'awaySecondaryColor'),
         readHexColor(normalized, 'away_secondary_color'),
+        readKitColor(normalized, 'away', 'player', 'secondary'),
         readHexColor(normalizedAwayKitColors, 'secondary'),
         readHexColor(detailAwayKitColors, 'secondary')
-      ) ?? null,
-    goalsHome: firstNumber(readNumber(normalized, 'goalsHome'), readNumber(detailGoals, 'home'), readNumber(rawGoals, 'home')),
-    goalsAway: firstNumber(readNumber(normalized, 'goalsAway'), readNumber(detailGoals, 'away'), readNumber(rawGoals, 'away')),
+      ),
+    awayNumberColor:
+      resolveHexOverride(
+        overrides,
+        'awayNumberColor',
+        readKitColor(overrides, 'away', 'player', 'number'),
+        readHexColor(normalized, 'awayNumberColor'),
+        readHexColor(normalized, 'away_number_color'),
+        readKitColor(normalized, 'away', 'player', 'number'),
+        readHexColor(detailAwayKitColors, 'number')
+      ),
+    awayGoalkeeperPrimaryColor:
+      resolveHexOverride(
+        overrides,
+        'awayGoalkeeperPrimaryColor',
+        readKitColor(overrides, 'away', 'goalkeeper', 'primary'),
+        readHexColor(normalized, 'awayGoalkeeperPrimaryColor'),
+        readHexColor(normalized, 'away_goalkeeper_primary_color'),
+        readKitColor(normalized, 'away', 'goalkeeper', 'primary')
+      ),
+    awayGoalkeeperSecondaryColor:
+      resolveHexOverride(
+        overrides,
+        'awayGoalkeeperSecondaryColor',
+        readKitColor(overrides, 'away', 'goalkeeper', 'secondary'),
+        readHexColor(normalized, 'awayGoalkeeperSecondaryColor'),
+        readHexColor(normalized, 'away_goalkeeper_secondary_color'),
+        readKitColor(normalized, 'away', 'goalkeeper', 'secondary')
+      ),
+    awayGoalkeeperNumberColor:
+      resolveHexOverride(
+        overrides,
+        'awayGoalkeeperNumberColor',
+        readKitColor(overrides, 'away', 'goalkeeper', 'number'),
+        readHexColor(normalized, 'awayGoalkeeperNumberColor'),
+        readHexColor(normalized, 'away_goalkeeper_number_color'),
+        readKitColor(normalized, 'away', 'goalkeeper', 'number')
+      ),
+    goalsHome: resolveNumberOverride(overrides, 'goalsHome', readNumber(normalized, 'goalsHome'), readNumber(detailGoals, 'home'), readNumber(rawGoals, 'home')),
+    goalsAway: resolveNumberOverride(overrides, 'goalsAway', readNumber(normalized, 'goalsAway'), readNumber(detailGoals, 'away'), readNumber(rawGoals, 'away')),
     homePenaltyScore:
-      firstNumber(readNumber(normalized, 'homePenaltyScore'), readNumber(detailPenalty, 'home'), readNumber(rawPenalty, 'home')),
+      resolveNumberOverride(overrides, 'homePenaltyScore', readNumber(normalized, 'homePenaltyScore'), readNumber(detailPenalty, 'home'), readNumber(rawPenalty, 'home')),
     awayPenaltyScore:
-      firstNumber(readNumber(normalized, 'awayPenaltyScore'), readNumber(detailPenalty, 'away'), readNumber(rawPenalty, 'away')),
-    minute: firstNumber(readNumber(normalized, 'minute'), readNumber(detailFixtureStatus, 'elapsed'), readNumber(rawFixtureStatus, 'elapsed')),
+      resolveNumberOverride(overrides, 'awayPenaltyScore', readNumber(normalized, 'awayPenaltyScore'), readNumber(detailPenalty, 'away'), readNumber(rawPenalty, 'away')),
+    minute: resolveNumberOverride(overrides, 'minute', readNumber(normalized, 'minute'), readNumber(detailFixtureStatus, 'elapsed'), readNumber(rawFixtureStatus, 'elapsed')),
     statusShort:
-      firstText(readText(normalized, 'statusShort'), readText(detailFixtureStatus, 'short'), readText(rawFixtureStatus, 'short')) ??
-      null,
+      resolveTextOverride(overrides, 'statusShort', readText(normalized, 'statusShort'), readText(detailFixtureStatus, 'short'), readText(rawFixtureStatus, 'short')),
     statusLong:
-      firstText(readText(normalized, 'statusLong'), readText(detailFixtureStatus, 'long'), readText(rawFixtureStatus, 'long')) ??
-      null,
+      resolveTextOverride(overrides, 'statusLong', readText(normalized, 'statusLong'), readText(detailFixtureStatus, 'long'), readText(rawFixtureStatus, 'long')),
     venueName:
-      firstText(readText(normalized, 'venueName'), readText(detailVenue, 'name'), readText(rawVenue, 'name')) ??
-      null,
+      resolveTextOverride(overrides, 'venueName', readText(normalized, 'venueName'), readText(detailVenue, 'name'), readText(rawVenue, 'name')),
     venueCity:
-      firstText(readText(normalized, 'venueCity'), readText(detailVenue, 'city'), readText(rawVenue, 'city')) ??
-      null,
+      resolveTextOverride(overrides, 'venueCity', readText(normalized, 'venueCity'), readText(detailVenue, 'city'), readText(rawVenue, 'city')),
     referee:
-      firstText(readText(normalized, 'referee'), readText(detailFixture, 'referee'), readText(rawFixture, 'referee')) ??
-      null,
+      resolveTextOverride(overrides, 'referee', readText(normalized, 'referee'), readText(detailFixture, 'referee'), readText(rawFixture, 'referee')),
     tv:
-      firstText(readText(normalized, 'tv'), readText(normalized, 'broadcastChannel'), readText(normalized, 'broadcast_channel')) ??
-      null,
+      resolveTextOverride(overrides, 'tv', readText(normalized, 'tv'), readText(normalized, 'broadcastChannel'), readText(normalized, 'broadcast_channel')),
     broadcastLogoUrl:
-      firstText(readText(normalized, 'broadcastLogoUrl'), readText(normalized, 'broadcast_logo_url')) ??
-      null,
+      resolveTextOverride(overrides, 'broadcastLogoUrl', readText(normalized, 'broadcastLogoUrl'), readText(normalized, 'broadcast_logo_url')),
     highlightsUrl:
-      firstText(readText(normalized, 'highlightsUrl'), readText(normalized, 'highlights_url')) ??
-      null,
+      resolveTextOverride(overrides, 'highlightsUrl', readText(normalized, 'highlightsUrl'), readText(normalized, 'highlights_url')),
     highlightsTitle:
-      firstText(readText(normalized, 'highlightsTitle'), readText(normalized, 'highlights_title')) ??
-      null,
+      resolveTextOverride(overrides, 'highlightsTitle', readText(normalized, 'highlightsTitle'), readText(normalized, 'highlights_title')),
   }
 }
 
@@ -568,8 +734,16 @@ function patchNormalizedPayload(row: FixtureCacheRow, input: AdminMatchDetailsIn
   const awayLogo = cleanText(input.awayLogo)
   const homePrimaryColor = cleanHexColor(input.homePrimaryColor)
   const homeSecondaryColor = cleanHexColor(input.homeSecondaryColor)
+  const homeNumberColor = cleanHexColor(input.homeNumberColor)
+  const homeGoalkeeperPrimaryColor = cleanHexColor(input.homeGoalkeeperPrimaryColor)
+  const homeGoalkeeperSecondaryColor = cleanHexColor(input.homeGoalkeeperSecondaryColor)
+  const homeGoalkeeperNumberColor = cleanHexColor(input.homeGoalkeeperNumberColor)
   const awayPrimaryColor = cleanHexColor(input.awayPrimaryColor)
   const awaySecondaryColor = cleanHexColor(input.awaySecondaryColor)
+  const awayNumberColor = cleanHexColor(input.awayNumberColor)
+  const awayGoalkeeperPrimaryColor = cleanHexColor(input.awayGoalkeeperPrimaryColor)
+  const awayGoalkeeperSecondaryColor = cleanHexColor(input.awayGoalkeeperSecondaryColor)
+  const awayGoalkeeperNumberColor = cleanHexColor(input.awayGoalkeeperNumberColor)
   const goalsHome = toIntegerOrNull(input.goalsHome)
   const goalsAway = toIntegerOrNull(input.goalsAway)
   const homePenaltyScore = toIntegerOrNull(input.homePenaltyScore)
@@ -599,12 +773,28 @@ function patchNormalizedPayload(row: FixtureCacheRow, input: AdminMatchDetailsIn
   normalized.awayLogo = awayLogo
   normalized.homePrimaryColor = homePrimaryColor
   normalized.homeSecondaryColor = homeSecondaryColor
+  normalized.homeNumberColor = homeNumberColor
+  normalized.homeGoalkeeperPrimaryColor = homeGoalkeeperPrimaryColor
+  normalized.homeGoalkeeperSecondaryColor = homeGoalkeeperSecondaryColor
+  normalized.homeGoalkeeperNumberColor = homeGoalkeeperNumberColor
   normalized.awayPrimaryColor = awayPrimaryColor
   normalized.awaySecondaryColor = awaySecondaryColor
+  normalized.awayNumberColor = awayNumberColor
+  normalized.awayGoalkeeperPrimaryColor = awayGoalkeeperPrimaryColor
+  normalized.awayGoalkeeperSecondaryColor = awayGoalkeeperSecondaryColor
+  normalized.awayGoalkeeperNumberColor = awayGoalkeeperNumberColor
   normalized.home_primary_color = homePrimaryColor
   normalized.home_secondary_color = homeSecondaryColor
+  normalized.home_number_color = homeNumberColor
+  normalized.home_goalkeeper_primary_color = homeGoalkeeperPrimaryColor
+  normalized.home_goalkeeper_secondary_color = homeGoalkeeperSecondaryColor
+  normalized.home_goalkeeper_number_color = homeGoalkeeperNumberColor
   normalized.away_primary_color = awayPrimaryColor
   normalized.away_secondary_color = awaySecondaryColor
+  normalized.away_number_color = awayNumberColor
+  normalized.away_goalkeeper_primary_color = awayGoalkeeperPrimaryColor
+  normalized.away_goalkeeper_secondary_color = awayGoalkeeperSecondaryColor
+  normalized.away_goalkeeper_number_color = awayGoalkeeperNumberColor
   normalized.goalsHome = goalsHome
   normalized.goalsAway = goalsAway
   normalized.homePenaltyScore = homePenaltyScore
@@ -630,11 +820,37 @@ function patchNormalizedPayload(row: FixtureCacheRow, input: AdminMatchDetailsIn
       ...(asRecord(currentKitColors?.home) ?? {}),
       primary: homePrimaryColor,
       secondary: homeSecondaryColor,
+      number: homeNumberColor,
+      player: {
+        ...(asRecord(asRecord(currentKitColors?.home)?.player) ?? {}),
+        primary: homePrimaryColor,
+        secondary: homeSecondaryColor,
+        number: homeNumberColor,
+      },
+      goalkeeper: {
+        ...(asRecord(asRecord(currentKitColors?.home)?.goalkeeper) ?? {}),
+        primary: homeGoalkeeperPrimaryColor,
+        secondary: homeGoalkeeperSecondaryColor,
+        number: homeGoalkeeperNumberColor,
+      },
     },
     away: {
       ...(asRecord(currentKitColors?.away) ?? {}),
       primary: awayPrimaryColor,
       secondary: awaySecondaryColor,
+      number: awayNumberColor,
+      player: {
+        ...(asRecord(asRecord(currentKitColors?.away)?.player) ?? {}),
+        primary: awayPrimaryColor,
+        secondary: awaySecondaryColor,
+        number: awayNumberColor,
+      },
+      goalkeeper: {
+        ...(asRecord(asRecord(currentKitColors?.away)?.goalkeeper) ?? {}),
+        primary: awayGoalkeeperPrimaryColor,
+        secondary: awayGoalkeeperSecondaryColor,
+        number: awayGoalkeeperNumberColor,
+      },
     },
   }
   normalized.teamKitColors = teamKitColors
@@ -765,8 +981,16 @@ async function updateStoredMatch(input: AdminMatchDetailsInput) {
     away_penalty_score: toIntegerOrNull(input.awayPenaltyScore),
     home_primary_color: cleanHexColor(input.homePrimaryColor),
     home_secondary_color: cleanHexColor(input.homeSecondaryColor),
+    home_number_color: cleanHexColor(input.homeNumberColor),
+    home_goalkeeper_primary_color: cleanHexColor(input.homeGoalkeeperPrimaryColor),
+    home_goalkeeper_secondary_color: cleanHexColor(input.homeGoalkeeperSecondaryColor),
+    home_goalkeeper_number_color: cleanHexColor(input.homeGoalkeeperNumberColor),
     away_primary_color: cleanHexColor(input.awayPrimaryColor),
     away_secondary_color: cleanHexColor(input.awaySecondaryColor),
+    away_number_color: cleanHexColor(input.awayNumberColor),
+    away_goalkeeper_primary_color: cleanHexColor(input.awayGoalkeeperPrimaryColor),
+    away_goalkeeper_secondary_color: cleanHexColor(input.awayGoalkeeperSecondaryColor),
+    away_goalkeeper_number_color: cleanHexColor(input.awayGoalkeeperNumberColor),
     venue_name: cleanText(input.venueName),
     venue_city: cleanText(input.venueCity),
     referee: cleanText(input.referee),
@@ -917,6 +1141,167 @@ async function getAdminBroadcastOptions(fixtures: AdminEditableMatch[] = []) {
   return buildAdminBroadcastOptions(logoByName)
 }
 
+function isMissingOptionalMatchOverrideStore(error: unknown) {
+  const record = typeof error === 'object' && error !== null ? (error as SupabaseSchemaError) : null
+  const code = typeof record?.code === 'string' ? record.code : null
+  const message = typeof record?.message === 'string' ? record.message.toLowerCase() : ''
+
+  return (
+    code === '42P01' ||
+    code === 'PGRST204' ||
+    code === 'PGRST205' ||
+    message.includes('admin_match_detail_overrides') ||
+    message.includes('schema cache')
+  )
+}
+
+function buildAdminMatchOverridePayload(input: AdminMatchDetailsInput) {
+  const homePrimaryColor = cleanHexColor(input.homePrimaryColor)
+  const homeSecondaryColor = cleanHexColor(input.homeSecondaryColor)
+  const homeNumberColor = cleanHexColor(input.homeNumberColor)
+  const homeGoalkeeperPrimaryColor = cleanHexColor(input.homeGoalkeeperPrimaryColor)
+  const homeGoalkeeperSecondaryColor = cleanHexColor(input.homeGoalkeeperSecondaryColor)
+  const homeGoalkeeperNumberColor = cleanHexColor(input.homeGoalkeeperNumberColor)
+  const awayPrimaryColor = cleanHexColor(input.awayPrimaryColor)
+  const awaySecondaryColor = cleanHexColor(input.awaySecondaryColor)
+  const awayNumberColor = cleanHexColor(input.awayNumberColor)
+  const awayGoalkeeperPrimaryColor = cleanHexColor(input.awayGoalkeeperPrimaryColor)
+  const awayGoalkeeperSecondaryColor = cleanHexColor(input.awayGoalkeeperSecondaryColor)
+  const awayGoalkeeperNumberColor = cleanHexColor(input.awayGoalkeeperNumberColor)
+
+  return {
+    leagueExternalId: cleanText(input.leagueExternalId),
+    leagueName: cleanText(input.leagueName),
+    country: cleanText(input.country),
+    season: toIntegerOrNull(input.season),
+    round: cleanText(input.round),
+    date: normalizeDateForStorage(input.date),
+    homeTeam: cleanText(input.homeTeam),
+    awayTeam: cleanText(input.awayTeam),
+    homeLogo: cleanText(input.homeLogo),
+    awayLogo: cleanText(input.awayLogo),
+    goalsHome: toIntegerOrNull(input.goalsHome),
+    goalsAway: toIntegerOrNull(input.goalsAway),
+    homePenaltyScore: toIntegerOrNull(input.homePenaltyScore),
+    awayPenaltyScore: toIntegerOrNull(input.awayPenaltyScore),
+    minute: toIntegerOrNull(input.minute),
+    statusShort: cleanText(input.statusShort),
+    statusLong: cleanText(input.statusLong),
+    venueName: cleanText(input.venueName),
+    venueCity: cleanText(input.venueCity),
+    referee: cleanText(input.referee),
+    tv: cleanText(input.tv),
+    broadcastLogoUrl: cleanText(input.broadcastLogoUrl),
+    highlightsUrl: cleanText(input.highlightsUrl),
+    highlightsTitle: cleanText(input.highlightsTitle),
+    homePrimaryColor,
+    homeSecondaryColor,
+    homeNumberColor,
+    homeGoalkeeperPrimaryColor,
+    homeGoalkeeperSecondaryColor,
+    homeGoalkeeperNumberColor,
+    awayPrimaryColor,
+    awaySecondaryColor,
+    awayNumberColor,
+    awayGoalkeeperPrimaryColor,
+    awayGoalkeeperSecondaryColor,
+    awayGoalkeeperNumberColor,
+    teamKitColors: {
+      home: {
+        primary: homePrimaryColor,
+        secondary: homeSecondaryColor,
+        number: homeNumberColor,
+        player: {
+          primary: homePrimaryColor,
+          secondary: homeSecondaryColor,
+          number: homeNumberColor,
+        },
+        goalkeeper: {
+          primary: homeGoalkeeperPrimaryColor,
+          secondary: homeGoalkeeperSecondaryColor,
+          number: homeGoalkeeperNumberColor,
+        },
+      },
+      away: {
+        primary: awayPrimaryColor,
+        secondary: awaySecondaryColor,
+        number: awayNumberColor,
+        player: {
+          primary: awayPrimaryColor,
+          secondary: awaySecondaryColor,
+          number: awayNumberColor,
+        },
+        goalkeeper: {
+          primary: awayGoalkeeperPrimaryColor,
+          secondary: awayGoalkeeperSecondaryColor,
+          number: awayGoalkeeperNumberColor,
+        },
+      },
+    },
+  }
+}
+
+async function getAdminMatchDetailOverridesByFixtureIds(fixtureExternalIds: string[]) {
+  const ids = [
+    ...new Set(
+      fixtureExternalIds
+        .map((id) => cleanText(id))
+        .filter((id): id is string => Boolean(id))
+    ),
+  ]
+  const overridesByFixtureId = new Map<string, Record<string, unknown>>()
+
+  if (!ids.length) return overridesByFixtureId
+
+  const { data, error } = await getAdminClient()
+    .from('admin_match_detail_overrides')
+    .select('fixture_external_id, overrides, active')
+    .in('fixture_external_id', ids)
+    .eq('active', true)
+
+  if (error) {
+    if (isMissingOptionalMatchOverrideStore(error)) return overridesByFixtureId
+
+    throw error
+  }
+
+  for (const row of (data ?? []) as AdminMatchDetailOverrideRow[]) {
+    const overrides = asRecord(row.overrides)
+    if (!row.fixture_external_id || !overrides) continue
+
+    overridesByFixtureId.set(String(row.fixture_external_id), overrides)
+  }
+
+  return overridesByFixtureId
+}
+
+async function upsertAdminMatchDetailOverride(input: AdminMatchDetailsInput) {
+  const fixtureExternalId = cleanText(input.fixtureExternalId)
+  if (!fixtureExternalId) return
+
+  const { error } = await getAdminClient()
+    .from('admin_match_detail_overrides')
+    .upsert(
+      {
+        fixture_external_id: fixtureExternalId,
+        overrides: buildAdminMatchOverridePayload(input),
+        active: true,
+      },
+      { onConflict: 'fixture_external_id' }
+    )
+
+  if (error) {
+    if (isMissingOptionalMatchOverrideStore(error)) {
+      console.warn('[admin-matches] Admin match detail overrides table is missing; cache update will still be saved.', {
+        fixtureExternalId,
+      })
+      return
+    }
+
+    throw error
+  }
+}
+
 export async function getAdminMatchesPageData(
   query: string | null | undefined,
   selectedFixtureId?: string | null,
@@ -940,8 +1325,11 @@ export async function getAdminMatchesPageData(
     }
 
     const rows = (data ?? []) as FixtureCacheRow[]
+    const overridesByFixtureId = await getAdminMatchDetailOverridesByFixtureIds(
+      rows.map((row) => String(row.fixture_external_id))
+    )
     const allFixtures = rows
-      .map(parseEditableMatch)
+      .map((row) => parseEditableMatch(row, overridesByFixtureId.get(String(row.fixture_external_id))))
       .filter((fixture) => (listMode === 'world-cup' ? isWorldCupFixture(fixture) : true))
     const broadcastOptions = await getAdminBroadcastOptions(allFixtures)
     const fixtures = allFixtures
@@ -956,9 +1344,13 @@ export async function getAdminMatchesPageData(
       selectedFixtureId && !selectedMatchFromList
         ? await findFixtureCacheRow(selectedFixtureId)
         : null
+    const selectedOverride =
+      selectedRow && selectedFixtureId
+        ? (await getAdminMatchDetailOverridesByFixtureIds([selectedFixtureId])).get(selectedFixtureId)
+        : null
     const selectedMatch =
       selectedMatchFromList ??
-      (selectedRow ? parseEditableMatch(selectedRow) : null) ??
+      (selectedRow ? parseEditableMatch(selectedRow, selectedOverride) : null) ??
       fixtures[0] ??
       null
 
@@ -1004,5 +1396,6 @@ export async function updateAdminMatchDetails(input: AdminMatchDetailsInput) {
     throw new Error(`No se pudo actualizar el cache del partido: ${error.message}`)
   }
 
+  await upsertAdminMatchDetailOverride(input)
   await updateStoredMatch(input)
 }

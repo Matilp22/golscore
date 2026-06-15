@@ -269,8 +269,16 @@ function MatchEditor({
           awayTeamName={match.awayTeam}
           homePrimaryColor={match.homePrimaryColor}
           homeSecondaryColor={match.homeSecondaryColor}
+          homeNumberColor={match.homeNumberColor}
+          homeGoalkeeperPrimaryColor={match.homeGoalkeeperPrimaryColor}
+          homeGoalkeeperSecondaryColor={match.homeGoalkeeperSecondaryColor}
+          homeGoalkeeperNumberColor={match.homeGoalkeeperNumberColor}
           awayPrimaryColor={match.awayPrimaryColor}
           awaySecondaryColor={match.awaySecondaryColor}
+          awayNumberColor={match.awayNumberColor}
+          awayGoalkeeperPrimaryColor={match.awayGoalkeeperPrimaryColor}
+          awayGoalkeeperSecondaryColor={match.awayGoalkeeperSecondaryColor}
+          awayGoalkeeperNumberColor={match.awayGoalkeeperNumberColor}
         />
       </section>
 

@@ -189,15 +189,20 @@ export type MatchBroadcaster = {
   verified?: boolean | null
 }
 
+export type MatchKitRoleColors = {
+  primary: string | null
+  secondary: string | null
+  number: string | null
+}
+
+export type MatchTeamSideKitColors = MatchKitRoleColors & {
+  player?: MatchKitRoleColors
+  goalkeeper?: MatchKitRoleColors
+}
+
 export type MatchTeamKitColors = {
-  home: {
-    primary: string | null
-    secondary: string | null
-  }
-  away: {
-    primary: string | null
-    secondary: string | null
-  }
+  home: MatchTeamSideKitColors
+  away: MatchTeamSideKitColors
 }
 
 export type HomeLiveEvent = {
@@ -774,6 +779,10 @@ function getStringFromCachedValue(value: unknown) {
   return typeof value === 'string' && value.trim() ? value : null
 }
 
+function hasRecordKey(source: Record<string, unknown> | null, key: string) {
+  return Boolean(source && Object.prototype.hasOwnProperty.call(source, key))
+}
+
 function getHexColorFromCachedValue(value: unknown) {
   if (typeof value !== 'string') return null
 
@@ -784,10 +793,29 @@ function getHexColorFromCachedValue(value: unknown) {
 
 function getCachedKitColorSide(value: unknown) {
   const record = readRecord(value)
+  const playerRecord = readRecord(record?.player)
+  const goalkeeperRecord = readRecord(record?.goalkeeper)
+  const player = {
+    primary:
+      getHexColorFromCachedValue(playerRecord?.primary) ??
+      getHexColorFromCachedValue(record?.primary),
+    secondary:
+      getHexColorFromCachedValue(playerRecord?.secondary) ??
+      getHexColorFromCachedValue(record?.secondary),
+    number:
+      getHexColorFromCachedValue(playerRecord?.number) ??
+      getHexColorFromCachedValue(record?.number),
+  }
+  const goalkeeper = {
+    primary: getHexColorFromCachedValue(goalkeeperRecord?.primary),
+    secondary: getHexColorFromCachedValue(goalkeeperRecord?.secondary),
+    number: getHexColorFromCachedValue(goalkeeperRecord?.number),
+  }
 
   return {
-    primary: getHexColorFromCachedValue(record?.primary),
-    secondary: getHexColorFromCachedValue(record?.secondary),
+    ...player,
+    player,
+    goalkeeper,
   }
 }
 
@@ -803,6 +831,22 @@ function getCachedTeamKitColors(row: Record<string, unknown>): MatchTeamKitColor
     homeKitColors.secondary ??
     getHexColorFromCachedValue(row.homeSecondaryColor) ??
     getHexColorFromCachedValue(row.home_secondary_color)
+  const homeNumber =
+    homeKitColors.number ??
+    getHexColorFromCachedValue(row.homeNumberColor) ??
+    getHexColorFromCachedValue(row.home_number_color)
+  const homeGoalkeeperPrimary =
+    homeKitColors.goalkeeper?.primary ??
+    getHexColorFromCachedValue(row.homeGoalkeeperPrimaryColor) ??
+    getHexColorFromCachedValue(row.home_goalkeeper_primary_color)
+  const homeGoalkeeperSecondary =
+    homeKitColors.goalkeeper?.secondary ??
+    getHexColorFromCachedValue(row.homeGoalkeeperSecondaryColor) ??
+    getHexColorFromCachedValue(row.home_goalkeeper_secondary_color)
+  const homeGoalkeeperNumber =
+    homeKitColors.goalkeeper?.number ??
+    getHexColorFromCachedValue(row.homeGoalkeeperNumberColor) ??
+    getHexColorFromCachedValue(row.home_goalkeeper_number_color)
   const awayPrimary =
     awayKitColors.primary ??
     getHexColorFromCachedValue(row.awayPrimaryColor) ??
@@ -811,8 +855,37 @@ function getCachedTeamKitColors(row: Record<string, unknown>): MatchTeamKitColor
     awayKitColors.secondary ??
     getHexColorFromCachedValue(row.awaySecondaryColor) ??
     getHexColorFromCachedValue(row.away_secondary_color)
+  const awayNumber =
+    awayKitColors.number ??
+    getHexColorFromCachedValue(row.awayNumberColor) ??
+    getHexColorFromCachedValue(row.away_number_color)
+  const awayGoalkeeperPrimary =
+    awayKitColors.goalkeeper?.primary ??
+    getHexColorFromCachedValue(row.awayGoalkeeperPrimaryColor) ??
+    getHexColorFromCachedValue(row.away_goalkeeper_primary_color)
+  const awayGoalkeeperSecondary =
+    awayKitColors.goalkeeper?.secondary ??
+    getHexColorFromCachedValue(row.awayGoalkeeperSecondaryColor) ??
+    getHexColorFromCachedValue(row.away_goalkeeper_secondary_color)
+  const awayGoalkeeperNumber =
+    awayKitColors.goalkeeper?.number ??
+    getHexColorFromCachedValue(row.awayGoalkeeperNumberColor) ??
+    getHexColorFromCachedValue(row.away_goalkeeper_number_color)
 
-  if (!homePrimary && !homeSecondary && !awayPrimary && !awaySecondary) {
+  if (
+    !homePrimary &&
+    !homeSecondary &&
+    !homeNumber &&
+    !homeGoalkeeperPrimary &&
+    !homeGoalkeeperSecondary &&
+    !homeGoalkeeperNumber &&
+    !awayPrimary &&
+    !awaySecondary &&
+    !awayNumber &&
+    !awayGoalkeeperPrimary &&
+    !awayGoalkeeperSecondary &&
+    !awayGoalkeeperNumber
+  ) {
     return null
   }
 
@@ -820,10 +893,32 @@ function getCachedTeamKitColors(row: Record<string, unknown>): MatchTeamKitColor
     home: {
       primary: homePrimary,
       secondary: homeSecondary,
+      number: homeNumber,
+      player: {
+        primary: homePrimary,
+        secondary: homeSecondary,
+        number: homeNumber,
+      },
+      goalkeeper: {
+        primary: homeGoalkeeperPrimary,
+        secondary: homeGoalkeeperSecondary,
+        number: homeGoalkeeperNumber,
+      },
     },
     away: {
       primary: awayPrimary,
       secondary: awaySecondary,
+      number: awayNumber,
+      player: {
+        primary: awayPrimary,
+        secondary: awaySecondary,
+        number: awayNumber,
+      },
+      goalkeeper: {
+        primary: awayGoalkeeperPrimary,
+        secondary: awayGoalkeeperSecondary,
+        number: awayGoalkeeperNumber,
+      },
     },
   }
 }
@@ -2471,6 +2566,12 @@ type CachedFixtureSummary = {
   teamKitColors?: MatchTeamKitColors | null
 }
 
+type AdminMatchDetailOverrideRow = {
+  fixture_external_id: string
+  overrides: unknown
+  active?: boolean | null
+}
+
 function isMissingOptionalMatchDetailCache(error: { code?: string; message?: string } | null | undefined) {
   const message = (error?.message ?? '').toLowerCase()
 
@@ -2480,6 +2581,18 @@ function isMissingOptionalMatchDetailCache(error: { code?: string; message?: str
     error?.code === 'PGRST204' ||
     error?.code === 'PGRST205' ||
     message.includes('football_match_detail_cache') ||
+    message.includes('schema cache')
+  )
+}
+
+function isMissingOptionalMatchOverrideStore(error: { code?: string; message?: string } | null | undefined) {
+  const message = (error?.message ?? '').toLowerCase()
+
+  return (
+    error?.code === '42P01' ||
+    error?.code === 'PGRST204' ||
+    error?.code === 'PGRST205' ||
+    message.includes('admin_match_detail_overrides') ||
     message.includes('schema cache')
   )
 }
@@ -2614,6 +2727,25 @@ async function fetchCachedFixtureSummaryByExternalId(externalId: number) {
 
   const row = (response.data as StoredFixtureDetailCacheRow | null) ?? null
   return mapCachedFixtureSummaryPayload(row?.normalized_payload)
+}
+
+async function fetchAdminMatchDetailOverrideByExternalId(externalId: number) {
+  const supabase = getSupabaseAdminClient()
+  const response = await supabase
+    .from('admin_match_detail_overrides')
+    .select('fixture_external_id, overrides, active')
+    .eq('fixture_external_id', String(externalId))
+    .eq('active', true)
+    .limit(1)
+    .maybeSingle()
+
+  if (response.error) {
+    if (isMissingOptionalMatchOverrideStore(response.error)) return null
+
+    throw response.error
+  }
+
+  return ((response.data as AdminMatchDetailOverrideRow | null)?.overrides ?? null)
 }
 
 async function fetchStoredFixtureDetailCacheByExternalId(externalId: number) {
@@ -2963,28 +3095,35 @@ export async function getMatchDetail(id: number) {
   }
 
   const fixtureExternalId = toFiniteNumber(match.external_id) ?? id
-  const [league, teamsById, events, detailCache, fixtureSummary, broadcast, highlights] = await Promise.all([
+  const [league, teamsById, events, detailCache, fixtureSummary, adminOverride, broadcast, highlights] = await Promise.all([
     fetchStoredLeagueRowById(match.league_id).catch(() => null),
     fetchStoredTeamsByIds([match.home_team_id, match.away_team_id]),
     fetchStoredEventsByMatchId(match.id),
     fetchStoredMatchDetailCacheByExternalId(fixtureExternalId),
     fetchCachedFixtureSummaryByExternalId(fixtureExternalId),
+    fetchAdminMatchDetailOverrideByExternalId(fixtureExternalId),
     getMatchBroadcastByExternalId(fixtureExternalId),
     getMatchHighlightsByExternalId(fixtureExternalId),
   ])
   const cachedFixture = readCachedFixturePayload(detailCache?.fixture_payload)
   const fixture = mapStoredMatchToFixture(match, league, teamsById, fixtureExternalId, fixtureSummary, cachedFixture)
-  const cachedBroadcastChannel = fixtureSummary?.broadcastChannel?.trim() || null
+  const adminOverrideRecord = readRecord(adminOverride)
+  const adminBroadcastChannel = getStringFromCachedValue(adminOverrideRecord?.tv)
+  const adminBroadcastLogoUrl = getStringFromCachedValue(adminOverrideRecord?.broadcastLogoUrl)
+  const adminTeamKitColors = adminOverrideRecord ? getCachedTeamKitColors(adminOverrideRecord) : null
+  const hasAdminTeamKitColors = hasRecordKey(adminOverrideRecord, 'teamKitColors')
+  const cachedBroadcastChannel = adminBroadcastChannel || fixtureSummary?.broadcastChannel?.trim() || null
+  const cachedBroadcastLogoUrl = adminBroadcastLogoUrl || fixtureSummary?.broadcastLogoUrl || null
   const resolvedBroadcast = broadcast.channel || !cachedBroadcastChannel
     ? broadcast
     : {
         channel: cachedBroadcastChannel,
-        logoUrl: fixtureSummary?.broadcastLogoUrl ?? null,
+        logoUrl: cachedBroadcastLogoUrl,
         broadcasters: [{
           name: cachedBroadcastChannel,
-          logoUrl: fixtureSummary?.broadcastLogoUrl ?? null,
+          logoUrl: cachedBroadcastLogoUrl,
           country: null,
-          source: 'normalized_cache',
+          source: adminBroadcastChannel ? 'admin_override' : 'normalized_cache',
           confidence: 'high',
           verified: true,
         }],
@@ -3034,9 +3173,17 @@ export async function getMatchDetail(id: number) {
     broadcastChannel: resolvedBroadcast.channel ?? null,
     broadcastLogoUrl: resolvedBroadcast.logoUrl ?? null,
     broadcasters: resolvedBroadcast.broadcasters,
-    highlightsUrl: match.highlights_url ?? highlights.url,
-    highlightsTitle: match.highlights_title ?? highlights.title,
-    teamKitColors: fixtureSummary?.teamKitColors ?? null,
+    highlightsUrl:
+      getStringFromCachedValue(adminOverrideRecord?.highlightsUrl) ??
+      match.highlights_url ??
+      highlights.url,
+    highlightsTitle:
+      getStringFromCachedValue(adminOverrideRecord?.highlightsTitle) ??
+      match.highlights_title ??
+      highlights.title,
+    teamKitColors: hasAdminTeamKitColors
+      ? adminTeamKitColors
+      : fixtureSummary?.teamKitColors ?? null,
   }
 }
 
