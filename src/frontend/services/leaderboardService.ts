@@ -38,6 +38,7 @@ export async function getLeaderboard({
     partialPredictions?: number
     partial_predictions?: number
     partial_hits?: number
+    predictions?: LeaderboardRow['predictions']
   }): LeaderboardRow => ({
     userId: row.userId ?? row.user_id,
     name: row.username || row.name || 'Usuario',
@@ -45,5 +46,6 @@ export async function getLeaderboard({
     played: row.playedPredictions ?? row.played ?? 0,
     exactHits: row.exactPredictions ?? row.exact_predictions ?? row.exact_hits ?? 0,
     partialHits: row.partialPredictions ?? row.partial_predictions ?? row.partial_hits ?? 0,
+    predictions: row.predictions ?? [],
   }))
 }

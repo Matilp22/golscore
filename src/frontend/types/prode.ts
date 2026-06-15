@@ -120,6 +120,25 @@ export type PointsEntry = {
   partialHit: boolean
 }
 
+export type LeaderboardPredictionDetail = {
+  predictionId: string
+  matchId: string
+  matchDate: string
+  status: string | null
+  homeTeamName: string
+  awayTeamName: string
+  homeLogoUrl: string | null
+  awayLogoUrl: string | null
+  predictedHomeScore: number
+  predictedAwayScore: number
+  realHomeScore: number | null
+  realAwayScore: number | null
+  points: number | null
+  exactHit: boolean
+  partialHit: boolean
+  scoreCalculated: boolean
+}
+
 export type LeaderboardRow = {
   userId: string
   name: string
@@ -127,6 +146,7 @@ export type LeaderboardRow = {
   played: number
   exactHits: number
   partialHits: number
+  predictions: LeaderboardPredictionDetail[]
 }
 
 export function isPredictionLocked(matchDate: string | null, now = new Date()) {

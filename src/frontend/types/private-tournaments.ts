@@ -29,6 +29,25 @@ export type PrivateTournamentSearchResult = {
   canRequest: boolean
 }
 
+export type PrivateTournamentPredictionDetail = {
+  predictionId: string
+  matchId: string
+  matchDate: string
+  status: string | null
+  homeTeamName: string
+  awayTeamName: string
+  homeLogoUrl: string | null
+  awayLogoUrl: string | null
+  predictedHomeScore: number
+  predictedAwayScore: number
+  realHomeScore: number | null
+  realAwayScore: number | null
+  points: number | null
+  exactHit: boolean
+  partialHit: boolean
+  scoreCalculated: boolean
+}
+
 export type PrivateTournamentRankingRow = {
   position: number
   userId: string
@@ -37,6 +56,7 @@ export type PrivateTournamentRankingRow = {
   exactHits: number
   partialHits: number
   playedPredictions: number
+  predictions: PrivateTournamentPredictionDetail[]
 }
 
 export type PrivateTournamentRoundRanking = {

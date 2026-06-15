@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 
 import { useTranslations } from '@/frontend/components/LocaleProvider'
 import PrivateTournamentChat from '@/frontend/components/prode/private-tournaments/PrivateTournamentChat'
@@ -15,6 +15,7 @@ import {
 import type {
   PrivateTournamentDetail,
   PrivateTournamentInvite,
+  PrivateTournamentPredictionDetail,
   PrivateTournamentRankingRow,
 } from '@/frontend/types/private-tournaments'
 
@@ -46,22 +47,184 @@ function EmptyState({ children }: { children: string }) {
   return <p className="p-4 text-sm text-[#9aa7b5]">{children}</p>
 }
 
+type RankingTableLabels = {
+  position: string
+  user: string
+  points: string
+  exacts: string
+  partials: string
+  played: string
+  lockedPredictionsTitle: string
+  lockedPredictionsHint: string
+  noLockedPredictions: string
+  predictionLabel: string
+  resultLabel: string
+  pendingScoreLabel: string
+  matchPointsLabel: (points: number) => string
+  expandUserPredictions: (user: string) => string
+  collapseUserPredictions: (user: string) => string
+}
+
+function TeamBadge({
+  name,
+  logoUrl,
+  align = 'left',
+}: {
+  name: string
+  logoUrl: string | null
+  align?: 'left' | 'right'
+}) {
+  return (
+    <div
+      className={`flex min-w-0 items-center gap-2 ${
+        align === 'right' ? 'justify-end text-right' : ''
+      }`}
+    >
+      {align === 'right' ? null : (
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/8">
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoUrl} alt="" className="h-full w-full object-contain" loading="lazy" />
+          ) : null}
+        </span>
+      )}
+      <span className="min-w-0 truncate text-xs font-black text-white sm:text-sm">
+        {name}
+      </span>
+      {align === 'right' ? (
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/8">
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoUrl} alt="" className="h-full w-full object-contain" loading="lazy" />
+          ) : null}
+        </span>
+      ) : null}
+    </div>
+  )
+}
+
+function formatPredictionResult(prediction: PrivateTournamentPredictionDetail) {
+  if (
+    prediction.realHomeScore === null ||
+    prediction.realHomeScore === undefined ||
+    prediction.realAwayScore === null ||
+    prediction.realAwayScore === undefined
+  ) {
+    return null
+  }
+
+  return `${prediction.realHomeScore} - ${prediction.realAwayScore}`
+}
+
+function PredictionDetailsPanel({
+  row,
+  labels,
+  locale,
+}: {
+  row: PrivateTournamentRankingRow
+  labels: RankingTableLabels
+  locale: string
+}) {
+  const predictions = row.predictions ?? []
+
+  return (
+    <div className="bg-black/[0.18] px-3 py-3 sm:px-4">
+      <div className="mb-3 flex min-w-0 flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-black uppercase tracking-[0.08em] text-[#7ff0b2]">
+            {labels.lockedPredictionsTitle}
+          </p>
+          <p className="mt-0.5 text-xs text-[#8d98a7]">{labels.lockedPredictionsHint}</p>
+        </div>
+        <p className="text-xs font-black text-[#dce7f2]">
+          {row.points} {labels.points}
+        </p>
+      </div>
+
+      {predictions.length ? (
+        <div className="grid gap-2">
+          {predictions.map((prediction) => {
+            const realResult = formatPredictionResult(prediction)
+            const pointsTone = prediction.exactHit
+              ? 'border-[#7ff0b2]/25 bg-[#7ff0b2]/[0.12] text-[#7ff0b2]'
+              : prediction.partialHit
+                ? 'border-amber-300/25 bg-amber-300/[0.12] text-amber-200'
+                : prediction.scoreCalculated
+                  ? 'border-white/10 bg-white/[0.04] text-[#dce7f2]'
+                  : 'border-white/8 bg-black/25 text-[#9aa7b5]'
+
+            return (
+              <article
+                key={prediction.predictionId}
+                className="rounded-xl border border-white/8 bg-white/[0.025] p-3"
+              >
+                <div className="mb-2 flex items-center justify-between gap-2 text-[11px] font-bold uppercase tracking-[0.06em] text-[#8d98a7]">
+                  <span>{formatDate(prediction.matchDate, locale)}</span>
+                  <span className={`shrink-0 rounded-full border px-2 py-0.5 ${pointsTone}`}>
+                    {prediction.scoreCalculated
+                      ? labels.matchPointsLabel(prediction.points ?? 0)
+                      : labels.pendingScoreLabel}
+                  </span>
+                </div>
+
+                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+                  <TeamBadge name={prediction.homeTeamName} logoUrl={prediction.homeLogoUrl} />
+                  <span className="rounded-lg border border-white/8 bg-black/25 px-2 py-1 text-sm font-black text-white">
+                    {prediction.predictedHomeScore} - {prediction.predictedAwayScore}
+                  </span>
+                  <TeamBadge
+                    name={prediction.awayTeamName}
+                    logoUrl={prediction.awayLogoUrl}
+                    align="right"
+                  />
+                </div>
+
+                <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded-lg border border-white/6 bg-black/20 px-2 py-1.5">
+                    <p className="font-bold uppercase tracking-[0.05em] text-[#8d98a7]">
+                      {labels.predictionLabel}
+                    </p>
+                    <p className="mt-0.5 font-black text-white">
+                      {prediction.predictedHomeScore} - {prediction.predictedAwayScore}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-white/6 bg-black/20 px-2 py-1.5">
+                    <p className="font-bold uppercase tracking-[0.05em] text-[#8d98a7]">
+                      {labels.resultLabel}
+                    </p>
+                    <p className="mt-0.5 font-black text-white">
+                      {realResult ?? labels.pendingScoreLabel}
+                    </p>
+                  </div>
+                </div>
+              </article>
+            )
+          })}
+        </div>
+      ) : (
+        <div className="rounded-xl border border-white/8 bg-white/[0.025] px-3 py-4 text-sm text-[#9aa7b5]">
+          {labels.noLockedPredictions}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function RankingTable({
   rows,
   emptyMessage,
   labels,
+  expandable = false,
+  locale,
 }: {
   rows: PrivateTournamentRankingRow[]
   emptyMessage: string
-  labels: {
-    position: string
-    user: string
-    points: string
-    exacts: string
-    partials: string
-    played: string
-  }
+  labels: RankingTableLabels
+  expandable?: boolean
+  locale: string
 }) {
+  const [expandedUserId, setExpandedUserId] = useState<string | null>(null)
+
   if (!rows.length) {
     return <EmptyState>{emptyMessage}</EmptyState>
   }
@@ -80,22 +243,65 @@ function RankingTable({
           </tr>
         </thead>
         <tbody className="divide-y divide-white/6">
-          {rows.map((row) => (
-            <tr key={row.userId} className="transition hover:bg-white/[0.025]">
-              <td className="px-3 py-2 font-black text-[#7ff0b2]">#{row.position}</td>
-              <td className="min-w-0 px-3 py-2 font-bold text-white">{row.username}</td>
-              <td className="px-3 py-2 text-right font-black text-[#7ff0b2]">
-                {row.points}
-              </td>
-              <td className="px-3 py-2 text-right text-[#dce7f2]">{row.exactHits}</td>
-              <td className="px-3 py-2 text-right text-[#dce7f2]">
-                {row.partialHits}
-              </td>
-              <td className="px-3 py-2 text-right text-[#9aa7b5]">
-                {row.playedPredictions}
-              </td>
-            </tr>
-          ))}
+          {rows.map((row) => {
+            const isExpanded = expandable && expandedUserId === row.userId
+
+            return (
+              <Fragment key={row.userId}>
+                <tr className="transition hover:bg-white/[0.025]">
+                  <td className="px-3 py-2 font-black text-[#7ff0b2]">#{row.position}</td>
+                  <td className="min-w-0 px-3 py-2 font-bold text-white">
+                    {expandable ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedUserId((current) =>
+                            current === row.userId ? null : row.userId
+                          )
+                        }
+                        aria-expanded={isExpanded}
+                        aria-label={
+                          isExpanded
+                            ? labels.collapseUserPredictions(row.username)
+                            : labels.expandUserPredictions(row.username)
+                        }
+                        className="flex min-w-0 max-w-full items-center gap-1.5 rounded-lg text-left font-bold text-white transition hover:text-[#7ff0b2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7ff0b2]"
+                      >
+                        <span className="min-w-0 truncate">{row.username}</span>
+                        <span
+                          aria-hidden="true"
+                          className={`shrink-0 text-[10px] text-[#7ff0b2] transition ${
+                            isExpanded ? 'rotate-180' : ''
+                          }`}
+                        >
+                          ▼
+                        </span>
+                      </button>
+                    ) : (
+                      row.username
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-right font-black text-[#7ff0b2]">
+                    {row.points}
+                  </td>
+                  <td className="px-3 py-2 text-right text-[#dce7f2]">{row.exactHits}</td>
+                  <td className="px-3 py-2 text-right text-[#dce7f2]">
+                    {row.partialHits}
+                  </td>
+                  <td className="px-3 py-2 text-right text-[#9aa7b5]">
+                    {row.playedPredictions}
+                  </td>
+                </tr>
+                {isExpanded ? (
+                  <tr className="border-t border-white/6">
+                    <td colSpan={6} className="p-0">
+                      <PredictionDetailsPanel row={row} labels={labels} locale={locale} />
+                    </td>
+                  </tr>
+                ) : null}
+              </Fragment>
+            )
+          })}
         </tbody>
       </table>
     </div>
@@ -437,6 +643,18 @@ export default function PrivateTournamentDetailPage({
     exacts: t('common.exacts'),
     partials: t('common.partials'),
     played: t('common.playedShort'),
+    lockedPredictionsTitle: t('privateTournaments.lockedPredictionsTitle'),
+    lockedPredictionsHint: t('privateTournaments.lockedPredictionsHint'),
+    noLockedPredictions: t('privateTournaments.noLockedPredictions'),
+    predictionLabel: t('privateTournaments.predictionLabel'),
+    resultLabel: t('privateTournaments.resultLabel'),
+    pendingScoreLabel: t('privateTournaments.pendingScoreLabel'),
+    matchPointsLabel: (points: number) =>
+      t('privateTournaments.matchPointsLabel', { points: String(points) }),
+    expandUserPredictions: (username: string) =>
+      t('privateTournaments.expandUserPredictions', { user: username }),
+    collapseUserPredictions: (username: string) =>
+      t('privateTournaments.collapseUserPredictions', { user: username }),
   }
 
   return (
@@ -527,8 +745,11 @@ export default function PrivateTournamentDetailPage({
           </div>
 
           <RankingTable
+            key={`${mode}:${selectedRoundRanking?.value ?? 'total'}`}
             rows={activeRows}
             labels={rankingLabels}
+            locale={locale}
+            expandable={mode === 'round'}
             emptyMessage={
               mode === 'total'
                 ? t('prode.noPointsTotal')

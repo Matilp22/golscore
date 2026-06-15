@@ -9,6 +9,7 @@ import {
 } from '@/shared/config/prode-rounds'
 import { SITE_URL } from '@/shared/seo'
 import { isFinalMatchStatus } from '@/shared/utils/match-status'
+import { isPredictionLocked } from '@/shared/utils/prediction-lock'
 
 export type PrivateTournamentRole = 'owner' | 'member'
 export type JoinRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled'
@@ -88,11 +89,20 @@ type ProfileRow = {
 }
 
 type PredictionScoreRow = {
+  prediction_id?: string | null
   user_id: string
   match_id: string | number | null
   points: number | null
   exact_hit: boolean | null
   partial_hit: boolean | null
+}
+
+type PredictionRow = {
+  id: string
+  user_id: string
+  match_id: string | number | null
+  predicted_home_score: number
+  predicted_away_score: number
 }
 
 type MatchRoundRow = {
@@ -101,12 +111,22 @@ type MatchRoundRow = {
   league_id: string | null
   match_date: string
   status: string | null
+  home_team_id: string | number | null
+  away_team_id: string | number | null
+  home_score: number | null
+  away_score: number | null
 }
 
 type LeagueRow = {
   id: string
   external_id: string | number | null
   name: string | null
+}
+
+type TeamRow = {
+  id: string | number
+  name: string | null
+  logo_url?: string | null
 }
 
 type MatchRoundInfo = {
@@ -117,6 +137,33 @@ type MatchRoundInfo = {
   leagueName: string | null
   matchDate: string
   status: string | null
+  homeTeamId: string | null
+  awayTeamId: string | null
+  homeTeamName: string
+  awayTeamName: string
+  homeLogoUrl: string | null
+  awayLogoUrl: string | null
+  homeScore: number | null
+  awayScore: number | null
+}
+
+export type PrivateTournamentPredictionDetail = {
+  predictionId: string
+  matchId: string
+  matchDate: string
+  status: string | null
+  homeTeamName: string
+  awayTeamName: string
+  homeLogoUrl: string | null
+  awayLogoUrl: string | null
+  predictedHomeScore: number
+  predictedAwayScore: number
+  realHomeScore: number | null
+  realAwayScore: number | null
+  points: number | null
+  exactHit: boolean
+  partialHit: boolean
+  scoreCalculated: boolean
 }
 
 export type PrivateTournamentRankingRow = {
@@ -127,6 +174,7 @@ export type PrivateTournamentRankingRow = {
   exactHits: number
   partialHits: number
   playedPredictions: number
+  predictions: PrivateTournamentPredictionDetail[]
 }
 
 export type PrivateTournamentRoundRanking = {
@@ -370,7 +418,7 @@ async function fetchScoresByUserIds(userIds: string[]) {
   for (const chunk of chunkArray(uniqueUserIds, 100)) {
     const { data, error } = await supabase
       .from('prediction_scores')
-      .select('user_id, match_id, points, exact_hit, partial_hit')
+      .select('prediction_id, user_id, match_id, points, exact_hit, partial_hit')
       .in('user_id', chunk)
 
     throwIfDatabaseError(error, 'No se pudo calcular el ranking privado.')
@@ -378,6 +426,140 @@ async function fetchScoresByUserIds(userIds: string[]) {
   }
 
   return scores
+}
+
+async function fetchPredictionsByUserIds(userIds: string[]) {
+  const predictions: PredictionRow[] = []
+  const uniqueUserIds = [...new Set(userIds)].filter(Boolean)
+
+  if (!uniqueUserIds.length) return predictions
+
+  const supabase = getSupabaseAdminClient()
+
+  for (const chunk of chunkArray(uniqueUserIds, 100)) {
+    const { data, error } = await supabase
+      .from('predictions')
+      .select('id, user_id, match_id, predicted_home_score, predicted_away_score')
+      .in('user_id', chunk)
+
+    throwIfDatabaseError(error, 'No se pudieron leer los pronósticos privados.')
+    predictions.push(...((data ?? []) as PredictionRow[]))
+  }
+
+  return predictions
+}
+
+async function fetchLeaguesByIds(leagueIds: string[]) {
+  const leaguesById = new Map<string, LeagueRow>()
+  const uniqueLeagueIds = [...new Set(leagueIds.filter(Boolean))]
+  const supabase = getSupabaseAdminClient()
+
+  for (const chunk of chunkArray(uniqueLeagueIds, 100)) {
+    const { data, error } = await supabase
+      .from('leagues')
+      .select('id, external_id, name')
+      .in('id', chunk)
+
+    throwIfDatabaseError(error, 'No se pudieron leer las ligas del Prode.')
+
+    for (const league of (data ?? []) as LeagueRow[]) {
+      leaguesById.set(String(league.id), league)
+    }
+  }
+
+  return leaguesById
+}
+
+async function fetchTeamsByIds(teamIds: string[]) {
+  const teamsById = new Map<string, TeamRow>()
+  const uniqueTeamIds = [...new Set(teamIds.filter(Boolean))]
+  const supabase = getSupabaseAdminClient()
+
+  for (const chunk of chunkArray(uniqueTeamIds, 100)) {
+    const { data, error } = await supabase
+      .from('teams')
+      .select('id, name, logo_url')
+      .in('id', chunk)
+
+    throwIfDatabaseError(error, 'No se pudieron leer los equipos del Prode.')
+
+    for (const team of (data ?? []) as TeamRow[]) {
+      teamsById.set(String(team.id), team)
+    }
+  }
+
+  return teamsById
+}
+
+function parseNumericId(value: string | null) {
+  if (value === null) return null
+
+  const parsed = Number(value)
+
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+async function buildMatchRoundInfoMap(
+  matches: MatchRoundRow[],
+  fallbackLeague: {
+    leagueExternalIdText?: string | null
+    leagueName?: string | null
+  } = {}
+) {
+  const leagueIds = [
+    ...new Set(matches.map((match) => match.league_id).filter(Boolean).map((id) => String(id))),
+  ]
+  const teamIds = [
+    ...new Set(
+      matches
+        .flatMap((match) => [match.home_team_id, match.away_team_id])
+        .filter(Boolean)
+        .map((id) => String(id))
+    ),
+  ]
+  const [leaguesById, teamsById] = await Promise.all([
+    fetchLeaguesByIds(leagueIds),
+    fetchTeamsByIds(teamIds),
+  ])
+
+  return new Map(
+    matches.map((match) => {
+      const league = match.league_id ? leaguesById.get(String(match.league_id)) : null
+      const homeTeam = match.home_team_id ? teamsById.get(String(match.home_team_id)) : null
+      const awayTeam = match.away_team_id ? teamsById.get(String(match.away_team_id)) : null
+      const leagueExternalIdText =
+        league?.external_id === null || league?.external_id === undefined
+          ? fallbackLeague.leagueExternalIdText ?? null
+          : String(league.external_id)
+
+      return [
+        String(match.id),
+        {
+          id: String(match.id),
+          round: match.round === null || match.round === undefined ? null : String(match.round),
+          leagueExternalId: parseNumericId(leagueExternalIdText),
+          leagueExternalIdText,
+          leagueName: league?.name ?? fallbackLeague.leagueName ?? null,
+          matchDate: match.match_date,
+          status: match.status,
+          homeTeamId:
+            match.home_team_id === null || match.home_team_id === undefined
+              ? null
+              : String(match.home_team_id),
+          awayTeamId:
+            match.away_team_id === null || match.away_team_id === undefined
+              ? null
+              : String(match.away_team_id),
+          homeTeamName: homeTeam?.name?.trim() || 'Local',
+          awayTeamName: awayTeam?.name?.trim() || 'Visitante',
+          homeLogoUrl: homeTeam?.logo_url ?? null,
+          awayLogoUrl: awayTeam?.logo_url ?? null,
+          homeScore: match.home_score,
+          awayScore: match.away_score,
+        },
+      ] as const
+    })
+  )
 }
 
 async function fetchMatchRoundInfo(matchIds: Array<string | number | null>) {
@@ -390,57 +572,14 @@ async function fetchMatchRoundInfo(matchIds: Array<string | number | null>) {
   for (const chunk of chunkArray(uniqueMatchIds, 100)) {
     const { data, error } = await supabase
       .from('matches')
-      .select('id, round, league_id, match_date, status')
+      .select('id, round, league_id, match_date, status, home_team_id, away_team_id, home_score, away_score')
       .in('id', chunk)
 
     throwIfDatabaseError(error, 'No se pudieron leer las fechas del Prode.')
     matches.push(...((data ?? []) as MatchRoundRow[]))
   }
 
-  const leagueIds = [
-    ...new Set(matches.map((match) => match.league_id).filter(Boolean).map((id) => String(id))),
-  ]
-  const leaguesById = new Map<string, LeagueRow>()
-
-  if (leagueIds.length) {
-    for (const chunk of chunkArray(leagueIds, 100)) {
-      const { data, error } = await supabase
-        .from('leagues')
-        .select('id, external_id, name')
-        .in('id', chunk)
-
-      throwIfDatabaseError(error, 'No se pudieron leer las ligas del Prode.')
-
-      for (const league of (data ?? []) as LeagueRow[]) {
-        leaguesById.set(String(league.id), league)
-      }
-    }
-  }
-
-  return new Map(
-    matches.map((match) => {
-      const league = match.league_id ? leaguesById.get(String(match.league_id)) : null
-
-      return [
-        String(match.id),
-        {
-          id: String(match.id),
-          round: match.round === null || match.round === undefined ? null : String(match.round),
-          leagueExternalId:
-            league?.external_id === null || league?.external_id === undefined
-              ? null
-              : Number(league.external_id),
-          leagueExternalIdText:
-            league?.external_id === null || league?.external_id === undefined
-              ? null
-              : String(league.external_id),
-          leagueName: league?.name ?? null,
-          matchDate: match.match_date,
-          status: match.status,
-        },
-      ] as const
-    })
-  )
+  return buildMatchRoundInfoMap(matches)
 }
 
 async function fetchTournamentAvailableMatches(tournament: TournamentRow, members: MemberRow[]) {
@@ -469,7 +608,7 @@ async function fetchTournamentAvailableMatches(tournament: TournamentRow, member
   }, null)
   const query = supabase
     .from('matches')
-    .select('id, round, league_id, match_date, status')
+    .select('id, round, league_id, match_date, status, home_team_id, away_team_id, home_score, away_score')
     .in('league_id', leagueIds)
     .order('match_date', { ascending: true })
 
@@ -481,20 +620,10 @@ async function fetchTournamentAvailableMatches(tournament: TournamentRow, member
 
   throwIfDatabaseError(error, 'No se pudieron leer las fechas del torneo privado.')
 
-  return new Map(
-    ((data ?? []) as MatchRoundRow[]).map((match) => [
-      String(match.id),
-      {
-        id: String(match.id),
-        round: match.round === null || match.round === undefined ? null : String(match.round),
-        leagueExternalId: Number(leagueExternalId),
-        leagueExternalIdText: leagueExternalId,
-        leagueName,
-        matchDate: match.match_date,
-        status: match.status,
-      },
-    ])
-  )
+  return buildMatchRoundInfoMap((data ?? []) as MatchRoundRow[], {
+    leagueExternalIdText: leagueExternalId,
+    leagueName,
+  })
 }
 
 async function resolvePrivateTournamentLeague(leagueExternalId: string) {
@@ -555,6 +684,116 @@ function filterScoresForTournament(
   })
 }
 
+function getPredictionMatchId(prediction: PredictionRow) {
+  return prediction.match_id === null || prediction.match_id === undefined
+    ? null
+    : String(prediction.match_id)
+}
+
+function getScoreMatchId(score: PredictionScoreRow) {
+  return score.match_id === null || score.match_id === undefined
+    ? null
+    : String(score.match_id)
+}
+
+function getUserMatchKey(userId: string, matchId: string) {
+  return `${userId}:${matchId}`
+}
+
+function filterPredictionsForTournament(
+  tournament: TournamentRow,
+  members: MemberRow[],
+  predictions: PredictionRow[],
+  matchesById: Map<string, MatchRoundInfo>
+) {
+  const memberByUserId = new Map(members.map((member) => [member.user_id, member]))
+  const leagueExternalId = getTournamentLeagueExternalId(tournament)
+  const now = new Date()
+
+  return predictions.filter((prediction) => {
+    const member = memberByUserId.get(prediction.user_id)
+    const matchId = getPredictionMatchId(prediction)
+    const match = matchId ? matchesById.get(matchId) : null
+
+    if (!member || !match) return false
+    if (match.leagueExternalIdText !== leagueExternalId) return false
+    if (!isPredictionLocked(match.matchDate, match.status ?? 'scheduled', now)) return false
+
+    return new Date(match.matchDate).getTime() >= new Date(member.joined_at).getTime()
+  })
+}
+
+function buildPredictionDetailsByUserId(
+  predictions: PredictionRow[],
+  scores: PredictionScoreRow[],
+  matchesById: Map<string, MatchRoundInfo>
+) {
+  const scoresByPredictionId = new Map(
+    scores
+      .filter((score) => score.prediction_id)
+      .map((score) => [String(score.prediction_id), score])
+  )
+  const scoresByUserMatch = new Map<string, PredictionScoreRow>()
+
+  for (const score of scores) {
+    const matchId = getScoreMatchId(score)
+
+    if (matchId) {
+      scoresByUserMatch.set(getUserMatchKey(score.user_id, matchId), score)
+    }
+  }
+
+  const detailsByUserId = new Map<string, PrivateTournamentPredictionDetail[]>()
+
+  for (const prediction of predictions) {
+    const matchId = getPredictionMatchId(prediction)
+    const match = matchId ? matchesById.get(matchId) : null
+
+    if (!matchId || !match) continue
+
+    const score =
+      scoresByPredictionId.get(prediction.id) ??
+      scoresByUserMatch.get(getUserMatchKey(prediction.user_id, matchId)) ??
+      null
+    const current = detailsByUserId.get(prediction.user_id) ?? []
+
+    current.push({
+      predictionId: prediction.id,
+      matchId,
+      matchDate: match.matchDate,
+      status: match.status,
+      homeTeamName: match.homeTeamName,
+      awayTeamName: match.awayTeamName,
+      homeLogoUrl: match.homeLogoUrl,
+      awayLogoUrl: match.awayLogoUrl,
+      predictedHomeScore: prediction.predicted_home_score,
+      predictedAwayScore: prediction.predicted_away_score,
+      realHomeScore: match.homeScore,
+      realAwayScore: match.awayScore,
+      points: score?.points ?? null,
+      exactHit: Boolean(score?.exact_hit),
+      partialHit: Boolean(score?.partial_hit),
+      scoreCalculated: Boolean(score),
+    })
+    detailsByUserId.set(prediction.user_id, current)
+  }
+
+  for (const details of detailsByUserId.values()) {
+    details.sort((a, b) => {
+      const dateSort = new Date(a.matchDate).getTime() - new Date(b.matchDate).getTime()
+
+      if (dateSort !== 0) return dateSort
+      return `${a.homeTeamName} ${a.awayTeamName}`.localeCompare(
+        `${b.homeTeamName} ${b.awayTeamName}`,
+        'es-AR',
+        { sensitivity: 'base' }
+      )
+    })
+  }
+
+  return detailsByUserId
+}
+
 function buildRankings(
   members: MemberRow[],
   profilesById: Map<string, ProfileRow>,
@@ -608,6 +847,7 @@ function buildRankings(
         userId: member.user_id,
         username: getDisplayName(member.user_id, profilesById),
         ...totals,
+        predictions: [],
       }
     })
 
@@ -630,7 +870,8 @@ function buildRoundRankings(
   profilesById: Map<string, ProfileRow>,
   scores: PredictionScoreRow[],
   matchesById: Map<string, MatchRoundInfo>,
-  availableMatchesById: Map<string, MatchRoundInfo> = matchesById
+  availableMatchesById: Map<string, MatchRoundInfo> = matchesById,
+  predictions: PredictionRow[] = []
 ) {
   const roundBuckets = new Map<
     string,
@@ -641,6 +882,7 @@ function buildRoundRankings(
       leagueName: string
       matchIds: Set<string>
       scores: PredictionScoreRow[]
+      predictions: PredictionRow[]
     }
   >()
 
@@ -663,6 +905,7 @@ function buildRoundRankings(
       leagueName,
       matchIds: new Set<string>(),
       scores: [],
+      predictions: [],
     }
 
     current.matchIds.add(match.id)
@@ -676,13 +919,19 @@ function buildRoundRankings(
   }
 
   for (const score of scores) {
-    const matchId = score.match_id === null || score.match_id === undefined
-      ? null
-      : String(score.match_id)
+    const matchId = getScoreMatchId(score)
     const match = matchId ? matchesById.get(matchId) : null
     const bucket = match ? ensureRoundBucket(match) : null
 
     bucket?.scores.push(score)
+  }
+
+  for (const prediction of predictions) {
+    const matchId = getPredictionMatchId(prediction)
+    const match = matchId ? matchesById.get(matchId) : null
+    const bucket = match ? ensureRoundBucket(match) : null
+
+    bucket?.predictions.push(prediction)
   }
 
   return [...roundBuckets.values()]
@@ -695,12 +944,23 @@ function buildRoundRankings(
       if (a.sortValue !== b.sortValue) return a.sortValue - b.sortValue
       return a.label.localeCompare(b.label, 'es-AR', { numeric: true })
     })
-    .map((bucket) => ({
-      value: bucket.value,
-      label: bucket.label,
-      matchCount: bucket.matchIds.size,
-      ranking: buildRankingForMembers(members, profilesById, bucket.scores),
-    }))
+    .map((bucket) => {
+      const detailsByUserId = buildPredictionDetailsByUserId(
+        bucket.predictions,
+        bucket.scores,
+        matchesById
+      )
+
+      return {
+        value: bucket.value,
+        label: bucket.label,
+        matchCount: bucket.matchIds.size,
+        ranking: buildRankingForMembers(members, profilesById, bucket.scores).map((row) => ({
+          ...row,
+          predictions: detailsByUserId.get(row.userId) ?? [],
+        })),
+      }
+    })
 }
 
 async function fetchTournamentById(id: string) {
@@ -1020,20 +1280,36 @@ export async function getPrivateTournamentDetail(userId: string, tournamentId: s
     ...members.map((member) => member.user_id),
     ...pendingRequests.map((request) => request.user_id),
   ])
-  const scores = await fetchScoresByUserIds(members.map((member) => member.user_id))
-  const [scoreMatchesById, availableMatchesById] = await Promise.all([
+  const userIds = members.map((member) => member.user_id)
+  const [scores, predictions] = await Promise.all([
+    fetchScoresByUserIds(userIds),
+    fetchPredictionsByUserIds(userIds),
+  ])
+  const [scoreMatchesById, predictionMatchesById, availableMatchesById] = await Promise.all([
     fetchMatchRoundInfo(scores.map((score) => score.match_id)),
+    fetchMatchRoundInfo(predictions.map((prediction) => prediction.match_id)),
     fetchTournamentAvailableMatches(tournament, members),
   ])
-  const matchesById = new Map([...availableMatchesById, ...scoreMatchesById])
+  const matchesById = new Map([
+    ...availableMatchesById,
+    ...predictionMatchesById,
+    ...scoreMatchesById,
+  ])
   const tournamentScores = filterScoresForTournament(tournament, members, scores, matchesById)
+  const tournamentPredictions = filterPredictionsForTournament(
+    tournament,
+    members,
+    predictions,
+    matchesById
+  )
   const ranking = buildRankings(members, profilesById, tournamentScores).get(tournamentId) ?? []
   const roundRankings = buildRoundRankings(
     members,
     profilesById,
     tournamentScores,
     matchesById,
-    availableMatchesById
+    availableMatchesById,
+    tournamentPredictions
   )
 
   return {
