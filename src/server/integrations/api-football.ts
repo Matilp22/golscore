@@ -927,6 +927,13 @@ function applyAdminCaptainOverridesToLineups(
   })
 }
 
+function hasAdminCaptainOverrides(overrides: Record<string, unknown> | null) {
+  return Boolean(
+    readAdminCaptainOverride(overrides, 'home') ||
+    readAdminCaptainOverride(overrides, 'away')
+  )
+}
+
 function getHexColorFromCachedValue(value: unknown) {
   if (typeof value !== 'string') return null
 
@@ -2788,6 +2795,10 @@ type CachedFixtureSummary = {
   broadcastChannel?: string | null
   broadcastLogoUrl?: string | null
   teamKitColors?: MatchTeamKitColors | null
+  captains?: {
+    home: AdminCaptainOverride | null
+    away: AdminCaptainOverride | null
+  } | null
 }
 
 type AdminMatchDetailOverrideRow = {
@@ -2924,6 +2935,10 @@ function mapCachedFixtureSummaryPayload(payload: unknown): CachedFixtureSummary 
       getStringFromCachedValue(row.broadcastLogoUrl) ??
       getStringFromCachedValue(row.broadcast_logo_url),
     teamKitColors: getCachedTeamKitColors(row),
+    captains: {
+      home: readAdminCaptainOverride(row, 'home'),
+      away: readAdminCaptainOverride(row, 'away'),
+    },
   }
 }
 
@@ -3332,6 +3347,13 @@ export async function getMatchDetail(id: number) {
   const cachedFixture = readCachedFixturePayload(detailCache?.fixture_payload)
   const fixture = mapStoredMatchToFixture(match, league, teamsById, fixtureExternalId, fixtureSummary, cachedFixture)
   const adminOverrideRecord = readAdminMatchOverridePayload(adminOverride)
+  const fixtureSummaryCaptainOverrideRecord =
+    fixtureSummary?.captains?.home || fixtureSummary?.captains?.away
+      ? { captains: fixtureSummary.captains }
+      : null
+  const captainOverrideRecord = hasAdminCaptainOverrides(adminOverrideRecord)
+    ? adminOverrideRecord
+    : fixtureSummaryCaptainOverrideRecord
   const adminBroadcastChannel = getStringFromCachedValue(adminOverrideRecord?.tv)
   const adminBroadcastLogoUrl = getStringFromCachedValue(adminOverrideRecord?.broadcastLogoUrl)
   const adminTeamKitColors = adminOverrideRecord ? getCachedTeamKitColors(adminOverrideRecord) : null
@@ -3358,7 +3380,7 @@ export async function getMatchDetail(id: number) {
   const lineups = applyAdminCaptainOverridesToLineups(
     readCachedArray<MatchLineup>(detailCache?.lineups),
     fixture,
-    adminOverrideRecord
+    captainOverrideRecord
   )
 
   if (process.env.NODE_ENV === 'development') {

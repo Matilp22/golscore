@@ -565,6 +565,12 @@ function parseEditableMatch(
   const normalizedAwayKitColors = asRecord(normalizedKitColors?.away)
   const detailHomeKitColors = asRecord(detailKitColors?.home)
   const detailAwayKitColors = asRecord(detailKitColors?.away)
+  const normalizedCaptains = asRecord(normalized?.captains)
+  const detailCaptains = asRecord(detail?.captains)
+  const normalizedHomeCaptain = asRecord(normalizedCaptains?.home)
+  const normalizedAwayCaptain = asRecord(normalizedCaptains?.away)
+  const detailHomeCaptain = asRecord(detailCaptains?.home)
+  const detailAwayCaptain = asRecord(detailCaptains?.away)
   const resolvedHomeTeam = resolveTextOverride(overrides, 'homeTeam', readText(normalized, 'home'), readText(normalized, 'homeTeam'), readText(detailHome, 'name'), readText(rawHome, 'name'))
   const resolvedAwayTeam = resolveTextOverride(overrides, 'awayTeam', readText(normalized, 'away'), readText(normalized, 'awayTeam'), readText(detailAway, 'name'), readText(rawAway, 'name'))
   const detailLineups = readAdminLineups(detailCacheLineups, detail?.lineups, normalized?.lineups)
@@ -572,10 +578,38 @@ function parseEditableMatch(
   const awayLineup = findAdminLineup(detailLineups, resolvedAwayTeam, 1)
   const homeApiCaptain = getAdminCaptainFromLineup(homeLineup)
   const awayApiCaptain = getAdminCaptainFromLineup(awayLineup)
-  const homeCaptainPlayerId = resolveTextOverride(overrides, 'homeCaptainPlayerId', homeApiCaptain?.playerId)
-  const homeCaptainPlayerName = resolveTextOverride(overrides, 'homeCaptainPlayerName', homeApiCaptain?.playerName)
-  const awayCaptainPlayerId = resolveTextOverride(overrides, 'awayCaptainPlayerId', awayApiCaptain?.playerId)
-  const awayCaptainPlayerName = resolveTextOverride(overrides, 'awayCaptainPlayerName', awayApiCaptain?.playerName)
+  const homeCaptainPlayerId = resolveTextOverride(
+    overrides,
+    'homeCaptainPlayerId',
+    readText(normalized, 'homeCaptainPlayerId'),
+    readText(normalizedHomeCaptain, 'playerId'),
+    readText(detailHomeCaptain, 'playerId'),
+    homeApiCaptain?.playerId
+  )
+  const homeCaptainPlayerName = resolveTextOverride(
+    overrides,
+    'homeCaptainPlayerName',
+    readText(normalized, 'homeCaptainPlayerName'),
+    readText(normalizedHomeCaptain, 'playerName'),
+    readText(detailHomeCaptain, 'playerName'),
+    homeApiCaptain?.playerName
+  )
+  const awayCaptainPlayerId = resolveTextOverride(
+    overrides,
+    'awayCaptainPlayerId',
+    readText(normalized, 'awayCaptainPlayerId'),
+    readText(normalizedAwayCaptain, 'playerId'),
+    readText(detailAwayCaptain, 'playerId'),
+    awayApiCaptain?.playerId
+  )
+  const awayCaptainPlayerName = resolveTextOverride(
+    overrides,
+    'awayCaptainPlayerName',
+    readText(normalized, 'awayCaptainPlayerName'),
+    readText(normalizedAwayCaptain, 'playerName'),
+    readText(detailAwayCaptain, 'playerName'),
+    awayApiCaptain?.playerName
+  )
 
   return {
     ...cached,
