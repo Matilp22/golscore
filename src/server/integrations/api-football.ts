@@ -431,6 +431,14 @@ export type TeamSquadPlayer = {
   age?: number
   number?: number
   position?: string
+  height?: string
+  clubExternalId?: number
+  clubName?: string
+  clubLogo?: string
+  club_logo_url?: string
+  clubLogoUrl?: string
+  profile_last_synced_at?: string
+  profileLastSyncedAt?: string
   photo?: string
   photo_url?: string
   photoUrl?: string
@@ -2178,6 +2186,11 @@ type StoredPlayerRow = {
   team_external_id: number | string | null
   number: number | null
   position: string | null
+  height?: string | null
+  club_external_id?: number | string | null
+  club_name?: string | null
+  club_logo_url?: string | null
+  profile_last_synced_at?: string | null
   photo_url: string | null
 }
 
@@ -2219,6 +2232,39 @@ type ApiFootballSquadRow = {
   }
   players?: ApiFootballSquadPlayer[]
 }
+
+type ApiFootballPlayerDetailRow = {
+  player?: {
+    id?: number
+    name?: string
+    age?: number | null
+    height?: string | null
+    photo?: string | null
+  }
+  statistics?: Array<{
+    team?: {
+      id?: number
+      name?: string | null
+      logo?: string | null
+    }
+    league?: {
+      id?: number
+      name?: string | null
+      country?: string | null
+      season?: number | null
+    }
+  }>
+}
+
+type SquadPlayerProfile = Pick<
+  TeamSquadPlayer,
+  'age' | 'height' | 'clubExternalId' | 'clubName' | 'clubLogo' | 'club_logo_url' | 'clubLogoUrl' | 'photo' | 'photo_url' | 'photoUrl'
+>
+
+const STORED_PLAYER_BASE_SELECT =
+  'id, external_id, name, team_id, team_external_id, number, position, photo_url'
+const STORED_PLAYER_PROFILE_SELECT =
+  `${STORED_PLAYER_BASE_SELECT}, height, club_external_id, club_name, club_logo_url, profile_last_synced_at`
 
 const KNOWN_TOURNAMENT_RESOLUTIONS: ResolvedTournament[] = [
   { leagueId: 128, season: 2026, name: 'Liga Profesional Argentina', country: 'Argentina' },
@@ -3194,9 +3240,61 @@ async function fetchStoredPlayersByTeam(
 ) {
   if (!team?.id && !externalId) return []
 
+  let response = await selectStoredPlayersByTeam(
+    supabase,
+    team,
+    externalId,
+    STORED_PLAYER_PROFILE_SELECT
+  )
+
+  if (response.error && isStoredPlayerReadFallbackError(response.error)) {
+    response = await selectStoredPlayersByTeam(
+      supabase,
+      team,
+      externalId,
+      STORED_PLAYER_BASE_SELECT
+    )
+  }
+
+  if (response.error) {
+    if (isStoredPlayerReadFallbackError(response.error)) return []
+    throw response.error
+  }
+
+  const rows = (response.data ?? []) as unknown as StoredPlayerRow[]
+
+  if (rows.length || !team?.id) return rows
+
+  let fallback = await selectStoredPlayersByTeam(
+    supabase,
+    null,
+    externalId,
+    STORED_PLAYER_PROFILE_SELECT
+  )
+
+  if (fallback.error && isStoredPlayerReadFallbackError(fallback.error)) {
+    fallback = await selectStoredPlayersByTeam(
+      supabase,
+      null,
+      externalId,
+      STORED_PLAYER_BASE_SELECT
+    )
+  }
+
+  if (fallback.error) return []
+
+  return (fallback.data ?? []) as unknown as StoredPlayerRow[]
+}
+
+function selectStoredPlayersByTeam(
+  supabase: ReturnType<typeof getSupabaseAdminClient>,
+  team: StoredTeamRow | null,
+  externalId: number,
+  columns: string
+) {
   let query = supabase
     .from('players')
-    .select('id, external_id, name, team_id, team_external_id, number, position, photo_url')
+    .select(columns)
     .order('position', { ascending: true, nullsFirst: false })
     .order('number', { ascending: true, nullsFirst: false })
     .order('name', { ascending: true })
@@ -3207,37 +3305,23 @@ async function fetchStoredPlayersByTeam(
     query = query.eq('team_external_id', String(externalId))
   }
 
-  const response = await query.limit(80)
+  return query.limit(80)
+}
 
-  if (response.error) {
-    const message = response.error.message.toLowerCase()
-    const missingPlayersTable =
-      response.error.code === '42P01' ||
-      response.error.code === 'PGRST205' ||
-      response.error.code === '42703' ||
-      message.includes('players') ||
-      message.includes('schema cache')
+function isStoredPlayerReadFallbackError(error: { code?: string; message?: string }) {
+  const message = (error.message ?? '').toLowerCase()
 
-    if (missingPlayersTable) return []
-    throw response.error
-  }
-
-  const rows = (response.data ?? []) as StoredPlayerRow[]
-
-  if (rows.length || !team?.id) return rows
-
-  const fallback = await supabase
-    .from('players')
-    .select('id, external_id, name, team_id, team_external_id, number, position, photo_url')
-    .eq('team_external_id', String(externalId))
-    .order('position', { ascending: true, nullsFirst: false })
-    .order('number', { ascending: true, nullsFirst: false })
-    .order('name', { ascending: true })
-    .limit(80)
-
-  if (fallback.error) return []
-
-  return (fallback.data ?? []) as StoredPlayerRow[]
+  return (
+    error.code === '42P01' ||
+    error.code === 'PGRST205' ||
+    error.code === '42703' ||
+    error.code === 'PGRST204' ||
+    message.includes('players') ||
+    message.includes('schema cache') ||
+    message.includes('height') ||
+    message.includes('club_') ||
+    message.includes('profile_last_synced_at')
+  )
 }
 
 async function fetchApiTeamDetailSafe(externalId: number) {
@@ -3284,13 +3368,23 @@ async function fetchApiTeamSquadSafe(externalId: number) {
 
 function mapStoredPlayerToSquadPlayer(player: StoredPlayerRow): TeamSquadPlayer {
   const playerExternalId = toFiniteNumber(player.external_id) ?? undefined
+  const clubExternalId = toFiniteNumber(player.club_external_id)
   const photoUrl = player.photo_url ?? undefined
+  const clubLogoUrl = player.club_logo_url ?? undefined
 
   return {
     id: playerExternalId,
     name: player.name ?? 'Jugador',
     number: player.number ?? undefined,
     position: player.position ?? undefined,
+    height: player.height ?? undefined,
+    clubExternalId: clubExternalId ?? undefined,
+    clubName: player.club_name ?? undefined,
+    clubLogo: clubLogoUrl,
+    club_logo_url: clubLogoUrl,
+    clubLogoUrl,
+    profile_last_synced_at: player.profile_last_synced_at ?? undefined,
+    profileLastSyncedAt: player.profile_last_synced_at ?? undefined,
     photo: photoUrl,
     photo_url: photoUrl,
     photoUrl,
@@ -3343,11 +3437,20 @@ function mergeSquadPlayers(
       ...player,
       id: previous?.id ?? player.id,
       name: previous?.name || player.name,
+      age: previous?.age ?? player.age,
       number: previous?.number ?? player.number,
       position: previous?.position ?? player.position,
+      height: previous?.height ?? player.height,
+      clubExternalId: previous?.clubExternalId ?? player.clubExternalId,
+      clubName: previous?.clubName ?? player.clubName,
+      clubLogo: previous?.clubLogo ?? player.clubLogo,
+      club_logo_url: previous?.club_logo_url ?? player.club_logo_url,
+      clubLogoUrl: previous?.clubLogoUrl ?? player.clubLogoUrl,
       photo: previous?.photo ?? player.photo,
       photo_url: previous?.photo_url ?? player.photo_url,
       photoUrl: previous?.photoUrl ?? player.photoUrl,
+      profile_last_synced_at: previous?.profile_last_synced_at ?? player.profile_last_synced_at,
+      profileLastSyncedAt: previous?.profileLastSyncedAt ?? player.profileLastSyncedAt,
     })
   }
 
@@ -3357,6 +3460,269 @@ function mergeSquadPlayers(
 
     return (a.number ?? 999) - (b.number ?? 999) ||
       String(a.name ?? '').localeCompare(String(b.name ?? ''))
+  })
+}
+
+function getSquadProfileLookupSeasons() {
+  const currentYear = new Date().getFullYear()
+
+  return [currentYear, currentYear - 1].filter((season, index, seasons) =>
+    season > 2000 && seasons.indexOf(season) === index
+  )
+}
+
+function getTrimmedValue(value?: string | null) {
+  const trimmed = value?.trim()
+
+  return trimmed || undefined
+}
+
+function isFreshPlayerProfileSync(player: TeamSquadPlayer) {
+  const value = player.profileLastSyncedAt ?? player.profile_last_synced_at
+  if (!value) return false
+
+  const timestamp = new Date(value).getTime()
+  if (!Number.isFinite(timestamp)) return false
+
+  const sevenDays = 7 * 24 * 60 * 60 * 1000
+  return Date.now() - timestamp < sevenDays
+}
+
+function needsNationalSquadProfile(player: TeamSquadPlayer) {
+  return Boolean(player.id && (!player.height || !player.clubName) && !isFreshPlayerProfileSync(player))
+}
+
+function pickClubFromPlayerStatistics(
+  rows: ApiFootballPlayerDetailRow[],
+  nationalTeamExternalId: number
+) {
+  for (const row of rows) {
+    const club = row.statistics?.find((stat) => {
+      const teamId = toFiniteNumber(stat.team?.id)
+      const teamName = getTrimmedValue(stat.team?.name)
+
+      return Boolean(teamId && teamName && teamId !== nationalTeamExternalId)
+    })?.team
+
+    if (club?.id && club.name) return club
+  }
+
+  return null
+}
+
+function mapApiPlayerRowsToSquadProfile(
+  rows: ApiFootballPlayerDetailRow[],
+  nationalTeamExternalId: number
+): SquadPlayerProfile | null {
+  if (!rows.length) return null
+
+  const profile: SquadPlayerProfile = {}
+  const player = rows.find((row) => row.player)?.player
+  const club = pickClubFromPlayerStatistics(rows, nationalTeamExternalId)
+  const clubLogoUrl = getTrimmedValue(club?.logo)
+
+  if (player?.age) profile.age = player.age
+  profile.height = getTrimmedValue(player?.height)
+  profile.photo = getTrimmedValue(player?.photo)
+  profile.photo_url = profile.photo
+  profile.photoUrl = profile.photo
+
+  if (club?.id) profile.clubExternalId = club.id
+  profile.clubName = getTrimmedValue(club?.name)
+  profile.clubLogo = clubLogoUrl
+  profile.club_logo_url = clubLogoUrl
+  profile.clubLogoUrl = clubLogoUrl
+
+  return Object.values(profile).some(Boolean) ? profile : null
+}
+
+function mergeSquadPlayerProfile(
+  player: TeamSquadPlayer,
+  profile: SquadPlayerProfile | null,
+  profileLastSyncedAt: string
+): TeamSquadPlayer {
+  if (!profile) {
+    return {
+      ...player,
+      profile_last_synced_at: profileLastSyncedAt,
+      profileLastSyncedAt,
+    }
+  }
+
+  return {
+    ...player,
+    age: player.age ?? profile.age,
+    height: player.height ?? profile.height,
+    clubExternalId: player.clubExternalId ?? profile.clubExternalId,
+    clubName: player.clubName ?? profile.clubName,
+    clubLogo: player.clubLogo ?? profile.clubLogo,
+    club_logo_url: player.club_logo_url ?? profile.club_logo_url,
+    clubLogoUrl: player.clubLogoUrl ?? profile.clubLogoUrl,
+    photo: player.photo ?? profile.photo,
+    photo_url: player.photo_url ?? profile.photo_url,
+    photoUrl: player.photoUrl ?? profile.photoUrl,
+    profile_last_synced_at: profileLastSyncedAt,
+    profileLastSyncedAt,
+  }
+}
+
+async function fetchApiSquadPlayerProfileSafe(
+  playerExternalId: number,
+  nationalTeamExternalId: number
+) {
+  let mergedProfile: SquadPlayerProfile = {}
+
+  for (const season of getSquadProfileLookupSeasons()) {
+    try {
+      const { payload } = await withTimeout(
+        requestFootballApi<ApiFootballPlayerDetailRow[]>(
+          '/players',
+          {
+            id: playerExternalId,
+            season,
+          },
+          {
+            logContext:
+              `team-detail:${nationalTeamExternalId}:player:${playerExternalId}:${season}`,
+          }
+        ),
+        4500,
+        `API-Football player profile timeout ${playerExternalId}`
+      )
+      const profile = mapApiPlayerRowsToSquadProfile(
+        payload.response ?? [],
+        nationalTeamExternalId
+      )
+
+      if (!profile) continue
+
+      mergedProfile = {
+        ...mergedProfile,
+        age: mergedProfile.age ?? profile.age,
+        height: mergedProfile.height ?? profile.height,
+        clubExternalId: mergedProfile.clubExternalId ?? profile.clubExternalId,
+        clubName: mergedProfile.clubName ?? profile.clubName,
+        clubLogo: mergedProfile.clubLogo ?? profile.clubLogo,
+        club_logo_url: mergedProfile.club_logo_url ?? profile.club_logo_url,
+        clubLogoUrl: mergedProfile.clubLogoUrl ?? profile.clubLogoUrl,
+        photo: mergedProfile.photo ?? profile.photo,
+        photo_url: mergedProfile.photo_url ?? profile.photo_url,
+        photoUrl: mergedProfile.photoUrl ?? profile.photoUrl,
+      }
+
+      if (mergedProfile.height && mergedProfile.clubName) break
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[team-detail-data] No se pudo enriquecer jugador del plantel.', {
+          playerExternalId,
+          season,
+          message: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
+  }
+
+  return Object.values(mergedProfile).some(Boolean) ? mergedProfile : null
+}
+
+async function persistNationalSquadPlayerProfiles(
+  supabase: ReturnType<typeof getSupabaseAdminClient>,
+  nationalTeamExternalId: number,
+  players: TeamSquadPlayer[],
+  profiles: Map<number, SquadPlayerProfile | null>,
+  profileLastSyncedAt: string
+) {
+  const rows = players
+    .filter((player) => player.id && profiles.has(player.id))
+    .map((player) => {
+      const profile = player.id ? profiles.get(player.id) ?? null : null
+      const clubExternalId = profile?.clubExternalId ?? player.clubExternalId
+      const clubLogoUrl =
+        profile?.clubLogoUrl ??
+        profile?.club_logo_url ??
+        profile?.clubLogo ??
+        player.clubLogoUrl ??
+        player.club_logo_url ??
+        player.clubLogo ??
+        null
+      const photoUrl = profile?.photoUrl ?? profile?.photo_url ?? profile?.photo ?? player.photoUrl ?? player.photo_url ?? player.photo ?? null
+
+      return {
+        external_id: String(player.id),
+        name: player.name || `Jugador ${player.id}`,
+        team_external_id: String(nationalTeamExternalId),
+        number: player.number ?? null,
+        position: player.position ?? null,
+        height: profile?.height ?? player.height ?? null,
+        club_external_id: clubExternalId ? String(clubExternalId) : null,
+        club_name: profile?.clubName ?? player.clubName ?? null,
+        club_logo_url: clubLogoUrl,
+        photo_url: photoUrl,
+        profile_last_synced_at: profileLastSyncedAt,
+        updated_at: profileLastSyncedAt,
+      }
+    })
+
+  if (!rows.length) return
+
+  const { error } = await supabase
+    .from('players')
+    .upsert(rows, { onConflict: 'external_id' })
+
+  if (error) throw error
+}
+
+async function enrichNationalSquadProfiles(
+  supabase: ReturnType<typeof getSupabaseAdminClient>,
+  players: TeamSquadPlayer[],
+  nationalTeamExternalId: number
+) {
+  if (!process.env.FOOTBALL_API_KEY) return players
+
+  const candidates = players.filter(needsNationalSquadProfile).slice(0, 32)
+  if (!candidates.length) return players
+
+  const profileLastSyncedAt = new Date().toISOString()
+  const profiles = new Map<number, SquadPlayerProfile | null>()
+
+  for (const group of chunkArray(candidates, 4)) {
+    const resolvedProfiles = await Promise.all(
+      group.map(async (player) => ({
+        playerId: player.id,
+        profile: player.id
+          ? await fetchApiSquadPlayerProfileSafe(player.id, nationalTeamExternalId)
+          : null,
+      }))
+    )
+
+    for (const resolvedProfile of resolvedProfiles) {
+      if (resolvedProfile.playerId) {
+        profiles.set(resolvedProfile.playerId, resolvedProfile.profile)
+      }
+    }
+  }
+
+  try {
+    await persistNationalSquadPlayerProfiles(
+      supabase,
+      nationalTeamExternalId,
+      players,
+      profiles,
+      profileLastSyncedAt
+    )
+  } catch (error) {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[team-detail-data] No se pudieron persistir perfiles del plantel.', {
+        teamExternalId: nationalTeamExternalId,
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  return players.map((player) => {
+    if (!player.id || !profiles.has(player.id)) return player
+
+    return mergeSquadPlayerProfile(player, profiles.get(player.id) ?? null, profileLastSyncedAt)
   })
 }
 
@@ -3401,10 +3767,19 @@ export async function getTeamDetail(id: number) {
     pickTeamLogoUrl(apiTeam?.logo, resolvedExternalId) ??
     undefined
   const apiSquadPlayers = (apiSquad?.players ?? []).map(mapApiPlayerToSquadPlayer)
-  const squadPlayers = mergeSquadPlayers(
+  let squadPlayers = mergeSquadPlayers(
     players.map(mapStoredPlayerToSquadPlayer),
     apiSquadPlayers
   )
+
+  if (apiTeam?.national) {
+    squadPlayers = await enrichNationalSquadProfiles(
+      supabase,
+      squadPlayers,
+      resolvedExternalId
+    )
+  }
+
   const resolvedTeamName = team?.name || apiTeam?.name || apiSquad?.team?.name || 'Equipo'
 
   if (process.env.NODE_ENV === 'development') {
@@ -3467,11 +3842,19 @@ export async function getPlayerDetail(
   void season
 
   const supabase = getSupabaseAdminClient()
-  const response = await supabase
+  let response = await supabase
     .from('players')
-    .select('id, external_id, name, team_id, team_external_id, number, position, photo_url')
+    .select(STORED_PLAYER_PROFILE_SELECT)
     .eq('external_id', String(id))
     .maybeSingle()
+
+  if (response.error && isStoredPlayerReadFallbackError(response.error)) {
+    response = await supabase
+      .from('players')
+      .select(STORED_PLAYER_BASE_SELECT)
+      .eq('external_id', String(id))
+      .maybeSingle()
+  }
 
   if (response.error) {
     const message = response.error.message.toLowerCase()
@@ -3491,24 +3874,33 @@ export async function getPlayerDetail(
 
   const playerExternalId = toFiniteNumber(player.external_id) ?? id
   const playerPhotoUrl = player.photo_url ?? undefined
-  const teamResponse = player.team_id
+  const preferredTeamExternalId = player.club_external_id ?? player.team_external_id
+  const teamResponse = player.club_external_id
     ? await supabase
+        .from('teams')
+        .select('id, external_id, name, logo_url')
+        .eq('external_id', String(player.club_external_id))
+        .maybeSingle()
+    : player.team_id
+      ? await supabase
         .from('teams')
         .select('id, external_id, name, logo_url')
         .eq('id', String(player.team_id))
         .maybeSingle()
-    : player.team_external_id
-      ? await supabase
-          .from('teams')
-          .select('id, external_id, name, logo_url')
-          .eq('external_id', String(player.team_external_id))
-          .maybeSingle()
-      : null
+      : player.team_external_id
+        ? await supabase
+            .from('teams')
+            .select('id, external_id, name, logo_url')
+            .eq('external_id', String(player.team_external_id))
+            .maybeSingle()
+        : null
   const storedTeam = teamResponse && !teamResponse.error
     ? (teamResponse.data as StoredTeamRow | null)
     : null
-  const teamExternalId = toFiniteNumber(storedTeam?.external_id ?? player.team_external_id)
-  const teamLogoUrl = pickTeamLogoUrl(storedTeam?.logo_url, teamExternalId) ?? undefined
+  const teamExternalId = toFiniteNumber(storedTeam?.external_id ?? preferredTeamExternalId)
+  const teamLogoUrl =
+    pickTeamLogoUrl(player.club_logo_url ?? storedTeam?.logo_url, teamExternalId) ??
+    undefined
   const leagueRows = leagueId
     ? await fetchStoredLeagueRowsByExternalId(leagueId, season).catch(() => [])
     : []
@@ -3521,14 +3913,15 @@ export async function getPlayerDetail(
     player: {
       id: playerExternalId,
       name: player.name || 'Jugador',
+      height: player.height ?? undefined,
       photo: playerPhotoUrl,
       photo_url: playerPhotoUrl,
       photoUrl: playerPhotoUrl,
     },
-    team: storedTeam
+    team: storedTeam || player.club_name || teamExternalId
       ? {
           id: teamExternalId ?? undefined,
-          name: storedTeam.name ?? undefined,
+          name: storedTeam?.name ?? player.club_name ?? undefined,
           logo: teamLogoUrl,
           logo_url: teamLogoUrl,
           logoUrl: teamLogoUrl,

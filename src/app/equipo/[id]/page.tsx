@@ -87,6 +87,56 @@ function translatePlayerPosition(position?: string) {
   return labels[normalizePlayerPosition(position)]
 }
 
+function formatPlayerHeight(value?: string) {
+  const normalized = value?.trim().toLowerCase()
+  if (!normalized) return null
+
+  const centimetersMatch = normalized.match(/(\d{2,3})(?:[.,]\d+)?\s*cm\b/)
+  if (centimetersMatch) {
+    return `${(Number(centimetersMatch[1]) / 100).toFixed(2).replace('.', ',')} m`
+  }
+
+  const metersMatch = normalized.match(/(\d+(?:[.,]\d+)?)\s*m\b/)
+  if (metersMatch) {
+    const meters = Number(metersMatch[1].replace(',', '.'))
+    return Number.isFinite(meters) ? `${meters.toFixed(2).replace('.', ',')} m` : value
+  }
+
+  const numeric = Number(normalized.replace(',', '.').replace(/[^\d.]/g, ''))
+  if (!Number.isFinite(numeric) || numeric <= 0) return value
+
+  const meters = numeric > 3 ? numeric / 100 : numeric
+  return `${meters.toFixed(2).replace('.', ',')} m`
+}
+
+function abbreviateClubName(value?: string) {
+  const name = value?.replace(/\s+/g, ' ').trim()
+  if (!name) return null
+
+  const replacements: Array<[RegExp, string]> = [
+    [/^F[uú]tbol Club\s+/i, 'FC '],
+    [/^Football Club\s+/i, 'FC '],
+    [/^Club de F[uú]tbol\s+/i, 'CF '],
+    [/^Club Atl[eé]tico\s+/i, 'CA '],
+    [/^Athletic Club\s+/i, 'AC '],
+    [/^Atl[eé]tico Club\s+/i, 'AC '],
+    [/^Association Sportive\s+/i, 'AS '],
+    [/^Associazione Calcio\s+/i, 'AC '],
+    [/^Real Club Deportivo\s+/i, 'RCD '],
+    [/^Sociedade Esportiva\s+/i, 'SE '],
+    [/^Sporting Clube de\s+/i, 'SC '],
+    [/^Sport Club\s+/i, 'SC '],
+    [/^Club Deportivo\s+/i, 'CD '],
+    [/^Unión Deportiva\s+/i, 'UD '],
+    [/^Union Deportiva\s+/i, 'UD '],
+  ]
+
+  return replacements.reduce(
+    (current, [pattern, replacement]) => current.replace(pattern, replacement),
+    name
+  )
+}
+
 function groupPlayersByPosition(players: TeamSquadPlayer[]) {
   const order = ['Goalkeeper', 'Defender', 'Midfielder', 'Attacker', 'Other']
   const labels: Record<string, string> = {
@@ -121,7 +171,17 @@ function TeamInfoRow({
   )
 }
 
-function PlayerCard({ player }: { player: TeamSquadPlayer }) {
+function PlayerCard({
+  player,
+  showExtendedInfo = false,
+}: {
+  player: TeamSquadPlayer
+  showExtendedInfo?: boolean
+}) {
+  const height = showExtendedInfo ? formatPlayerHeight(player.height) : null
+  const clubName = showExtendedInfo ? abbreviateClubName(player.clubName) : null
+  const fullClubName = player.clubName?.trim()
+
   return (
     <div className="flex items-center gap-2.5 rounded-xl border border-white/6 bg-black/20 px-2.5 py-2 transition hover:bg-[#70ff9d]/10">
       <div className="flex h-12 w-12 items-center justify-center overflow-hidden">
@@ -140,10 +200,19 @@ function PlayerCard({ player }: { player: TeamSquadPlayer }) {
         <p className="truncate text-sm font-semibold text-white">
           {player.name || 'Jugador'}
         </p>
-        <div className="mt-0.5 flex flex-wrap gap-1.5 text-[11px] text-[#8d98a7]">
-          <span>N° {player.number ?? '-'}</span>
-          <span>Edad {player.age ?? '-'}</span>
-          <span>{translatePlayerPosition(player.position)}</span>
+        <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] leading-tight text-[#8d98a7]">
+          <span className="shrink-0">N° {player.number ?? '-'}</span>
+          <span className="shrink-0">Edad {player.age ?? '-'}</span>
+          <span className="shrink-0">{translatePlayerPosition(player.position)}</span>
+          {height ? <span className="shrink-0">{height}</span> : null}
+          {clubName ? (
+            <span
+              className="min-w-0 max-w-[11rem] truncate sm:max-w-[16rem]"
+              title={fullClubName || clubName}
+            >
+              {clubName}
+            </span>
+          ) : null}
         </div>
       </div>
     </div>
@@ -179,6 +248,7 @@ export default async function EquipoPage({ params }: PageProps) {
   const squad = data.squad?.players || []
   const groupedSquad = groupPlayersByPosition(squad)
   const teamCountry = translateCountryName(team?.country, locale)
+  const showExtendedSquadInfo = Boolean(team?.national)
 
   if (!team) {
     return (
@@ -305,7 +375,11 @@ export default async function EquipoPage({ params }: PageProps) {
 
                       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
                         {group.players.map((player) => (
-                          <PlayerCard key={player.id || `${group.key}-${player.name}`} player={player} />
+                          <PlayerCard
+                            key={player.id || `${group.key}-${player.name}`}
+                            player={player}
+                            showExtendedInfo={showExtendedSquadInfo}
+                          />
                         ))}
                       </div>
                     </section>

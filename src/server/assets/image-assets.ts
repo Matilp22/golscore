@@ -36,6 +36,7 @@ type PlayerLike = {
   number?: number | null
   pos?: string | null
   position?: string | null
+  height?: string | null
   photo?: string | null
 }
 
@@ -112,6 +113,10 @@ type PlayerAssetInput = {
   teamExternalId?: number | string | null
   number?: number | null
   position?: string | null
+  height?: string | null
+  clubExternalId?: number | string | null
+  clubName?: string | null
+  clubLogoUrl?: string | null
   photoUrl?: string | null
 }
 
@@ -159,6 +164,7 @@ type ApiFootballPlayerRow = {
   player?: {
     id?: number
     name?: string
+    height?: string | null
     photo?: string | null
   }
   statistics?: Array<{
@@ -566,6 +572,20 @@ export async function upsertPlayerAssets(
       photo_last_synced_at: syncedAt,
       updated_at: syncedAt,
     }
+    const clubExternalId = toExternalId(item.clubExternalId)
+
+    if (item.height !== undefined) row.height = item.height ?? null
+    if (item.clubName !== undefined) row.club_name = item.clubName ?? null
+    if (item.clubLogoUrl !== undefined) row.club_logo_url = item.clubLogoUrl ?? null
+    if (item.clubExternalId !== undefined) row.club_external_id = clubExternalId
+    if (
+      item.height !== undefined ||
+      item.clubName !== undefined ||
+      item.clubLogoUrl !== undefined ||
+      item.clubExternalId !== undefined
+    ) {
+      row.profile_last_synced_at = syncedAt
+    }
 
     const { error } = await supabase
       .from('players')
@@ -962,6 +982,10 @@ export async function syncPlayerAssetsFromApiFootball(
           externalId: row.player?.id,
           name: row.player?.name,
           teamExternalId: team?.id,
+          height: row.player?.height,
+          clubExternalId: team?.id,
+          clubName: team?.name,
+          clubLogoUrl: team?.logo,
           photoUrl: row.player?.photo,
         }
       })
