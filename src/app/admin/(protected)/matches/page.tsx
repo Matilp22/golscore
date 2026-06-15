@@ -7,6 +7,7 @@ import { saveMatchDetailsAction } from '@/app/admin/actions'
 import {
   getAdminMatchesPageData,
   type AdminBroadcastOption,
+  type AdminCaptainOption,
   type AdminEditableMatch,
   type AdminMatchListMode,
 } from '@/server/admin/matches'
@@ -134,6 +135,131 @@ function MatchTextarea({
         className="hf-input min-h-20 w-full rounded-xl px-3 py-2 text-sm"
       />
     </label>
+  )
+}
+
+function buildCaptainSelectValue(playerId: string | null | undefined, playerName: string | null | undefined) {
+  const cleanPlayerId = playerId?.trim() || null
+  const cleanPlayerName = playerName?.trim() || null
+
+  if (!cleanPlayerId && !cleanPlayerName) return ''
+
+  return JSON.stringify({
+    playerId: cleanPlayerId,
+    playerName: cleanPlayerName,
+  })
+}
+
+function getCaptainOptionLabel(option: AdminCaptainOption) {
+  const number = option.number ? `#${option.number} ` : ''
+  const role = option.list === 'starter' ? 'Titular' : 'Suplente'
+
+  return `${number}${option.playerName} - ${role}`
+}
+
+function getCaptainOptionsWithCurrent(
+  options: AdminCaptainOption[],
+  playerId: string | null,
+  playerName: string | null
+) {
+  const selectedValue = buildCaptainSelectValue(playerId, playerName)
+  if (!selectedValue) return options
+
+  const alreadyIncluded = options.some((option) => (
+    buildCaptainSelectValue(option.playerId, option.playerName) === selectedValue
+  ))
+  if (alreadyIncluded) return options
+
+  return [
+    {
+      playerId,
+      playerName: playerName ?? `Jugador ${playerId}`,
+      number: null,
+      list: 'starter' as const,
+    },
+    ...options,
+  ]
+}
+
+function CaptainSelect({
+  label,
+  name,
+  playerId,
+  playerName,
+  options,
+}: {
+  label: string
+  name: string
+  playerId: string | null
+  playerName: string | null
+  options: AdminCaptainOption[]
+}) {
+  const selectedValue = buildCaptainSelectValue(playerId, playerName)
+  const optionsWithCurrent = getCaptainOptionsWithCurrent(options, playerId, playerName)
+  const disabled = optionsWithCurrent.length === 0
+
+  return (
+    <label className="block min-w-0">
+      <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.08em] text-[#90a0ae]">
+        {label}
+      </span>
+      {disabled ? <input type="hidden" name={name} value="" /> : null}
+      <select
+        name={name}
+        defaultValue={selectedValue}
+        disabled={disabled}
+        className="hf-input h-11 w-full rounded-xl px-3 text-sm disabled:opacity-60"
+      >
+        <option value="">
+          {disabled ? 'Sin alineacion cargada' : 'Sin capitan manual'}
+        </option>
+        {optionsWithCurrent.map((option) => {
+          const value = buildCaptainSelectValue(option.playerId, option.playerName)
+
+          return (
+            <option
+              key={`${option.list}-${option.playerId ?? option.playerName}`}
+              value={value}
+            >
+              {getCaptainOptionLabel(option)}
+            </option>
+          )
+        })}
+      </select>
+    </label>
+  )
+}
+
+function AdminMatchCaptainFields({ match }: { match: AdminEditableMatch }) {
+  return (
+    <section className="rounded-xl border border-white/8 bg-black/10 p-3">
+      <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h4 className="text-xs font-black uppercase tracking-[0.12em] text-[#70ff9d]">
+            Capitanes
+          </h4>
+          <p className="mt-1 text-xs text-[#9aa7b5]">
+            Corrige la C de la formacion y de la lista si la API no la trae bien.
+          </p>
+        </div>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <CaptainSelect
+          label={`Capitan ${match.homeTeam ?? 'local'}`}
+          name="homeCaptainPlayerRef"
+          playerId={match.homeCaptainPlayerId}
+          playerName={match.homeCaptainPlayerName}
+          options={match.homeCaptainOptions}
+        />
+        <CaptainSelect
+          label={`Capitan ${match.awayTeam ?? 'visitante'}`}
+          name="awayCaptainPlayerRef"
+          playerId={match.awayCaptainPlayerId}
+          playerName={match.awayCaptainPlayerName}
+          options={match.awayCaptainOptions}
+        />
+      </div>
+    </section>
   )
 }
 
@@ -281,6 +407,7 @@ function MatchEditor({
           awayGoalkeeperSecondaryColor={match.awayGoalkeeperSecondaryColor}
           awayGoalkeeperNumberColor={match.awayGoalkeeperNumberColor}
         />
+        <AdminMatchCaptainFields match={match} />
       </section>
 
       <section className="space-y-3">

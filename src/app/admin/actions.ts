@@ -75,6 +75,41 @@ function readNullableInteger(formData: FormData, key: string) {
   return Math.trunc(parsed)
 }
 
+function readCaptainFormValue(formData: FormData, key: string) {
+  const value = readString(formData, key)
+  if (!value) {
+    return {
+      playerId: null,
+      playerName: null,
+    }
+  }
+
+  try {
+    const parsed = JSON.parse(value) as {
+      playerId?: unknown
+      playerName?: unknown
+    }
+    const playerId =
+      typeof parsed.playerId === 'string' && parsed.playerId.trim()
+        ? parsed.playerId.trim()
+        : null
+    const playerName =
+      typeof parsed.playerName === 'string' && parsed.playerName.trim()
+        ? parsed.playerName.trim()
+        : null
+
+    return {
+      playerId,
+      playerName,
+    }
+  } catch {
+    return {
+      playerId: null,
+      playerName: value,
+    }
+  }
+}
+
 function sanitizeAdminReturnPath(value: string) {
   if (!value.startsWith('/admin/matches')) return '/admin/matches'
 
@@ -207,6 +242,8 @@ export async function saveMatchDetailsAction(formData: FormData) {
 
   const fixtureExternalId = readString(formData, 'fixtureExternalId')
   const returnPath = sanitizeAdminReturnPath(readString(formData, 'returnPath'))
+  const homeCaptain = readCaptainFormValue(formData, 'homeCaptainPlayerRef')
+  const awayCaptain = readCaptainFormValue(formData, 'awayCaptainPlayerRef')
 
   try {
     await updateAdminMatchDetails({
@@ -247,6 +284,10 @@ export async function saveMatchDetailsAction(formData: FormData) {
       broadcastLogoUrl: readOptionalString(formData, 'broadcastLogoUrl'),
       highlightsUrl: readOptionalString(formData, 'highlightsUrl'),
       highlightsTitle: readOptionalString(formData, 'highlightsTitle'),
+      homeCaptainPlayerId: homeCaptain.playerId,
+      homeCaptainPlayerName: homeCaptain.playerName,
+      awayCaptainPlayerId: awayCaptain.playerId,
+      awayCaptainPlayerName: awayCaptain.playerName,
     })
   } catch (error) {
     console.error('[admin-matches] Failed to save match details.', error)

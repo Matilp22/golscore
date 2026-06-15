@@ -794,6 +794,139 @@ function readAdminMatchOverridePayload(value: unknown) {
   return readRecord(record.overrides) ?? record
 }
 
+type AdminCaptainOverrideSide = 'home' | 'away'
+
+type AdminCaptainOverride = {
+  playerId: string | null
+  playerName: string | null
+}
+
+function getCaptainTextFromCachedValue(value: unknown) {
+  if (typeof value === 'string' && value.trim()) return value.trim()
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+
+  return null
+}
+
+function readAdminCaptainOverride(
+  overrides: Record<string, unknown> | null,
+  side: AdminCaptainOverrideSide
+): AdminCaptainOverride | null {
+  const captains = readRecord(overrides?.captains)
+  const sideCaptain = readRecord(captains?.[side])
+  const playerId =
+    getCaptainTextFromCachedValue(overrides?.[`${side}CaptainPlayerId`]) ??
+    getCaptainTextFromCachedValue(sideCaptain?.playerId)
+  const playerName =
+    getCaptainTextFromCachedValue(overrides?.[`${side}CaptainPlayerName`]) ??
+    getCaptainTextFromCachedValue(sideCaptain?.playerName)
+
+  if (!playerId && !playerName) return null
+
+  return {
+    playerId,
+    playerName,
+  }
+}
+
+function normalizeCaptainMatchText(value: string | null | undefined) {
+  return normalizeSearchValue(value ?? '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function playerMatchesAdminCaptain(
+  playerWrapper: PlayerWrapper,
+  captain: AdminCaptainOverride
+) {
+  const wrapperRecord = readRecord(playerWrapper)
+  const playerRecord = readRecord(wrapperRecord?.player)
+  const playerId = getCaptainTextFromCachedValue(playerRecord?.id ?? wrapperRecord?.id)
+  const playerName = getCaptainTextFromCachedValue(playerRecord?.name ?? wrapperRecord?.name)
+
+  if (captain.playerId && playerId && captain.playerId === playerId) return true
+
+  return Boolean(
+    captain.playerName &&
+      playerName &&
+      normalizeCaptainMatchText(captain.playerName) === normalizeCaptainMatchText(playerName)
+  )
+}
+
+function applyAdminCaptainOverrideToPlayers(
+  players: PlayerWrapper[] | undefined,
+  captain: AdminCaptainOverride
+) {
+  if (!Array.isArray(players)) return players
+
+  return players.map((playerWrapper) => {
+    const isCaptain = playerMatchesAdminCaptain(playerWrapper, captain)
+
+    return {
+      ...playerWrapper,
+      captain: isCaptain,
+      player: playerWrapper.player
+        ? {
+            ...playerWrapper.player,
+            captain: isCaptain,
+          }
+        : playerWrapper.player,
+    }
+  })
+}
+
+function isSameCaptainTeam(lineupTeam: TeamInfo | undefined, fixtureTeam: TeamInfo | undefined) {
+  const lineupTeamId = toFiniteNumber(lineupTeam?.id)
+  const fixtureTeamId = toFiniteNumber(fixtureTeam?.id)
+
+  if (lineupTeamId !== null && fixtureTeamId !== null && lineupTeamId === fixtureTeamId) {
+    return true
+  }
+
+  const lineupTeamName = normalizeCaptainMatchText(lineupTeam?.name)
+  const fixtureTeamName = normalizeCaptainMatchText(fixtureTeam?.name)
+
+  return Boolean(lineupTeamName && fixtureTeamName && lineupTeamName === fixtureTeamName)
+}
+
+function getLineupFixtureSide(
+  lineup: MatchLineup,
+  fixture: MatchFixture | null,
+  index: number
+): AdminCaptainOverrideSide | null {
+  if (isSameCaptainTeam(lineup.team, fixture?.teams?.home)) return 'home'
+  if (isSameCaptainTeam(lineup.team, fixture?.teams?.away)) return 'away'
+  if (index === 0) return 'home'
+  if (index === 1) return 'away'
+
+  return null
+}
+
+function applyAdminCaptainOverridesToLineups(
+  lineups: MatchLineup[],
+  fixture: MatchFixture | null,
+  overrides: Record<string, unknown> | null
+) {
+  const homeCaptain = readAdminCaptainOverride(overrides, 'home')
+  const awayCaptain = readAdminCaptainOverride(overrides, 'away')
+
+  if (!homeCaptain && !awayCaptain) return lineups
+
+  return lineups.map((lineup, index) => {
+    const side = getLineupFixtureSide(lineup, fixture, index)
+    const captain = side === 'home' ? homeCaptain : side === 'away' ? awayCaptain : null
+
+    if (!captain) return lineup
+
+    return {
+      ...lineup,
+      startXI: applyAdminCaptainOverrideToPlayers(lineup.startXI, captain),
+      substitutes: applyAdminCaptainOverrideToPlayers(lineup.substitutes, captain),
+    }
+  })
+}
+
 function getHexColorFromCachedValue(value: unknown) {
   if (typeof value !== 'string') return null
 
@@ -3222,7 +3355,11 @@ export async function getMatchDetail(id: number) {
   const storedEvents = events.map((event) => mapStoredEventToMatchEvent(event, teamsById))
   const mergedEvents = mergeMatchEvents(cachedEvents, storedEvents)
   const statistics = readCachedArray<MatchStatisticsTeam>(detailCache?.statistics)
-  const lineups = readCachedArray<MatchLineup>(detailCache?.lineups)
+  const lineups = applyAdminCaptainOverridesToLineups(
+    readCachedArray<MatchLineup>(detailCache?.lineups),
+    fixture,
+    adminOverrideRecord
+  )
 
   if (process.env.NODE_ENV === 'development') {
     console.info('[match-detail-data]', {

@@ -84,6 +84,12 @@ export type AdminEditableMatch = CachedFixture & {
   broadcastLogoUrl: string | null
   highlightsUrl: string | null
   highlightsTitle: string | null
+  homeCaptainPlayerId: string | null
+  homeCaptainPlayerName: string | null
+  awayCaptainPlayerId: string | null
+  awayCaptainPlayerName: string | null
+  homeCaptainOptions: AdminCaptainOption[]
+  awayCaptainOptions: AdminCaptainOption[]
 }
 
 export type AdminMatchesPageData = {
@@ -95,6 +101,13 @@ export type AdminMatchesPageData = {
 export type AdminBroadcastOption = {
   name: string
   logoUrl: string | null
+}
+
+export type AdminCaptainOption = {
+  playerId: string | null
+  playerName: string
+  number: number | null
+  list: 'starter' | 'substitute'
 }
 
 export type AdminMatchListMode = 'today' | 'world-cup' | 'upcoming' | 'recent' | 'search'
@@ -137,6 +150,10 @@ export type AdminMatchDetailsInput = {
   broadcastLogoUrl?: string | null
   highlightsUrl?: string | null
   highlightsTitle?: string | null
+  homeCaptainPlayerId?: string | null
+  homeCaptainPlayerName?: string | null
+  awayCaptainPlayerId?: string | null
+  awayCaptainPlayerName?: string | null
 }
 
 const ADMIN_TV_OPTION_DEFINITIONS = [
@@ -291,6 +308,117 @@ function readKitColor(
   )
 }
 
+function isCaptainFlag(value: unknown) {
+  if (value === true || value === 1) return true
+  if (typeof value !== 'string') return false
+
+  const normalized = normalizeSearch(value)
+
+  return normalized === 'true' || normalized === '1' || normalized === 'c' || normalized === 'captain'
+}
+
+function readAdminLineups(...values: unknown[]) {
+  for (const value of values) {
+    if (!Array.isArray(value)) continue
+
+    const lineups = value
+      .map((lineup) => asRecord(lineup))
+      .filter((lineup): lineup is Record<string, unknown> => Boolean(lineup))
+
+    if (lineups.length) return lineups
+  }
+
+  return []
+}
+
+function getLineupTeamName(lineup: Record<string, unknown> | null) {
+  return readText(asRecord(lineup?.team), 'name')
+}
+
+function findAdminLineup(
+  lineups: Record<string, unknown>[],
+  teamName: string | null,
+  fallbackIndex: number
+) {
+  const normalizedTeamName = normalizeSearch(teamName)
+
+  if (normalizedTeamName) {
+    const exactMatch = lineups.find((lineup) => normalizeSearch(getLineupTeamName(lineup)) === normalizedTeamName)
+    if (exactMatch) return exactMatch
+
+    const containsMatch = lineups.find((lineup) => {
+      const lineupName = normalizeSearch(getLineupTeamName(lineup))
+
+      return lineupName.includes(normalizedTeamName) || normalizedTeamName.includes(lineupName)
+    })
+    if (containsMatch) return containsMatch
+  }
+
+  return lineups[fallbackIndex] ?? null
+}
+
+function getLineupPlayerOption(
+  value: unknown,
+  list: AdminCaptainOption['list']
+): AdminCaptainOption | null {
+  const wrapper = asRecord(value)
+  const player = asRecord(wrapper?.player)
+  const playerName = firstText(readText(player, 'name'), readText(wrapper, 'name'))
+
+  if (!playerName) return null
+
+  return {
+    playerId: firstText(readText(player, 'id'), readText(wrapper, 'id')),
+    playerName,
+    number: firstNumber(readNumber(player, 'number'), readNumber(wrapper, 'number')),
+    list,
+  }
+}
+
+function getAdminCaptainOptions(lineup: Record<string, unknown> | null): AdminCaptainOption[] {
+  const rawStarters = Array.isArray(lineup?.startXI) ? lineup.startXI : []
+  const rawSubstitutes = Array.isArray(lineup?.substitutes) ? lineup.substitutes : []
+  const options = [
+    ...rawStarters.map((player) => getLineupPlayerOption(player, 'starter')),
+    ...rawSubstitutes.map((player) => getLineupPlayerOption(player, 'substitute')),
+  ].filter((player): player is AdminCaptainOption => Boolean(player))
+  const seen = new Set<string>()
+
+  return options.filter((option) => {
+    const key = option.playerId ? `id:${option.playerId}` : `name:${normalizeSearch(option.playerName)}`
+    if (seen.has(key)) return false
+
+    seen.add(key)
+    return true
+  })
+}
+
+function findAdminCaptainInPlayers(
+  players: unknown[],
+  list: AdminCaptainOption['list']
+): AdminCaptainOption | null {
+  for (const value of players) {
+    const wrapper = asRecord(value)
+    const player = asRecord(wrapper?.player)
+
+    if (!isCaptainFlag(wrapper?.captain) && !isCaptainFlag(player?.captain)) continue
+
+    return getLineupPlayerOption(value, list)
+  }
+
+  return null
+}
+
+function getAdminCaptainFromLineup(lineup: Record<string, unknown> | null) {
+  const rawStarters = Array.isArray(lineup?.startXI) ? lineup.startXI : []
+  const rawSubstitutes = Array.isArray(lineup?.substitutes) ? lineup.substitutes : []
+
+  return (
+    findAdminCaptainInPlayers(rawStarters, 'starter') ??
+    findAdminCaptainInPlayers(rawSubstitutes, 'substitute')
+  )
+}
+
 function getBroadcastOptionName(value: string | null | undefined) {
   const normalizedValue = normalizeSearch(value)
   if (!normalizedValue) return null
@@ -431,6 +559,17 @@ function parseEditableMatch(
   const normalizedAwayKitColors = asRecord(normalizedKitColors?.away)
   const detailHomeKitColors = asRecord(detailKitColors?.home)
   const detailAwayKitColors = asRecord(detailKitColors?.away)
+  const resolvedHomeTeam = resolveTextOverride(overrides, 'homeTeam', readText(normalized, 'home'), readText(normalized, 'homeTeam'), readText(detailHome, 'name'), readText(rawHome, 'name'))
+  const resolvedAwayTeam = resolveTextOverride(overrides, 'awayTeam', readText(normalized, 'away'), readText(normalized, 'awayTeam'), readText(detailAway, 'name'), readText(rawAway, 'name'))
+  const detailLineups = readAdminLineups(detail?.lineups, normalized?.lineups)
+  const homeLineup = findAdminLineup(detailLineups, resolvedHomeTeam, 0)
+  const awayLineup = findAdminLineup(detailLineups, resolvedAwayTeam, 1)
+  const homeApiCaptain = getAdminCaptainFromLineup(homeLineup)
+  const awayApiCaptain = getAdminCaptainFromLineup(awayLineup)
+  const homeCaptainPlayerId = resolveTextOverride(overrides, 'homeCaptainPlayerId', homeApiCaptain?.playerId)
+  const homeCaptainPlayerName = resolveTextOverride(overrides, 'homeCaptainPlayerName', homeApiCaptain?.playerName)
+  const awayCaptainPlayerId = resolveTextOverride(overrides, 'awayCaptainPlayerId', awayApiCaptain?.playerId)
+  const awayCaptainPlayerName = resolveTextOverride(overrides, 'awayCaptainPlayerName', awayApiCaptain?.playerName)
 
   return {
     ...cached,
@@ -446,10 +585,8 @@ function parseEditableMatch(
       resolveTextOverride(overrides, 'round', readText(normalized, 'round'), readText(detailLeague, 'round'), readText(rawLeague, 'round')),
     date:
       resolveTextOverride(overrides, 'date', readText(normalized, 'date'), readText(detailFixture, 'date'), readText(rawFixture, 'date'), row.date),
-    homeTeam:
-      resolveTextOverride(overrides, 'homeTeam', readText(normalized, 'home'), readText(normalized, 'homeTeam'), readText(detailHome, 'name'), readText(rawHome, 'name')),
-    awayTeam:
-      resolveTextOverride(overrides, 'awayTeam', readText(normalized, 'away'), readText(normalized, 'awayTeam'), readText(detailAway, 'name'), readText(rawAway, 'name')),
+    homeTeam: resolvedHomeTeam,
+    awayTeam: resolvedAwayTeam,
     homeLogo:
       resolveTextOverride(overrides, 'homeLogo', readText(normalized, 'homeLogo'), readText(detailHome, 'logo'), readText(rawHome, 'logo')),
     awayLogo:
@@ -597,6 +734,12 @@ function parseEditableMatch(
       resolveTextOverride(overrides, 'highlightsUrl', readText(normalized, 'highlightsUrl'), readText(normalized, 'highlights_url')),
     highlightsTitle:
       resolveTextOverride(overrides, 'highlightsTitle', readText(normalized, 'highlightsTitle'), readText(normalized, 'highlights_title')),
+    homeCaptainPlayerId,
+    homeCaptainPlayerName,
+    awayCaptainPlayerId,
+    awayCaptainPlayerName,
+    homeCaptainOptions: getAdminCaptainOptions(homeLineup),
+    awayCaptainOptions: getAdminCaptainOptions(awayLineup),
   }
 }
 
@@ -758,6 +901,20 @@ function patchNormalizedPayload(row: FixtureCacheRow, input: AdminMatchDetailsIn
   const broadcastLogoUrl = cleanText(input.broadcastLogoUrl)
   const highlightsUrl = cleanText(input.highlightsUrl)
   const highlightsTitle = cleanText(input.highlightsTitle)
+  const homeCaptainPlayerId = cleanText(input.homeCaptainPlayerId)
+  const homeCaptainPlayerName = cleanText(input.homeCaptainPlayerName)
+  const awayCaptainPlayerId = cleanText(input.awayCaptainPlayerId)
+  const awayCaptainPlayerName = cleanText(input.awayCaptainPlayerName)
+  const captains = {
+    home: {
+      playerId: homeCaptainPlayerId,
+      playerName: homeCaptainPlayerName,
+    },
+    away: {
+      playerId: awayCaptainPlayerId,
+      playerName: awayCaptainPlayerName,
+    },
+  }
 
   normalized.id = Number(fixtureExternalId) || fixtureExternalId
   normalized.externalId = Number(fixtureExternalId) || fixtureExternalId
@@ -812,6 +969,11 @@ function patchNormalizedPayload(row: FixtureCacheRow, input: AdminMatchDetailsIn
   normalized.broadcast_logo_url = broadcastLogoUrl
   normalized.highlightsUrl = highlightsUrl
   normalized.highlightsTitle = highlightsTitle
+  normalized.homeCaptainPlayerId = homeCaptainPlayerId
+  normalized.homeCaptainPlayerName = homeCaptainPlayerName
+  normalized.awayCaptainPlayerId = awayCaptainPlayerId
+  normalized.awayCaptainPlayerName = awayCaptainPlayerName
+  normalized.captains = captains
 
   const currentKitColors = asRecord(normalized.teamKitColors)
   const teamKitColors = {
@@ -930,6 +1092,7 @@ function patchNormalizedPayload(row: FixtureCacheRow, input: AdminMatchDetailsIn
     score,
   }
   matchDetail.teamKitColors = teamKitColors
+  matchDetail.captains = captains
   normalized.matchDetail = matchDetail
 
   return {
@@ -1168,6 +1331,10 @@ function buildAdminMatchOverridePayload(input: AdminMatchDetailsInput) {
   const awayGoalkeeperPrimaryColor = cleanHexColor(input.awayGoalkeeperPrimaryColor)
   const awayGoalkeeperSecondaryColor = cleanHexColor(input.awayGoalkeeperSecondaryColor)
   const awayGoalkeeperNumberColor = cleanHexColor(input.awayGoalkeeperNumberColor)
+  const homeCaptainPlayerId = cleanText(input.homeCaptainPlayerId)
+  const homeCaptainPlayerName = cleanText(input.homeCaptainPlayerName)
+  const awayCaptainPlayerId = cleanText(input.awayCaptainPlayerId)
+  const awayCaptainPlayerName = cleanText(input.awayCaptainPlayerName)
 
   return {
     leagueExternalId: cleanText(input.leagueExternalId),
@@ -1194,6 +1361,10 @@ function buildAdminMatchOverridePayload(input: AdminMatchDetailsInput) {
     broadcastLogoUrl: cleanText(input.broadcastLogoUrl),
     highlightsUrl: cleanText(input.highlightsUrl),
     highlightsTitle: cleanText(input.highlightsTitle),
+    homeCaptainPlayerId,
+    homeCaptainPlayerName,
+    awayCaptainPlayerId,
+    awayCaptainPlayerName,
     homePrimaryColor,
     homeSecondaryColor,
     homeNumberColor,
@@ -1236,6 +1407,16 @@ function buildAdminMatchOverridePayload(input: AdminMatchDetailsInput) {
           secondary: awayGoalkeeperSecondaryColor,
           number: awayGoalkeeperNumberColor,
         },
+      },
+    },
+    captains: {
+      home: {
+        playerId: homeCaptainPlayerId,
+        playerName: homeCaptainPlayerName,
+      },
+      away: {
+        playerId: awayCaptainPlayerId,
+        playerName: awayCaptainPlayerName,
       },
     },
   }
