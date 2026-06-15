@@ -57,6 +57,24 @@ function renderSticker(stickerUrl: string | null, label: string | null, fallback
   )
 }
 
+function NotificationBellIcon({ className = 'h-3.5 w-3.5' }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </svg>
+  )
+}
+
 export default function PrivateTournamentChat({
   tournamentId,
   tournamentName,
@@ -247,9 +265,20 @@ export default function PrivateTournamentChat({
             <h2 className="text-lg font-black text-white">{t('privateChat.title')}</h2>
             <p className="mt-1 truncate text-xs text-[#8d98a7]">{tournamentName}</p>
           </div>
-          <span className="rounded-full border border-[#70ff9d]/20 bg-[#70ff9d]/10 px-2 py-1 text-[10px] font-black uppercase text-[#70ff9d]">
-            {t('privateChat.live')}
-          </span>
+          <div className="flex shrink-0 items-center gap-2">
+            {unreadCount ? (
+              <span
+                className="inline-flex items-center gap-1 rounded-full border border-amber-300/35 bg-amber-300 px-2 py-1 text-[10px] font-black uppercase text-[#221505] shadow-[0_0_16px_rgba(251,191,36,0.28)]"
+                title={t('privateChat.unreadMessages', { count: String(unreadCount) })}
+              >
+                <NotificationBellIcon />
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            ) : null}
+            <span className="rounded-full border border-[#70ff9d]/20 bg-[#70ff9d]/10 px-2 py-1 text-[10px] font-black uppercase text-[#70ff9d]">
+              {t('privateChat.live')}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -406,10 +435,18 @@ export default function PrivateTournamentChat({
               : t('privateChat.title')
           }
         >
-          {t('privateChat.title')}
+          <span className="inline-flex min-w-0 items-center gap-2">
+            {unreadCount ? (
+              <span className="relative inline-flex h-6 w-6 items-center justify-center rounded-full border border-amber-300/35 bg-amber-300 text-[#221505] shadow-[0_0_16px_rgba(251,191,36,0.28)]">
+                <NotificationBellIcon className="h-3.5 w-3.5" />
+                <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-red-400 ring-2 ring-[#70ff9d]" />
+              </span>
+            ) : null}
+            <span className="truncate">{t('privateChat.title')}</span>
+          </span>
           {unreadCount ? (
             <span className="absolute right-2 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 rounded-full border border-amber-300/35 bg-amber-300 px-2 py-0.5 text-[10px] font-black text-[#221505] shadow-[0_0_16px_rgba(251,191,36,0.28)]">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#221505]" aria-hidden="true" />
+              <NotificationBellIcon className="h-3 w-3" />
               {unreadCount > 9 ? '9+' : unreadCount}
             </span>
           ) : null}
