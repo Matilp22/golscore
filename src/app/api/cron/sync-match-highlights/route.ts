@@ -7,8 +7,8 @@ import { addDaysToISO, getArgentinaTodayISO } from '@/shared/utils/argentina-tim
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 
-const DEFAULT_LOOKBACK_DAYS = 7
-const DEFAULT_LIMIT = 50
+const DEFAULT_LOOKBACK_DAYS = 4
+const DEFAULT_LIMIT = 2
 
 function jsonNoStore(body: unknown, init?: ResponseInit) {
   const response = NextResponse.json(body, init)
@@ -52,16 +52,18 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url)
   const lookbackDays = readPositiveNumber(searchParams.get('lookbackDays'), DEFAULT_LOOKBACK_DAYS, 14)
-  const limit = readPositiveNumber(searchParams.get('limit'), DEFAULT_LIMIT, 50)
+  const limit = readPositiveNumber(searchParams.get('limit'), DEFAULT_LIMIT, 10)
   const today = getArgentinaTodayISO()
   const dateFrom = searchParams.get('dateFrom') ?? addDaysToISO(today, -lookbackDays)
   const dateTo = searchParams.get('dateTo') ?? today
+  const leagueExternalId = searchParams.get('leagueExternalId') ?? searchParams.get('league_external_id')
 
   try {
     const supabase = getSupabaseAdminClient()
     const result = await syncMatchHighlights(supabase, {
       dateFrom,
       dateTo,
+      leagueExternalId,
       limit,
       force: false,
     })
@@ -71,6 +73,7 @@ export async function GET(request: Request) {
       automation: {
         dateFrom,
         dateTo,
+        leagueExternalId,
         lookbackDays,
         limit,
         force: false,

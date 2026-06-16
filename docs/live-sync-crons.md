@@ -18,7 +18,7 @@ Vercel Hobby solo permite crons diarios, por eso `vercel.json` queda como respal
 ## Cron externo 3
 
 - URL: `https://golscore.vercel.app/api/cron/sync-match-highlights`
-- Frecuencia: cada 1 hora
+- Frecuencia: cada 4 horas con limite bajo
 - Header: `Authorization: Bearer CRON_SECRET`
 
 ## Politica de requests
@@ -28,6 +28,6 @@ Vercel Hobby solo permite crons diarios, por eso `vercel.json` queda como respal
 - Las estadisticas se sincronizan cada 5 minutos para partidos en vivo.
 - Las alineaciones se sincronizan desde T-180, con reintentos en T-90, T-60, T-30, inicio, post-inicio, live espaciado y final.
 - Al detectar `FT`, `AET` o `PEN`, se hace sync final y un follow-up 10 minutos despues.
-- `/api/cron/sync-match-highlights` revisa partidos finalizados de los ultimos 3 dias sin video. Si la busqueda principal de YouTube no encuentra un candidato confiable, intenta queries con fuentes confiables como ESPN Fans, ESPN, TNT Sports, DSports, DAZN, AFA Play, FIFA Play, FIFA+, CONMEBOL, Liga Profesional y canales oficiales. No guarda videos de canales desconocidos y descarta gameplays/simulaciones de FIFA, EA Sports FC, eFootball, PES, PS5/Xbox y similares.
+- `/api/cron/sync-match-highlights` revisa partidos finalizados de los ultimos 4 dias sin video. Busca primero con nombres de selecciones en espanol y una ventana de publicacion cercana al partido. Si la busqueda principal de YouTube no encuentra un candidato confiable, intenta queries con fuentes confiables como TyC Sports, Telefe, ESPN Fans, ESPN, TNT Sports, DSports, DAZN, AFA Play, FIFA Play, FIFA+, CONMEBOL, Liga Profesional y canales oficiales. No guarda videos de canales desconocidos y descarta gameplays/simulaciones de FIFA, EA Sports FC, eFootball, PES, PS5/Xbox y similares.
 
 El frontend solo refresca datos desde Supabase/cache. No debe consultar API-Football directamente ni disparar syncs de API-Football desde cada render.

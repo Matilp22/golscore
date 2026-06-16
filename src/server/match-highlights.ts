@@ -200,17 +200,17 @@ class SerializableError extends Error {
   }
 }
 
-const DEFAULT_SYNC_LIMIT = 50
-const MAX_SYNC_LIMIT = 100
+const DEFAULT_SYNC_LIMIT = 8
+const MAX_SYNC_LIMIT = 30
 const DEFAULT_AUDIT_LIMIT = 50
 const MAX_AUDIT_LIMIT = 100
 const YOUTUBE_SEARCH_URL = 'https://www.googleapis.com/youtube/v3/search'
 const YOUTUBE_VIDEOS_URL = 'https://www.googleapis.com/youtube/v3/videos'
 const YOUTUBE_FETCH_TIMEOUT_MS = 8000
-const YOUTUBE_RESULTS_PER_QUERY = 12
+const YOUTUBE_RESULTS_PER_QUERY = 8
 const YOUTUBE_VIDEO_DETAILS_BATCH_SIZE = 50
-const MAX_PRIMARY_HIGHLIGHT_QUERIES = 8
-const MAX_TRUSTED_SOURCE_FALLBACK_QUERIES = 24
+const MAX_PRIMARY_HIGHLIGHT_QUERIES = 3
+const MAX_TRUSTED_SOURCE_FALLBACK_QUERIES = 5
 const MAX_TEAM_SEARCH_NAMES = 4
 const FINISHED_QUERY_STATUSES = ['FT', 'AET', 'PEN', 'Final', 'Finalizado', 'Finished', 'Match Finished']
 const PRIORITY_HIGHLIGHT_LEAGUES = [
@@ -334,13 +334,13 @@ const OFFICIAL_CHANNEL_HINTS = [
   'vivo azzurro',
 ]
 const TRUSTED_SOURCE_SEARCH_TERMS = [
-  'ESPN Fans',
-  'ESPN FC',
-  'ESPN',
   'TyC Sports',
   'TyC Sports Play',
   'Telefe',
   'Telefe Deportes',
+  'ESPN Fans',
+  'ESPN FC',
+  'ESPN',
   'TNT Sports',
   'DSports',
   'DirecTV Sports',
@@ -716,8 +716,36 @@ function getTeamSearchNames(teamName: string | null) {
   const normalizedTeam = normalizeText(teamName)
   if (!teamName || !normalizedTeam) return []
 
-  return uniqueTextValues([teamName, ...getTeamAliasNames(teamName)])
+  return uniqueTextValues([
+    ...getTranslatedCountryAliases(teamName, normalizedTeam),
+    ...(COUNTRY_TEAM_SEARCH_ALIASES[normalizedTeam] ?? []),
+    ...(TEAM_SEARCH_ALIASES[normalizedTeam] ?? []),
+    teamName,
+    ...getTeamAliasNames(teamName),
+  ])
     .slice(0, MAX_TEAM_SEARCH_NAMES)
+}
+
+function getLeagueSearchNames(match: HighlightMatch) {
+  const leagueExternalId = match.leagueExternalId ? String(match.leagueExternalId) : null
+  const normalizedLeague = normalizeText(match.leagueName)
+  const priorityLeague = PRIORITY_HIGHLIGHT_LEAGUES.find((league) => {
+    if (leagueExternalId === league.externalId) return true
+
+    return league.aliases.some((alias) => normalizedLeague.includes(alias))
+  })
+
+  return uniqueTextValues([
+    priorityLeague?.name,
+    ...(priorityLeague?.aliases ?? []),
+    match.leagueName,
+  ]).slice(0, 2)
+}
+
+function getQueryYearText(leagueName: string | null | undefined, yearText: string | null) {
+  if (!yearText) return null
+
+  return normalizeText(leagueName).includes(yearText) ? null : yearText
 }
 
 function getTeamSearchPairVariants(match: HighlightMatch) {
@@ -834,6 +862,11 @@ export function buildYouTubeHighlightQueries(match: HighlightMatch) {
   const yearText = year && Number.isFinite(year) ? String(year) : null
   const pairs = getTeamSearchPairVariants(match)
   const primaryPair = pairs[0] ?? [match.homeName, match.awayName]
+  const leagueNames = getLeagueSearchNames(match)
+  const primaryLeague = leagueNames[0] ?? match.leagueName
+  const secondaryLeague = leagueNames[1] ?? null
+  const primaryYearText = getQueryYearText(primaryLeague, yearText)
+  const secondaryYearText = getQueryYearText(secondaryLeague ?? primaryLeague, yearText)
   const primaryQueries = [
     compactSpaces(
       [
@@ -841,8 +874,8 @@ export function buildYouTubeHighlightQueries(match: HighlightMatch) {
         primaryPair[1],
         'resumen',
         'goles',
-        match.leagueName,
-        yearText,
+        primaryLeague,
+        primaryYearText,
       ].filter(Boolean).join(' ')
     ),
     compactSpaces(
@@ -851,21 +884,17 @@ export function buildYouTubeHighlightQueries(match: HighlightMatch) {
         'vs',
         primaryPair[1],
         'highlights',
-        match.leagueName,
-        yearText,
+        secondaryLeague ?? primaryLeague,
+        secondaryYearText,
       ].filter(Boolean).join(' ')
     ),
     compactSpaces(
-      [primaryPair[0], primaryPair[1], 'goles', yearText].filter(Boolean).join(' ')
-    ),
-    compactSpaces(
-      [primaryPair[0], primaryPair[1], 'resumen completo'].filter(Boolean).join(' ')
+      [primaryPair[0], primaryPair[1], 'resumen completo', yearText].filter(Boolean).join(' ')
     ),
   ]
-  const variantQueries = pairs.slice(1).flatMap(([home, away]) => [
-    compactSpaces([home, away, 'resumen goles', match.leagueName, yearText].filter(Boolean).join(' ')),
-    compactSpaces([home, 'vs', away, 'highlights', yearText].filter(Boolean).join(' ')),
-  ])
+  const variantQueries = pairs.slice(1).map(([home, away]) =>
+    compactSpaces([home, away, 'resumen goles', primaryLeague, primaryYearText].filter(Boolean).join(' '))
+  )
 
   return [...new Set([...primaryQueries, ...variantQueries])]
     .filter((query) => query.length >= 12)
@@ -880,6 +909,9 @@ function buildYouTubeTrustedSourceQueries(match: HighlightMatch) {
   const pairs = getTeamSearchPairVariants(match).slice(0, 3)
   const primaryPair = pairs[0]
   if (!primaryPair) return []
+  const leagueNames = getLeagueSearchNames(match)
+  const primaryLeague = leagueNames[0] ?? match.leagueName
+  const primaryYearText = getQueryYearText(primaryLeague, yearText)
 
   const queries = [
     ...TRUSTED_SOURCE_SEARCH_TERMS.map((source) =>
@@ -890,8 +922,8 @@ function buildYouTubeTrustedSourceQueries(match: HighlightMatch) {
           primaryPair[1],
           source,
           'resumen highlights',
-          match.leagueName,
-          yearText,
+          primaryLeague,
+          primaryYearText,
         ].filter(Boolean).join(' ')
       )
     ),
@@ -1210,8 +1242,27 @@ function sortMatchesForHighlightSync(matches: HighlightMatch[], options: Highlig
   })
 }
 
-async function searchYouTubeHighlights(query: string, apiKey: string) {
+function getYouTubePublishedWindow(match: HighlightMatch) {
+  if (!match.match_date) return null
+
+  const matchTimestamp = new Date(match.match_date).getTime()
+  if (!Number.isFinite(matchTimestamp)) return null
+
+  const publishedAfter = new Date(matchTimestamp - 12 * 60 * 60 * 1000)
+  const maxPublishedBefore = matchTimestamp + 14 * 24 * 60 * 60 * 1000
+  const publishedBeforeTimestamp = Math.min(Date.now(), maxPublishedBefore)
+  if (publishedBeforeTimestamp <= publishedAfter.getTime()) return null
+
+  return {
+    publishedAfter: publishedAfter.toISOString(),
+    publishedBefore: new Date(publishedBeforeTimestamp).toISOString(),
+  }
+}
+
+async function searchYouTubeHighlights(query: string, apiKey: string, match: HighlightMatch) {
   const url = new URL(YOUTUBE_SEARCH_URL)
+  const publishedWindow = getYouTubePublishedWindow(match)
+
   url.searchParams.set('part', 'snippet')
   url.searchParams.set('type', 'video')
   url.searchParams.set('maxResults', String(YOUTUBE_RESULTS_PER_QUERY))
@@ -1222,6 +1273,10 @@ async function searchYouTubeHighlights(query: string, apiKey: string) {
   url.searchParams.set('regionCode', 'AR')
   url.searchParams.set('videoEmbeddable', 'true')
   url.searchParams.set('safeSearch', 'moderate')
+  if (publishedWindow) {
+    url.searchParams.set('publishedAfter', publishedWindow.publishedAfter)
+    url.searchParams.set('publishedBefore', publishedWindow.publishedBefore)
+  }
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), YOUTUBE_FETCH_TIMEOUT_MS)
@@ -1581,7 +1636,7 @@ export async function syncMatchHighlights(supabase: DbClient, options: Highlight
       const runSearches = async (searchQueries: string[]) => {
         for (const query of searchQueries) {
           searched += 1
-          const items = await searchYouTubeHighlights(query, apiKey)
+          const items = await searchYouTubeHighlights(query, apiKey, match)
           const scored = items
             .map((item) => toCandidate(item, match, query))
             .filter((item) => item.videoId)

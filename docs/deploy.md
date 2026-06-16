@@ -136,7 +136,7 @@ En produccion se invoca con:
 Authorization: Bearer <CRON_SECRET>
 ```
 
-Necesita `YOUTUBE_API_KEY` en servidor. Revisa partidos finalizados sin `highlights_url`, busca en YouTube y guarda la URL seleccionada en `public.matches`. Si la busqueda principal no encuentra un video confiable, prueba fuentes como ESPN Fans, ESPN, TNT Sports, DSports, DAZN, AFA Play, FIFA Play, FIFA+, CONMEBOL, Liga Profesional y canales oficiales. Solo acepta canales confiables/oficiales y descarta gameplays o simulaciones de FIFA, EA Sports FC, eFootball, PES, PS5/Xbox y similares. En `vercel.json` esta programado cada 1 hora (`0 * * * *`).
+Necesita `YOUTUBE_API_KEY` en servidor. Revisa partidos finalizados sin `highlights_url`, busca en YouTube y guarda la URL seleccionada en `public.matches`. Prioriza busquedas en espanol y fuentes como TyC Sports, Telefe, ESPN Fans, ESPN, TNT Sports, DSports, DAZN, AFA Play, FIFA Play, FIFA+, CONMEBOL, Liga Profesional y canales oficiales. Solo acepta canales confiables/oficiales y descarta gameplays o simulaciones de FIFA, EA Sports FC, eFootball, PES, PS5/Xbox y similares. En `vercel.json` esta programado cada 4 horas (`0 */4 * * *`) con limite bajo para no consumir la cuota diaria de YouTube de golpe.
 
 ## Chequeos posteriores
 
