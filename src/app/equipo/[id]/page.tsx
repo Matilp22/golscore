@@ -1,6 +1,7 @@
 import SafeImage from '@/frontend/components/SafeImage'
 import { PlayerPhoto, TeamLogo } from '@/frontend/components/AssetImage'
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { buildSeoMetadata } from '@/shared/seo'
 
 import {
@@ -59,16 +60,16 @@ function formatCapacity(value?: number) {
 function normalizePlayerPosition(position?: string) {
   const normalized = (position || '').trim().toLowerCase()
 
-  if (['goalkeeper', 'keeper', 'gk', 'arquero', 'portero'].includes(normalized)) {
+  if (['goalkeeper', 'keeper', 'gk', 'g', 'arquero', 'portero'].includes(normalized)) {
     return 'Goalkeeper'
   }
-  if (['defender', 'defence', 'defense', 'df', 'defensor'].includes(normalized)) {
+  if (['defender', 'defence', 'defense', 'df', 'd', 'cb', 'lb', 'rb', 'defensor'].includes(normalized)) {
     return 'Defender'
   }
-  if (['midfielder', 'midfield', 'mf', 'mediocampista', 'volante'].includes(normalized)) {
+  if (['midfielder', 'midfield', 'mf', 'm', 'dm', 'cm', 'am', 'mediocampista', 'volante'].includes(normalized)) {
     return 'Midfielder'
   }
-  if (['attacker', 'forward', 'fw', 'delantero'].includes(normalized)) {
+  if (['attacker', 'forward', 'fw', 'f', 'st', 'lw', 'rw', 'delantero'].includes(normalized)) {
     return 'Attacker'
   }
 
@@ -173,17 +174,35 @@ function TeamInfoRow({
 
 function PlayerCard({
   player,
+  team,
   showExtendedInfo = false,
 }: {
   player: TeamSquadPlayer
+  team?: {
+    id?: number
+    name?: string
+    logo?: string
+  }
   showExtendedInfo?: boolean
 }) {
   const height = showExtendedInfo ? formatPlayerHeight(player.height) : null
   const clubName = showExtendedInfo ? abbreviateClubName(player.clubName) : null
   const fullClubName = player.clubName?.trim()
+  const playerPhoto = player.photo_url ?? player.photo ?? player.photoUrl ?? ''
+  const href = player.id
+    ? `/jugador/${player.id}?${new URLSearchParams({
+        name: player.name || 'Jugador',
+        photo: playerPhoto,
+        teamId: team?.id ? String(team.id) : '',
+        teamName: team?.name || '',
+        teamLogo: team?.logo || '',
+      }).toString()}`
+    : null
+  const cardClassName =
+    'flex items-center gap-2.5 rounded-xl border border-white/6 bg-black/20 px-2.5 py-2 transition hover:bg-[#70ff9d]/10'
 
-  return (
-    <div className="flex items-center gap-2.5 rounded-xl border border-white/6 bg-black/20 px-2.5 py-2 transition hover:bg-[#70ff9d]/10">
+  const content = (
+    <>
       <div className="flex h-12 w-12 items-center justify-center overflow-hidden">
         <PlayerPhoto
           player={player}
@@ -215,6 +234,20 @@ function PlayerCard({
           ) : null}
         </div>
       </div>
+    </>
+  )
+
+  if (href) {
+    return (
+      <Link href={href} className={cardClassName}>
+        {content}
+      </Link>
+    )
+  }
+
+  return (
+    <div className={cardClassName}>
+      {content}
     </div>
   )
 }
@@ -248,7 +281,10 @@ export default async function EquipoPage({ params }: PageProps) {
   const squad = data.squad?.players || []
   const groupedSquad = groupPlayersByPosition(squad)
   const teamCountry = translateCountryName(team?.country, locale)
-  const showExtendedSquadInfo = Boolean(team?.national)
+  const showExtendedSquadInfo = Boolean(
+    team?.national ||
+    squad.some((player) => player.height || player.clubName || player.clubLogoUrl)
+  )
 
   if (!team) {
     return (
@@ -261,6 +297,12 @@ export default async function EquipoPage({ params }: PageProps) {
         </div>
       </div>
     )
+  }
+
+  const teamSummary = {
+    id: team.id,
+    name: team.name,
+    logo: team.logo_url ?? team.logo ?? team.logoUrl,
   }
 
   return (
@@ -378,6 +420,7 @@ export default async function EquipoPage({ params }: PageProps) {
                           <PlayerCard
                             key={player.id || `${group.key}-${player.name}`}
                             player={player}
+                            team={teamSummary}
                             showExtendedInfo={showExtendedSquadInfo}
                           />
                         ))}

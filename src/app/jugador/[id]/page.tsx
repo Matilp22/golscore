@@ -112,7 +112,10 @@ export default async function JugadorPage({ params, searchParams }: PageProps) {
   const query = await searchParams
   const playerId = Number(id)
   const leagueId = Number(query.leagueId)
-  const season = Number(query.season)
+  const requestedSeason = Number(query.season)
+  const season = Number.isFinite(requestedSeason) && requestedSeason > 0
+    ? requestedSeason
+    : new Date().getFullYear()
   const statType = isLeaderStatType(query.statType) ? query.statType : 'scorers'
   const expectedCount = Number(query.expectedCount) || undefined
   const fallbackName = query.name || 'Jugador'
@@ -121,7 +124,7 @@ export default async function JugadorPage({ params, searchParams }: PageProps) {
   const fallbackTeamName = query.teamName || undefined
   const fallbackTeamLogo = query.teamLogo || undefined
 
-  if (!playerId || !season) {
+  if (!playerId) {
     return (
       <div className="min-h-screen text-white">
         <div className="mx-0 w-full max-w-none px-0 py-3 md:mx-auto md:max-w-6xl md:px-4 md:py-10">

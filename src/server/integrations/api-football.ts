@@ -3441,6 +3441,29 @@ async function fetchStoredPlayersByTeam(
 ) {
   if (!team?.id && !externalId) return []
 
+  const rows = await fetchStoredPlayerRowsByTeamSelector(
+    supabase,
+    team,
+    externalId
+  )
+  const rowsByExternalId = team?.id
+    ? await fetchStoredPlayerRowsByTeamSelector(
+        supabase,
+        null,
+        externalId,
+        { suppressErrors: true }
+      )
+    : []
+
+  return mergeStoredPlayerRows(rows, rowsByExternalId)
+}
+
+async function fetchStoredPlayerRowsByTeamSelector(
+  supabase: ReturnType<typeof getSupabaseAdminClient>,
+  team: StoredTeamRow | null,
+  externalId: number,
+  options: { suppressErrors?: boolean } = {}
+) {
   let response = await selectStoredPlayersByTeam(
     supabase,
     team,
@@ -3458,33 +3481,82 @@ async function fetchStoredPlayersByTeam(
   }
 
   if (response.error) {
-    if (isStoredPlayerReadFallbackError(response.error)) return []
+    if (isStoredPlayerReadFallbackError(response.error) || options.suppressErrors) return []
     throw response.error
   }
 
-  const rows = (response.data ?? []) as unknown as StoredPlayerRow[]
+  return (response.data ?? []) as unknown as StoredPlayerRow[]
+}
 
-  if (rows.length || !team?.id) return rows
+function getStoredPlayerMergeKey(player: StoredPlayerRow) {
+  const externalId = toFiniteNumber(player.external_id)
+  if (externalId) return `external:${externalId}`
 
-  let fallback = await selectStoredPlayersByTeam(
-    supabase,
-    null,
-    externalId,
-    STORED_PLAYER_PROFILE_SELECT
-  )
+  const normalizedName = normalizeSquadPlayerKey(player.name)
 
-  if (fallback.error && isStoredPlayerReadFallbackError(fallback.error)) {
-    fallback = await selectStoredPlayersByTeam(
-      supabase,
-      null,
-      externalId,
-      STORED_PLAYER_BASE_SELECT
-    )
+  return normalizedName ? `name:${normalizedName}` : `row:${player.id}`
+}
+
+function getStoredPlayerCompletenessScore(player: StoredPlayerRow) {
+  return [
+    player.external_id,
+    player.name,
+    player.team_id,
+    player.team_external_id,
+    player.number,
+    player.position,
+    player.height,
+    player.club_external_id,
+    player.club_name,
+    player.club_logo_url,
+    player.profile_last_synced_at,
+    player.photo_url,
+  ].filter(Boolean).length
+}
+
+function mergeStoredPlayerRow(
+  current: StoredPlayerRow,
+  candidate: StoredPlayerRow
+): StoredPlayerRow {
+  const currentScore = getStoredPlayerCompletenessScore(current)
+  const candidateScore = getStoredPlayerCompletenessScore(candidate)
+  const primary = candidateScore >= currentScore ? candidate : current
+  const fallback = primary === candidate ? current : candidate
+
+  return {
+    id: primary.id ?? fallback.id,
+    external_id: primary.external_id ?? fallback.external_id,
+    name: primary.name ?? fallback.name,
+    team_id: primary.team_id ?? fallback.team_id,
+    team_external_id: primary.team_external_id ?? fallback.team_external_id,
+    number: primary.number ?? fallback.number,
+    position: primary.position ?? fallback.position,
+    height: primary.height ?? fallback.height,
+    club_external_id: primary.club_external_id ?? fallback.club_external_id,
+    club_name: primary.club_name ?? fallback.club_name,
+    club_logo_url: primary.club_logo_url ?? fallback.club_logo_url,
+    profile_last_synced_at: primary.profile_last_synced_at ?? fallback.profile_last_synced_at,
+    photo_url: primary.photo_url ?? fallback.photo_url,
+  }
+}
+
+function mergeStoredPlayerRows(...groups: StoredPlayerRow[][]) {
+  const rowsByKey = new Map<string, StoredPlayerRow>()
+
+  for (const player of groups.flat()) {
+    const key = getStoredPlayerMergeKey(player)
+    const current = rowsByKey.get(key)
+
+    rowsByKey.set(key, current ? mergeStoredPlayerRow(current, player) : player)
   }
 
-  if (fallback.error) return []
+  return [...rowsByKey.values()].sort((a, b) => {
+    const positionCompare = String(a.position ?? '').localeCompare(String(b.position ?? ''))
+    if (positionCompare !== 0) return positionCompare
 
-  return (fallback.data ?? []) as unknown as StoredPlayerRow[]
+    return (a.number ?? 999) - (b.number ?? 999) ||
+      String(a.name ?? '').localeCompare(String(b.name ?? ''))
+  })
 }
 
 function selectStoredPlayersByTeam(

@@ -765,6 +765,7 @@ function normalizeGroupName(value: string) {
 }
 
 const GROUP_STAGE_ORDER = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']
+const WORLD_CUP_THIRD_PLACE_TABLE_NAME = 'Tabla de terceros'
 
 function getGroupKeyFromText(value?: string | null) {
   const normalized = normalizeGroupName(value || '')
@@ -813,7 +814,7 @@ function isThirdPlaceTableGroup(
 
 function getDisplayGroupName(value: string, options: { thirdPlaceTable?: boolean } = {}) {
   if (options.thirdPlaceTable || isThirdPlaceRankingGroup(value)) {
-    return 'Tabla de terceros'
+    return WORLD_CUP_THIRD_PLACE_TABLE_NAME
   }
 
   const groupKey = getGroupKeyFromText(value)
@@ -850,6 +851,85 @@ function sortGroupStageGroups(groups: LeagueStandingGroup[]) {
 
     return getDisplayGroupName(a.name).localeCompare(getDisplayGroupName(b.name), 'es-AR')
   })
+}
+
+function compareWorldCupThirdPlaceRows(a: LeagueStandingRow, b: LeagueStandingRow) {
+  if (b.points !== a.points) return b.points - a.points
+  if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference
+  if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor
+  if (a.goalsAgainst !== b.goalsAgainst) return a.goalsAgainst - b.goalsAgainst
+  if (b.won !== a.won) return b.won - a.won
+
+  return a.teamName.localeCompare(b.teamName, 'es-AR')
+}
+
+function getWorldCupGroupThirdPlaceRow(group: LeagueStandingGroup) {
+  if (!getGroupKeyFromText(group.name) || group.rows.length < 3) return null
+
+  const sortedRows = [...group.rows].sort((a, b) => {
+    const rankA = a.rank || Number.MAX_SAFE_INTEGER
+    const rankB = b.rank || Number.MAX_SAFE_INTEGER
+
+    if (rankA !== rankB) return rankA - rankB
+
+    return compareWorldCupThirdPlaceRows(a, b)
+  })
+
+  return sortedRows[2] ?? null
+}
+
+function rankWorldCupThirdPlaceRows(rows: LeagueStandingRow[]) {
+  return [...rows]
+    .sort(compareWorldCupThirdPlaceRows)
+    .map((row, index) => ({
+      ...row,
+      rank: index + 1,
+    }))
+}
+
+function buildWorldCupBestThirdsGroup(groups: LeagueStandingGroup[]) {
+  const rows = groups
+    .filter((group) => Boolean(getGroupKeyFromText(group.name)))
+    .sort((a, b) => getGroupSortValue(a) - getGroupSortValue(b))
+    .map(getWorldCupGroupThirdPlaceRow)
+    .filter((row): row is LeagueStandingRow => Boolean(row))
+
+  if (!rows.length) return null
+
+  return {
+    name: WORLD_CUP_THIRD_PLACE_TABLE_NAME,
+    rows: rankWorldCupThirdPlaceRows(rows),
+  }
+}
+
+function ensureWorldCupBestThirdsGroup(
+  primaryGroups: LeagueStandingGroup[],
+  allGroups: LeagueStandingGroup[],
+  isWorldCupTournament: boolean
+) {
+  if (!isWorldCupTournament) return primaryGroups
+
+  const existingThirdPlaceGroup = allGroups.find((group) =>
+    isThirdPlaceTableGroup(group, true)
+  )
+
+  if (existingThirdPlaceGroup) {
+    const alreadyVisible = primaryGroups.some((group) => group.name === existingThirdPlaceGroup.name)
+
+    return alreadyVisible
+      ? primaryGroups
+      : [
+          ...primaryGroups,
+          {
+            ...existingThirdPlaceGroup,
+            rows: rankWorldCupThirdPlaceRows(existingThirdPlaceGroup.rows),
+          },
+        ]
+  }
+
+  const derivedThirdPlaceGroup = buildWorldCupBestThirdsGroup(primaryGroups)
+
+  return derivedThirdPlaceGroup ? [...primaryGroups, derivedThirdPlaceGroup] : primaryGroups
 }
 
 function isGroupLikeTable(name: string) {
@@ -2507,6 +2587,7 @@ export default async function LigaPage({ params }: PageProps) {
     standings,
     displayOptions.groupMode
   )
+  const isWorldCupTournament = tournament.key === 'selecciones-mundial'
   const showConmebolGroupStage = isConmebolGroupStage(tournament.key)
   const showGroupStageCards = usesGroupStageCards(tournament.key)
   const isUefaLeaguePhaseTournament = isUefaLeaguePhaseTournamentKey(
@@ -2514,9 +2595,14 @@ export default async function LigaPage({ params }: PageProps) {
     resolvedTournament?.leagueId ?? null
   )
   const uefaLeaguePhaseMatchdayLimit = getUefaLeaguePhaseMatchdayLimit(tournament.key)
+  const primaryGroupsWithDerivedTables = ensureWorldCupBestThirdsGroup(
+    primaryGroups,
+    standings,
+    isWorldCupTournament
+  )
   const displayPrimaryGroups = showGroupStageCards
-    ? sortGroupStageGroups(primaryGroups)
-    : primaryGroups
+    ? sortGroupStageGroups(primaryGroupsWithDerivedTables)
+    : primaryGroupsWithDerivedTables
   const uefaLeaguePhaseRows = isUefaLeaguePhaseTournament
     ? buildUefaLeaguePhaseRows(displayPrimaryGroups)
     : []
@@ -2531,7 +2617,11 @@ export default async function LigaPage({ params }: PageProps) {
     ? []
     : !shouldRenderStandings
       ? []
-    : secondaryGroups.filter((group) => !isDerivedTableGroup(group.name))
+    : secondaryGroups.filter(
+        (group) =>
+          !isDerivedTableGroup(group.name) &&
+          !displayPrimaryGroups.some((primaryGroup) => primaryGroup.name === group.name)
+      )
   const baseRows = shouldRenderStandings
     ? primaryGroups.flatMap((group) => group.rows)
     : []
@@ -2610,7 +2700,6 @@ export default async function LigaPage({ params }: PageProps) {
     locale === 'es' && displayOptions.countryNameEs
       ? displayOptions.countryNameEs
       : translateCountryName(resolvedTournament?.country || tournament.country, locale)
-  const isWorldCupTournament = tournament.key === 'selecciones-mundial'
   const hasTournamentData =
     fixtures.length > 0 ||
     standings.some((group) => group.rows.length > 0) ||
