@@ -245,6 +245,48 @@ function readHexColor(source: Record<string, unknown> | null, key: string) {
   return cleanHexColor(readText(source, key))
 }
 
+function toExternalIdValue(value: string | number | null | undefined) {
+  const text = firstText(value)
+  if (!text) return null
+
+  const numeric = Number(text)
+
+  return Number.isFinite(numeric) ? numeric : text
+}
+
+function readRawFixtureIdentity(row: FixtureCacheRow) {
+  const raw = asRecord(row.payload)
+  const rawTeams = asRecord(raw?.teams)
+  const rawHome = asRecord(rawTeams?.home)
+  const rawAway = asRecord(rawTeams?.away)
+
+  return {
+    homeTeam: readText(rawHome, 'name'),
+    awayTeam: readText(rawAway, 'name'),
+    homeLogo: readText(rawHome, 'logo'),
+    awayLogo: readText(rawAway, 'logo'),
+    homeId: readText(rawHome, 'id'),
+    awayId: readText(rawAway, 'id'),
+  }
+}
+
+function withCanonicalFixtureIdentity(
+  input: AdminMatchDetailsInput,
+  row: FixtureCacheRow
+): AdminMatchDetailsInput {
+  const identity = readRawFixtureIdentity(row)
+
+  if (!identity.homeTeam && !identity.awayTeam) return input
+
+  return {
+    ...input,
+    homeTeam: identity.homeTeam ?? input.homeTeam,
+    awayTeam: identity.awayTeam ?? input.awayTeam,
+    homeLogo: identity.homeLogo ?? input.homeLogo,
+    awayLogo: identity.awayLogo ?? input.awayLogo,
+  }
+}
+
 function hasRecordKey(source: Record<string, unknown> | null, key: string) {
   return Boolean(source && Object.prototype.hasOwnProperty.call(source, key))
 }
@@ -544,6 +586,7 @@ function parseEditableMatch(
   const rawTeams = asRecord(raw?.teams)
   const rawHome = asRecord(rawTeams?.home)
   const rawAway = asRecord(rawTeams?.away)
+  const rawIdentity = readRawFixtureIdentity(row)
   const rawGoals = asRecord(raw?.goals)
   const rawScore = asRecord(raw?.score)
   const rawPenalty = asRecord(asRecord(rawScore?.penalty))
@@ -571,8 +614,12 @@ function parseEditableMatch(
   const normalizedAwayCaptain = asRecord(normalizedCaptains?.away)
   const detailHomeCaptain = asRecord(detailCaptains?.home)
   const detailAwayCaptain = asRecord(detailCaptains?.away)
-  const resolvedHomeTeam = resolveTextOverride(overrides, 'homeTeam', readText(normalized, 'home'), readText(normalized, 'homeTeam'), readText(detailHome, 'name'), readText(rawHome, 'name'))
-  const resolvedAwayTeam = resolveTextOverride(overrides, 'awayTeam', readText(normalized, 'away'), readText(normalized, 'awayTeam'), readText(detailAway, 'name'), readText(rawAway, 'name'))
+  const resolvedHomeTeam =
+    rawIdentity.homeTeam ??
+    resolveTextOverride(overrides, 'homeTeam', readText(normalized, 'home'), readText(normalized, 'homeTeam'), readText(detailHome, 'name'), readText(rawHome, 'name'))
+  const resolvedAwayTeam =
+    rawIdentity.awayTeam ??
+    resolveTextOverride(overrides, 'awayTeam', readText(normalized, 'away'), readText(normalized, 'awayTeam'), readText(detailAway, 'name'), readText(rawAway, 'name'))
   const detailLineups = readAdminLineups(detailCacheLineups, detail?.lineups, normalized?.lineups)
   const homeLineup = findAdminLineup(detailLineups, resolvedHomeTeam, 0)
   const awayLineup = findAdminLineup(detailLineups, resolvedAwayTeam, 1)
@@ -628,8 +675,10 @@ function parseEditableMatch(
     homeTeam: resolvedHomeTeam,
     awayTeam: resolvedAwayTeam,
     homeLogo:
+      rawIdentity.homeLogo ??
       resolveTextOverride(overrides, 'homeLogo', readText(normalized, 'homeLogo'), readText(detailHome, 'logo'), readText(rawHome, 'logo')),
     awayLogo:
+      rawIdentity.awayLogo ??
       resolveTextOverride(overrides, 'awayLogo', readText(normalized, 'awayLogo'), readText(detailAway, 'logo'), readText(rawAway, 'logo')),
     homePrimaryColor:
       resolveHexOverride(
@@ -904,6 +953,7 @@ function patchNormalizedPayload(row: FixtureCacheRow, input: AdminMatchDetailsIn
   const normalized = {
     ...(asRecord(row.normalized_payload) ?? {}),
   }
+  const rawIdentity = readRawFixtureIdentity(row)
   const fixtureExternalId = cleanText(input.fixtureExternalId) ?? String(row.fixture_external_id)
   const date = normalizeDateForStorage(input.date)
   const leagueExternalId = cleanText(input.leagueExternalId) ?? row.league_external_id
@@ -911,10 +961,12 @@ function patchNormalizedPayload(row: FixtureCacheRow, input: AdminMatchDetailsIn
   const country = cleanText(input.country)
   const season = toIntegerOrNull(input.season)
   const round = cleanText(input.round)
-  const homeTeam = cleanText(input.homeTeam)
-  const awayTeam = cleanText(input.awayTeam)
-  const homeLogo = cleanText(input.homeLogo)
-  const awayLogo = cleanText(input.awayLogo)
+  const homeTeam = rawIdentity.homeTeam ?? cleanText(input.homeTeam)
+  const awayTeam = rawIdentity.awayTeam ?? cleanText(input.awayTeam)
+  const homeLogo = rawIdentity.homeLogo ?? cleanText(input.homeLogo)
+  const awayLogo = rawIdentity.awayLogo ?? cleanText(input.awayLogo)
+  const homeId = rawIdentity.homeId ?? readText(normalized, 'homeId')
+  const awayId = rawIdentity.awayId ?? readText(normalized, 'awayId')
   const homePrimaryColor = cleanHexColor(input.homePrimaryColor)
   const homeSecondaryColor = cleanHexColor(input.homeSecondaryColor)
   const homeNumberColor = cleanHexColor(input.homeNumberColor)
@@ -966,6 +1018,8 @@ function patchNormalizedPayload(row: FixtureCacheRow, input: AdminMatchDetailsIn
   normalized.date = date
   normalized.home = homeTeam
   normalized.away = awayTeam
+  normalized.homeId = toExternalIdValue(homeId)
+  normalized.awayId = toExternalIdValue(awayId)
   normalized.homeLogo = homeLogo
   normalized.awayLogo = awayLogo
   normalized.homePrimaryColor = homePrimaryColor
@@ -1089,11 +1143,13 @@ function patchNormalizedPayload(row: FixtureCacheRow, input: AdminMatchDetailsIn
     ...(asRecord(fixturePayload.teams) ?? {}),
     home: {
       ...(asRecord(asRecord(fixturePayload.teams)?.home) ?? {}),
+      id: toExternalIdValue(homeId),
       name: homeTeam,
       logo: homeLogo,
     },
     away: {
       ...(asRecord(asRecord(fixturePayload.teams)?.away) ?? {}),
+      id: toExternalIdValue(awayId),
       name: awayTeam,
       logo: awayLogo,
     },
@@ -1662,7 +1718,8 @@ export async function updateAdminMatchDetails(input: AdminMatchDetailsInput) {
     throw new Error('No se encontro el fixture cacheado para editar.')
   }
 
-  const patch = patchNormalizedPayload(row, input)
+  const safeInput = withCanonicalFixtureIdentity(input, row)
+  const patch = patchNormalizedPayload(row, safeInput)
   const supabase = getAdminClient()
   const { error } = await supabase
     .from('football_fixture_cache')
@@ -1677,6 +1734,6 @@ export async function updateAdminMatchDetails(input: AdminMatchDetailsInput) {
     throw new Error(`No se pudo actualizar el cache del partido: ${error.message}`)
   }
 
-  await upsertAdminMatchDetailOverride(input)
-  await updateStoredMatch(input)
+  await upsertAdminMatchDetailOverride(safeInput)
+  await updateStoredMatch(safeInput)
 }

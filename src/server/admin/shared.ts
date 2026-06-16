@@ -127,11 +127,11 @@ function parseFixturePayload(row: FixtureCacheRow) {
       firstText(normalized, ['league', 'leagueName']) ||
       firstText(league, ['name']),
     homeTeam:
-      firstText(normalized, ['home', 'homeTeam']) ||
-      firstText(home, ['name']),
+      firstText(home, ['name']) ||
+      firstText(normalized, ['home', 'homeTeam']),
     awayTeam:
-      firstText(normalized, ['away', 'awayTeam']) ||
-      firstText(away, ['name']),
+      firstText(away, ['name']) ||
+      firstText(normalized, ['away', 'awayTeam']),
     matchDate:
       firstText(normalized, ['date', 'matchDate']) ||
       firstText(fixture, ['date']),
