@@ -279,6 +279,7 @@ const KNOWN_CHANNELS = [
   'afa estudio',
   'conmebol',
   'espn',
+  'espn fc',
   'espn fans',
   'espn premium',
   'espn deportes',
@@ -297,6 +298,7 @@ const KNOWN_CHANNELS = [
   'tnt premium',
   'tnt sports premium',
   'fox sports',
+  'fox soccer',
   'fox deportes',
   'dazn',
   'dazn tv',
@@ -333,6 +335,7 @@ const OFFICIAL_CHANNEL_HINTS = [
 ]
 const TRUSTED_SOURCE_SEARCH_TERMS = [
   'ESPN Fans',
+  'ESPN FC',
   'ESPN',
   'TyC Sports',
   'TyC Sports Play',
@@ -354,6 +357,7 @@ const TRUSTED_SOURCE_SEARCH_TERMS = [
   'canal oficial resumen',
   'official highlights',
   'Fox Sports',
+  'FOX Soccer',
 ]
 const COUNTRY_TEAM_SEARCH_ALIASES: Record<string, string[]> = {
   algeria: ['Argelia'],
@@ -525,6 +529,10 @@ function isYouTubeQuotaError(error: ErrorPayload) {
 
   return (
     text.includes('quota') ||
+    text.includes('ratelimitexceeded') ||
+    text.includes('rate limit exceeded') ||
+    text.includes('too many requests') ||
+    error.status === 429 ||
     text.includes('dailylimitexceeded') ||
     text.includes('daily limit exceeded')
   )
