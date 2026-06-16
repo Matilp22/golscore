@@ -22,7 +22,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { id } = await params
 
   try {
-    const data = await getTeamDetail(Number(id))
+    const data = await getTeamDetail(Number(id), { allowApiEnrichment: false })
     const teamData = data.team as TeamProfile | null
     const team = teamData?.team
     const venue = teamData?.venue
@@ -238,7 +238,10 @@ export default async function EquipoPage({ params }: PageProps) {
   let data
 
   try {
-    data = await getTeamDetail(Number(id))
+    data = await getTeamDetail(Number(id), {
+      allowApiEnrichment: true,
+      deepPlayerProfileLimit: 8,
+    })
   } catch {
     const message = 'Datos temporalmente no disponibles. Intentá nuevamente en unos minutos.'
 

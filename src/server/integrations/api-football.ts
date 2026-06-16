@@ -2361,6 +2361,16 @@ type StoredTeamRow = {
   name: string | null
   logo_url?: string | null
   country?: string | null
+  code?: string | null
+  founded?: number | null
+  national?: boolean | null
+  venue_name?: string | null
+  venue_address?: string | null
+  venue_city?: string | null
+  venue_capacity?: number | null
+  venue_surface?: string | null
+  venue_image?: string | null
+  profile_last_synced_at?: string | null
 }
 
 type StoredPlayerRow = {
@@ -2484,8 +2494,16 @@ type SquadPlayerProfile = Pick<
 
 const STORED_PLAYER_BASE_SELECT =
   'id, external_id, name, team_id, team_external_id, number, position, photo_url'
+const STORED_PLAYER_ROSTER_PROFILE_SELECT =
+  `${STORED_PLAYER_BASE_SELECT}, height, club_external_id, club_name, club_logo_url, profile_last_synced_at`
 const STORED_PLAYER_PROFILE_SELECT =
-  `${STORED_PLAYER_BASE_SELECT}, firstname, lastname, age, nationality, birth_date, birth_place, birth_country, height, weight, injured, club_external_id, club_name, club_logo_url, profile_last_synced_at`
+  `${STORED_PLAYER_ROSTER_PROFILE_SELECT}, firstname, lastname, age, nationality, birth_date, birth_place, birth_country, weight, injured`
+const STORED_TEAM_BASE_SELECT =
+  'id, external_id, name, logo_url'
+const STORED_TEAM_COUNTRY_SELECT =
+  `${STORED_TEAM_BASE_SELECT}, country`
+const STORED_TEAM_PROFILE_SELECT =
+  `${STORED_TEAM_COUNTRY_SELECT}, code, founded, national, venue_name, venue_address, venue_city, venue_capacity, venue_surface, venue_image, profile_last_synced_at`
 
 const KNOWN_TOURNAMENT_RESOLUTIONS: ResolvedTournament[] = [
   { leagueId: 128, season: 2026, name: 'Liga Profesional Argentina', country: 'Argentina' },
@@ -3512,6 +3530,15 @@ async function fetchStoredPlayerRowsByTeamSelector(
       supabase,
       team,
       externalId,
+      STORED_PLAYER_ROSTER_PROFILE_SELECT
+    )
+  }
+
+  if (response.error && isStoredPlayerReadFallbackError(response.error)) {
+    response = await selectStoredPlayersByTeam(
+      supabase,
+      team,
+      externalId,
       STORED_PLAYER_BASE_SELECT
     )
   }
@@ -3640,6 +3667,56 @@ function isStoredPlayerReadFallbackError(error: { code?: string; message?: strin
   )
 }
 
+function isStoredTeamProfileReadFallbackError(error: { code?: string; message?: string }) {
+  const message = (error.message ?? '').toLowerCase()
+
+  return (
+    error.code === '42P01' ||
+    error.code === 'PGRST205' ||
+    error.code === '42703' ||
+    error.code === 'PGRST204' ||
+    message.includes('teams') ||
+    message.includes('schema cache') ||
+    message.includes('country') ||
+    message.includes('code') ||
+    message.includes('founded') ||
+    message.includes('national') ||
+    message.includes('venue_') ||
+    message.includes('profile_last_synced_at')
+  )
+}
+
+async function fetchStoredTeamByExternalId(
+  supabase: ReturnType<typeof getSupabaseAdminClient>,
+  externalId: number
+) {
+  let response = await supabase
+    .from('teams')
+    .select(STORED_TEAM_PROFILE_SELECT)
+    .eq('external_id', String(externalId))
+    .maybeSingle()
+
+  if (response.error && isStoredTeamProfileReadFallbackError(response.error)) {
+    response = await supabase
+      .from('teams')
+      .select(STORED_TEAM_COUNTRY_SELECT)
+      .eq('external_id', String(externalId))
+      .maybeSingle()
+  }
+
+  if (response.error && isStoredTeamProfileReadFallbackError(response.error)) {
+    response = await supabase
+      .from('teams')
+      .select(STORED_TEAM_BASE_SELECT)
+      .eq('external_id', String(externalId))
+      .maybeSingle()
+  }
+
+  if (response.error) throw response.error
+
+  return (response.data as StoredTeamRow | null) ?? null
+}
+
 async function fetchApiTeamDetailSafe(externalId: number) {
   try {
     const { payload } = await requestFootballApi<ApiFootballTeamDetailRow[]>(
@@ -3680,6 +3757,154 @@ async function fetchApiTeamSquadSafe(externalId: number) {
 
     return null
   }
+}
+
+function isFreshTeamProfileSync(team: StoredTeamRow | null) {
+  if (!team?.profile_last_synced_at) return false
+
+  const timestamp = new Date(team.profile_last_synced_at).getTime()
+  if (!Number.isFinite(timestamp)) return false
+
+  const thirtyDays = 30 * 24 * 60 * 60 * 1000
+  return Date.now() - timestamp < thirtyDays
+}
+
+function hasStoredTeamProfileGap(team: StoredTeamRow | null) {
+  if (!team) return true
+  if (isFreshTeamProfileSync(team)) return false
+
+  return Boolean(
+    !team.country ||
+    !team.code ||
+    !team.founded ||
+    !team.venue_name ||
+    !team.venue_city ||
+    !team.venue_capacity ||
+    !team.venue_surface
+  )
+}
+
+function hasStoredSquadProfileGap(players: StoredPlayerRow[]) {
+  if (!players.length) return true
+
+  return players.some((player) =>
+    !player.age ||
+    !player.height ||
+    !player.club_name ||
+    !player.photo_url
+  )
+}
+
+function hasStoredPlayerDetailGap(player: StoredPlayerRow | null) {
+  if (!player) return true
+
+  return Boolean(
+    !player.age ||
+    !player.nationality ||
+    !player.birth_date ||
+    !player.birth_place ||
+    !player.height ||
+    !player.weight
+  )
+}
+
+function mapStoredTeamVenue(team: StoredTeamRow | null): TeamVenue | undefined {
+  if (!team) return undefined
+
+  const venue: TeamVenue = {
+    name: team.venue_name ?? undefined,
+    address: team.venue_address ?? undefined,
+    city: team.venue_city ?? undefined,
+    capacity: team.venue_capacity ?? undefined,
+    surface: team.venue_surface ?? undefined,
+    image: team.venue_image ?? undefined,
+  }
+
+  return Object.values(venue).some(Boolean) ? venue : undefined
+}
+
+function mapApiTeamVenue(apiVenue?: ApiFootballTeamDetailRow['venue']): TeamVenue | undefined {
+  if (!apiVenue) return undefined
+
+  const venue: TeamVenue = {
+    name: apiVenue.name ?? undefined,
+    address: apiVenue.address ?? undefined,
+    city: apiVenue.city ?? undefined,
+    capacity: apiVenue.capacity ?? undefined,
+    surface: apiVenue.surface ?? undefined,
+    image: apiVenue.image ?? undefined,
+  }
+
+  return Object.values(venue).some(Boolean) ? venue : undefined
+}
+
+function mergeTeamVenue(
+  storedVenue?: TeamVenue,
+  apiVenue?: TeamVenue
+): TeamVenue | undefined {
+  if (!storedVenue && !apiVenue) return undefined
+
+  return {
+    name: storedVenue?.name ?? apiVenue?.name,
+    address: storedVenue?.address ?? apiVenue?.address,
+    city: storedVenue?.city ?? apiVenue?.city,
+    capacity: storedVenue?.capacity ?? apiVenue?.capacity,
+    surface: storedVenue?.surface ?? apiVenue?.surface,
+    image: storedVenue?.image ?? apiVenue?.image,
+  }
+}
+
+async function persistApiTeamProfileSafe(
+  supabase: ReturnType<typeof getSupabaseAdminClient>,
+  externalId: number,
+  currentTeam: StoredTeamRow | null,
+  apiDetail: ApiFootballTeamDetailRow | null
+) {
+  const apiTeam = apiDetail?.team
+  const apiVenue = apiDetail?.venue
+  if (!apiTeam && !apiVenue) return
+
+  const syncedAt = new Date().toISOString()
+  const row: Record<string, string | number | boolean> = {
+    profile_last_synced_at: syncedAt,
+  }
+
+  assignPlayerProfileValue(row, 'name', apiTeam?.name)
+  assignPlayerProfileValue(row, 'logo_url', apiTeam?.logo)
+  assignPlayerProfileValue(row, 'country', apiTeam?.country)
+  assignPlayerProfileValue(row, 'code', apiTeam?.code)
+  assignPlayerProfileValue(row, 'founded', apiTeam?.founded)
+  assignPlayerProfileValue(row, 'national', apiTeam?.national)
+  assignPlayerProfileValue(row, 'venue_name', apiVenue?.name)
+  assignPlayerProfileValue(row, 'venue_address', apiVenue?.address)
+  assignPlayerProfileValue(row, 'venue_city', apiVenue?.city)
+  assignPlayerProfileValue(row, 'venue_capacity', apiVenue?.capacity)
+  assignPlayerProfileValue(row, 'venue_surface', apiVenue?.surface)
+  assignPlayerProfileValue(row, 'venue_image', apiVenue?.image)
+
+  const changedFields = Object.keys(row).filter((key) => key !== 'profile_last_synced_at')
+  if (!changedFields.length) return
+
+  const result = currentTeam
+    ? await supabase
+        .from('teams')
+        .update(row)
+        .eq('external_id', String(externalId))
+    : await supabase
+        .from('teams')
+        .upsert(
+          {
+            external_id: externalId,
+            name: apiTeam?.name || `Equipo ${externalId}`,
+            ...row,
+          },
+          { onConflict: 'external_id' }
+        )
+
+  if (!result.error) return
+  if (isStoredTeamProfileReadFallbackError(result.error)) return
+
+  throw result.error
 }
 
 function mapStoredPlayerToSquadPlayer(player: StoredPlayerRow): TeamSquadPlayer {
@@ -4243,11 +4468,12 @@ async function persistNationalSquadPlayerProfiles(
 async function enrichNationalSquadProfiles(
   supabase: ReturnType<typeof getSupabaseAdminClient>,
   players: TeamSquadPlayer[],
-  nationalTeamExternalId: number
+  nationalTeamExternalId: number,
+  maxProfiles = 8
 ) {
   if (!process.env.FOOTBALL_API_KEY) return players
 
-  const candidates = players.filter(needsNationalSquadProfile).slice(0, 32)
+  const candidates = players.filter(needsNationalSquadProfile).slice(0, maxProfiles)
   if (!candidates.length) return players
 
   const profileLastSyncedAt = new Date().toISOString()
@@ -4296,6 +4522,7 @@ async function enrichNationalSquadProfiles(
 
 type PublicDetailDataOptions = {
   allowApiEnrichment?: boolean
+  deepPlayerProfileLimit?: number
 }
 
 export async function getTeamDetail(
@@ -4303,43 +4530,20 @@ export async function getTeamDetail(
   options: PublicDetailDataOptions = {}
 ) {
   const supabase = getSupabaseAdminClient()
-  let response = await supabase
-    .from('teams')
-    .select('id, external_id, name, logo_url, country')
-    .eq('external_id', String(id))
-    .maybeSingle()
-
-  if (
-    response.error &&
-    (
-      response.error.code === '42703' ||
-      response.error.code === 'PGRST204' ||
-      response.error.message.toLowerCase().includes('country') ||
-      response.error.message.toLowerCase().includes('schema cache')
-    )
-  ) {
-    response = await supabase
-      .from('teams')
-      .select('id, external_id, name, logo_url')
-      .eq('external_id', String(id))
-      .maybeSingle()
-  }
-
-  if (response.error) throw response.error
-
-  const team = response.data as StoredTeamRow | null
+  const team = await fetchStoredTeamByExternalId(supabase, id)
   const externalId = toFiniteNumber(team?.external_id) ?? id
   const players = await fetchStoredPlayersByTeam(supabase, team, externalId)
-  const shouldUseApiEnrichment =
-    options.allowApiEnrichment === true || (!team && players.length === 0)
-  const [apiTeamDetail, apiSquad] = shouldUseApiEnrichment
-    ? await Promise.all([
-        fetchApiTeamDetailSafe(externalId),
-        fetchApiTeamSquadSafe(externalId),
-      ])
-    : [null, null]
+  const shouldFetchApiTeamDetail =
+    options.allowApiEnrichment === true && hasStoredTeamProfileGap(team)
+  const shouldFetchApiSquad =
+    options.allowApiEnrichment === true && hasStoredSquadProfileGap(players)
+  const [apiTeamDetail, apiSquad] = await Promise.all([
+    shouldFetchApiTeamDetail ? fetchApiTeamDetailSafe(externalId) : Promise.resolve(null),
+    shouldFetchApiSquad ? fetchApiTeamSquadSafe(externalId) : Promise.resolve(null),
+  ])
   const apiTeam = apiTeamDetail?.team
-  const apiVenue = apiTeamDetail?.venue
+  const storedVenue = mapStoredTeamVenue(team)
+  const apiVenue = mapApiTeamVenue(apiTeamDetail?.venue)
   const resolvedExternalId = toFiniteNumber(apiTeam?.id) ?? externalId
   const logoUrl =
     pickTeamLogoUrl(team?.logo_url, resolvedExternalId) ??
@@ -4351,11 +4555,25 @@ export async function getTeamDetail(
     apiSquadPlayers
   )
 
-  if (shouldUseApiEnrichment && apiTeam?.national) {
+  if (apiTeamDetail) {
+    try {
+      await persistApiTeamProfileSafe(supabase, resolvedExternalId, team, apiTeamDetail)
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[team-detail-data] No se pudo persistir el perfil del equipo.', {
+          teamExternalId: resolvedExternalId,
+          message: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
+  }
+
+  if (options.allowApiEnrichment === true && (team?.national ?? apiTeam?.national)) {
     squadPlayers = await enrichNationalSquadProfiles(
       supabase,
       squadPlayers,
-      resolvedExternalId
+      resolvedExternalId,
+      options.deepPlayerProfileLimit
     )
   }
 
@@ -4369,6 +4587,8 @@ export async function getTeamDetail(
       storedPlayers: players.length,
       apiSquadPlayers: apiSquadPlayers.length,
       renderedPlayers: squadPlayers.length,
+      fetchedApiTeamDetail: shouldFetchApiTeamDetail,
+      fetchedApiSquad: shouldFetchApiSquad,
     })
   }
 
@@ -4381,21 +4601,12 @@ export async function getTeamDetail(
             logo: logoUrl,
             logo_url: logoUrl,
             logoUrl,
-            code: apiTeam?.code ?? undefined,
+            code: team?.code ?? apiTeam?.code ?? undefined,
             country: team?.country ?? apiTeam?.country ?? undefined,
-            founded: apiTeam?.founded ?? undefined,
-            national: apiTeam?.national ?? undefined,
+            founded: team?.founded ?? apiTeam?.founded ?? undefined,
+            national: team?.national ?? apiTeam?.national ?? undefined,
           },
-          venue: apiVenue
-            ? {
-                name: apiVenue.name ?? undefined,
-                address: apiVenue.address ?? undefined,
-                city: apiVenue.city ?? undefined,
-                capacity: apiVenue.capacity ?? undefined,
-                surface: apiVenue.surface ?? undefined,
-                image: apiVenue.image ?? undefined,
-              }
-            : undefined,
+          venue: mergeTeamVenue(storedVenue, apiVenue),
         }
       : null,
     squad: team || apiTeam || apiSquad
@@ -4429,6 +4640,14 @@ export async function getPlayerDetail(
   if (response.error && isStoredPlayerReadFallbackError(response.error)) {
     response = await supabase
       .from('players')
+      .select(STORED_PLAYER_ROSTER_PROFILE_SELECT)
+      .eq('external_id', String(id))
+      .maybeSingle()
+  }
+
+  if (response.error && isStoredPlayerReadFallbackError(response.error)) {
+    response = await supabase
+      .from('players')
       .select(STORED_PLAYER_BASE_SELECT)
       .eq('external_id', String(id))
       .maybeSingle()
@@ -4449,7 +4668,9 @@ export async function getPlayerDetail(
 
   const player = response.data as StoredPlayerRow | null
   const playerExternalId = toFiniteNumber(player?.external_id) ?? id
-  const shouldUseApiEnrichment = options.allowApiEnrichment === true
+  const shouldUseApiEnrichment =
+    options.allowApiEnrichment === true &&
+    (hasStoredPlayerDetailGap(player) || season > 0)
   const apiRows = shouldUseApiEnrichment
     ? await fetchApiPlayerDetailSafe(playerExternalId, season, leagueId)
     : []

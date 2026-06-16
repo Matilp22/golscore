@@ -144,7 +144,9 @@ export default async function JugadorPage({ params, searchParams }: PageProps) {
   }
 
   try {
-    const playerDetail = await getPlayerDetail(playerId, season, leagueId || undefined)
+    const playerDetail = await getPlayerDetail(playerId, season, leagueId || undefined, {
+      allowApiEnrichment: true,
+    })
 
     const player = playerDetail?.player || {
       id: playerId,
