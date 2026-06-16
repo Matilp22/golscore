@@ -12,6 +12,7 @@ import {
 import { getRequestLocale } from '@/server/request-locale'
 import { t } from '@/shared/i18n/locales'
 import { translateCountryName } from '@/shared/utils/country-names'
+import { formatPlayerHeight } from '@/shared/utils/player-profile'
 
 type PageProps = {
   params: Promise<{ id: string }>
@@ -86,28 +87,6 @@ function translatePlayerPosition(position?: string) {
   }
 
   return labels[normalizePlayerPosition(position)]
-}
-
-function formatPlayerHeight(value?: string) {
-  const normalized = value?.trim().toLowerCase()
-  if (!normalized) return null
-
-  const centimetersMatch = normalized.match(/(\d{2,3})(?:[.,]\d+)?\s*cm\b/)
-  if (centimetersMatch) {
-    return `${(Number(centimetersMatch[1]) / 100).toFixed(2).replace('.', ',')} m`
-  }
-
-  const metersMatch = normalized.match(/(\d+(?:[.,]\d+)?)\s*m\b/)
-  if (metersMatch) {
-    const meters = Number(metersMatch[1].replace(',', '.'))
-    return Number.isFinite(meters) ? `${meters.toFixed(2).replace('.', ',')} m` : value
-  }
-
-  const numeric = Number(normalized.replace(',', '.').replace(/[^\d.]/g, ''))
-  if (!Number.isFinite(numeric) || numeric <= 0) return value
-
-  const meters = numeric > 3 ? numeric / 100 : numeric
-  return `${meters.toFixed(2).replace('.', ',')} m`
 }
 
 function abbreviateClubName(value?: string) {

@@ -2371,7 +2371,16 @@ type StoredPlayerRow = {
   team_external_id: number | string | null
   number: number | null
   position: string | null
+  firstname?: string | null
+  lastname?: string | null
+  age?: number | null
+  nationality?: string | null
+  birth_date?: string | null
+  birth_place?: string | null
+  birth_country?: string | null
   height?: string | null
+  weight?: string | null
+  injured?: boolean | null
   club_external_id?: number | string | null
   club_name?: string | null
   club_logo_url?: string | null
@@ -2422,8 +2431,18 @@ type ApiFootballPlayerDetailRow = {
   player?: {
     id?: number
     name?: string
+    firstname?: string | null
+    lastname?: string | null
     age?: number | null
+    nationality?: string | null
+    birth?: {
+      date?: string | null
+      place?: string | null
+      country?: string | null
+    } | null
     height?: string | null
+    weight?: string | null
+    injured?: boolean | null
     photo?: string | null
   }
   statistics?: Array<{
@@ -2436,7 +2455,24 @@ type ApiFootballPlayerDetailRow = {
       id?: number
       name?: string | null
       country?: string | null
+      logo?: string | null
       season?: number | null
+    }
+    games?: {
+      appearences?: number | string | null
+      appearances?: number | string | null
+      lineups?: number | string | null
+      minutes?: number | string | null
+      position?: string | null
+      rating?: string | null
+    }
+    goals?: {
+      total?: number | string | null
+      assists?: number | string | null
+    }
+    cards?: {
+      yellow?: number | string | null
+      red?: number | string | null
     }
   }>
 }
@@ -2449,7 +2485,7 @@ type SquadPlayerProfile = Pick<
 const STORED_PLAYER_BASE_SELECT =
   'id, external_id, name, team_id, team_external_id, number, position, photo_url'
 const STORED_PLAYER_PROFILE_SELECT =
-  `${STORED_PLAYER_BASE_SELECT}, height, club_external_id, club_name, club_logo_url, profile_last_synced_at`
+  `${STORED_PLAYER_BASE_SELECT}, firstname, lastname, age, nationality, birth_date, birth_place, birth_country, height, weight, injured, club_external_id, club_name, club_logo_url, profile_last_synced_at`
 
 const KNOWN_TOURNAMENT_RESOLUTIONS: ResolvedTournament[] = [
   { leagueId: 128, season: 2026, name: 'Liga Profesional Argentina', country: 'Argentina' },
@@ -3592,6 +3628,13 @@ function isStoredPlayerReadFallbackError(error: { code?: string; message?: strin
     message.includes('players') ||
     message.includes('schema cache') ||
     message.includes('height') ||
+    message.includes('firstname') ||
+    message.includes('lastname') ||
+    message.includes('age') ||
+    message.includes('nationality') ||
+    message.includes('birth_') ||
+    message.includes('weight') ||
+    message.includes('injured') ||
     message.includes('club_') ||
     message.includes('profile_last_synced_at')
   )
@@ -3648,6 +3691,7 @@ function mapStoredPlayerToSquadPlayer(player: StoredPlayerRow): TeamSquadPlayer 
   return {
     id: playerExternalId,
     name: player.name ?? 'Jugador',
+    age: player.age ?? undefined,
     number: player.number ?? undefined,
     position: player.position ?? undefined,
     height: player.height ?? undefined,
@@ -3748,6 +3792,257 @@ function getTrimmedValue(value?: string | null) {
   const trimmed = value?.trim()
 
   return trimmed || undefined
+}
+
+type ApiFootballPlayerStatistic = NonNullable<ApiFootballPlayerDetailRow['statistics']>[number]
+
+function getFirstFinitePlayerNumber(
+  ...values: Array<number | string | null | undefined>
+) {
+  for (const value of values) {
+    const numericValue = toFiniteNumber(value)
+    if (numericValue !== null) return numericValue
+  }
+
+  return 0
+}
+
+function getFirstTrimmedPlayerValue(...values: Array<string | null | undefined>) {
+  for (const value of values) {
+    const trimmed = getTrimmedValue(value)
+    if (trimmed) return trimmed
+  }
+
+  return undefined
+}
+
+function pickApiPlayerStatistic(
+  rows: ApiFootballPlayerDetailRow[],
+  leagueId?: number
+): ApiFootballPlayerStatistic | null {
+  const statistics = rows.flatMap((row) => row.statistics ?? [])
+  if (!statistics.length) return null
+
+  if (leagueId) {
+    const leagueStatistic = statistics.find(
+      (statistic) => toFiniteNumber(statistic.league?.id) === leagueId
+    )
+    if (leagueStatistic) return leagueStatistic
+  }
+
+  return (
+    statistics.find((statistic) => statistic.team?.id || statistic.league?.id) ??
+    statistics[0] ??
+    null
+  )
+}
+
+function pickApiPlayerRow(rows: ApiFootballPlayerDetailRow[], leagueId?: number) {
+  if (leagueId) {
+    const leagueRow = rows.find((row) =>
+      row.statistics?.some((statistic) => toFiniteNumber(statistic.league?.id) === leagueId)
+    )
+    if (leagueRow?.player) return leagueRow
+  }
+
+  return rows.find((row) => row.player) ?? null
+}
+
+function mapApiPlayerRowsToPlayerDetail(
+  rows: ApiFootballPlayerDetailRow[],
+  leagueId?: number
+): PlayerDetail | null {
+  if (!rows.length) return null
+
+  const row = pickApiPlayerRow(rows, leagueId)
+  const statistic = pickApiPlayerStatistic(rows, leagueId)
+  const apiPlayer = row?.player
+  if (!apiPlayer && !statistic) return null
+
+  const playerId = toFiniteNumber(apiPlayer?.id) ?? undefined
+  const playerPhotoUrl = getTrimmedValue(apiPlayer?.photo)
+  const playerNameFromParts = [apiPlayer?.firstname, apiPlayer?.lastname]
+    .map((part) => getTrimmedValue(part))
+    .filter((part): part is string => Boolean(part))
+    .join(' ')
+  const playerName =
+    getFirstTrimmedPlayerValue(apiPlayer?.name, playerNameFromParts) ?? 'Jugador'
+  const teamId = toFiniteNumber(statistic?.team?.id)
+  const teamLogoUrl =
+    pickTeamLogoUrl(getTrimmedValue(statistic?.team?.logo), teamId) ?? undefined
+  const statisticLeagueId = toFiniteNumber(statistic?.league?.id)
+  const leagueLogoUrl =
+    pickLeagueLogoUrl(
+      getTrimmedValue(statistic?.league?.logo),
+      statisticLeagueId ?? leagueId
+    ) ?? undefined
+
+  return {
+    player: {
+      id: playerId,
+      name: playerName || 'Jugador',
+      firstname: getTrimmedValue(apiPlayer?.firstname),
+      lastname: getTrimmedValue(apiPlayer?.lastname),
+      age: toFiniteNumber(apiPlayer?.age) ?? undefined,
+      nationality: getTrimmedValue(apiPlayer?.nationality),
+      birthDate: getTrimmedValue(apiPlayer?.birth?.date),
+      birthPlace: getTrimmedValue(apiPlayer?.birth?.place),
+      birthCountry: getTrimmedValue(apiPlayer?.birth?.country),
+      height: getTrimmedValue(apiPlayer?.height),
+      weight: getTrimmedValue(apiPlayer?.weight),
+      injured: apiPlayer?.injured ?? undefined,
+      photo: playerPhotoUrl,
+      photo_url: playerPhotoUrl,
+      photoUrl: playerPhotoUrl,
+    },
+    team: statistic?.team
+      ? {
+          id: teamId ?? undefined,
+          name: getTrimmedValue(statistic.team.name),
+          logo: teamLogoUrl,
+          logo_url: teamLogoUrl,
+          logoUrl: teamLogoUrl,
+        }
+      : undefined,
+    league: statistic?.league
+      ? {
+          id: statisticLeagueId ?? leagueId,
+          name: getTrimmedValue(statistic.league.name),
+          country: getTrimmedValue(statistic.league.country),
+          logo: leagueLogoUrl,
+          logo_url: leagueLogoUrl,
+          logoUrl: leagueLogoUrl,
+          season: toFiniteNumber(statistic.league.season) ?? undefined,
+        }
+      : undefined,
+    statistics: {
+      appearances: getFirstFinitePlayerNumber(
+        statistic?.games?.appearences,
+        statistic?.games?.appearances
+      ),
+      lineups: getFirstFinitePlayerNumber(statistic?.games?.lineups),
+      minutes: getFirstFinitePlayerNumber(statistic?.games?.minutes),
+      position: getTrimmedValue(statistic?.games?.position),
+      rating: getTrimmedValue(statistic?.games?.rating) ?? null,
+      goals: getFirstFinitePlayerNumber(statistic?.goals?.total),
+      assists: getFirstFinitePlayerNumber(statistic?.goals?.assists),
+      yellowCards: getFirstFinitePlayerNumber(statistic?.cards?.yellow),
+      redCards: getFirstFinitePlayerNumber(statistic?.cards?.red),
+    },
+  }
+}
+
+async function fetchApiPlayerDetailSafe(
+  playerExternalId: number,
+  season: number,
+  leagueId?: number
+) {
+  const attempts = leagueId
+    ? [
+        { id: playerExternalId, season, league: leagueId },
+        { id: playerExternalId, season },
+      ]
+    : [{ id: playerExternalId, season }]
+
+  for (const params of attempts) {
+    try {
+      const { payload } = await withTimeout(
+        requestFootballApi<ApiFootballPlayerDetailRow[]>('/players', params, {
+          logContext: `player-detail:${playerExternalId}:${season}:${leagueId ?? 'all'}`,
+        }),
+        4500,
+        `API-Football player detail timeout ${playerExternalId}`
+      )
+      const rows = payload.response ?? []
+      if (rows.length) return rows
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[player-detail-data] No se pudo enriquecer la ficha del jugador.', {
+          playerExternalId,
+          season,
+          leagueId,
+          message: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
+  }
+
+  return []
+}
+
+function getValidPlayerBirthDate(value?: string | null) {
+  const trimmed = getTrimmedValue(value)
+  if (!trimmed) return undefined
+
+  const date = new Date(trimmed)
+  if (!Number.isFinite(date.getTime())) return undefined
+
+  return date.toISOString().slice(0, 10)
+}
+
+function assignPlayerProfileValue(
+  row: Record<string, string | number | boolean>,
+  key: string,
+  value: string | number | boolean | null | undefined
+) {
+  if (value === null || value === undefined || value === '') return
+
+  row[key] = value
+}
+
+async function persistApiPlayerDetailProfileSafe(
+  supabase: ReturnType<typeof getSupabaseAdminClient>,
+  playerExternalId: number,
+  currentPlayer: StoredPlayerRow | null,
+  apiDetail: PlayerDetail | null
+) {
+  const apiPlayer = apiDetail?.player
+  if (!apiPlayer) return
+
+  const syncedAt = new Date().toISOString()
+  const row: Record<string, string | number | boolean> = {
+    profile_last_synced_at: syncedAt,
+    updated_at: syncedAt,
+  }
+
+  assignPlayerProfileValue(row, 'name', apiPlayer.name)
+  assignPlayerProfileValue(row, 'firstname', apiPlayer.firstname)
+  assignPlayerProfileValue(row, 'lastname', apiPlayer.lastname)
+  assignPlayerProfileValue(row, 'age', apiPlayer.age)
+  assignPlayerProfileValue(row, 'nationality', apiPlayer.nationality)
+  assignPlayerProfileValue(row, 'birth_date', getValidPlayerBirthDate(apiPlayer.birthDate))
+  assignPlayerProfileValue(row, 'birth_place', apiPlayer.birthPlace)
+  assignPlayerProfileValue(row, 'birth_country', apiPlayer.birthCountry)
+  assignPlayerProfileValue(row, 'height', apiPlayer.height)
+  assignPlayerProfileValue(row, 'weight', apiPlayer.weight)
+  assignPlayerProfileValue(row, 'injured', apiPlayer.injured)
+  assignPlayerProfileValue(row, 'photo_url', apiPlayer.photo_url ?? apiPlayer.photo)
+
+  const changedFields = Object.keys(row).filter(
+    (key) => key !== 'profile_last_synced_at' && key !== 'updated_at'
+  )
+  if (!changedFields.length) return
+
+  const result = currentPlayer
+    ? await supabase
+        .from('players')
+        .update(row)
+        .eq('external_id', String(playerExternalId))
+    : await supabase
+        .from('players')
+        .upsert(
+          {
+            external_id: String(playerExternalId),
+            name: apiPlayer.name || `Jugador ${playerExternalId}`,
+            ...row,
+          },
+          { onConflict: 'external_id' }
+        )
+
+  if (!result.error) return
+  if (isStoredPlayerReadFallbackError(result.error)) return
+
+  throw result.error
 }
 
 function isFreshPlayerProfileSync(player: TeamSquadPlayer) {
@@ -4112,8 +4407,6 @@ export async function getPlayerDetail(
   season: number,
   leagueId?: number
 ): Promise<PlayerDetail | null> {
-  void season
-
   const supabase = getSupabaseAdminClient()
   let response = await supabase
     .from('players')
@@ -4143,84 +4436,125 @@ export async function getPlayerDetail(
   }
 
   const player = response.data as StoredPlayerRow | null
-  if (!player) return null
+  const playerExternalId = toFiniteNumber(player?.external_id) ?? id
+  const apiRows = await fetchApiPlayerDetailSafe(playerExternalId, season, leagueId)
+  const apiDetail = mapApiPlayerRowsToPlayerDetail(apiRows, leagueId)
 
-  const playerExternalId = toFiniteNumber(player.external_id) ?? id
-  const playerPhotoUrl = player.photo_url ?? undefined
-  const preferredTeamExternalId = player.club_external_id ?? player.team_external_id
-  const teamResponse = player.club_external_id
+  if (!player && !apiDetail) return null
+
+  try {
+    await persistApiPlayerDetailProfileSafe(supabase, playerExternalId, player, apiDetail)
+  } catch (error) {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[player-detail-data] No se pudo persistir la ficha del jugador.', {
+        playerExternalId,
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  const apiPlayer = apiDetail?.player
+  const apiTeam = apiDetail?.team
+  const apiLeague = apiDetail?.league
+  const apiStatistics = apiDetail?.statistics
+  const playerPhotoUrl = player?.photo_url ?? apiPlayer?.photo_url ?? apiPlayer?.photo
+  const preferredTeamExternalId =
+    player?.club_external_id ??
+    player?.team_external_id ??
+    (apiTeam?.id ? String(apiTeam.id) : undefined)
+  const teamResponse = player?.club_external_id
     ? await supabase
         .from('teams')
         .select('id, external_id, name, logo_url')
         .eq('external_id', String(player.club_external_id))
         .maybeSingle()
-    : player.team_id
+    : player?.team_id
       ? await supabase
         .from('teams')
         .select('id, external_id, name, logo_url')
         .eq('id', String(player.team_id))
         .maybeSingle()
-      : player.team_external_id
+      : preferredTeamExternalId
         ? await supabase
             .from('teams')
             .select('id, external_id, name, logo_url')
-            .eq('external_id', String(player.team_external_id))
+            .eq('external_id', String(preferredTeamExternalId))
             .maybeSingle()
         : null
   const storedTeam = teamResponse && !teamResponse.error
     ? (teamResponse.data as StoredTeamRow | null)
     : null
-  const teamExternalId = toFiniteNumber(storedTeam?.external_id ?? preferredTeamExternalId)
+  const teamExternalId =
+    toFiniteNumber(storedTeam?.external_id ?? preferredTeamExternalId) ??
+    apiTeam?.id ??
+    undefined
+  const teamName = storedTeam?.name ?? player?.club_name ?? apiTeam?.name
   const teamLogoUrl =
-    pickTeamLogoUrl(player.club_logo_url ?? storedTeam?.logo_url, teamExternalId) ??
+    pickTeamLogoUrl(
+      player?.club_logo_url ?? storedTeam?.logo_url,
+      teamExternalId,
+      apiTeam?.logo
+    ) ??
+    apiTeam?.logo ??
     undefined
   const leagueRows = leagueId
     ? await fetchStoredLeagueRowsByExternalId(leagueId, season).catch(() => [])
     : []
   const storedLeague = leagueRows[0] ?? null
-  const leagueLogoUrl = storedLeague
-    ? pickLeagueLogoUrl(storedLeague.logo_url, leagueId) ?? undefined
-    : undefined
+  const resolvedLeagueId = leagueId ?? apiLeague?.id
+  const leagueLogoUrl =
+    pickLeagueLogoUrl(storedLeague?.logo_url, resolvedLeagueId, apiLeague?.logo) ??
+    apiLeague?.logo ??
+    undefined
 
   return {
     player: {
-      id: playerExternalId,
-      name: player.name || 'Jugador',
-      height: player.height ?? undefined,
+      id: apiPlayer?.id ?? playerExternalId,
+      name: apiPlayer?.name ?? player?.name ?? 'Jugador',
+      firstname: apiPlayer?.firstname ?? player?.firstname ?? undefined,
+      lastname: apiPlayer?.lastname ?? player?.lastname ?? undefined,
+      age: apiPlayer?.age ?? player?.age ?? undefined,
+      nationality: apiPlayer?.nationality ?? player?.nationality ?? undefined,
+      birthDate: apiPlayer?.birthDate ?? player?.birth_date ?? undefined,
+      birthPlace: apiPlayer?.birthPlace ?? player?.birth_place ?? undefined,
+      birthCountry: apiPlayer?.birthCountry ?? player?.birth_country ?? undefined,
+      height: apiPlayer?.height ?? player?.height ?? undefined,
+      weight: apiPlayer?.weight ?? player?.weight ?? undefined,
+      injured: apiPlayer?.injured ?? player?.injured ?? undefined,
       photo: playerPhotoUrl,
       photo_url: playerPhotoUrl,
       photoUrl: playerPhotoUrl,
     },
-    team: storedTeam || player.club_name || teamExternalId
+    team: storedTeam || teamName || teamExternalId
       ? {
           id: teamExternalId ?? undefined,
-          name: storedTeam?.name ?? player.club_name ?? undefined,
+          name: teamName ?? undefined,
           logo: teamLogoUrl,
           logo_url: teamLogoUrl,
           logoUrl: teamLogoUrl,
         }
       : undefined,
-    league: storedLeague
+    league: storedLeague || apiLeague
       ? {
-          id: leagueId,
-          name: storedLeague.name ?? undefined,
-          country: storedLeague.country ?? undefined,
+          id: resolvedLeagueId,
+          name: storedLeague?.name ?? apiLeague?.name,
+          country: storedLeague?.country ?? apiLeague?.country,
           logo: leagueLogoUrl,
           logo_url: leagueLogoUrl,
           logoUrl: leagueLogoUrl,
-          season: storedLeague.season ?? season,
+          season: storedLeague?.season ?? apiLeague?.season ?? season,
         }
       : undefined,
     statistics: {
-      appearances: 0,
-      lineups: 0,
-      minutes: 0,
-      position: player.position,
-      rating: null,
-      goals: 0,
-      assists: 0,
-      yellowCards: 0,
-      redCards: 0,
+      appearances: apiStatistics?.appearances ?? 0,
+      lineups: apiStatistics?.lineups ?? 0,
+      minutes: apiStatistics?.minutes ?? 0,
+      position: apiStatistics?.position ?? player?.position ?? null,
+      rating: apiStatistics?.rating ?? null,
+      goals: apiStatistics?.goals ?? 0,
+      assists: apiStatistics?.assists ?? 0,
+      yellowCards: apiStatistics?.yellowCards ?? 0,
+      redCards: apiStatistics?.redCards ?? 0,
     },
   }
 }

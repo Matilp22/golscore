@@ -6,6 +6,7 @@ import {
   type LeaderStatType,
 } from '@/lib/api-football'
 import { translateCountryNameToSpanish } from '@/shared/utils/country-names'
+import { formatPlayerHeight, formatPlayerWeight } from '@/shared/utils/player-profile'
 
 type PageProps = {
   params: Promise<{ id: string }>
@@ -47,11 +48,14 @@ function isLeaderStatType(value?: string): value is LeaderStatType {
 function formatDate(value?: string) {
   if (!value) return 'No disponible'
 
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) return 'No disponible'
+
   return new Intl.DateTimeFormat('es-AR', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
-  }).format(new Date(value))
+  }).format(date)
 }
 
 function formatMinutes(value: number) {
@@ -236,8 +240,14 @@ export default async function JugadorPage({ params, searchParams }: PageProps) {
                       'No disponible'
                     }
                   />
-                  <InfoRow label="Altura" value={player.height || 'No disponible'} />
-                  <InfoRow label="Peso" value={player.weight || 'No disponible'} />
+                  <InfoRow
+                    label="Altura"
+                    value={formatPlayerHeight(player.height) || 'No disponible'}
+                  />
+                  <InfoRow
+                    label="Peso"
+                    value={formatPlayerWeight(player.weight) || 'No disponible'}
+                  />
                   <InfoRow label="Lesionado" value={player.injured ? 'Sí' : 'No'} />
                 </div>
               </div>
