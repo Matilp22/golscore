@@ -11,7 +11,7 @@
     },
     {
       "path": "/api/cron/sync-match-highlights",
-      "schedule": "0 */4 * * *"
+      "schedule": "10 8 * * *"
     }
   ]
 }
