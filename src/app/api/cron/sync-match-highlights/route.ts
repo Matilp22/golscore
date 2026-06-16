@@ -7,8 +7,8 @@ import { addDaysToISO, getArgentinaTodayISO } from '@/shared/utils/argentina-tim
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 
-const DEFAULT_LOOKBACK_DAYS = 3
-const DEFAULT_LIMIT = 20
+const DEFAULT_LOOKBACK_DAYS = 7
+const DEFAULT_LIMIT = 50
 
 function jsonNoStore(body: unknown, init?: ResponseInit) {
   const response = NextResponse.json(body, init)

@@ -75,6 +75,12 @@ type YouTubeSearchResponse = {
 
 type YouTubeVideoDetailsItem = {
   id?: string
+  snippet?: {
+    title?: string
+    description?: string
+    channelTitle?: string
+    publishedAt?: string
+  }
   status?: {
     uploadStatus?: string
     privacyStatus?: string
@@ -194,7 +200,7 @@ class SerializableError extends Error {
   }
 }
 
-const DEFAULT_SYNC_LIMIT = 20
+const DEFAULT_SYNC_LIMIT = 50
 const MAX_SYNC_LIMIT = 100
 const DEFAULT_AUDIT_LIMIT = 50
 const MAX_AUDIT_LIMIT = 100
@@ -254,6 +260,8 @@ const NEGATIVE_PATTERNS = [
   'radio',
   'reaccion',
   'reaction',
+  'shorts',
+  '#shorts',
   'watchalong',
   'watch along',
   'resumen falso',
@@ -422,13 +430,21 @@ const STOPWORDS = new Set([
 ])
 const TEAM_NAME_ALIASES: Record<string, string[]> = {
   argentina: ['seleccion argentina', 'argentina seleccion', 'albiceleste'],
+  belgium: ['belgica'],
+  'bosnia & herzegovina': ['bosnia y herzegovina', 'bosnia herzegovina', 'bosnia'],
+  'bosnia and herzegovina': ['bosnia y herzegovina', 'bosnia herzegovina', 'bosnia'],
+  canada: ['canada'],
+  curacao: ['curazao'],
+  egypt: ['egipto'],
   'new zealand': ['nueva zelanda', 'n zelanda'],
   usa: ['estados unidos', 'united states', 'usmnt'],
   'united states': ['estados unidos', 'usa', 'usmnt'],
   mexico: ['mexico', 'méxico'],
-  'ivory coast': ['costa de marfil'],
+  'ivory coast': ['costa de marfil', 'cote d ivoire', "cote d'ivoire"],
   'south korea': ['corea del sur'],
   'north korea': ['corea del norte'],
+  sweden: ['suecia'],
+  tunisia: ['tunez', 'túnez'],
 }
 const EXTRA_TEAM_NAME_ALIASES: Record<string, string[]> = {
   algeria: ['argelia'],
@@ -1195,6 +1211,7 @@ async function searchYouTubeHighlights(query: string, apiKey: string) {
   url.searchParams.set('key', apiKey)
   url.searchParams.set('order', 'relevance')
   url.searchParams.set('relevanceLanguage', 'es')
+  url.searchParams.set('regionCode', 'AR')
   url.searchParams.set('videoEmbeddable', 'true')
   url.searchParams.set('safeSearch', 'moderate')
 
@@ -1255,7 +1272,7 @@ async function fetchYouTubeVideoDetails(videoIds: string[], apiKey: string) {
   for (let index = 0; index < uniqueIds.length; index += YOUTUBE_VIDEO_DETAILS_BATCH_SIZE) {
     const chunk = uniqueIds.slice(index, index + YOUTUBE_VIDEO_DETAILS_BATCH_SIZE)
     const url = new URL(YOUTUBE_VIDEOS_URL)
-    url.searchParams.set('part', 'status,contentDetails')
+    url.searchParams.set('part', 'snippet,status,contentDetails')
     url.searchParams.set('id', chunk.join(','))
     url.searchParams.set('key', apiKey)
 
@@ -1305,9 +1322,27 @@ async function fetchYouTubeVideoDetails(videoIds: string[], apiKey: string) {
   return details
 }
 
-function getStoredYouTubeVideoRejectReason(
+function toSearchItemFromVideoDetails(
   videoId: string,
-  details: Map<string, YouTubeVideoDetailsItem>
+  item: YouTubeVideoDetailsItem
+): YouTubeSearchItem {
+  return {
+    id: {
+      videoId,
+    },
+    snippet: {
+      title: item.snippet?.title,
+      description: item.snippet?.description,
+      channelTitle: item.snippet?.channelTitle,
+      publishedAt: item.snippet?.publishedAt,
+    },
+  }
+}
+
+function getYouTubeVideoDetailsRejectReason(
+  videoId: string,
+  details: Map<string, YouTubeVideoDetailsItem>,
+  match: HighlightMatch
 ) {
   const item = details.get(videoId)
   if (!item) return 'stored_video_not_found'
@@ -1329,6 +1364,14 @@ function getStoredYouTubeVideoRejectReason(
   const allowedCountries = regionRestriction?.allowed?.map((country) => country.toUpperCase()) ?? []
   if (allowedCountries.length && !allowedCountries.includes('AR')) {
     return 'stored_video_region_not_allowed_ar'
+  }
+
+  const scored = scoreYouTubeHighlightResult(match, toSearchItemFromVideoDetails(videoId, item))
+
+  if (!scored.accepted) {
+    const reason = scored.reasons.slice(0, 4).join(',')
+
+    return reason ? `stored_video_low_relevance:${reason}` : 'stored_video_low_relevance'
   }
 
   return null
@@ -1387,7 +1430,10 @@ async function clearSuspiciousStoredHighlights(
       const details = await fetchYouTubeVideoDetails([...storedVideoIds.values()], apiKey)
 
       for (const [matchId, videoId] of storedVideoIds.entries()) {
-        const rejectReason = getStoredYouTubeVideoRejectReason(videoId, details)
+        const match = matches.find((candidate) => candidate.id === matchId)
+        if (!match) continue
+
+        const rejectReason = getYouTubeVideoDetailsRejectReason(videoId, details, match)
         if (rejectReason) rejectReasons.set(matchId, rejectReason)
       }
     } catch (error) {
@@ -1551,12 +1597,39 @@ export async function syncMatchHighlights(supabase: DbClient, options: Highlight
         await runSearches(trustedSourceQueries)
       }
 
-      const selected = allCandidates
-        .filter((item) => item.videoId)
+      const acceptedCandidates = allCandidates
+        .filter((item): item is ReturnType<typeof toCandidate> & { videoId: string } =>
+          Boolean(item.videoId) && item.accepted
+        )
         .sort((a, b) => b.score - a.score)
-        .find((item) => item.accepted)
+      const rejectedAcceptedCandidates: Array<{
+        videoId: string
+        reason: string
+      }> = []
+      let selected: (ReturnType<typeof toCandidate> & { videoId: string }) | null = null
 
-      if (!selected?.videoId) {
+      if (acceptedCandidates.length) {
+        const details = await fetchYouTubeVideoDetails(
+          acceptedCandidates.map((item) => item.videoId),
+          apiKey
+        )
+
+        for (const candidate of acceptedCandidates) {
+          const rejectReason = getYouTubeVideoDetailsRejectReason(candidate.videoId, details, match)
+
+          if (!rejectReason) {
+            selected = candidate
+            break
+          }
+
+          rejectedAcceptedCandidates.push({
+            videoId: candidate.videoId,
+            reason: rejectReason,
+          })
+        }
+      }
+
+      if (!selected) {
         results.push({
           ...toResultBase(match),
           query: attemptedQueries[0],
@@ -1575,7 +1648,12 @@ export async function syncMatchHighlights(supabase: DbClient, options: Highlight
               channelTitle: item.channelTitle,
               publishedAt: item.publishedAt,
               score: item.score,
-              reasons: item.reasons,
+              reasons: [
+                ...item.reasons,
+                ...rejectedAcceptedCandidates
+                  .filter((rejected) => rejected.videoId === item.videoId)
+                  .map((rejected) => `video-details:${rejected.reason}`),
+              ],
               query: item.query,
             })),
         })

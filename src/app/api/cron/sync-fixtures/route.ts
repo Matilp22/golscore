@@ -14,8 +14,8 @@ export const fetchCache = 'force-no-store'
 
 const DEFAULT_DETAIL_BACKFILL_DAYS = 14
 const DEFAULT_DETAIL_BACKFILL_LIMIT = 25
-const DEFAULT_HIGHLIGHTS_BACKFILL_DAYS = 3
-const DEFAULT_HIGHLIGHTS_LIMIT = 20
+const DEFAULT_HIGHLIGHTS_BACKFILL_DAYS = 7
+const DEFAULT_HIGHLIGHTS_LIMIT = 50
 
 function jsonNoStore(body: unknown, init?: ResponseInit) {
   const response = NextResponse.json(body, init)
