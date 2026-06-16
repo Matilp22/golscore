@@ -4294,7 +4294,14 @@ async function enrichNationalSquadProfiles(
   })
 }
 
-export async function getTeamDetail(id: number) {
+type PublicDetailDataOptions = {
+  allowApiEnrichment?: boolean
+}
+
+export async function getTeamDetail(
+  id: number,
+  options: PublicDetailDataOptions = {}
+) {
   const supabase = getSupabaseAdminClient()
   let response = await supabase
     .from('teams')
@@ -4322,11 +4329,15 @@ export async function getTeamDetail(id: number) {
 
   const team = response.data as StoredTeamRow | null
   const externalId = toFiniteNumber(team?.external_id) ?? id
-  const [players, apiTeamDetail, apiSquad] = await Promise.all([
-    fetchStoredPlayersByTeam(supabase, team, externalId),
-    fetchApiTeamDetailSafe(externalId),
-    fetchApiTeamSquadSafe(externalId),
-  ])
+  const players = await fetchStoredPlayersByTeam(supabase, team, externalId)
+  const shouldUseApiEnrichment =
+    options.allowApiEnrichment === true || (!team && players.length === 0)
+  const [apiTeamDetail, apiSquad] = shouldUseApiEnrichment
+    ? await Promise.all([
+        fetchApiTeamDetailSafe(externalId),
+        fetchApiTeamSquadSafe(externalId),
+      ])
+    : [null, null]
   const apiTeam = apiTeamDetail?.team
   const apiVenue = apiTeamDetail?.venue
   const resolvedExternalId = toFiniteNumber(apiTeam?.id) ?? externalId
@@ -4340,7 +4351,7 @@ export async function getTeamDetail(id: number) {
     apiSquadPlayers
   )
 
-  if (apiTeam?.national) {
+  if (shouldUseApiEnrichment && apiTeam?.national) {
     squadPlayers = await enrichNationalSquadProfiles(
       supabase,
       squadPlayers,
@@ -4405,7 +4416,8 @@ export async function getTeamDetail(id: number) {
 export async function getPlayerDetail(
   id: number,
   season: number,
-  leagueId?: number
+  leagueId?: number,
+  options: PublicDetailDataOptions = {}
 ): Promise<PlayerDetail | null> {
   const supabase = getSupabaseAdminClient()
   let response = await supabase
@@ -4437,19 +4449,24 @@ export async function getPlayerDetail(
 
   const player = response.data as StoredPlayerRow | null
   const playerExternalId = toFiniteNumber(player?.external_id) ?? id
-  const apiRows = await fetchApiPlayerDetailSafe(playerExternalId, season, leagueId)
+  const shouldUseApiEnrichment = options.allowApiEnrichment === true
+  const apiRows = shouldUseApiEnrichment
+    ? await fetchApiPlayerDetailSafe(playerExternalId, season, leagueId)
+    : []
   const apiDetail = mapApiPlayerRowsToPlayerDetail(apiRows, leagueId)
 
   if (!player && !apiDetail) return null
 
-  try {
-    await persistApiPlayerDetailProfileSafe(supabase, playerExternalId, player, apiDetail)
-  } catch (error) {
-    if (process.env.NODE_ENV === 'development') {
-      console.warn('[player-detail-data] No se pudo persistir la ficha del jugador.', {
-        playerExternalId,
-        message: error instanceof Error ? error.message : String(error),
-      })
+  if (shouldUseApiEnrichment) {
+    try {
+      await persistApiPlayerDetailProfileSafe(supabase, playerExternalId, player, apiDetail)
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[player-detail-data] No se pudo persistir la ficha del jugador.', {
+          playerExternalId,
+          message: error instanceof Error ? error.message : String(error),
+        })
+      }
     }
   }
 
