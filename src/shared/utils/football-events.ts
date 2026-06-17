@@ -403,8 +403,9 @@ export function formatMatchEventSemanticKey(
 
   const normalized = normalizeMatchEvent(event)
   const detailKey = getSemanticDetailKey(event, normalized.kind)
+  const extraKey = getSemanticExtraKey(event, normalized.kind, detailKey)
   const playerKey = normalized.kind === 'substitution'
-    ? getSubstitutionSemanticPairKey(event)
+    ? getSubstitutionSemanticPlayerKey(event, detailKey)
     : getSemanticPersonKey(
         normalized.playerId,
         normalized.playerName,
@@ -416,7 +417,7 @@ export function formatMatchEventSemanticKey(
     normalized.kind,
     detailKey,
     normalized.minute ?? 'minute',
-    formatEventKeyExtra(normalized.extraMinute),
+    extraKey,
     getEventTeamId(event) ?? event.team?.name ?? 'team',
     playerKey,
   ])
@@ -472,6 +473,13 @@ function getSemanticDetailKey(
   event: FootballEventLike,
   kind: NormalizedMatchEventKind
 ) {
+  if (kind === 'substitution') {
+    const detail = normalizeFootballEventText(getEventDetail(event))
+    const slotMatch = detail.match(/\b(?:substitution|subst|cambio)\s*(\d+)\b/)
+
+    return slotMatch?.[1] ? `substitution-${slotMatch[1]}` : 'substitution'
+  }
+
   if (
     kind === 'goal' ||
     kind === 'penalty-goal' ||
@@ -480,7 +488,6 @@ function getSemanticDetailKey(
     kind === 'yellow-card' ||
     kind === 'red-card' ||
     kind === 'second-yellow' ||
-    kind === 'substitution' ||
     kind === 'injury'
   ) {
     return kind
@@ -514,7 +521,24 @@ function getSemanticDetailKey(
   return getEventDetail(event) ?? getEventType(event) ?? kind
 }
 
-function getSubstitutionSemanticPairKey(event: FootballEventLike) {
+function getSemanticExtraKey(
+  event: FootballEventLike,
+  kind: NormalizedMatchEventKind,
+  detailKey: string
+) {
+  if (kind === 'substitution' && detailKey !== 'substitution') {
+    return 'substitution-slot-extra'
+  }
+
+  return formatEventKeyExtra(getEventExtraMinute(event))
+}
+
+function getSubstitutionSemanticPlayerKey(
+  event: FootballEventLike,
+  detailKey: string
+) {
+  if (detailKey !== 'substitution') return 'substitution-slot'
+
   const substitution = normalizeSubstitutionEvent(event)
   const people = [
     getSemanticPersonKey(
