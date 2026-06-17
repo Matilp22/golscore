@@ -193,6 +193,17 @@ function normalizePersonDisplayRef(value?: string | null) {
   return firstInitial && lastName ? `${firstInitial}-${lastName}` : normalized
 }
 
+export function normalizeFootballPersonRef(value?: string | null) {
+  return normalizePersonDisplayRef(value)
+}
+
+function getPersonMapKeys(value?: string | null) {
+  return [
+    normalizeFootballEventText(value),
+    normalizePersonDisplayRef(value),
+  ].filter((key, index, keys): key is string => Boolean(key) && keys.indexOf(key) === index)
+}
+
 function eventText(
   type?: string | null,
   detail?: string | null,
@@ -610,12 +621,12 @@ export function getSubstitutionMap(
     const substitution = normalizeSubstitutionEvent(event, context)
     if (!substitution) continue
 
-    if (substitution.playerOutName) {
-      byPlayerOutName.set(normalizeFootballEventText(substitution.playerOutName), substitution)
+    for (const key of getPersonMapKeys(substitution.playerOutName)) {
+      byPlayerOutName.set(key, substitution)
     }
 
-    if (substitution.playerInName) {
-      byPlayerInName.set(normalizeFootballEventText(substitution.playerInName), substitution)
+    for (const key of getPersonMapKeys(substitution.playerInName)) {
+      byPlayerInName.set(key, substitution)
     }
 
     const playerOutId = normalizeId(substitution.playerOutId)

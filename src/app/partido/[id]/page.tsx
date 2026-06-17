@@ -23,6 +23,7 @@ import {
   isInjuryEvent,
   isMissedPenaltyEvent,
   getSubstitutionMap,
+  normalizeFootballPersonRef,
   normalizeFootballEventText,
   normalizeMatchEvent,
   normalizeSubstitutionEvent,
@@ -1517,9 +1518,12 @@ function getCaptainReference(lineup?: MatchLineup | null) {
 type PlayerFieldState = {
   displayName: string
   displayNumber?: number
+  activePlayerId?: number | string | null
+  activePlayerName?: string | null
   substitutionMinute?: number | null
   substitutionExtraMinute?: number | null
   substitutionReplacementName?: string | null
+  substitutionDirection?: 'in' | 'out'
   goals: number
   penaltyGoals: number
   ownGoals: number
@@ -1547,17 +1551,41 @@ function getPlayerSubstitutionEvents(
 ) {
   const playerId = normalizePlayerLookupId(player.id)
   const playerKey = normalizeFootballEventText(player.name)
+  const playerRef = normalizeFootballPersonRef(player.name)
 
   return {
     playerOutEvent:
       (playerId ? substitutionMap.byPlayerOutId.get(playerId) : null) ||
       (playerKey ? substitutionMap.byPlayerOutName.get(playerKey) : null) ||
+      (playerRef ? substitutionMap.byPlayerOutName.get(playerRef) : null) ||
       null,
     playerInEvent:
       (playerId ? substitutionMap.byPlayerInId.get(playerId) : null) ||
       (playerKey ? substitutionMap.byPlayerInName.get(playerKey) : null) ||
+      (playerRef ? substitutionMap.byPlayerInName.get(playerRef) : null) ||
       null,
   }
+}
+
+function findLineupPlayerByRef(
+  players: PlayerWrapper[],
+  lookup: LineupPlayerLookup
+) {
+  const lookupId = normalizePlayerLookupId(lookup.id)
+  const lookupName = normalizeFootballEventText(lookup.name)
+  const lookupRef = normalizeFootballPersonRef(lookup.name)
+
+  return players.find((playerWrap) => {
+    const player = playerWrap.player
+    const playerId = normalizePlayerLookupId(player?.id)
+    if (lookupId && playerId && lookupId === playerId) return true
+
+    const playerName = normalizeFootballEventText(player?.name)
+    if (lookupName && playerName && lookupName === playerName) return true
+
+    const playerRef = normalizeFootballPersonRef(player?.name)
+    return Boolean(lookupRef && playerRef && lookupRef === playerRef)
+  }) ?? null
 }
 
 function getPlayerFieldState(
@@ -1567,28 +1595,52 @@ function getPlayerFieldState(
   substitutionContext: {
     starters?: Array<{ id?: number | null; name?: string | null }>
     substitutes?: Array<{ id?: number | null; name?: string | null }>
+    substitutePlayers?: PlayerWrapper[]
   } = {}
 ): PlayerFieldState {
   const basePlayer = playerWrap.player || {}
   const displayName = basePlayer.name || 'Jugador'
   const displayNumber = basePlayer.number
-  const substitutionMap = getSubstitutionMap(events, substitutionContext)
+  const substitutionMap = getSubstitutionMap(events, {
+    starters: substitutionContext.starters,
+    substitutes: substitutionContext.substitutes,
+  })
   const { playerOutEvent: substitutionEvent } = getPlayerSubstitutionEvents(basePlayer, substitutionMap)
+  const substitutePlayers = substitutionContext.substitutePlayers ?? []
+  const replacementPlayerWrap = substitutionEvent
+    ? findLineupPlayerByRef(substitutePlayers, {
+        id: substitutionEvent.playerInId,
+        name: substitutionEvent.playerInName,
+      })
+    : null
+  const activePlayer = replacementPlayerWrap?.player ?? (
+    substitutionEvent?.playerInName
+      ? {
+          id: substitutionEvent.playerInId,
+          name: substitutionEvent.playerInName,
+          number: undefined,
+        }
+      : basePlayer
+  )
+  const activeDisplayName = activePlayer.name || displayName
 
   const incidents = getPlayerIncidentsForLineup(
-    { id: basePlayer.id, name: displayName },
+    { id: activePlayer.id, name: activeDisplayName },
     teamId,
     events
   )
 
   return {
-    displayName: abbreviatePlayerName(displayName),
-    displayNumber,
+    displayName: abbreviatePlayerName(activeDisplayName),
+    displayNumber: activePlayer.number ?? displayNumber,
+    activePlayerId: activePlayer.id ?? basePlayer.id ?? null,
+    activePlayerName: activeDisplayName,
     substitutionMinute: substitutionEvent?.minute ?? null,
     substitutionExtraMinute: substitutionEvent?.extraMinute ?? null,
-    substitutionReplacementName: substitutionEvent?.playerInName
-      ? abbreviatePlayerName(substitutionEvent.playerInName)
+    substitutionReplacementName: substitutionEvent?.playerOutName
+      ? abbreviatePlayerName(substitutionEvent.playerOutName)
       : null,
+    substitutionDirection: substitutionEvent ? 'in' : undefined,
     goals: incidents.filter((incident) => incident.kind === 'goal').length,
     penaltyGoals: incidents.filter((incident) => incident.kind === 'penalty-goal').length,
     ownGoals: incidents.filter((incident) => incident.kind === 'own-goal').length,
@@ -1674,17 +1726,24 @@ function FieldSubstitutionBadge({
   substitutionMinute,
   substitutionExtraMinute,
   substitutionReplacementName,
+  substitutionDirection = 'out',
 }: {
   substitutionMinute?: number | null
   substitutionExtraMinute?: number | null
   substitutionReplacementName?: string | null
+  substitutionDirection?: 'in' | 'out'
 }) {
   if (substitutionMinute === null || substitutionMinute === undefined) return null
+  const isSubstitutedIn = substitutionDirection === 'in'
 
   return (
     <div className="mt-0.5 max-w-[76px] text-center leading-tight sm:max-w-[104px]">
-      <div className="text-[9px] font-black text-[#ff8f8f] sm:text-[11px]">
-        &darr; {formatEventMinute(substitutionMinute, substitutionExtraMinute)}
+      <div
+        className={`text-[9px] font-black sm:text-[11px] ${
+          isSubstitutedIn ? 'text-[#7ff0b2]' : 'text-[#ff8f8f]'
+        }`}
+      >
+        {isSubstitutedIn ? <>&uarr;</> : <>&darr;</>} {formatEventMinute(substitutionMinute, substitutionExtraMinute)}
       </div>
       {substitutionReplacementName ? (
         <div className="truncate text-[8px] font-semibold text-[#9fb0c2] sm:text-[9px]">
@@ -1747,17 +1806,19 @@ function PlayerOnField({
       id: entry.player?.id ?? null,
       name: entry.player?.name ?? null,
     })),
+    substitutePlayers: lineup?.substitutes || [],
   }
   const playerState = getPlayerFieldState(playerWrap, teamId, events, substitutionContext)
+  const captainCandidateId = playerState.activePlayerId ?? player.id
+  const captainCandidateName = playerState.activePlayerName ?? player.name
   const isCaptain = Boolean(
-    isCaptainFlag(player.captain) ||
-    isCaptainFlag(playerWrap.captain) ||
-    (captainReference?.id && player.id && captainReference.id === player.id) ||
+    (!playerState.substitutionDirection && (isCaptainFlag(player.captain) || isCaptainFlag(playerWrap.captain))) ||
+    (captainReference?.id && captainCandidateId && captainReference.id === captainCandidateId) ||
     (
       !captainReference?.id &&
       captainReference?.name &&
-      player.name &&
-      captainReference.name.trim().toLowerCase() === player.name.trim().toLowerCase()
+      captainCandidateName &&
+      captainReference.name.trim().toLowerCase() === captainCandidateName.trim().toLowerCase()
     )
   )
 
@@ -1794,6 +1855,7 @@ function PlayerOnField({
                   substitutionMinute={playerState.substitutionMinute}
                   substitutionExtraMinute={playerState.substitutionExtraMinute}
                   substitutionReplacementName={playerState.substitutionReplacementName}
+                  substitutionDirection={playerState.substitutionDirection}
                 />
       </div>
     </div>
