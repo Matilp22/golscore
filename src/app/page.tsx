@@ -7,7 +7,6 @@ import ChampionsEntrySoundLink from '@/frontend/components/ChampionsEntrySoundLi
 import { LeagueLogo } from '@/frontend/components/AssetImage'
 import LiveEventToasts from '@/frontend/components/LiveEventToasts'
 import MatchRow from '@/frontend/components/MatchRow'
-import WorldCupBackgroundAudio from '@/frontend/components/WorldCupBackgroundAudio'
 import Link from 'next/link'
 import {
   getMatchesByDate,
@@ -48,7 +47,6 @@ import {
 } from '@/shared/i18n/locales'
 import { WORLD_CUP_2026_LOGO_URL } from '@/shared/utils/asset-urls'
 import { getHomeProdePredictions } from '@/server/prode/home-predictions'
-import { getCurrentUserAudioEnabled } from '@/server/profile/audio-preference'
 
 export async function generateMetadata() {
   const locale = await getRequestLocale()
@@ -1119,19 +1117,6 @@ function getHomeCompetitionPriority(competition: CompetitionBucket) {
   return Number.MAX_SAFE_INTEGER
 }
 
-function isWorldCupHomeCompetition(competition: CompetitionBucket) {
-  const text = normalizeText(
-    `${competition.key} ${competition.title} ${competition.sectionTitle}`
-  )
-
-  return (
-    competition.key === 'selecciones-mundial' ||
-    text.includes('mundial 2026') ||
-    text === 'mundial' ||
-    text.includes(' world cup ')
-  )
-}
-
 function sortHomeCompetitions(competitions: CompetitionBucket[]) {
   return competitions
     .map((competition, index) => ({ competition, index }))
@@ -1363,17 +1348,14 @@ export default async function HomePage({
   const visibleFixtureIds = visibleCompetitions.flatMap((competition) =>
     competition.matches.map((match) => match.externalId ?? match.id)
   )
-  const [homeProdePredictions, appAudioEnabled] = await Promise.all([
-    getHomeProdePredictions(
-      visibleCompetitions.flatMap((competition) =>
-        competition.matches.map((match) => ({
-          id: match.id,
-          externalId: match.externalId,
-        }))
-      )
-    ),
-    getCurrentUserAudioEnabled(),
-  ])
+  const homeProdePredictions = await getHomeProdePredictions(
+    visibleCompetitions.flatMap((competition) =>
+      competition.matches.map((match) => ({
+        id: match.id,
+        externalId: match.externalId,
+      }))
+    )
+  )
   const refreshIntervalMs = hasFastRefreshMatches ? 20_000 : 300_000
   const homeLiveSyncUrl = hasFastRefreshMatches
     ? `/api/home/live-sync?date=${encodeURIComponent(selectedDate)}&limit=20`
@@ -1444,10 +1426,6 @@ export default async function HomePage({
                       key={competition.key}
                       className="hf-card hf-card-hover scroll-mt-4 overflow-hidden rounded-2xl"
                     >
-                      {isWorldCupHomeCompetition(competition) ? (
-                        <WorldCupBackgroundAudio enabled={appAudioEnabled} />
-                      ) : null}
-
                       <div className="hf-section-head px-2.5 py-1.5 sm:px-3">
                         <div className="flex min-w-0 items-center justify-between gap-2">
                           {competition.href ? (

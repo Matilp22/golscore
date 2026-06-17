@@ -1,5 +1,5 @@
 export const APP_AUDIO_PREFERENCE = {
-  enabledByDefault: false,
+  enabledByDefault: true,
   storageKey: 'hayfulbo_audio_enabled',
   changeEvent: 'hayfulbo:audio-preference',
   stopEvent: 'hayfulbo:audio-stop-all',

@@ -5,6 +5,7 @@ import { useEffect } from 'react'
 import { useAuth } from '@/frontend/hooks/useAuth'
 import { writeAppAudioEnabled } from '@/frontend/hooks/useAppAudioPreference'
 import { getSupabaseBrowserClient } from '@/lib/supabase/supabaseClient'
+import { APP_AUDIO_PREFERENCE } from '@/lib/audio-config'
 
 type ProfileQuery = {
   select: (columns: string) => {
@@ -71,7 +72,9 @@ export default function AppAudioPreferenceBridge() {
           return
         }
 
-        writeAppAudioEnabled(Boolean(data?.audio_enabled))
+        writeAppAudioEnabled(
+          data?.audio_enabled ?? APP_AUDIO_PREFERENCE.enabledByDefault
+        )
       })
       .catch((error: unknown) => {
         if (!active) return

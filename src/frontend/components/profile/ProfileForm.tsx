@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/frontend/hooks/useAuth'
 import { writeAppAudioEnabled } from '@/frontend/hooks/useAppAudioPreference'
 import { getSupabaseBrowserClient } from '@/lib/supabase/supabaseClient'
+import { APP_AUDIO_PREFERENCE } from '@/lib/audio-config'
 import { normalizeUsername } from '@/shared/utils/usernames'
 
 type ProfileError = {
@@ -185,7 +186,9 @@ export default function ProfileForm() {
   const [password, setPassword] = useState('')
   const [repeatPassword, setRepeatPassword] = useState('')
   const [showHomePredictions, setShowHomePredictions] = useState(false)
-  const [audioEnabled, setAudioEnabled] = useState(false)
+  const [audioEnabled, setAudioEnabled] = useState<boolean>(
+    APP_AUDIO_PREFERENCE.enabledByDefault
+  )
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [isPending, startTransition] = useTransition()
@@ -209,7 +212,8 @@ export default function ProfileForm() {
           return
         }
 
-        const nextAudioEnabled = Boolean(data?.audio_enabled)
+        const nextAudioEnabled =
+          data?.audio_enabled ?? APP_AUDIO_PREFERENCE.enabledByDefault
 
         setEmail(user.email ?? '')
         setUsername(

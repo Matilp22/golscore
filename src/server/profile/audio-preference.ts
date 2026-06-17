@@ -1,5 +1,6 @@
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getSupabaseServerClient } from '@/lib/supabase/server'
+import { APP_AUDIO_PREFERENCE } from '@/lib/audio-config'
 
 type ProfileAudioPreferenceRow = {
   audio_enabled?: boolean | null
@@ -43,7 +44,8 @@ export async function getCurrentUserAudioEnabled() {
       throw error
     }
 
-    return Boolean((data as ProfileAudioPreferenceRow | null)?.audio_enabled)
+    return (data as ProfileAudioPreferenceRow | null)?.audio_enabled ??
+      APP_AUDIO_PREFERENCE.enabledByDefault
   } catch (error) {
     console.error('[profile-audio] No se pudo cargar la preferencia de audio', {
       error: error instanceof Error ? error.message : String(error),
