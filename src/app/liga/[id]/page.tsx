@@ -2,6 +2,7 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import type { CSSProperties, ReactNode } from 'react'
 
+import ChampionsBackgroundAudio from '@/frontend/components/ChampionsBackgroundAudio'
 import CurrentRoundNavigator from '@/frontend/components/CurrentRoundNavigator'
 import ChampionsEntrySoundControl from '@/frontend/components/ChampionsEntrySoundControl'
 import CopaArgentinaChampions from '@/frontend/components/CopaArgentinaChampions'
@@ -9,6 +10,7 @@ import CopaArgentinaMatchList from '@/frontend/components/CopaArgentinaMatchList
 import GroupStageGrid from '@/frontend/components/GroupStage'
 import LeaderListInteractive from '@/frontend/components/LeaderListInteractive'
 import TournamentChampionsButton from '@/frontend/components/TournamentChampionsButton'
+import WorldCupBackgroundAudio from '@/frontend/components/WorldCupBackgroundAudio'
 import {
   ConmebolFixtureAgenda,
   ConmebolKnockoutBracket,
@@ -88,6 +90,7 @@ import { buildSeoMetadata } from '@/shared/seo'
 import { getRequestLocale } from '@/server/request-locale'
 import { getTournamentDisplayName, type AppLocale } from '@/shared/i18n/locales'
 import { translateCountryName } from '@/shared/utils/country-names'
+import { getCurrentUserAudioEnabled } from '@/server/profile/audio-preference'
 
 type PageProps = {
   params: Promise<{ id: string }>
@@ -2715,6 +2718,12 @@ export default async function LigaPage({ params }: PageProps) {
     isWorldCupTournament
       ? WORLD_CUP_2026_LOGO_URL
       : resolvedTournament?.logo ?? null
+  const hasSectionBackgroundAudio =
+    tournament.key === 'internacional-champions' ||
+    isWorldCupTournament
+  const appAudioEnabled = hasSectionBackgroundAudio
+    ? await getCurrentUserAudioEnabled()
+    : false
   const tournamentSubtitle = isWorldCupTournament
     ? 'Canadá - México - Estados Unidos'
     : resolvedTournament
@@ -2723,6 +2732,13 @@ export default async function LigaPage({ params }: PageProps) {
 
   return (
     <div className="min-h-screen bg-transparent text-white">
+      {tournament.key === 'internacional-champions' ? (
+        <ChampionsBackgroundAudio enabled={appAudioEnabled} />
+      ) : null}
+      {isWorldCupTournament ? (
+        <WorldCupBackgroundAudio enabled={appAudioEnabled} />
+      ) : null}
+
       <div className="w-full max-w-none px-0 py-3 lg:mx-auto lg:max-w-7xl lg:px-5 lg:py-6">
         <main className="w-full min-w-0 space-y-4">
           <header
