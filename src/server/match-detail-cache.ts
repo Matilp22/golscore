@@ -3999,6 +3999,7 @@ export async function syncMatchDetail(
     ? getTimelineEvents(events, {
         descending: false,
         excludePenaltyShootout: false,
+        matchId: match?.id ?? fixtureExternalId,
         semanticDedupe: true,
       })
     : []
@@ -4007,6 +4008,7 @@ export async function syncMatchDetail(
     {
       descending: false,
       excludePenaltyShootout: false,
+      matchId: match?.id ?? fixtureExternalId,
       semanticDedupe: true,
     }
   )

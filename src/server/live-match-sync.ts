@@ -12,6 +12,7 @@ import { getFixtureStatusElapsedMinute } from '@/shared/utils/match-minute'
 import {
   formatMatchEventSemanticKey,
   getMatchEventExternalIdPriority,
+  getTimelineEvents,
 } from '@/shared/utils/football-events'
 
 type DbId = string | number
@@ -439,6 +440,17 @@ function getEventSemanticKey(input: {
 
 function asArray(value: unknown) {
   return Array.isArray(value) ? value : []
+}
+
+function dedupeDetailCacheEvents(events: unknown[]) {
+  return getTimelineEvents(
+    events as Parameters<typeof getTimelineEvents>[0],
+    {
+      descending: false,
+      excludePenaltyShootout: false,
+      semanticDedupe: true,
+    }
+  )
 }
 
 function asRecord(value: unknown) {
@@ -1087,9 +1099,11 @@ async function upsertDetailCache(
 ) {
   const existing = await readDetailCache(supabase, input.fixtureExternalId)
   const fixturePayload = input.fixturePayload ?? (existing?.fixture_payload as ApiFixture | undefined) ?? null
-  const events = input.events && input.events.length
-    ? input.events
-    : asArray(existing?.events)
+  const fetchedEvents = input.events && input.events.length
+    ? dedupeDetailCacheEvents(input.events)
+    : []
+  const cachedEvents = dedupeDetailCacheEvents(asArray(existing?.events))
+  const events = fetchedEvents.length ? fetchedEvents : cachedEvents
   const lineups = input.lineups && input.lineups.length
     ? input.lineups
     : asArray(existing?.lineups)

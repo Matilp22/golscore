@@ -180,6 +180,20 @@ function formatEventKeyExtra(value: unknown) {
   return value
 }
 
+function formatEventKeyPart(part: unknown) {
+  return String(part)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'none'
+}
+
+function formatEventKeyParts(parts: unknown[]) {
+  return parts.map(formatEventKeyPart).join(':')
+}
+
 function normalizePersonDisplayRef(value?: string | null) {
   const normalized = normalizeFootballEventText(value)
   if (!normalized) return ''
@@ -341,22 +355,14 @@ export function formatMatchEventStableKey(
   const externalEventId = getEventExternalId(event)
 
   if (externalEventId !== null && externalEventId !== undefined && String(externalEventId).trim()) {
-    return [
+    return formatEventKeyParts([
       matchId ?? event.match_id ?? 'match',
       'external',
       externalEventId,
-    ].map((part) =>
-      String(part)
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '') || 'none'
-    ).join(':')
+    ])
   }
 
-  return [
+  return formatEventKeyParts([
     matchId ?? event.match_id ?? 'match',
     getEventType(event) ?? 'type',
     getEventDetail(event) ?? 'detail',
@@ -366,15 +372,7 @@ export function formatMatchEventStableKey(
     getEventPlayerName(event) ?? 'player',
     getEventAssistName(event) ?? 'assist',
     getEventComments(event) ?? 'comments',
-  ].map((part) =>
-    String(part)
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '') || 'none'
-  ).join(':')
+  ])
 }
 
 export const getMatchEventDedupeKey = formatMatchEventStableKey
@@ -403,35 +401,25 @@ export function formatMatchEventSemanticKey(
     return formatMatchEventStableKey(event, matchId)
   }
 
-  const displayDetail = isSubstitutionEvent(event)
-    ? 'substitution'
-    : isVarEvent(event) || isCancelledEvent(event)
-      ? [getEventDetail(event), getEventComments(event)].filter(Boolean).join(':') || 'var'
-    : getEventDetail(event) ?? 'detail'
-  const substitutionAssist = isSubstitutionEvent(event)
-    ? normalizePersonDisplayRef(getEventAssistName(event)) || 'assist'
-    : null
+  const normalized = normalizeMatchEvent(event)
+  const detailKey = getSemanticDetailKey(event, normalized.kind)
+  const playerKey = normalized.kind === 'substitution'
+    ? getSubstitutionSemanticPairKey(event)
+    : getSemanticPersonKey(
+        normalized.playerId,
+        normalized.playerName,
+        'player'
+      )
 
-  const keyParts = [
+  return formatEventKeyParts([
     matchId ?? event.match_id ?? 'match',
-    getEventType(event) ?? 'type',
-    displayDetail,
-    getEventMinute(event) ?? 'minute',
-    formatEventKeyExtra(getEventExtraMinute(event)),
+    normalized.kind,
+    detailKey,
+    normalized.minute ?? 'minute',
+    formatEventKeyExtra(normalized.extraMinute),
     getEventTeamId(event) ?? event.team?.name ?? 'team',
-    normalizePersonDisplayRef(getEventPlayerName(event)) || 'player',
-  ]
-  if (substitutionAssist) keyParts.push(substitutionAssist)
-
-  return keyParts.map((part) =>
-    String(part)
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '') || 'none'
-    ).join(':')
+    playerKey,
+  ])
 }
 
 const formatMatchEventDisplayKey = formatMatchEventSemanticKey
@@ -463,6 +451,85 @@ function eventCompletenessScore(event: FootballEventLike) {
 
 function getEventSortValue(event: FootballEventLike) {
   return (getEventMinute(event) ?? 0) * 100 + (getEventExtraMinute(event) ?? 0)
+}
+
+function getSemanticPersonKey(
+  id?: string | number | null,
+  name?: string | null,
+  fallback = 'player'
+) {
+  const displayRef = normalizePersonDisplayRef(name)
+  if (displayRef) return `person:${displayRef}`
+
+  const normalizedName = normalizeFootballEventText(name)
+  if (normalizedName) return `person:${normalizedName}`
+
+  const normalizedId = normalizeId(id)
+  return normalizedId ? `id:${normalizedId}` : fallback
+}
+
+function getSemanticDetailKey(
+  event: FootballEventLike,
+  kind: NormalizedMatchEventKind
+) {
+  if (
+    kind === 'goal' ||
+    kind === 'penalty-goal' ||
+    kind === 'own-goal' ||
+    kind === 'penalty-missed' ||
+    kind === 'yellow-card' ||
+    kind === 'red-card' ||
+    kind === 'second-yellow' ||
+    kind === 'substitution' ||
+    kind === 'injury'
+  ) {
+    return kind
+  }
+
+  if (kind === 'var') {
+    const combined = eventText(
+      getEventType(event),
+      getEventDetail(event),
+      getEventComments(event)
+    )
+
+    if (combined.includes('goal')) return 'var-goal'
+    if (combined.includes('penalty')) return 'var-penalty'
+    if (combined.includes('card')) return 'var-card'
+
+    return 'var'
+  }
+
+  if (isCancelledEvent(event)) {
+    const combined = eventText(
+      getEventType(event),
+      getEventDetail(event),
+      getEventComments(event)
+    )
+
+    if (combined.includes('goal')) return 'cancelled-goal'
+    if (combined.includes('card')) return 'cancelled-card'
+  }
+
+  return getEventDetail(event) ?? getEventType(event) ?? kind
+}
+
+function getSubstitutionSemanticPairKey(event: FootballEventLike) {
+  const substitution = normalizeSubstitutionEvent(event)
+  const people = [
+    getSemanticPersonKey(
+      substitution?.playerInId ?? getEventAssistId(event),
+      substitution?.playerInName ?? getEventAssistName(event),
+      ''
+    ),
+    getSemanticPersonKey(
+      substitution?.playerOutId ?? getEventPlayerId(event),
+      substitution?.playerOutName ?? getEventPlayerName(event),
+      ''
+    ),
+  ].filter(Boolean)
+
+  return people.length ? people.sort().join('>') : 'substitution-pair'
 }
 
 export function dedupeTimelineEvents<T extends FootballEventLike>(
