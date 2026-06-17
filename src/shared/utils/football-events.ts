@@ -530,6 +530,15 @@ function getSemanticExtraKey(
     return 'substitution-slot-extra'
   }
 
+  if (
+    kind === 'goal' ||
+    kind === 'penalty-goal' ||
+    kind === 'own-goal' ||
+    kind === 'penalty-missed'
+  ) {
+    return 'score-clock-compatible-extra'
+  }
+
   return formatEventKeyExtra(getEventExtraMinute(event))
 }
 
