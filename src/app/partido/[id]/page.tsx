@@ -1528,6 +1528,38 @@ type PlayerFieldState = {
   redCards: number
 }
 
+type LineupPlayerLookup = {
+  id?: number | string | null
+  name?: string | null
+}
+
+type SubstitutionMap = ReturnType<typeof getSubstitutionMap>
+
+function normalizePlayerLookupId(value?: number | string | null) {
+  if (value === null || value === undefined) return ''
+
+  return String(value).trim()
+}
+
+function getPlayerSubstitutionEvents(
+  player: LineupPlayerLookup,
+  substitutionMap: SubstitutionMap
+) {
+  const playerId = normalizePlayerLookupId(player.id)
+  const playerKey = normalizeFootballEventText(player.name)
+
+  return {
+    playerOutEvent:
+      (playerId ? substitutionMap.byPlayerOutId.get(playerId) : null) ||
+      (playerKey ? substitutionMap.byPlayerOutName.get(playerKey) : null) ||
+      null,
+    playerInEvent:
+      (playerId ? substitutionMap.byPlayerInId.get(playerId) : null) ||
+      (playerKey ? substitutionMap.byPlayerInName.get(playerKey) : null) ||
+      null,
+  }
+}
+
 function getPlayerFieldState(
   playerWrap: PlayerWrapper,
   teamId: number | string | null | undefined,
@@ -1541,9 +1573,7 @@ function getPlayerFieldState(
   const displayName = basePlayer.name || 'Jugador'
   const displayNumber = basePlayer.number
   const substitutionMap = getSubstitutionMap(events, substitutionContext)
-  const substitutionEvent = basePlayer.name
-    ? substitutionMap.byPlayerOutName.get(normalizeFootballEventText(basePlayer.name))
-    : null
+  const { playerOutEvent: substitutionEvent } = getPlayerSubstitutionEvents(basePlayer, substitutionMap)
 
   const incidents = getPlayerIncidentsForLineup(
     { id: basePlayer.id, name: displayName },
@@ -1643,15 +1673,24 @@ function FieldSideIncidences({
 function FieldSubstitutionBadge({
   substitutionMinute,
   substitutionExtraMinute,
+  substitutionReplacementName,
 }: {
   substitutionMinute?: number | null
   substitutionExtraMinute?: number | null
+  substitutionReplacementName?: string | null
 }) {
-  if (!substitutionMinute) return null
+  if (substitutionMinute === null || substitutionMinute === undefined) return null
 
   return (
     <div className="mt-0.5 max-w-[76px] text-center leading-tight sm:max-w-[104px]">
-      <div className="text-[9px] font-black text-[#ff8f8f] sm:text-[11px]">&darr; {formatEventMinute(substitutionMinute, substitutionExtraMinute)}</div>
+      <div className="text-[9px] font-black text-[#ff8f8f] sm:text-[11px]">
+        &darr; {formatEventMinute(substitutionMinute, substitutionExtraMinute)}
+      </div>
+      {substitutionReplacementName ? (
+        <div className="truncate text-[8px] font-semibold text-[#9fb0c2] sm:text-[9px]">
+          por {substitutionReplacementName}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -1754,6 +1793,7 @@ function PlayerOnField({
                 <FieldSubstitutionBadge
                   substitutionMinute={playerState.substitutionMinute}
                   substitutionExtraMinute={playerState.substitutionExtraMinute}
+                  substitutionReplacementName={playerState.substitutionReplacementName}
                 />
       </div>
     </div>
@@ -1883,13 +1923,7 @@ function buildPanelPlayers({
         captainReference.name.trim().toLowerCase() === player.name.trim().toLowerCase()
       )
     )
-    const playerKey = normalizeFootballEventText(player.name)
-    const playerOutEvent = playerKey
-      ? substitutionMap.byPlayerOutName.get(playerKey)
-      : null
-    const playerInEvent = playerKey
-      ? substitutionMap.byPlayerInName.get(playerKey)
-      : null
+    const { playerOutEvent, playerInEvent } = getPlayerSubstitutionEvents(player, substitutionMap)
     const incidents = getPlayerIncidentsForLineup(
       { id: player.id, name: player.name ?? null },
       teamId,

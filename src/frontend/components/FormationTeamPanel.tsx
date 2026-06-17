@@ -172,6 +172,10 @@ function translatePositionShort(position?: string) {
   return normalized || null
 }
 
+function hasSubstitutionMinute(value?: number | null) {
+  return value !== null && value !== undefined
+}
+
 export default function FormationTeamPanel({
   title,
   coachName,
@@ -337,7 +341,7 @@ function PlayerRow({
               }`}
             >
               {player.substitutionDirection === 'in' ? <>&uarr;</> : <>&darr;</>}{' '}
-              {player.substitutionMinute
+              {hasSubstitutionMinute(player.substitutionMinute)
                 ? formatEventMinute(player.substitutionMinute, player.substitutionExtraMinute)
                 : ''}
             </p>

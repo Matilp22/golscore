@@ -553,6 +553,8 @@ export function normalizeSubstitutionEvent(
   const assistLooksLikeSubstitute = playerMatchesRef(assistRef, context.substitutes)
   const apiFootballShape = playerLooksLikeStarter && assistLooksLikeSubstitute
   const reversedShape = playerLooksLikeSubstitute && assistLooksLikeStarter
+  const playerId = getEventPlayerId(event)
+  const assistId = getEventAssistId(event)
   const playerInName = apiFootballShape
     ? getEventAssistName(event)
     : reversedShape
@@ -563,6 +565,16 @@ export function normalizeSubstitutionEvent(
     : reversedShape
       ? getEventAssistName(event)
       : getEventPlayerName(event)
+  const playerInId = apiFootballShape
+    ? assistId
+    : reversedShape
+      ? playerId
+      : assistId
+  const playerOutId = apiFootballShape
+    ? playerId
+    : reversedShape
+      ? assistId
+      : playerId
 
   return {
     type: 'substitution' as const,
@@ -570,7 +582,9 @@ export function normalizeSubstitutionEvent(
     extraMinute: getEventExtraMinute(event),
     teamId: getEventTeamId(event),
     teamName: event.team?.name ?? null,
+    playerInId,
     playerInName,
+    playerOutId,
     playerOutName,
     label: 'Cambio',
   }
@@ -585,6 +599,8 @@ export function getSubstitutionMap(
 ) {
   const byPlayerOutName = new Map<string, ReturnType<typeof normalizeSubstitutionEvent> & { type: 'substitution' }>()
   const byPlayerInName = new Map<string, ReturnType<typeof normalizeSubstitutionEvent> & { type: 'substitution' }>()
+  const byPlayerOutId = new Map<string, ReturnType<typeof normalizeSubstitutionEvent> & { type: 'substitution' }>()
+  const byPlayerInId = new Map<string, ReturnType<typeof normalizeSubstitutionEvent> & { type: 'substitution' }>()
   const byTeamId = new Map<string, Array<ReturnType<typeof normalizeSubstitutionEvent> & { type: 'substitution' }>>()
 
   for (const event of dedupeTimelineEvents(events, {
@@ -602,6 +618,16 @@ export function getSubstitutionMap(
       byPlayerInName.set(normalizeFootballEventText(substitution.playerInName), substitution)
     }
 
+    const playerOutId = normalizeId(substitution.playerOutId)
+    if (playerOutId) {
+      byPlayerOutId.set(playerOutId, substitution)
+    }
+
+    const playerInId = normalizeId(substitution.playerInId)
+    if (playerInId) {
+      byPlayerInId.set(playerInId, substitution)
+    }
+
     if (substitution.teamId !== null && substitution.teamId !== undefined) {
       const teamKey = String(substitution.teamId)
       const substitutions = byTeamId.get(teamKey) ?? []
@@ -614,6 +640,8 @@ export function getSubstitutionMap(
   return {
     byPlayerOutName,
     byPlayerInName,
+    byPlayerOutId,
+    byPlayerInId,
     byTeamId,
   }
 }
