@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 
-import ChampionsEntrySoundLink from '@/frontend/components/ChampionsEntrySoundLink'
 import { useAuth } from '@/frontend/hooks/useAuth'
 import {
   getFavoriteLeagueErrorInfo,
@@ -201,20 +200,9 @@ export default function SidebarNav({
 
     return (
       <div key={tournament.key} className={`group flex min-w-0 items-center gap-1 rounded-xl transition ${isHighlighted ? 'bg-[#70ff9d]/10 text-[#eaffef] shadow-[inset_0_0_0_1px_rgba(112,255,157,0.16)]' : 'text-[#bcc6d2] hover:bg-[#70ff9d]/10 hover:text-white'}`}>
-        {tournament.key === 'internacional-champions' ? (
-          <ChampionsEntrySoundLink
-            href={href}
-            tournamentKey={tournament.key}
-            onClick={onNavigate}
-            className={linkClassName}
-          >
-            {tournamentTitle}
-          </ChampionsEntrySoundLink>
-        ) : (
-          <Link href={href} onClick={onNavigate} className={linkClassName}>
-            {tournamentTitle}
-          </Link>
-        )}
+        <Link href={href} onClick={onNavigate} prefetch={false} className={linkClassName}>
+          {tournamentTitle}
+        </Link>
         <button
           type="button"
           onClick={(event) => {

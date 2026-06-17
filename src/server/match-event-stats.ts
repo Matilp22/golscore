@@ -295,8 +295,10 @@ async function fetchPlayers(supabase: SupabaseClient) {
 async function fetchLeagueEventStatsDataset(
   supabase: SupabaseClient,
   leagueExternalId: number | string,
-  season?: number
+  season?: number,
+  options: { includePlayers?: boolean } = {}
 ): Promise<EventStatsDataset> {
+  const includePlayers = options.includePlayers ?? true
   const leagues = await fetchLeagues(supabase, leagueExternalId, season)
   const leagueIds = leagues.map((league) => String(league.id))
 
@@ -323,7 +325,7 @@ async function fetchLeagueEventStatsDataset(
     ),
   ]
   const teamsById = teamIds.length ? await fetchTeamsByIds(supabase, teamIds) : new Map()
-  const players = await fetchPlayers(supabase)
+  const players = includePlayers ? await fetchPlayers(supabase) : []
 
   return {
     leagues,
@@ -610,19 +612,21 @@ export async function getLeagueEventStatsLeaders(
   leagueExternalId: number | string,
   season?: number
 ): Promise<EventStatsLeaders> {
-  const rankings = await buildCompetitionIncidentRankings({
-    leagueExternalId,
-    season,
-    includeKnockouts: true,
+  const supabase = getSupabaseAdminClient()
+  const dataset = await fetchLeagueEventStatsDataset(supabase, leagueExternalId, season, {
+    includePlayers: false,
   })
+  const matchesById = new Map(dataset.matches.map((match) => [String(match.id), match]))
+  const dedupedEvents = dedupeRankingEvents(dataset.events)
+  const leaders = buildEventStatsLeaders(dedupedEvents, matchesById, dataset.teamsById)
 
   return {
-    scorers: rankings.rankings.scorers,
-    assists: rankings.rankings.assists,
-    yellowCards: rankings.rankings.yellowCards,
-    redCards: rankings.rankings.redCards,
-    hasEvents: rankings.counts.eventsDeduped > 0,
-    warnings: rankings.warnings,
+    scorers: leaders.scorers,
+    assists: leaders.assists,
+    yellowCards: leaders.yellowCards,
+    redCards: leaders.redCards,
+    hasEvents: dedupedEvents.length > 0,
+    warnings: [],
   }
 }
 

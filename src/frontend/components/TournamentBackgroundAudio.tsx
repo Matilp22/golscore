@@ -40,6 +40,13 @@ function stopAudio(src: string) {
   audio.currentTime = 0
 }
 
+export function stopAllTournamentAudio() {
+  audioBySource.forEach((audio) => {
+    audio.pause()
+    audio.currentTime = 0
+  })
+}
+
 function isAutoplayBlock(error: unknown) {
   return error instanceof DOMException && error.name === 'NotAllowedError'
 }
@@ -84,7 +91,7 @@ export default function TournamentBackgroundAudio({
       if (!active || !audio) return
 
       try {
-        window.dispatchEvent(new Event(APP_AUDIO_PREFERENCE.stopEvent))
+        stopAllTournamentAudio()
         await audio.play()
         removeInteractionListeners()
       } catch (error) {
@@ -105,7 +112,7 @@ export default function TournamentBackgroundAudio({
     }
 
     function handleStop() {
-      stopAudio(src)
+      stopAllTournamentAudio()
     }
 
     window.addEventListener(APP_AUDIO_PREFERENCE.stopEvent, handleStop)

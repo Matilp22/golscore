@@ -50,6 +50,8 @@ import { requestFootballApi } from '@/server/integrations/football-api-client'
 import { getCompetitionRuleByExternalId } from '@/shared/config/competition-rules'
 
 const HOME_SUPABASE_TIMEOUT_MS = 5000
+const HOME_MATCH_EXTRAS_TIMEOUT_MS = 4000
+const LEAGUE_LEADERS_TIMEOUT_MS = 4500
 
 export class ApiFootballError extends Error {
   code?: string
@@ -602,26 +604,33 @@ export async function getHomeMatchesSourceSnapshot(
   let storedMatches: MatchListItem[] = []
   let cacheMatches: MatchListItem[] = []
 
-  try {
-    storedMatches = await withTimeout(
+  const [storedMatchesResult, cacheMatchesResult] = await Promise.allSettled([
+    withTimeout(
       fetchStoredHomeMatches(date),
       HOME_SUPABASE_TIMEOUT_MS,
       'Supabase home matches timeout'
-    )
-  } catch (error) {
+    ),
+    withTimeout(
+      Promise.resolve().then(() => fetchCachedHomeFixtures(getSupabaseAdminClient(), date)),
+      HOME_SUPABASE_TIMEOUT_MS,
+      'Supabase fixture cache timeout'
+    ),
+  ])
+
+  if (storedMatchesResult.status === 'fulfilled') {
+    storedMatches = storedMatchesResult.value
+  } else {
+    const error = storedMatchesResult.reason
     console.warn('[home] No se pudieron leer partidos desde Supabase/cache.', {
       date,
       message: error instanceof Error ? error.message : String(error),
     })
   }
 
-  try {
-    cacheMatches = await withTimeout(
-      fetchCachedHomeFixtures(getSupabaseAdminClient(), date),
-      HOME_SUPABASE_TIMEOUT_MS,
-      'Supabase fixture cache timeout'
-    )
-  } catch (error) {
+  if (cacheMatchesResult.status === 'fulfilled') {
+    cacheMatches = cacheMatchesResult.value
+  } else {
+    const error = cacheMatchesResult.reason
     console.warn('[home] No se pudo leer football_fixture_cache.', {
       date,
       message: error instanceof Error ? error.message : String(error),
@@ -2166,17 +2175,16 @@ export async function withGoalScorers(
   matches: MatchListItem[]
 ): Promise<MatchListItemWithGoalScorers[]> {
   let timeoutId: ReturnType<typeof setTimeout> | null = null
-  const extrasTimeoutMs = 12000
   const extrasByFixtureId = await Promise.race([
     getHomeMatchExtrasByFixtureId(matches),
     new Promise<Map<string, HomeMatchExtras>>((resolve) => {
       timeoutId = setTimeout(() => {
         console.warn('[home:match-extras] Supabase tardo demasiado; se renderiza Home sin extras.', {
           matches: matches.length,
-          timeoutMs: extrasTimeoutMs,
+          timeoutMs: HOME_MATCH_EXTRAS_TIMEOUT_MS,
         })
         resolve(new Map())
-      }, extrasTimeoutMs)
+      }, HOME_MATCH_EXTRAS_TIMEOUT_MS)
     }),
   ])
 
@@ -6668,7 +6676,12 @@ function mergeLeagueFixtureSources(
   return [...fixturesById.values()].sort(compareLeagueFixturesByApiOrder)
 }
 
-export async function getLeagueFixtures(leagueId: number, season: number) {
+export async function getLeagueFixtures(
+  leagueId: number,
+  season: number,
+  options: { includeEvents?: boolean } = {}
+) {
+  const includeEvents = options.includeEvents ?? true
   const supabase = getSupabaseAdminClient()
   const leagueRows = await fetchStoredLeagueRowsByExternalId(leagueId, season, {
     fallbackToAnySeason: false,
@@ -6782,7 +6795,9 @@ export async function getLeagueFixtures(leagueId: number, season: number) {
     })
     .filter((fixture): fixture is LeagueFixtureSummary => Boolean(fixture))
 
-  const enrichedFixtures = await enrichLeagueFixturesWithStoredEvents(leagueId, mappedFixtures)
+  const enrichedFixtures = includeEvents
+    ? await enrichLeagueFixturesWithStoredEvents(leagueId, mappedFixtures)
+    : mappedFixtures
   const mergedStoredAndCachedFixtures = mergeLeagueFixtureSources(
     cachedFixtures,
     enrichedFixtures
@@ -7028,7 +7043,11 @@ export async function getPlayerEventMatches(
 
 export async function getLeagueLeaders(leagueId: number, season: number) {
   try {
-    const eventLeaders = await getLeagueEventStatsLeaders(leagueId, season)
+    const eventLeaders = await withTimeout(
+      getLeagueEventStatsLeaders(leagueId, season),
+      LEAGUE_LEADERS_TIMEOUT_MS,
+      `League leaders timeout ${leagueId}:${season}`
+    )
 
     if (eventLeaders.hasEvents) {
       return {
