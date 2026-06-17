@@ -2,9 +2,13 @@
 
 import { useCallback, useEffect, useState } from 'react'
 
+import {
+  readAppAudioEnabled,
+  writeAppAudioEnabled,
+} from '@/frontend/hooks/useAppAudioPreference'
 import { CHAMPIONS_AUDIO } from '@/lib/audio-config'
+import { APP_AUDIO_PREFERENCE } from '@/lib/audio-config'
 
-const PREF_CHANGE_EVENT = 'hayfulbo:champions-audio-preference'
 const LAST_PLAYED_KEY = 'hayfulbo_champions_audio_last_played_at'
 const BLOCKED_KEY = 'hayfulbo_champions_audio_blocked'
 const RECENT_PLAY_WINDOW_MS = 15000
@@ -20,29 +24,12 @@ function hasWindow() {
 
 function readStoredEnabled() {
   if (!CHAMPIONS_AUDIO.enabled) return false
-  if (!hasWindow()) return CHAMPIONS_AUDIO.enabled
 
-  try {
-    const stored = window.localStorage.getItem(CHAMPIONS_AUDIO.storageKey)
-
-    if (stored === 'false') return false
-    if (stored === 'true') return true
-  } catch {
-    return CHAMPIONS_AUDIO.enabled
-  }
-
-  return CHAMPIONS_AUDIO.enabled
+  return readAppAudioEnabled()
 }
 
 function writeStoredEnabled(enabled: boolean) {
-  if (!hasWindow()) return
-
-  try {
-    window.localStorage.setItem(CHAMPIONS_AUDIO.storageKey, String(enabled))
-    window.dispatchEvent(new Event(PREF_CHANGE_EVENT))
-  } catch {
-    // Preference persistence is best-effort only.
-  }
+  writeAppAudioEnabled(enabled)
 }
 
 function readRecentPlayed() {
@@ -167,15 +154,20 @@ export function useChampionsEntrySound() {
     })
 
     function handlePreferenceChange() {
-      setEnabledState(readStoredEnabled())
+      const nextEnabled = readStoredEnabled()
+
+      setEnabledState(nextEnabled)
+      if (!nextEnabled) stopSharedAudio()
     }
 
-    window.addEventListener(PREF_CHANGE_EVENT, handlePreferenceChange)
+    window.addEventListener(APP_AUDIO_PREFERENCE.changeEvent, handlePreferenceChange)
+    window.addEventListener(APP_AUDIO_PREFERENCE.stopEvent, stopSharedAudio)
     window.addEventListener('storage', handlePreferenceChange)
 
     return () => {
       active = false
-      window.removeEventListener(PREF_CHANGE_EVENT, handlePreferenceChange)
+      window.removeEventListener(APP_AUDIO_PREFERENCE.changeEvent, handlePreferenceChange)
+      window.removeEventListener(APP_AUDIO_PREFERENCE.stopEvent, stopSharedAudio)
       window.removeEventListener('storage', handlePreferenceChange)
     }
   }, [])

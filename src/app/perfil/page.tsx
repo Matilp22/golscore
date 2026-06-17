@@ -18,7 +18,7 @@ export default function ProfilePage() {
           Mi perfil
         </h1>
         <p className="mt-2 max-w-2xl text-sm text-[#8d98a7]">
-          Editá tu usuario, email y contraseña sin cerrar tu sesión actual.
+          Editá tu usuario, email, contraseña y preferencias de la app sin cerrar tu sesión actual.
         </p>
       </header>
 

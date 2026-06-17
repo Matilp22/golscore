@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition, type ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
+import AppAudioPreferenceBridge from '@/frontend/components/AppAudioPreferenceBridge'
 import BackButton from '@/frontend/components/BackButton'
 import BrandMark from '@/frontend/components/BrandMark'
 import { LocaleProvider } from '@/frontend/components/LocaleProvider'
@@ -243,6 +244,7 @@ export default function AppShell({ auth, children, locale }: AppShellProps) {
 
   return (
     <LocaleProvider locale={locale}>
+      <AppAudioPreferenceBridge />
       <header className="hf-shell-top sticky top-0 z-40 border-b backdrop-blur-xl">
         <div className="mx-auto flex min-h-14 w-full max-w-7xl flex-nowrap items-center justify-between gap-2 px-2 py-2 sm:px-4 lg:min-h-16 lg:px-5 lg:py-0">
           <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
