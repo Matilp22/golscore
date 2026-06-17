@@ -46,6 +46,7 @@ import {
   t,
 } from '@/shared/i18n/locales'
 import { WORLD_CUP_2026_LOGO_URL } from '@/shared/utils/asset-urls'
+import { getHomeProdePredictions } from '@/server/prode/home-predictions'
 
 export async function generateMetadata() {
   const locale = await getRequestLocale()
@@ -1347,6 +1348,14 @@ export default async function HomePage({
   const visibleFixtureIds = visibleCompetitions.flatMap((competition) =>
     competition.matches.map((match) => match.externalId ?? match.id)
   )
+  const homeProdePredictions = await getHomeProdePredictions(
+    visibleCompetitions.flatMap((competition) =>
+      competition.matches.map((match) => ({
+        id: match.id,
+        externalId: match.externalId,
+      }))
+    )
+  )
   const refreshIntervalMs = hasFastRefreshMatches ? 20_000 : 300_000
   const homeLiveSyncUrl = hasFastRefreshMatches
     ? `/api/home/live-sync?date=${encodeURIComponent(selectedDate)}&limit=20`
@@ -1514,6 +1523,10 @@ export default async function HomePage({
                             broadcasters={match.broadcasters}
                             broadcastChannel={match.broadcastChannel}
                             broadcastLogoUrl={match.broadcastLogoUrl}
+                            prediction={
+                              homeProdePredictions.get(String(match.externalId ?? match.id)) ??
+                              homeProdePredictions.get(String(match.id))
+                            }
                             locale={locale}
                           />
                         ))}

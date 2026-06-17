@@ -21,7 +21,13 @@ type MatchRowProps = {
   broadcasters?: MatchBroadcaster[]
   broadcastChannel?: string | null
   broadcastLogoUrl?: string | null
+  prediction?: HomeProdePrediction | null
   locale?: AppLocale
+}
+
+type HomeProdePrediction = {
+  predictedHomeScore: number
+  predictedAwayScore: number
 }
 
 function formatCenterStatus(status: string, centerLabel: string) {
@@ -135,21 +141,34 @@ function formatGoalScorer(goal: MatchGoalScorer) {
 
 function GoalScorersLine({
   goalScorers,
+  prediction,
   locale,
 }: {
   goalScorers?: MatchGoalScorers
+  prediction?: HomeProdePrediction | null
   locale: AppLocale
 }) {
   const homeGoals = goalScorers?.home.map(formatGoalScorer).join('; ') || ''
   const awayGoals = goalScorers?.away.map(formatGoalScorer).join('; ') || ''
   const unassignedGoals = goalScorers?.unassigned?.map(formatGoalScorer).join('; ') || ''
+  const predictionBadge = prediction ? (
+    <span className="inline-flex max-w-full items-center justify-center rounded-full border border-[#70ff9d]/25 bg-[#70ff9d]/10 px-1.5 py-0.5 text-[9px] font-black leading-none text-[#7ff0b2]">
+      <span className="hidden sm:inline">{t(locale, 'prode.homePredictionShort')}&nbsp;</span>
+      {prediction.predictedHomeScore}-{prediction.predictedAwayScore}
+    </span>
+  ) : null
 
-  if (!homeGoals && !awayGoals && !unassignedGoals) return null
+  if (!homeGoals && !awayGoals && !unassignedGoals && !predictionBadge) return null
 
   if (unassignedGoals && !homeGoals && !awayGoals) {
     return (
-      <div className="mt-1 min-w-0 break-words text-[10px] leading-tight text-[#8d98a7]">
-        {t(locale, 'match.goals')}: {unassignedGoals}
+      <div className="mt-1 min-w-0 space-y-1 text-[10px] leading-tight text-[#8d98a7]">
+        <div className="break-words">
+          {t(locale, 'match.goals')}: {unassignedGoals}
+        </div>
+        {predictionBadge ? (
+          <div className="flex min-w-0 justify-center">{predictionBadge}</div>
+        ) : null}
       </div>
     )
   }
@@ -160,7 +179,9 @@ function GoalScorersLine({
         <div className="min-w-0 break-words">
           {homeGoals}
         </div>
-        <div aria-hidden="true" />
+        <div className="flex min-w-0 items-start justify-center">
+          {predictionBadge}
+        </div>
         <div className="min-w-0 break-words text-right">
           {awayGoals}
         </div>
@@ -187,6 +208,7 @@ export default function MatchRow({
   status,
   goalScorers,
   broadcasters,
+  prediction,
   locale = 'es',
 }: MatchRowProps) {
   const normalizedStatus = status.toLowerCase()
@@ -243,7 +265,11 @@ export default function MatchRow({
         </div>
       ) : null}
 
-      <GoalScorersLine goalScorers={goalScorers} locale={locale} />
+      <GoalScorersLine
+        goalScorers={goalScorers}
+        prediction={prediction}
+        locale={locale}
+      />
     </Link>
   )
 }

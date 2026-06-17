@@ -104,6 +104,7 @@ export type Database = {
           email?: string | null
           username: string | null
           display_name?: string | null
+          show_home_predictions?: boolean | null
           created_at: string
           updated_at?: string
         }
@@ -112,6 +113,7 @@ export type Database = {
           email?: string | null
           username?: string | null
           display_name?: string | null
+          show_home_predictions?: boolean | null
           created_at?: string
           updated_at?: string
         }
