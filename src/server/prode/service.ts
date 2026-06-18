@@ -2,6 +2,7 @@ import { getSupabaseServerClient } from '@/lib/supabase/server'
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { recalculateProdePoints } from '@/server/prode/points'
 import { getPredictionLockState } from '@/shared/utils/prediction-lock'
+import { getPredictionLockMinutesForMatch } from '@/shared/utils/prode-lock-exceptions'
 
 type SavePredictionInput = {
   userId: string
@@ -29,7 +30,7 @@ export async function savePrediction(input: SavePredictionInput) {
 
   const { data: match, error: matchError } = await supabase
     .from('matches')
-    .select('id, match_date, status, home_score, away_score')
+    .select('id, match_date, status, home_score, away_score, home_team_id, away_team_id')
     .eq('id', input.matchId)
     .single()
 
@@ -49,7 +50,15 @@ export async function savePrediction(input: SavePredictionInput) {
     }
   }
 
-  const lockState = getPredictionLockState(match.match_date, match.status)
+  const lockMinutes = getPredictionLockMinutesForMatch({
+    id: match.id,
+    matchDate: match.match_date,
+    homeTeamId: match.home_team_id,
+    awayTeamId: match.away_team_id,
+  })
+  const lockState = getPredictionLockState(match.match_date, match.status, new Date(), {
+    lockMinutes,
+  })
 
   console.info('[prode/save-prediction] lock check', {
     matchId: input.matchId,
@@ -58,6 +67,7 @@ export async function savePrediction(input: SavePredictionInput) {
     now: safeDateIso(lockState.now),
     matchStart: safeDateIso(lockState.matchStart),
     lockAt: safeDateIso(lockState.lockAt),
+    lockMinutes,
     minutesUntilMatch: Math.round(lockState.minutesUntilMatch * 10) / 10,
     locked: lockState.locked,
   })

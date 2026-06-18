@@ -3,6 +3,7 @@ import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { isFinalMatchStatus } from '@/shared/utils/match-status'
 import { normalizeLeagueRound } from '@/shared/utils/league-rounds'
 import { isPredictionLocked } from '@/shared/utils/prediction-lock'
+import { getPredictionLockMinutesForMatch } from '@/shared/utils/prode-lock-exceptions'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -434,6 +435,7 @@ export async function GET(request: Request) {
               String(match.round ?? '') === round
         )
       const matchesById = new Map(relevantMatches.map((match) => [String(match.id), match]))
+      const now = new Date()
       const scoredMatchIds = relevantMatches
         .filter(
           (match) =>
@@ -444,9 +446,21 @@ export async function GET(request: Request) {
         .map((match) => String(match.id))
       const lockedMatchIds = requestedRound
         ? relevantMatches
-            .filter((match) =>
-              isPredictionLocked(match.match_date, match.status ?? 'scheduled')
-            )
+            .filter((match) => {
+              const lockMinutes = getPredictionLockMinutesForMatch({
+                id: match.id,
+                matchDate: match.match_date,
+                homeTeamId: match.home_team_id,
+                awayTeamId: match.away_team_id,
+              })
+
+              return isPredictionLocked(
+                match.match_date,
+                match.status ?? 'scheduled',
+                now,
+                { lockMinutes }
+              )
+            })
             .map((match) => String(match.id))
         : []
 

@@ -4,6 +4,7 @@ import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { formatMatchDateTimeArgentina } from '@/shared/utils/argentina-time'
 import { normalizeLeagueRound } from '@/shared/utils/league-rounds'
 import { getPredictionLockState } from '@/shared/utils/prediction-lock'
+import { getPredictionLockMinutesForMatch } from '@/shared/utils/prode-lock-exceptions'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -151,7 +152,15 @@ export async function GET(request: Request) {
     )
     const now = new Date()
     const auditedMatches = matches.map((match) => {
-      const state = getPredictionLockState(match.match_date, match.status ?? 'scheduled', now)
+      const lockMinutes = getPredictionLockMinutesForMatch({
+        id: match.id,
+        matchDate: match.match_date,
+        homeTeamId: match.home_team_id,
+        awayTeamId: match.away_team_id,
+      })
+      const state = getPredictionLockState(match.match_date, match.status ?? 'scheduled', now, {
+        lockMinutes,
+      })
       const homeTeam = match.home_team_id ? teamsById.get(match.home_team_id) : null
       const awayTeam = match.away_team_id ? teamsById.get(match.away_team_id) : null
 
@@ -169,6 +178,7 @@ export async function GET(request: Request) {
         status: match.status,
         now_argentina: formatArgentinaDate(now),
         lockReason: getLockReason(state),
+        lockMinutes,
         canPredict: !state.locked,
         minutesUntilKickoff: roundMinutes(state.minutesUntilMatch),
         is_derived: match.is_derived ?? null,

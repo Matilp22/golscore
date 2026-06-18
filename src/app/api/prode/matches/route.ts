@@ -11,6 +11,7 @@ import { getAllowedProdeLeagueLabel } from '@/shared/config/prode-leagues'
 import { normalizeLeagueRound } from '@/shared/utils/league-rounds'
 import { parseMatchDate } from '@/shared/utils/prediction-lock'
 import { pickLeagueLogoUrl, pickTeamLogoUrl } from '@/shared/utils/asset-urls'
+import { getPredictionLockMinutesForMatch } from '@/shared/utils/prode-lock-exceptions'
 import {
   getWorldCupGroupLabel,
   isWorldCupTournamentExternalId,
@@ -355,6 +356,12 @@ export async function GET(request: Request) {
       groupLabel: worldCupGroupKey ? getWorldCupGroupLabel(worldCupGroupKey) : null,
       homeScore: match.home_score,
       awayScore: match.away_score,
+      predictionLockMinutes: getPredictionLockMinutesForMatch({
+        id: match.id,
+        matchDate: match.match_date,
+        homeTeamId: match.home_team_id,
+        awayTeamId: match.away_team_id,
+      }),
       league: league
         ? {
             id: String(league.id),

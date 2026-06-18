@@ -45,6 +45,7 @@ export type Match = {
   groupLabel?: string | null
   homeScore: number | null
   awayScore: number | null
+  predictionLockMinutes?: number | null
   league: League | null
   homeTeam: Team | null
   awayTeam: Team | null
@@ -158,10 +159,12 @@ export function hasMatchStarted(match: Pick<Match, 'matchDate' | 'status'>, now 
 }
 
 export function getMatchPredictionLockState(
-  match: Pick<Match, 'matchDate' | 'status'>,
+  match: Pick<Match, 'matchDate' | 'status' | 'predictionLockMinutes'>,
   now = new Date()
 ) {
-  return getPredictionLockState(match.matchDate, match.status, now)
+  return getPredictionLockState(match.matchDate, match.status, now, {
+    lockMinutes: match.predictionLockMinutes,
+  })
 }
 
 export function hasVisibleResult(match: Pick<Match, 'homeScore' | 'awayScore' | 'status'>) {

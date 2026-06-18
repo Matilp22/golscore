@@ -1,6 +1,6 @@
 import { hasStartedStatus } from '@/shared/utils/match-status'
 
-const PREDICTION_LOCK_MINUTES = 15
+export const DEFAULT_PREDICTION_LOCK_MINUTES = 15
 const ARGENTINA_UTC_OFFSET_HOURS = 3
 
 function hasExplicitTimezone(value: string) {
@@ -49,15 +49,19 @@ export function parseMatchDate(value: string | Date | null | undefined) {
 export function getPredictionLockState(
   matchDate: string | Date | null | undefined,
   status = 'scheduled',
-  now = new Date()
+  now = new Date(),
+  options: { lockMinutes?: number | null } = {}
 ) {
+  const lockMinutes = Number.isFinite(options.lockMinutes)
+    ? Number(options.lockMinutes)
+    : DEFAULT_PREDICTION_LOCK_MINUTES
   const matchStart = parseMatchDate(matchDate)
   const matchStartMs = matchStart.getTime()
   const nowMs = now.getTime()
   const minutesUntilMatch = (matchStartMs - nowMs) / 60000
   const statusStarted = hasStartedStatus(status)
   const invalidDate = Number.isNaN(matchStartMs)
-  const locked = invalidDate || statusStarted || minutesUntilMatch <= PREDICTION_LOCK_MINUTES
+  const locked = invalidDate || statusStarted || minutesUntilMatch <= lockMinutes
 
   return {
     locked,
@@ -66,16 +70,18 @@ export function getPredictionLockState(
     now,
     minutesUntilMatch,
     statusStarted,
-    lockAt: new Date(matchStartMs - PREDICTION_LOCK_MINUTES * 60000),
+    lockAt: new Date(matchStartMs - lockMinutes * 60000),
+    lockMinutes,
   }
 }
 
 export function isPredictionLocked(
   matchDate: string | Date | null | undefined,
   status = 'scheduled',
-  now = new Date()
+  now = new Date(),
+  options: { lockMinutes?: number | null } = {}
 ) {
-  return getPredictionLockState(matchDate, status, now).locked
+  return getPredictionLockState(matchDate, status, now, options).locked
 }
 
 export function hasMatchStarted(

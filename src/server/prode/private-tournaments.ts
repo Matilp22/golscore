@@ -10,6 +10,7 @@ import {
 import { SITE_URL } from '@/shared/seo'
 import { isFinalMatchStatus } from '@/shared/utils/match-status'
 import { isPredictionLocked } from '@/shared/utils/prediction-lock'
+import { getPredictionLockMinutesForMatch } from '@/shared/utils/prode-lock-exceptions'
 
 export type PrivateTournamentRole = 'owner' | 'member'
 export type JoinRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled'
@@ -717,7 +718,18 @@ function filterPredictionsForTournament(
 
     if (!member || !match) return false
     if (match.leagueExternalIdText !== leagueExternalId) return false
-    if (!isPredictionLocked(match.matchDate, match.status ?? 'scheduled', now)) return false
+    if (
+      !isPredictionLocked(match.matchDate, match.status ?? 'scheduled', now, {
+        lockMinutes: getPredictionLockMinutesForMatch({
+          id: match.id,
+          matchDate: match.matchDate,
+          homeTeamId: match.homeTeamId,
+          awayTeamId: match.awayTeamId,
+        }),
+      })
+    ) {
+      return false
+    }
 
     return new Date(match.matchDate).getTime() >= new Date(member.joined_at).getTime()
   })
