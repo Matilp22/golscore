@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useState, useTransition } from 'react'
 import {
   getSupabaseBrowserClient,
+  sendPasswordRecoveryEmail,
   signInWithEmail,
   signUpWithEmail,
   upsertUserProfile,
@@ -130,6 +131,42 @@ export default function AuthForm({
     })
   }
 
+  const handlePasswordRecovery = () => {
+    setMessage('')
+
+    const cleanEmail = email.trim()
+
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setMessage('Ingresá tu email para enviarte el enlace de recuperación.')
+      return
+    }
+
+    startTransition(async () => {
+      try {
+        getSupabaseBrowserClient()
+      } catch (error) {
+        setMessage(
+          error instanceof Error
+            ? `${error.message} Pegá tus claves públicas en .env.local y reiniciá npm run dev.`
+            : 'Supabase no está configurado. Pegá tus claves públicas en .env.local y reiniciá npm run dev.'
+        )
+        return
+      }
+
+      const { error } = await sendPasswordRecoveryEmail(
+        cleanEmail,
+        getRedirectUrl('/perfil?recovery=1')
+      )
+
+      if (error) {
+        setMessage(translateAuthError(error, 'passwordRecovery'))
+        return
+      }
+
+      setMessage('Te enviamos un email para recuperar tu contraseña. Revisá tu casilla y seguí el enlace.')
+    })
+  }
+
   return (
     <div className="hf-card rounded-3xl p-5">
       <div className="mb-4">
@@ -207,6 +244,17 @@ export default function AuthForm({
               : 'Crear cuenta'}
         </button>
       </form>
+
+      {isLogin ? (
+        <button
+          type="button"
+          onClick={handlePasswordRecovery}
+          disabled={isPending}
+          className="mt-3 w-full rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 text-sm font-bold text-[#7ff0b2] transition hover:border-[#70ff9d]/25 hover:bg-[#70ff9d]/10 hover:text-white disabled:cursor-wait disabled:opacity-70"
+        >
+          ¿Olvidaste tu contraseña?
+        </button>
+      ) : null}
 
       {message ? (
         <p className="mt-4 rounded-xl border border-white/8 bg-[#0f1317] px-3 py-2 text-sm text-[#dce7f2]">

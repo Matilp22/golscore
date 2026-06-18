@@ -243,6 +243,14 @@ export async function signInWithEmail(email: string, password: string) {
   })
 }
 
+export async function sendPasswordRecoveryEmail(email: string, redirectTo?: string | null) {
+  const supabase = getSupabaseBrowserClient()
+
+  return supabase.auth.resetPasswordForEmail(email.trim(), {
+    redirectTo: redirectTo?.trim() || undefined,
+  })
+}
+
 export async function signOut() {
   const supabase = getSupabaseBrowserClient()
 

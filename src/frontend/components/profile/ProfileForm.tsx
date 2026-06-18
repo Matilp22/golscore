@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useState, useTransition, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/frontend/hooks/useAuth'
@@ -177,6 +178,38 @@ function SettingToggle({
   )
 }
 
+function SignedOutProfileState() {
+  return (
+    <section className="rounded-3xl border border-white/8 bg-[#111418] p-4 shadow-[0_10px_30px_rgba(0,0,0,0.18)] sm:p-6">
+      <div className="rounded-2xl border border-[#70ff9d]/15 bg-[#0b1412]/80 p-4">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#70ff9d]">
+          Mi cuenta
+        </p>
+        <h2 className="mt-2 text-xl font-black text-white">
+          Iniciá sesión para ver tu perfil
+        </h2>
+        <p className="mt-2 text-sm leading-relaxed text-[#9aa7b5]">
+          Desde acá podés editar tu usuario, email, contraseña y preferencias de la app.
+        </p>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          <Link
+            href="/login?next=%2Fperfil"
+            className="hf-button inline-flex min-h-11 items-center justify-center rounded-xl px-4 text-sm font-black"
+          >
+            Iniciar sesión
+          </Link>
+          <Link
+            href="/register?next=%2Fperfil"
+            className="hf-button-secondary inline-flex min-h-11 items-center justify-center rounded-xl px-4 text-sm font-bold text-[#c8d0da]"
+          >
+            Crear cuenta
+          </Link>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export default function ProfileForm() {
   const router = useRouter()
   const { user, isLoading } = useAuth()
@@ -197,7 +230,6 @@ export default function ProfileForm() {
     if (isLoading) return
 
     if (!user) {
-      router.replace('/login')
       return
     }
 
@@ -344,6 +376,10 @@ export default function ProfileForm() {
         Cargando perfil...
       </div>
     )
+  }
+
+  if (!user) {
+    return <SignedOutProfileState />
   }
 
   const tabs: Array<{ id: ProfileTab; label: string }> = [

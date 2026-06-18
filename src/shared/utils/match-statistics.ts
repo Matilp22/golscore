@@ -161,18 +161,26 @@ function upsertDisciplineStat(
     type: string
     home: number
     away: number
-  }
+  },
+  options: {
+    preferExisting?: boolean
+    includeEmptyFallback?: boolean
+  } = {}
 ) {
+  const { preferExisting = false, includeEmptyFallback = true } = options
+  const hasDerivedValue = input.home > 0 || input.away > 0
   const index = pairs.findIndex((pair) =>
     isStatType(pair.type, [input.type])
   )
   const existing = index >= 0 ? pairs[index] : null
+
+  if (preferExisting && existing !== null) return pairs
+
   const existingHome = parseNumber(existing?.homeValue)
   const existingAway = parseNumber(existing?.awayValue)
   const shouldUseDerived =
-    input.home > 0 ||
-    input.away > 0 ||
-    existing === null
+    hasDerivedValue ||
+    (includeEmptyFallback && existing === null)
 
   if (!shouldUseDerived) return pairs
 
@@ -268,17 +276,31 @@ export function normalizeMatchStatistics(
   if (!officialPairs.length) return []
 
   const discipline = deriveDisciplineStatsFromEvents(events, homeTeam, awayTeam)
-  const withYellows = upsertDisciplineStat(officialPairs, {
-    type: 'Yellow Cards',
-    home: discipline.yellowCards.home,
-    away: discipline.yellowCards.away,
-  })
+  const withYellows = upsertDisciplineStat(
+    officialPairs,
+    {
+      type: 'Yellow Cards',
+      home: discipline.yellowCards.home,
+      away: discipline.yellowCards.away,
+    },
+    {
+      preferExisting: true,
+      includeEmptyFallback: false,
+    }
+  )
 
-  return upsertDisciplineStat(withYellows, {
-    type: 'Red Cards',
-    home: discipline.redCards.home,
-    away: discipline.redCards.away,
-  })
+  return upsertDisciplineStat(
+    withYellows,
+    {
+      type: 'Red Cards',
+      home: discipline.redCards.home,
+      away: discipline.redCards.away,
+    },
+    {
+      preferExisting: true,
+      includeEmptyFallback: false,
+    }
+  )
 }
 
 export function mergeOfficialAndDerivedStats(

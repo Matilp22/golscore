@@ -2388,6 +2388,20 @@ function buildMergedStatisticsAudit(input: {
   )
 }
 
+function getMergedDisciplineStat(
+  stats: ReturnType<typeof buildMergedStatisticsAudit>,
+  type: string
+) {
+  const pair = stats.find((stat) =>
+    normalizeFootballEventText(stat.type) === normalizeFootballEventText(type)
+  )
+
+  return {
+    home: numberField(pair?.homeValue),
+    away: numberField(pair?.awayValue),
+  }
+}
+
 function buildMissingExpectedStats(statisticsNames: string[]) {
   const normalizedNames = new Set(statisticsNames.map(normalizeFootballEventText))
   const expected = [
@@ -2559,6 +2573,8 @@ function buildDetailedAuditSections(input: {
     match: input.match,
     teamsById: input.teamsById,
   })
+  const mergedYellowCards = getMergedDisciplineStat(mergedStats, 'Yellow Cards')
+  const mergedRedCards = getMergedDisciplineStat(mergedStats, 'Red Cards')
   const mismatches = [
     {
       type: 'Yellow Cards',
@@ -2609,14 +2625,8 @@ function buildDetailedAuditSections(input: {
         },
       },
       merged: {
-        yellowCards: {
-          home: eventSummary.yellowCardsHome,
-          away: eventSummary.yellowCardsAway,
-        },
-        redCards: {
-          home: eventSummary.redCardsHome,
-          away: eventSummary.redCardsAway,
-        },
+        yellowCards: mergedYellowCards,
+        redCards: mergedRedCards,
       },
       mergedStats,
       mismatches,

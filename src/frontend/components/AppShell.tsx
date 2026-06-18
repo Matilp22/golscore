@@ -181,14 +181,14 @@ function MobileAccountSection({
                 <Link
                   href="/login"
                   onClick={onNavigate}
-                  className="block rounded-xl px-2.5 py-2 text-sm text-[#bcc6d2] transition hover:bg-[#70ff9d]/10 hover:text-white"
+                  className="mt-2 flex min-h-11 items-center justify-center rounded-xl border border-[#70ff9d]/45 bg-[#70ff9d] px-3 py-2 text-sm font-black text-[#041008] shadow-[0_12px_28px_rgba(33,212,111,0.22)] transition hover:brightness-105"
                 >
                   {t(locale, 'account.signIn')}
                 </Link>
                 <Link
                   href="/register"
                   onClick={onNavigate}
-                  className="block rounded-xl px-2.5 py-2 text-sm text-[#bcc6d2] transition hover:bg-[#70ff9d]/10 hover:text-white"
+                  className="flex min-h-11 items-center justify-center rounded-xl border border-white/12 bg-white/[0.06] px-3 py-2 text-sm font-bold text-[#e4ebf3] transition hover:border-[#70ff9d]/25 hover:bg-[#70ff9d]/10 hover:text-white"
                 >
                   {t(locale, 'account.createAccount')}
                 </Link>
