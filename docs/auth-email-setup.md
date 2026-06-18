@@ -32,6 +32,18 @@ http://localhost:3000/restablecer-contrasena
 http://localhost:3126/restablecer-contrasena
 ```
 
+## Flujo de recuperación
+
+La app llama a `resetPasswordForEmail` con:
+
+```text
+https://hayfulbo.com/auth/callback?next=%2Frestablecer-contrasena
+```
+
+El botón del email debe usar siempre `{{ .ConfirmationURL }}`. No reemplazarlo por `/perfil`, `/login`, `/restablecer-contrasena` ni una URL hardcodeada, porque Supabase necesita incluir el token de recuperación.
+
+Al tocar el botón del email, Supabase valida el token, vuelve a `/auth/callback`, la app intercambia el `code` por sesión y redirige a `/restablecer-contrasena` para crear la nueva contraseña.
+
 ## Reset Password Template
 
 Supabase -> Authentication -> Email Templates -> Reset Password
