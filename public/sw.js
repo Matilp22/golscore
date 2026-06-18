@@ -1,5 +1,5 @@
-const STATIC_CACHE = 'hayfulbo-static-assets-v4'
-const PAGE_CACHE = 'hayfulbo-pages-assets-v4'
+const STATIC_CACHE = 'hayfulbo-static-assets-v5'
+const PAGE_CACHE = 'hayfulbo-pages-assets-v5'
 const STATIC_ASSETS = [
   '/manifest.json',
   '/favicon.svg',

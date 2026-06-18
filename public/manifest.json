@@ -2,11 +2,11 @@
   "name": "HAY FULBO",
   "short_name": "HAY FULBO",
   "description": "Resultados, fixtures y Prode con identidad futbolera.",
-  "id": "https://hayfulbo.com/",
-  "start_url": "/?source=pwa",
+  "id": "/",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["standalone", "browser"],
+  "display_override": ["standalone"],
   "handle_links": "preferred",
   "launch_handler": {
     "client_mode": ["navigate-existing", "auto"]
