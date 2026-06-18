@@ -40,3 +40,7 @@ export function getAuthCallbackUrl(nextPath: string | null | undefined) {
 
   return callbackUrl.toString()
 }
+
+export function getAuthCallbackBaseUrl() {
+  return new URL('/auth/callback', getOrigin()).toString()
+}

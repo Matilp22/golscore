@@ -37,12 +37,12 @@ http://localhost:3126/restablecer-contrasena
 La app llama a `resetPasswordForEmail` con:
 
 ```text
-https://hayfulbo.com/auth/callback?next=%2Frestablecer-contrasena
+https://hayfulbo.com/auth/callback
 ```
 
-El botón del email debe usar siempre `{{ .ConfirmationURL }}`. No reemplazarlo por `/perfil`, `/login`, `/restablecer-contrasena` ni una URL hardcodeada, porque Supabase necesita incluir el token de recuperación.
+El botón del email de recuperación debe construir el link con `{{ .RedirectTo }}`, `{{ .TokenHash }}` y `type=recovery`. No usar `/perfil?recovery=1`, no usar directamente `/restablecer-contrasena` sin token y no hardcodear una URL que pierda el token.
 
-Al tocar el botón del email, Supabase valida el token, vuelve a `/auth/callback`, la app intercambia el `code` por sesión y redirige a `/restablecer-contrasena` para crear la nueva contraseña.
+Al tocar el botón del email, la app recibe `token_hash` en `/auth/callback`, verifica el token con Supabase Auth, crea la sesión temporal de recuperación y redirige a `/restablecer-contrasena` para crear la nueva contraseña.
 
 ## Reset Password Template
 
@@ -72,7 +72,7 @@ HTML:
 
   <p style="margin:30px 0">
     <a
-      href="{{ .ConfirmationURL }}"
+      href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=recovery&next=%2Frestablecer-contrasena"
       style="display:inline-block;background:#35e77c;color:#041008;padding:14px 22px;border-radius:10px;text-decoration:none;font-weight:700"
     >
       Crear nueva contraseña

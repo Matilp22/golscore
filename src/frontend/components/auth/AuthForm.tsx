@@ -12,6 +12,7 @@ import {
 } from '@/lib/supabase/supabaseClient'
 import BrandMark from '@/frontend/components/BrandMark'
 import {
+  getAuthCallbackBaseUrl,
   getAuthCallbackUrl,
   getSafeAuthNextPath,
 } from '@/shared/utils/auth-redirects'
@@ -170,7 +171,7 @@ export default function AuthForm({
 
       const { error } = await sendPasswordRecoveryEmail(
         cleanEmail,
-        getAuthCallbackUrl('/restablecer-contrasena')
+        getAuthCallbackBaseUrl()
       )
 
       if (error) {
@@ -178,7 +179,7 @@ export default function AuthForm({
         return
       }
 
-      setMessage('Si existe una cuenta asociada a ese email, vas a recibir un enlace para crear una nueva contraseña.')
+      setMessage('Si existe una cuenta asociada a ese email, vas a recibir un enlace para restablecer la contraseña.')
     })
   }
 

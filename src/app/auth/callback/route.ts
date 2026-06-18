@@ -9,19 +9,48 @@ function redirectTo(request: NextRequest, path: string) {
 }
 
 export async function GET(request: NextRequest) {
+  const tokenHash = request.nextUrl.searchParams.get('token_hash')
+  const type = request.nextUrl.searchParams.get('type')
   const code = request.nextUrl.searchParams.get('code')
-  const nextPath = getSafeAuthNextPath(
-    request.nextUrl.searchParams.get('next'),
-    '/prode'
-  )
+  const rawNextPath = request.nextUrl.searchParams.get('next')
 
-  if (!code) {
+  if (!tokenHash && !code) {
     return redirectTo(request, INVALID_LINK_PATH)
   }
 
   const supabase = await getSupabaseServerClient()
 
   if (!supabase) {
+    return redirectTo(request, INVALID_LINK_PATH)
+  }
+
+  if (tokenHash) {
+    const nextPath = getSafeAuthNextPath(rawNextPath, '/restablecer-contrasena')
+
+    if (type !== 'recovery') {
+      return redirectTo(request, INVALID_LINK_PATH)
+    }
+
+    const { error } = await supabase.auth.verifyOtp({
+      token_hash: tokenHash,
+      type: 'recovery',
+    })
+
+    if (error) {
+      console.warn('[auth/callback] No se pudo verificar el token de recuperación', {
+        code: error.code ?? null,
+        status: error.status ?? null,
+      })
+
+      return redirectTo(request, INVALID_LINK_PATH)
+    }
+
+    return redirectTo(request, nextPath)
+  }
+
+  const nextPath = getSafeAuthNextPath(rawNextPath, '/prode')
+
+  if (!code) {
     return redirectTo(request, INVALID_LINK_PATH)
   }
 

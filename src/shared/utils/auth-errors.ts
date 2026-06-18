@@ -81,6 +81,8 @@ function isExpiredOrInvalidLinkError(error: unknown) {
       'otp_expired',
       'access_denied',
       'invalid_grant',
+      'token expired',
+      'invalid token',
       'invalid recovery link',
       'expired recovery link',
       'invalid or expired',
