@@ -9,7 +9,7 @@ import {
 } from '@/server/prode/world-cup-groups'
 import { getAllowedProdeLeagueLabel } from '@/shared/config/prode-leagues'
 import { normalizeLeagueRound } from '@/shared/utils/league-rounds'
-import { parseMatchDate } from '@/shared/utils/prediction-lock'
+import { normalizePredictionLockOverride, parseMatchDate } from '@/shared/utils/prediction-lock'
 import { pickLeagueLogoUrl, pickTeamLogoUrl } from '@/shared/utils/asset-urls'
 import { getPredictionLockMinutesForMatch } from '@/shared/utils/prode-lock-exceptions'
 import {
@@ -36,6 +36,7 @@ type MatchRow = {
   status: string
   home_score: number | null
   away_score: number | null
+  prediction_lock_override?: string | null
 }
 
 type LeagueRow = {
@@ -174,7 +175,7 @@ export async function GET(request: Request) {
   let query = supabase
     .from('matches')
     .select(
-      'id, league_id, round, match_date, home_team_id, away_team_id, status, home_score, away_score'
+      'id, league_id, round, match_date, home_team_id, away_team_id, status, home_score, away_score, prediction_lock_override'
     )
     .order('match_date', { ascending: true, nullsFirst: false })
     .limit(1000)
@@ -356,6 +357,7 @@ export async function GET(request: Request) {
       groupLabel: worldCupGroupKey ? getWorldCupGroupLabel(worldCupGroupKey) : null,
       homeScore: match.home_score,
       awayScore: match.away_score,
+      predictionLockOverride: normalizePredictionLockOverride(match.prediction_lock_override),
       predictionLockMinutes: getPredictionLockMinutesForMatch({
         id: match.id,
         matchDate: match.match_date,

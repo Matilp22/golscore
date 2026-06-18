@@ -42,6 +42,7 @@ type LeagueMatchRow = {
   away_score: number | null
   home_team_id: string | number | null
   away_team_id: string | number | null
+  prediction_lock_override?: string | null
 }
 
 type PredictionRow = {
@@ -408,7 +409,7 @@ export async function GET(request: Request) {
 
       const { data: leagueMatchesData, error: leagueMatchesError } = await supabase
         .from('matches')
-        .select('id, round, status, match_date, home_score, away_score, home_team_id, away_team_id')
+        .select('id, round, status, match_date, home_score, away_score, home_team_id, away_team_id, prediction_lock_override')
         .eq('league_id', leagueId)
 
       if (leagueMatchesError) {
@@ -458,7 +459,10 @@ export async function GET(request: Request) {
                 match.match_date,
                 match.status ?? 'scheduled',
                 now,
-                { lockMinutes }
+                {
+                  lockMinutes,
+                  lockOverride: match.prediction_lock_override,
+                }
               )
             })
             .map((match) => String(match.id))

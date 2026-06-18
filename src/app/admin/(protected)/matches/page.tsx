@@ -280,6 +280,72 @@ function AdminMatchCaptainFields({ match }: { match: AdminEditableMatch }) {
   )
 }
 
+const PRODE_LOCK_OPTIONS = [
+  {
+    value: 'auto',
+    title: 'Automatico',
+    description: 'Usa la regla normal del cierre.',
+  },
+  {
+    value: 'locked',
+    title: 'Bloquear',
+    description: 'Cierra el Prode para este partido.',
+  },
+  {
+    value: 'unlocked',
+    title: 'Desbloquear',
+    description: 'Permite pronosticar fuera de horario.',
+  },
+] as const
+
+function getProdeLockLabel(value: AdminEditableMatch['predictionLockOverride']) {
+  if (value === 'locked') return 'Prode bloqueado'
+  if (value === 'unlocked') return 'Prode desbloqueado'
+
+  return 'Prode automatico'
+}
+
+function AdminMatchProdeLockFields({ match }: { match: AdminEditableMatch }) {
+  const selectedValue = match.predictionLockOverride ?? 'auto'
+
+  return (
+    <section className="rounded-xl border border-[#70ff9d]/15 bg-[#07110f]/60 p-3">
+      <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h4 className="text-xs font-black uppercase tracking-[0.12em] text-[#70ff9d]">
+            Bloqueo del Prode
+          </h4>
+          <p className="mt-1 text-xs text-[#9aa7b5]">
+            Override manual para bloquear o desbloquear este partido aunque este dentro o fuera del horario normal.
+          </p>
+        </div>
+        <span className="inline-flex w-fit rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-black text-[#dce7f2]">
+          {getProdeLockLabel(match.predictionLockOverride)}
+        </span>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {PRODE_LOCK_OPTIONS.map((option) => (
+          <label key={option.value} className="min-w-0 cursor-pointer">
+            <input
+              type="radio"
+              name="predictionLockOverride"
+              value={option.value}
+              defaultChecked={selectedValue === option.value}
+              className="peer sr-only"
+            />
+            <span className="flex h-full min-h-[76px] flex-col justify-center rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-center transition peer-checked:border-[#70ff9d]/50 peer-checked:bg-[#123022] peer-checked:text-white">
+              <span className="text-sm font-black">{option.title}</span>
+              <span className="mt-1 text-xs leading-snug text-[#9aa7b5]">
+                {option.description}
+              </span>
+            </span>
+          </label>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 function MatchSelector({
   fixtures,
   selectedFixtureId,
@@ -332,6 +398,11 @@ function MatchSelector({
             <p className="mt-1 text-xs text-[#7ff0b2]">
               {formatDateTime(fixture.date ?? fixture.matchDate)}
             </p>
+            {fixture.predictionLockOverride ? (
+              <p className="mt-1 text-[11px] font-black uppercase tracking-[0.08em] text-[#f5c542]">
+                {getProdeLockLabel(fixture.predictionLockOverride)}
+              </p>
+            ) : null}
           </Link>
         )
       })}
@@ -371,6 +442,8 @@ function MatchEditor({
           </Link>
         </div>
       </div>
+
+      <AdminMatchProdeLockFields match={match} />
 
       <section className="space-y-3">
         <h3 className="text-sm font-black uppercase tracking-[0.12em] text-[#70ff9d]">

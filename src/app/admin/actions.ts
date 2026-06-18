@@ -18,6 +18,7 @@ import {
   isVisibilityRuleType,
   updateVisibilityRule,
 } from '@/server/admin/visibility'
+import { normalizePredictionLockOverride } from '@/shared/utils/prediction-lock'
 
 export type ManualSyncActionState = {
   ok: boolean
@@ -298,6 +299,9 @@ export async function saveMatchDetailsAction(formData: FormData) {
       homeCaptainPlayerName: homeCaptain.playerName,
       awayCaptainPlayerId: awayCaptain.playerId,
       awayCaptainPlayerName: awayCaptain.playerName,
+      predictionLockOverride: normalizePredictionLockOverride(
+        readString(formData, 'predictionLockOverride')
+      ),
     })
   } catch (error) {
     console.error('[admin-matches] Failed to save match details.', error)

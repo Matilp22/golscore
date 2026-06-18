@@ -3,7 +3,10 @@ import { NextResponse } from 'next/server'
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { formatMatchDateTimeArgentina } from '@/shared/utils/argentina-time'
 import { normalizeLeagueRound } from '@/shared/utils/league-rounds'
-import { getPredictionLockState } from '@/shared/utils/prediction-lock'
+import {
+  getPredictionLockState,
+  type PredictionLockOverrideValue,
+} from '@/shared/utils/prediction-lock'
 import { getPredictionLockMinutesForMatch } from '@/shared/utils/prode-lock-exceptions'
 
 export const dynamic = 'force-dynamic'
@@ -26,6 +29,7 @@ type MatchRow = {
   league_id: string | null
   home_team_id: string | null
   away_team_id: string | null
+  prediction_lock_override?: PredictionLockOverrideValue
   is_derived?: boolean | null
   bracket_phase?: string | null
   bracket_slot?: number | null
@@ -62,10 +66,12 @@ function isAuthorized(request: Request) {
 }
 
 function getLockReason(state: ReturnType<typeof getPredictionLockState>) {
+  if (state.lockOverride === 'locked') return 'manual-locked'
+  if (state.lockOverride === 'unlocked') return 'manual-unlocked'
   if (state.invalidDate) return 'invalid-date'
   if (state.statusStarted) return 'status-started'
   if (state.minutesUntilMatch <= 0) return 'started-by-time'
-  if (state.minutesUntilMatch <= 15) return 'within-15-minutes'
+  if (state.minutesUntilMatch <= state.lockMinutes) return `within-${state.lockMinutes}-minutes`
 
   return 'open'
 }
@@ -119,7 +125,7 @@ export async function GET(request: Request) {
     const { data: matchesData, error: matchesError } = await supabase
       .from('matches')
       .select(
-        'id, external_id, round, match_date, status, league_id, home_team_id, away_team_id, is_derived, bracket_phase, bracket_slot'
+        'id, external_id, round, match_date, status, league_id, home_team_id, away_team_id, prediction_lock_override, is_derived, bracket_phase, bracket_slot'
       )
       .eq('league_id', league.id)
       .order('match_date', { ascending: true, nullsFirst: false })
@@ -160,6 +166,7 @@ export async function GET(request: Request) {
       })
       const state = getPredictionLockState(match.match_date, match.status ?? 'scheduled', now, {
         lockMinutes,
+        lockOverride: match.prediction_lock_override,
       })
       const homeTeam = match.home_team_id ? teamsById.get(match.home_team_id) : null
       const awayTeam = match.away_team_id ? teamsById.get(match.away_team_id) : null
@@ -179,6 +186,8 @@ export async function GET(request: Request) {
         now_argentina: formatArgentinaDate(now),
         lockReason: getLockReason(state),
         lockMinutes,
+        predictionLockOverride: state.lockOverride,
+        automaticCanPredict: !state.automaticLocked,
         canPredict: !state.locked,
         minutesUntilKickoff: roundMinutes(state.minutesUntilMatch),
         is_derived: match.is_derived ?? null,

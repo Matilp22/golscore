@@ -2,6 +2,7 @@ import {
   getPredictionLockState,
   hasMatchStarted as hasMatchStartedByDate,
   isPredictionLocked as isPredictionLockedByDate,
+  type PredictionLockOverrideValue,
 } from '@/shared/utils/prediction-lock'
 
 export type EntityId = string
@@ -46,6 +47,7 @@ export type Match = {
   homeScore: number | null
   awayScore: number | null
   predictionLockMinutes?: number | null
+  predictionLockOverride?: PredictionLockOverrideValue
   league: League | null
   homeTeam: Team | null
   awayTeam: Team | null
@@ -159,11 +161,12 @@ export function hasMatchStarted(match: Pick<Match, 'matchDate' | 'status'>, now 
 }
 
 export function getMatchPredictionLockState(
-  match: Pick<Match, 'matchDate' | 'status' | 'predictionLockMinutes'>,
+  match: Pick<Match, 'matchDate' | 'status' | 'predictionLockMinutes' | 'predictionLockOverride'>,
   now = new Date()
 ) {
   return getPredictionLockState(match.matchDate, match.status, now, {
     lockMinutes: match.predictionLockMinutes,
+    lockOverride: match.predictionLockOverride,
   })
 }
 

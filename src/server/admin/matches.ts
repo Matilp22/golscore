@@ -3,6 +3,10 @@ import 'server-only'
 import { addDaysToISO, getArgentinaDateISO, toArgentinaDate } from '@/shared/utils/argentina-time'
 import { upsertMatchBroadcast } from '@/server/broadcasts/admin'
 import {
+  normalizePredictionLockOverride,
+  type PredictionLockOverrideValue,
+} from '@/shared/utils/prediction-lock'
+import {
   asRecord,
   getAdminClient,
   isMissingRelationError,
@@ -52,6 +56,11 @@ type MatchDetailLineupsRow = {
   lineups: unknown
 }
 
+type AdminStoredMatchLockRow = {
+  external_id: string | number | null
+  prediction_lock_override?: string | null
+}
+
 export type AdminEditableMatch = CachedFixture & {
   leagueName: string | null
   leagueExternalId: string | null
@@ -93,6 +102,7 @@ export type AdminEditableMatch = CachedFixture & {
   homeCaptainPlayerName: string | null
   awayCaptainPlayerId: string | null
   awayCaptainPlayerName: string | null
+  predictionLockOverride: PredictionLockOverrideValue
   homeCaptainOptions: AdminCaptainOption[]
   awayCaptainOptions: AdminCaptainOption[]
 }
@@ -159,6 +169,7 @@ export type AdminMatchDetailsInput = {
   homeCaptainPlayerName?: string | null
   awayCaptainPlayerId?: string | null
   awayCaptainPlayerName?: string | null
+  predictionLockOverride?: PredictionLockOverrideValue
 }
 
 const ADMIN_TV_OPTION_DEFINITIONS = [
@@ -230,6 +241,10 @@ function cleanText(value: string | null | undefined) {
   const trimmed = value?.trim()
 
   return trimmed || null
+}
+
+function cleanPredictionLockOverride(value: unknown) {
+  return normalizePredictionLockOverride(value)
 }
 
 function cleanHexColor(value: string | null | undefined) {
@@ -573,7 +588,8 @@ function getCacheRowsAscendingQuery() {
 function parseEditableMatch(
   row: FixtureCacheRow,
   overridePayload?: Record<string, unknown> | null,
-  detailCacheLineups?: unknown
+  detailCacheLineups?: unknown,
+  storedPredictionLockOverride?: PredictionLockOverrideValue
 ): AdminEditableMatch {
   const cached = serializeCachedFixture(row)
   const normalized = asRecord(row.normalized_payload)
@@ -827,6 +843,9 @@ function parseEditableMatch(
     homeCaptainPlayerName,
     awayCaptainPlayerId,
     awayCaptainPlayerName,
+    predictionLockOverride:
+      storedPredictionLockOverride ??
+      cleanPredictionLockOverride(readText(overrides, 'predictionLockOverride')),
     homeCaptainOptions: getAdminCaptainOptions(homeLineup),
     awayCaptainOptions: getAdminCaptainOptions(awayLineup),
   }
@@ -1257,6 +1276,7 @@ async function updateStoredMatch(input: AdminMatchDetailsInput) {
     broadcast_logo_url: cleanText(input.broadcastLogoUrl),
     highlights_url: cleanText(input.highlightsUrl),
     highlights_title: cleanText(input.highlightsTitle),
+    prediction_lock_override: cleanPredictionLockOverride(input.predictionLockOverride),
   }
 
   const remainingPatch: MatchPatch = { ...patch }
@@ -1602,6 +1622,46 @@ async function getAdminMatchDetailLineupsByFixtureIds(fixtureExternalIds: string
   return lineupsByFixtureId
 }
 
+async function getAdminMatchPredictionLockOverridesByFixtureIds(fixtureExternalIds: string[]) {
+  const ids = [
+    ...new Set(
+      fixtureExternalIds
+        .map((id) => cleanText(id))
+        .filter((id): id is string => Boolean(id))
+    ),
+  ]
+  const overridesByFixtureId = new Map<string, PredictionLockOverrideValue>()
+
+  if (!ids.length) return overridesByFixtureId
+
+  const { data, error } = await getAdminClient()
+    .from('matches')
+    .select('external_id, prediction_lock_override')
+    .in('external_id', ids)
+
+  if (error) {
+    const missingColumn = getMissingMatchColumnFromError(error)
+
+    if (missingColumn === 'prediction_lock_override') {
+      console.warn('[admin-matches] prediction_lock_override column missing; Prode lock override UI will use auto.')
+      return overridesByFixtureId
+    }
+
+    throw error
+  }
+
+  for (const row of (data ?? []) as AdminStoredMatchLockRow[]) {
+    if (row.external_id === null || row.external_id === undefined) continue
+
+    overridesByFixtureId.set(
+      String(row.external_id),
+      cleanPredictionLockOverride(row.prediction_lock_override)
+    )
+  }
+
+  return overridesByFixtureId
+}
+
 async function upsertAdminMatchDetailOverride(input: AdminMatchDetailsInput) {
   const fixtureExternalId = cleanText(input.fixtureExternalId)
   if (!fixtureExternalId) return
@@ -1653,15 +1713,21 @@ export async function getAdminMatchesPageData(
 
     const rows = (data ?? []) as FixtureCacheRow[]
     const fixtureExternalIds = rows.map((row) => String(row.fixture_external_id))
-    const [overridesByFixtureId, lineupsByFixtureId] = await Promise.all([
+    const [
+      overridesByFixtureId,
+      lineupsByFixtureId,
+      predictionLockOverridesByFixtureId,
+    ] = await Promise.all([
       getAdminMatchDetailOverridesByFixtureIds(fixtureExternalIds),
       getAdminMatchDetailLineupsByFixtureIds(fixtureExternalIds),
+      getAdminMatchPredictionLockOverridesByFixtureIds(fixtureExternalIds),
     ])
     const allFixtures = rows
       .map((row) => parseEditableMatch(
         row,
         overridesByFixtureId.get(String(row.fixture_external_id)),
-        lineupsByFixtureId.get(String(row.fixture_external_id))
+        lineupsByFixtureId.get(String(row.fixture_external_id)),
+        predictionLockOverridesByFixtureId.get(String(row.fixture_external_id))
       ))
       .filter((fixture) => (listMode === 'world-cup' ? isWorldCupFixture(fixture) : true))
     const broadcastOptions = await getAdminBroadcastOptions(allFixtures)
@@ -1685,9 +1751,22 @@ export async function getAdminMatchesPageData(
       selectedRow && selectedFixtureId
         ? (await getAdminMatchDetailLineupsByFixtureIds([selectedFixtureId])).get(selectedFixtureId)
         : null
+    const selectedPredictionLockOverride =
+      selectedRow && selectedFixtureId
+        ? (await getAdminMatchPredictionLockOverridesByFixtureIds([selectedFixtureId])).get(selectedFixtureId)
+        : null
     const selectedMatch =
       selectedMatchFromList ??
-      (selectedRow ? parseEditableMatch(selectedRow, selectedOverride, selectedLineups) : null) ??
+      (
+        selectedRow
+          ? parseEditableMatch(
+              selectedRow,
+              selectedOverride,
+              selectedLineups,
+              selectedPredictionLockOverride
+            )
+          : null
+      ) ??
       fixtures[0] ??
       null
 

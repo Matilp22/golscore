@@ -116,6 +116,7 @@ type MatchRoundRow = {
   away_team_id: string | number | null
   home_score: number | null
   away_score: number | null
+  prediction_lock_override?: string | null
 }
 
 type LeagueRow = {
@@ -146,6 +147,7 @@ type MatchRoundInfo = {
   awayLogoUrl: string | null
   homeScore: number | null
   awayScore: number | null
+  predictionLockOverride: string | null
 }
 
 export type PrivateTournamentPredictionDetail = {
@@ -557,6 +559,7 @@ async function buildMatchRoundInfoMap(
           awayLogoUrl: awayTeam?.logo_url ?? null,
           homeScore: match.home_score,
           awayScore: match.away_score,
+          predictionLockOverride: match.prediction_lock_override ?? null,
         },
       ] as const
     })
@@ -573,7 +576,7 @@ async function fetchMatchRoundInfo(matchIds: Array<string | number | null>) {
   for (const chunk of chunkArray(uniqueMatchIds, 100)) {
     const { data, error } = await supabase
       .from('matches')
-      .select('id, round, league_id, match_date, status, home_team_id, away_team_id, home_score, away_score')
+      .select('id, round, league_id, match_date, status, home_team_id, away_team_id, home_score, away_score, prediction_lock_override')
       .in('id', chunk)
 
     throwIfDatabaseError(error, 'No se pudieron leer las fechas del Prode.')
@@ -609,7 +612,7 @@ async function fetchTournamentAvailableMatches(tournament: TournamentRow, member
   }, null)
   const query = supabase
     .from('matches')
-    .select('id, round, league_id, match_date, status, home_team_id, away_team_id, home_score, away_score')
+    .select('id, round, league_id, match_date, status, home_team_id, away_team_id, home_score, away_score, prediction_lock_override')
     .in('league_id', leagueIds)
     .order('match_date', { ascending: true })
 
@@ -726,6 +729,7 @@ function filterPredictionsForTournament(
           homeTeamId: match.homeTeamId,
           awayTeamId: match.awayTeamId,
         }),
+        lockOverride: match.predictionLockOverride,
       })
     ) {
       return false

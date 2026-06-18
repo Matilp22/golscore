@@ -2,6 +2,8 @@ import { hasStartedStatus } from '@/shared/utils/match-status'
 
 export const DEFAULT_PREDICTION_LOCK_MINUTES = 15
 const ARGENTINA_UTC_OFFSET_HOURS = 3
+export type PredictionLockOverride = 'locked' | 'unlocked'
+export type PredictionLockOverrideValue = PredictionLockOverride | null
 
 function hasExplicitTimezone(value: string) {
   return /(?:z|[+-]\d{2}:?\d{2})$/i.test(value.trim())
@@ -46,25 +48,58 @@ export function parseMatchDate(value: string | Date | null | undefined) {
   )
 }
 
+export function normalizePredictionLockOverride(value: unknown): PredictionLockOverrideValue {
+  if (value === 'locked' || value === 'unlocked') return value
+  if (typeof value !== 'string') return null
+
+  const normalized = value.trim().toLowerCase()
+
+  if (normalized === 'locked' || normalized === 'bloqueado' || normalized === 'block') {
+    return 'locked'
+  }
+
+  if (
+    normalized === 'unlocked' ||
+    normalized === 'desbloqueado' ||
+    normalized === 'open'
+  ) {
+    return 'unlocked'
+  }
+
+  return null
+}
+
 export function getPredictionLockState(
   matchDate: string | Date | null | undefined,
   status = 'scheduled',
   now = new Date(),
-  options: { lockMinutes?: number | null } = {}
+  options: {
+    lockMinutes?: number | null
+    lockOverride?: unknown
+  } = {}
 ) {
   const lockMinutes = Number.isFinite(options.lockMinutes)
     ? Number(options.lockMinutes)
     : DEFAULT_PREDICTION_LOCK_MINUTES
+  const lockOverride = normalizePredictionLockOverride(options.lockOverride)
   const matchStart = parseMatchDate(matchDate)
   const matchStartMs = matchStart.getTime()
   const nowMs = now.getTime()
   const minutesUntilMatch = (matchStartMs - nowMs) / 60000
   const statusStarted = hasStartedStatus(status)
   const invalidDate = Number.isNaN(matchStartMs)
-  const locked = invalidDate || statusStarted || minutesUntilMatch <= lockMinutes
+  const automaticLocked = invalidDate || statusStarted || minutesUntilMatch <= lockMinutes
+  const locked =
+    lockOverride === 'locked'
+      ? true
+      : lockOverride === 'unlocked' && !invalidDate
+        ? false
+        : automaticLocked
 
   return {
     locked,
+    automaticLocked,
+    lockOverride,
     invalidDate,
     matchStart,
     now,
@@ -79,7 +114,10 @@ export function isPredictionLocked(
   matchDate: string | Date | null | undefined,
   status = 'scheduled',
   now = new Date(),
-  options: { lockMinutes?: number | null } = {}
+  options: {
+    lockMinutes?: number | null
+    lockOverride?: unknown
+  } = {}
 ) {
   return getPredictionLockState(matchDate, status, now, options).locked
 }

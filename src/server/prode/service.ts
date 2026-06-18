@@ -30,7 +30,7 @@ export async function savePrediction(input: SavePredictionInput) {
 
   const { data: match, error: matchError } = await supabase
     .from('matches')
-    .select('id, match_date, status, home_score, away_score, home_team_id, away_team_id')
+    .select('id, match_date, status, home_score, away_score, home_team_id, away_team_id, prediction_lock_override')
     .eq('id', input.matchId)
     .single()
 
@@ -58,6 +58,7 @@ export async function savePrediction(input: SavePredictionInput) {
   })
   const lockState = getPredictionLockState(match.match_date, match.status, new Date(), {
     lockMinutes,
+    lockOverride: match.prediction_lock_override,
   })
 
   console.info('[prode/save-prediction] lock check', {
@@ -68,6 +69,7 @@ export async function savePrediction(input: SavePredictionInput) {
     matchStart: safeDateIso(lockState.matchStart),
     lockAt: safeDateIso(lockState.lockAt),
     lockMinutes,
+    lockOverride: lockState.lockOverride,
     minutesUntilMatch: Math.round(lockState.minutesUntilMatch * 10) / 10,
     locked: lockState.locked,
   })
