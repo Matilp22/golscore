@@ -40,19 +40,81 @@ function toStatus(value: unknown) {
   return null
 }
 
-function isEmailRateLimitError(error: unknown) {
+function getNormalizedErrorParts(error: unknown) {
   const shape = getAuthErrorShape(error)
-  const message = toText(shape.message).toLowerCase()
-  const code = toText(shape.code).toLowerCase()
-  const status = toStatus(shape.status) ?? toStatus(shape.statusCode)
+
+  return {
+    message: toText(shape.message).trim().toLowerCase(),
+    code: toText(shape.code).trim().toLowerCase(),
+    status: toStatus(shape.status) ?? toStatus(shape.statusCode),
+  }
+}
+
+function includesAny(value: string, terms: string[]) {
+  return terms.some((term) => value.includes(term))
+}
+
+function isEmailRateLimitError(error: unknown) {
+  const { message, code, status } = getNormalizedErrorParts(error)
 
   return (
     status === 429 ||
     code === 'over_email_send_rate_limit' ||
-    message.includes('rate limit') ||
-    message.includes('email rate') ||
-    message.includes('too many requests') ||
-    message.includes('429')
+    includesAny(message, [
+      'rate limit',
+      'email rate',
+      'too many requests',
+      '429',
+      'over_email_send_rate_limit',
+    ])
+  )
+}
+
+function isExpiredOrInvalidLinkError(error: unknown) {
+  const { message, code } = getNormalizedErrorParts(error)
+
+  return (
+    code === 'otp_expired' ||
+    code === 'access_denied' ||
+    code === 'invalid_grant' ||
+    includesAny(message, [
+      'otp_expired',
+      'access_denied',
+      'invalid_grant',
+      'invalid recovery link',
+      'expired recovery link',
+      'invalid or expired',
+      'expired',
+      'code verifier',
+      'pkce',
+    ])
+  )
+}
+
+function isSamePasswordError(error: unknown) {
+  const { message, code } = getNormalizedErrorParts(error)
+
+  return (
+    code === 'same_password' ||
+    includesAny(message, [
+      'same password',
+      'different from the old password',
+      'new password should be different',
+    ])
+  )
+}
+
+function isWeakPasswordError(error: unknown) {
+  const { message, code } = getNormalizedErrorParts(error)
+
+  return (
+    code === 'weak_password' ||
+    includesAny(message, [
+      'weak password',
+      'password should be',
+      'password must be',
+      'password is too weak',
+    ])
   )
 }
 
@@ -62,18 +124,53 @@ function getRateLimitMessage(context: AuthErrorContext) {
   }
 
   if (context === 'passwordRecovery') {
-    return 'Se alcanzó el límite de envío de emails de recuperación. Esperá unos minutos e intentá nuevamente.'
+    return 'Se alcanzó temporalmente el límite de envío de emails. Esperá unos minutos e intentá nuevamente.'
   }
 
   return 'Se alcanzó el límite de envío de emails. Esperá unos minutos e intentá nuevamente. Si el problema continúa, contactanos.'
 }
 
 export function translateAuthError(error: unknown, context: AuthErrorContext = 'login') {
+  const { message, code, status } = getNormalizedErrorParts(error)
+
   if (isEmailRateLimitError(error)) {
     return getRateLimitMessage(context)
   }
 
-  const message = toText(getAuthErrorShape(error).message).trim()
+  if (isExpiredOrInvalidLinkError(error)) {
+    return 'El enlace es inválido o expiró. Solicitá un nuevo enlace para continuar.'
+  }
 
-  return message || 'No se pudo completar la operación. Intentá nuevamente.'
+  if (isSamePasswordError(error)) {
+    return 'La nueva contraseña tiene que ser distinta a la anterior.'
+  }
+
+  if (isWeakPasswordError(error)) {
+    return 'La contraseña es demasiado débil. Probá con una más larga y difícil de adivinar.'
+  }
+
+  if (
+    code === 'invalid_credentials' ||
+    includesAny(message, ['invalid login credentials', 'invalid credentials'])
+  ) {
+    return 'Email o contraseña incorrectos.'
+  }
+
+  if (includesAny(message, ['email not confirmed', 'not confirmed'])) {
+    return 'Tenés que confirmar tu email antes de iniciar sesión.'
+  }
+
+  if (includesAny(message, ['already registered', 'user already registered'])) {
+    return 'Ya existe una cuenta con ese email. Iniciá sesión o recuperá tu contraseña.'
+  }
+
+  if (includesAny(message, ['invalid email', 'email address is invalid'])) {
+    return 'Ingresá un email válido.'
+  }
+
+  if (status === 400 && context === 'passwordRecovery') {
+    return 'No se pudo completar la recuperación. Solicitá un nuevo enlace e intentá nuevamente.'
+  }
+
+  return 'No se pudo completar la operación. Intentá nuevamente.'
 }

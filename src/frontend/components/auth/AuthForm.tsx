@@ -11,7 +11,15 @@ import {
   upsertUserProfile,
 } from '@/lib/supabase/supabaseClient'
 import BrandMark from '@/frontend/components/BrandMark'
+import {
+  getAuthCallbackUrl,
+  getSafeAuthNextPath,
+} from '@/shared/utils/auth-redirects'
 import { translateAuthError } from '@/shared/utils/auth-errors'
+import {
+  AUTH_PASSWORD_MIN_LENGTH,
+  validateAuthPassword,
+} from '@/shared/utils/password-policy'
 import { validateUsername } from '@/shared/utils/usernames'
 
 type AuthFormProps = {
@@ -21,36 +29,44 @@ type AuthFormProps = {
   showModeSwitch?: boolean
 }
 
-function getSafeNextPath(value: string | null, fallback: string) {
-  if (!value) return fallback
-  if (!value.startsWith('/') || value.startsWith('//')) return fallback
+function getLoginStatusMessage(searchParams: { get: (name: string) => string | null }) {
+  if (searchParams.get('passwordUpdated') === '1') {
+    return 'Tu contraseña fue actualizada. Ya podés iniciar sesión.'
+  }
 
-  return value
+  if (searchParams.get('authError') === 'recovery_link_invalid') {
+    return 'El enlace es inválido o expiró. Solicitá un nuevo enlace para restablecer tu contraseña.'
+  }
+
+  return ''
 }
 
-function getRedirectUrl(path: string) {
-  if (typeof window === 'undefined') return undefined
+function getSupabaseConfigErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return `${error.message} Pegá tus claves públicas en .env.local y reiniciá npm run dev.`
+  }
 
-  return new URL(path, window.location.origin).toString()
+  return 'Supabase no está configurado. Pegá tus claves públicas en .env.local y reiniciá npm run dev.'
 }
 
 export default function AuthForm({
   mode,
   defaultNext = '/prode',
-  loginDescription = 'Entra con tu email y contrasena para usar el prode.',
+  loginDescription = 'Entrá con tu email y contraseña para usar el prode.',
   showModeSwitch = true,
 }: AuthFormProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const nextPath = getSafeNextPath(searchParams.get('next'), defaultNext)
+  const nextPath = getSafeAuthNextPath(searchParams.get('next'), defaultNext)
+  const isLogin = mode === 'login'
 
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [message, setMessage] = useState('')
+  const [message, setMessage] = useState(() =>
+    isLogin ? getLoginStatusMessage(searchParams) : ''
+  )
   const [isPending, startTransition] = useTransition()
-
-  const isLogin = mode === 'login'
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -60,11 +76,7 @@ export default function AuthForm({
       try {
         getSupabaseBrowserClient()
       } catch (error) {
-        setMessage(
-          error instanceof Error
-            ? `${error.message} Pega tus claves publicas en .env.local y reinicia npm run dev.`
-            : 'Supabase no esta configurado. Pega tus claves publicas en .env.local y reinicia npm run dev.'
-        )
+        setMessage(getSupabaseConfigErrorMessage(error))
         return
       }
 
@@ -92,10 +104,17 @@ export default function AuthForm({
         return
       }
 
+      const passwordError = validateAuthPassword(password)
+
+      if (passwordError) {
+        setMessage(passwordError)
+        return
+      }
+
       const { data, error } = await signUpWithEmail(cleanEmail, password, {
         username: cleanUsername,
         displayName: cleanUsername,
-        emailRedirectTo: getRedirectUrl(nextPath),
+        emailRedirectTo: getAuthCallbackUrl(nextPath),
       })
 
       if (error) {
@@ -121,7 +140,7 @@ export default function AuthForm({
       }
 
       if (!data.session) {
-        setMessage('Cuenta creada. Revisa tu correo para confirmar el acceso.')
+        setMessage('Cuenta creada. Revisá tu correo para confirmar el acceso.')
         return
       }
 
@@ -145,17 +164,13 @@ export default function AuthForm({
       try {
         getSupabaseBrowserClient()
       } catch (error) {
-        setMessage(
-          error instanceof Error
-            ? `${error.message} Pegá tus claves públicas en .env.local y reiniciá npm run dev.`
-            : 'Supabase no está configurado. Pegá tus claves públicas en .env.local y reiniciá npm run dev.'
-        )
+        setMessage(getSupabaseConfigErrorMessage(error))
         return
       }
 
       const { error } = await sendPasswordRecoveryEmail(
         cleanEmail,
-        getRedirectUrl('/perfil?recovery=1')
+        getAuthCallbackUrl('/restablecer-contrasena')
       )
 
       if (error) {
@@ -163,7 +178,7 @@ export default function AuthForm({
         return
       }
 
-      setMessage('Te enviamos un email para recuperar tu contraseña. Revisá tu casilla y seguí el enlace.')
+      setMessage('Si existe una cuenta asociada a ese email, vas a recibir un enlace para restablecer la contraseña.')
     })
   }
 
@@ -178,7 +193,7 @@ export default function AuthForm({
       <p className="mt-2 text-sm text-[#8d98a7]">
         {isLogin
           ? loginDescription
-          : 'Crea tu cuenta para guardar predicciones y sumar puntos.'}
+          : 'Creá tu cuenta para guardar predicciones y sumar puntos.'}
       </p>
 
       <form onSubmit={handleSubmit} className="mt-5 space-y-4">
@@ -217,14 +232,14 @@ export default function AuthForm({
 
         <div>
           <label className="mb-2 block text-sm font-semibold text-[#c8d0da]">
-            Contrasena
+            Contraseña
           </label>
           <input
             type="password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             required
-            minLength={6}
+            minLength={AUTH_PASSWORD_MIN_LENGTH}
             className="hf-input h-11 w-full rounded-xl px-3 text-sm outline-none transition"
             placeholder="********"
           />
@@ -263,19 +278,19 @@ export default function AuthForm({
       ) : null}
 
       {showModeSwitch ? (
-      <div className="mt-4 text-sm text-[#8d98a7]">
-        {isLogin ? 'No tenes cuenta?' : 'Ya tenes cuenta?'}{' '}
-        <Link
-          href={
-            isLogin
-              ? `/register?next=${encodeURIComponent(nextPath)}`
-              : `/login?next=${encodeURIComponent(nextPath)}`
-          }
-          className="font-semibold text-[#7ff0b2] hover:text-white"
-        >
-          {isLogin ? 'Registrate' : 'Iniciá sesión'}
-        </Link>
-      </div>
+        <div className="mt-4 text-sm text-[#8d98a7]">
+          {isLogin ? '¿No tenés cuenta?' : '¿Ya tenés cuenta?'}{' '}
+          <Link
+            href={
+              isLogin
+                ? `/register?next=${encodeURIComponent(nextPath)}`
+                : `/login?next=${encodeURIComponent(nextPath)}`
+            }
+            className="font-semibold text-[#7ff0b2] hover:text-white"
+          >
+            {isLogin ? 'Registrate' : 'Iniciá sesión'}
+          </Link>
+        </div>
       ) : null}
     </div>
   )
