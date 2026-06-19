@@ -9,6 +9,7 @@ import MatchRow from '@/frontend/components/MatchRow'
 import Link from 'next/link'
 import {
   getMatchesByDate,
+  readCachedHomeMatchesByDate,
   type MatchListItemWithGoalScorers,
   withGoalScorers,
 } from '@/lib/api-football'
@@ -42,6 +43,7 @@ import {
   getDefaultSeoCopy,
 } from '@/shared/seo'
 import { getRequestLocale } from '@/server/request-locale'
+import { getFootballPublicReadMode } from '@/server/football-public-read-mode'
 import {
   getTournamentDisplayName,
   t,
@@ -1308,7 +1310,10 @@ export default async function HomePage({
   let dataError: string | null = null
 
   try {
-    const enrichedMatches = await withGoalScorers(await getMatchesByDate(selectedDate))
+    const readMode = getFootballPublicReadMode('home')
+    const loadHomeMatches =
+      readMode === 'cache-only' ? readCachedHomeMatchesByDate : getMatchesByDate
+    const enrichedMatches = await withGoalScorers(await loadHomeMatches(selectedDate))
     dateMatches = enrichedMatches
 
     if (process.env.NODE_ENV === 'development') {

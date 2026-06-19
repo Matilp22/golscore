@@ -4,10 +4,12 @@ import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import {
   getLeagueFixtures,
   getLeagueStandings,
+  readCachedLeagueStandings,
   type LeagueFixtureSummary,
   type LeagueStandingGroup,
   type LeagueStandingRow,
 } from '@/lib/api-football'
+import type { FootballPublicReadMode } from '@/server/football-public-read-mode'
 import { requestFootballApi } from '@/server/integrations/football-api-client'
 import { syncLeagueStandingsCache } from '@/server/football-standings-cache'
 import { syncCompetitionFull } from '@/server/prode/sync-matches'
@@ -667,15 +669,18 @@ export async function getConmebolQualifiedTeams(input: {
   competition: ConmebolCompetitionType
   leagueExternalId?: number | null
   season: number
+  readMode?: FootballPublicReadMode
 }): Promise<ConmebolQualifiedTeams> {
   const info = getCompetitionInfo(input.competition, input.leagueExternalId)
-  const targetStandingsPromise = getLeagueStandings(info.leagueExternalId, input.season).catch((error) => {
+  const loadStandings =
+    input.readMode === 'cache-only' ? readCachedLeagueStandings : getLeagueStandings
+  const targetStandingsPromise = loadStandings(info.leagueExternalId, input.season).catch((error) => {
     console.warn('[conmebol-qualified-teams] target standings unavailable', error)
     return [] as LeagueStandingGroup[]
   })
   const libertadoresStandingsPromise = input.competition === 'libertadores'
     ? targetStandingsPromise
-    : getLeagueStandings(CONMEBOL_COMPETITIONS.libertadores.leagueExternalId, input.season).catch((error) => {
+    : loadStandings(CONMEBOL_COMPETITIONS.libertadores.leagueExternalId, input.season).catch((error) => {
         console.warn('[conmebol-qualified-teams] libertadores standings unavailable', error)
         return [] as LeagueStandingGroup[]
       })
@@ -1431,14 +1436,17 @@ export async function buildConmebolBracketViewModel(input: {
   competition: ConmebolCompetitionType
   leagueExternalId?: number | null
   season: number
+  readMode?: FootballPublicReadMode
 }): Promise<ConmebolBracketViewModel> {
   const info = getCompetitionInfo(input.competition, input.leagueExternalId)
+  const loadStandings =
+    input.readMode === 'cache-only' ? readCachedLeagueStandings : getLeagueStandings
   const [fixtures, standings, series, qualifiedTeams] = await Promise.all([
     getLeagueFixtures(info.leagueExternalId, input.season).catch((error) => {
       console.warn('[conmebol-view-model] fixtures unavailable', error)
       return [] as LeagueFixtureSummary[]
     }),
-    getLeagueStandings(info.leagueExternalId, input.season).catch((error) => {
+    loadStandings(info.leagueExternalId, input.season).catch((error) => {
       console.warn('[conmebol-view-model] standings unavailable', error)
       return [] as LeagueStandingGroup[]
     }),
@@ -1454,6 +1462,7 @@ export async function buildConmebolBracketViewModel(input: {
       competition: input.competition,
       leagueExternalId: info.leagueExternalId,
       season: input.season,
+      readMode: input.readMode,
     }),
   ])
   const phases = getConmebolPhaseOrder(input.competition)

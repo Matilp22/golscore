@@ -2,7 +2,7 @@ import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getLeagueEventStatsLeaders } from '@/server/match-event-stats'
 import {
   readApiLeagueStandings,
-  readCachedLeagueStandings,
+  readCachedLeagueStandings as readCachedLeagueStandingsFromCache,
 } from '@/server/football-standings-cache'
 import {
   isFinishedStatus,
@@ -596,6 +596,10 @@ export async function getMatchesByDate(date: string): Promise<MatchListItem[]> {
   const sources = await getHomeMatchesSourceSnapshot(date)
 
   return sources.mergedMatches
+}
+
+export async function readCachedHomeMatchesByDate(date: string): Promise<MatchListItem[]> {
+  return getMatchesByDate(date)
 }
 
 export async function getHomeMatchesSourceSnapshot(
@@ -3378,7 +3382,7 @@ function mapStoredMatchToFixture(
   }
 }
 
-export async function getMatchDetail(id: number) {
+export async function readMatchDetailFromSupabase(id: number) {
   const match =
     await fetchStoredDetailMatchRowByExternalId(id) ??
     await fetchStoredDetailMatchRowById(id)
@@ -3497,6 +3501,10 @@ export async function getMatchDetail(id: number) {
       highlights.title,
     teamKitColors: mergeTeamKitColors(fixtureSummary?.teamKitColors, adminTeamKitColors),
   }
+}
+
+export async function getMatchDetail(id: number) {
+  return readMatchDetailFromSupabase(id)
 }
 
 async function fetchStoredPlayersByTeam(
@@ -5922,7 +5930,7 @@ export async function getLeagueStandings(
   const fixtures = await getLeagueFixtures(leagueId, season)
   const cachedStandings = normalizeOfficialStandingGroupNames(
     leagueId,
-    await readCachedLeagueStandings(supabase, leagueId, season)
+    await readCachedLeagueStandingsFromCache(supabase, leagueId, season)
   )
   const competitionRule = getCompetitionRuleByExternalId(leagueId)
   const officialStandings = cachedStandings.length
@@ -6062,6 +6070,30 @@ export async function getLeagueStandings(
   })
 
   return calculatedFallback.groups
+}
+
+export async function readCachedLeagueStandings(
+  leagueId: number,
+  season: number
+): Promise<LeagueStandingGroup[]> {
+  const supabase = getSupabaseAdminClient()
+
+  return normalizeOfficialStandingGroupNames(
+    leagueId,
+    await readCachedLeagueStandingsFromCache(supabase, leagueId, season)
+  )
+}
+
+export async function readCachedLeagueFixtures(
+  leagueId: number,
+  season: number,
+  options: { includeEvents?: boolean } = {}
+) {
+  return getLeagueFixtures(leagueId, season, options)
+}
+
+export async function readCachedLeagueLeaders(leagueId: number, season: number) {
+  return getLeagueLeaders(leagueId, season)
 }
 
 type StoredLeagueFixtureMatchRow = {

@@ -35,6 +35,9 @@ import {
   getLeagueFixtures,
   getLeagueLeaders,
   getLeagueStandings,
+  readCachedLeagueFixtures,
+  readCachedLeagueLeaders,
+  readCachedLeagueStandings,
   resolveTournament,
   type LeagueFixtureSummary,
   type LeagueStandingGroup,
@@ -85,6 +88,7 @@ import { WORLD_CUP_2026_LOGO_URL } from '@/shared/utils/asset-urls'
 import type { ConmebolCompetitionType } from '@/shared/utils/conmebol-rounds'
 import { buildSeoMetadata } from '@/shared/seo'
 import { getRequestLocale } from '@/server/request-locale'
+import { getFootballPublicReadMode } from '@/server/football-public-read-mode'
 import { getTournamentDisplayName, type AppLocale } from '@/shared/i18n/locales'
 import { translateCountryName } from '@/shared/utils/country-names'
 
@@ -2469,6 +2473,13 @@ export default async function LigaPage({ params }: PageProps) {
   let conmebolViewModel: ConmebolBracketViewModel | null = null
   const displayOptions = getTournamentDisplayOptions(tournament)
   const conmebolCompetitionType = getConmebolCompetitionType(tournament.key)
+  const readMode = getFootballPublicReadMode('league')
+  const loadLeagueFixtures =
+    readMode === 'cache-only' ? readCachedLeagueFixtures : getLeagueFixtures
+  const loadLeagueStandings =
+    readMode === 'cache-only' ? readCachedLeagueStandings : getLeagueStandings
+  const loadLeagueLeaders =
+    readMode === 'cache-only' ? readCachedLeagueLeaders : getLeagueLeaders
   const copaArgentinaChampions =
     tournament.key === 'argentina-copa-argentina'
       ? await getCopaArgentinaChampions()
@@ -2492,9 +2503,9 @@ export default async function LigaPage({ params }: PageProps) {
         resolvedTournament.leagueId
       )
       const [standingsResult, leadersResult, fixturesResult] = await Promise.allSettled([
-        getLeagueStandings(resolvedTournament.leagueId, resolvedTournament.season),
-        getLeagueLeaders(resolvedTournament.leagueId, resolvedTournament.season),
-        getLeagueFixtures(resolvedTournament.leagueId, resolvedTournament.season, {
+        loadLeagueStandings(resolvedTournament.leagueId, resolvedTournament.season),
+        loadLeagueLeaders(resolvedTournament.leagueId, resolvedTournament.season),
+        loadLeagueFixtures(resolvedTournament.leagueId, resolvedTournament.season, {
           includeEvents: shouldLoadFixtureEvents,
         }),
       ])
@@ -2537,12 +2548,12 @@ export default async function LigaPage({ params }: PageProps) {
             if (tournament.key === 'argentina-liga-profesional') {
               return buildLigaProfesionalPromediosStandingForSeason(
                 season,
-                getLeagueFixtures,
+                loadLeagueFixtures,
                 currentTournament.leagueId
               )
             }
 
-            return getLeagueStandings(currentTournament.leagueId, season).then((seasonStandings) => ({
+            return loadLeagueStandings(currentTournament.leagueId, season).then((seasonStandings) => ({
               season,
               standings: seasonStandings,
             }))
@@ -2585,6 +2596,7 @@ export default async function LigaPage({ params }: PageProps) {
       competition: conmebolCompetitionType,
       leagueExternalId: resolvedTournament.leagueId,
       season: resolvedTournament.season,
+      readMode,
     }).catch(() => null)
   }
 

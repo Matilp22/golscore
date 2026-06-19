@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "verify:public-reads": "node scripts/verify-public-read-boundaries.mjs"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.53.1",

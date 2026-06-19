@@ -4230,3 +4230,10 @@ export async function syncMatchDetail(
     errors,
   }
 }
+
+export async function syncMatchDetailFromProvider(
+  supabase: SupabaseClient,
+  input: Parameters<typeof syncMatchDetail>[1]
+) {
+  return syncMatchDetail(supabase, input)
+}

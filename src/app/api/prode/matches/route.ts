@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseServerClient } from '@/lib/supabase/server'
 import { getAllowedProdeLeagueIds } from '@/server/prode/scope'
+import { getFootballPublicReadMode } from '@/server/football-public-read-mode'
 import {
   buildWorldCupTeamGroupIndex,
   getWorldCupGroupStandings,
@@ -147,6 +148,7 @@ export async function GET(request: Request) {
   const round = searchParams.get('round')
   const status = searchParams.get('status')
   const date = searchParams.get('date')
+  const readMode = getFootballPublicReadMode('prode')
 
   let allowedLeagueIds: string[]
   try {
@@ -255,7 +257,7 @@ export async function GET(request: Request) {
   const worldCupGroups = worldCupLeague
     ? await getWorldCupGroupStandings(worldCupSeason)
         .then((groups) =>
-          groups.length
+          groups.length || readMode === 'cache-only'
             ? groups
             : getWorldCupGroupStandings(worldCupSeason, { includeOfficialFallback: true })
         )

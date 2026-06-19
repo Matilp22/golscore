@@ -43,6 +43,7 @@ import ShareCardButton from '@/frontend/components/share/ShareCardButton'
 import MatchSummaryPlayer from '@/frontend/components/MatchSummaryPlayer'
 import Link from 'next/link'
 import type { Metadata } from 'next'
+import { cache } from 'react'
 
 type PageProps = {
   params: Promise<{ id: string }>
@@ -51,15 +52,19 @@ type PageProps = {
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 
+const loadMatchDetailPageData = cache(async (id: string) =>
+  buildMatchDetailViewModel({
+    fixtureExternalId: id,
+    matchId: id,
+  })
+)
+
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params
   const locale = await getRequestLocale()
 
   try {
-    const data = await buildMatchDetailViewModel({
-      fixtureExternalId: id,
-      matchId: id,
-    })
+    const data = await loadMatchDetailPageData(id)
     const fixture = data.fixture as MatchFixture | null
 
     if (!fixture) {
@@ -2048,10 +2053,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
   let data: Awaited<ReturnType<typeof buildMatchDetailViewModel>>
 
   try {
-    data = await buildMatchDetailViewModel({
-      fixtureExternalId: id,
-      matchId: id,
-    })
+    data = await loadMatchDetailPageData(id)
   } catch (error) {
     console.warn('[match-detail-page] No se pudo cargar detalle desde Supabase.', {
       id,

@@ -1,5 +1,5 @@
 import {
-  getMatchDetail,
+  readMatchDetailFromSupabase,
   type MatchEvent,
   type MatchFixture,
   type MatchLineup,
@@ -33,7 +33,7 @@ import {
   type HeadToHeadViewModel,
 } from '@/server/head-to-head'
 
-type MatchDetailPayload = Awaited<ReturnType<typeof getMatchDetail>>
+type MatchDetailPayload = Awaited<ReturnType<typeof readMatchDetailFromSupabase>>
 
 export type BuildMatchDetailViewModelInput =
   | string
@@ -125,6 +125,8 @@ export type MatchDetailViewModel = MatchDetailPayload & {
     lineups: boolean
   }
   formationStringsMissing: boolean
+  dataSource: 'supabase' | 'cache' | 'missing'
+  syncRecommended: boolean
   missingSections: string[]
   warnings: string[]
   errors: string[]
@@ -403,6 +405,7 @@ export function buildMatchDetailViewModelFromDetail(
     !renderCounts.statisticsRows ? 'statistics' : null,
     !renderReadiness.canRenderLineupTabs ? 'lineups' : null,
   ].filter((section): section is string => Boolean(section))
+  const syncRecommended = Boolean(fixture && missingSections.length > 0)
 
   return {
     ...detail,
@@ -447,6 +450,8 @@ export function buildMatchDetailViewModelFromDetail(
     formationStringsMissing:
       renderCounts.formationPlayers > 0 &&
       (!hasFormationString(homeLineup) || !hasFormationString(awayLineup)),
+    dataSource: fixture ? 'supabase' : 'missing',
+    syncRecommended,
     missingSections,
     warnings: options.warnings ?? [],
     errors: options.errors ?? [],
@@ -459,7 +464,7 @@ export async function buildMatchDetailViewModel(input: BuildMatchDetailViewModel
     ? ['No se pudo resolver un fixtureExternalId numerico para el detalle de partido.']
     : []
   const detail = resolved.id !== null
-    ? await getMatchDetail(resolved.id)
+    ? await readMatchDetailFromSupabase(resolved.id)
     : createEmptyMatchDetailPayload()
   const viewModel = buildMatchDetailViewModelFromDetail(detail, {
     matchId: resolved.id ?? resolved.requestedId,
