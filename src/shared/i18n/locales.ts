@@ -1204,11 +1204,10 @@ const TOURNAMENT_LABELS: Record<string, Partial<Record<AppLocale, string>>> = {
     pt: 'Copa Argentina',
     fr: "Coupe d'Argentine",
   },
-  'argentina-reserva': { en: 'Reserve League', pt: 'Reserva', fr: 'Réserve' },
-  'argentina-copa-de-la-liga-reserva': {
-    en: 'League Cup - Reserve',
-    pt: 'Copa da Liga - Reserva',
-    fr: 'Coupe de la Ligue - Réserve',
+  'argentina-torneo-proyeccion': {
+    en: 'Reserve League',
+    pt: 'Torneio Projeção',
+    fr: 'Tournoi Projection',
   },
   'argentina-primera-nacional': { en: 'Primera Nacional', pt: 'Primera Nacional', fr: 'Primera Nacional' },
   'argentina-primera-b-metro': { en: 'Primera B Metro', pt: 'Primera B Metro', fr: 'Primera B Metro' },

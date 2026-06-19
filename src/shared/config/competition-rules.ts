@@ -1,4 +1,8 @@
 import type { TournamentPageConfig } from '@/shared/config/tournament-pages'
+import {
+  ARGENTINA_TORNEO_PROYECCION_EXTERNAL_ID,
+  ARGENTINA_TORNEO_PROYECCION_KEY,
+} from '@/shared/utils/competition-filter'
 
 export type CompetitionType =
   | 'league'
@@ -232,8 +236,7 @@ export const COMPETITION_NAME_ES: Record<string, string> = {
   'argentina-liga-profesional': 'Liga Profesional',
   'argentina-copa-argentina': 'Copa Argentina',
   'argentina-copa-de-la-liga': 'Copa de la Liga',
-  'argentina-reserva': 'Reserva',
-  'argentina-copa-de-la-liga-reserva': 'Copa de la Liga - Reserva',
+  [ARGENTINA_TORNEO_PROYECCION_KEY]: 'Torneo Proyección',
   'argentina-primera-nacional': 'Primera Nacional',
   'argentina-primera-b-metro': 'Primera B Metro',
   'argentina-federal-a': 'Federal A',
@@ -293,8 +296,7 @@ export const COMPETITION_COUNTRY_ES: Record<string, string> = {
   'argentina-liga-profesional': 'Argentina',
   'argentina-copa-argentina': 'Argentina',
   'argentina-copa-de-la-liga': 'Argentina',
-  'argentina-reserva': 'Argentina',
-  'argentina-copa-de-la-liga-reserva': 'Argentina',
+  [ARGENTINA_TORNEO_PROYECCION_KEY]: 'Argentina',
   'argentina-primera-nacional': 'Argentina',
   'argentina-primera-b-metro': 'Argentina',
   'argentina-federal-a': 'Argentina',
@@ -753,6 +755,22 @@ export const COMPETITION_RULES: CompetitionRule[] = [
     ],
     sourceUsed: [apiDescriptionSource, supabaseSource, 'AFA divisional rules'],
     warnings: ['Dos zonas de 14 equipos; últimos de cada zona van a repechaje por el descenso.'],
+  }),
+  leagueRule({
+    key: ARGENTINA_TORNEO_PROYECCION_KEY,
+    externalIds: [ARGENTINA_TORNEO_PROYECCION_EXTERNAL_ID],
+    aliases: ['Torneo Proyección', 'Torneo Proyeccion', 'Reserve League'],
+    type: 'league',
+    standingsMode: 'groups',
+    hasAverages: false,
+    showPromedios: false,
+    ...noRelegation,
+    groupMode: 'api_groups',
+    showAnnualTable: false,
+    qualificationRules: [],
+    legendItems: [],
+    sourceUsed: [apiDescriptionSource, supabaseSource, 'API-Football league id 906'],
+    warnings: ['API-Football publica este torneo como Reserve League.'],
   }),
   leagueRule({
     key: 'brasil-brasileirao',

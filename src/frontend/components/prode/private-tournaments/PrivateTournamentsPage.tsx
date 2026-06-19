@@ -38,6 +38,7 @@ const PRODE_TOURNAMENT_OPTIONS = [
   { externalId: '1', key: 'selecciones-mundial', fallback: 'Copa del Mundo 2026' },
   { externalId: '128', key: 'argentina-liga-profesional', fallback: 'Liga Profesional Argentina' },
   { externalId: '129', key: 'argentina-primera-nacional', fallback: 'Primera Nacional' },
+  { externalId: '906', key: 'argentina-torneo-proyeccion', fallback: 'Torneo Proyección' },
 ]
 
 function getTournamentOptionName(option: (typeof PRODE_TOURNAMENT_OPTIONS)[number], locale: AppLocale) {

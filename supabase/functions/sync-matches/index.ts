@@ -103,6 +103,13 @@ const TOURNAMENTS: Tournament[] = [
     country: 'Argentina',
   },
   {
+    slug: 'torneo-proyeccion',
+    name: 'Torneo Proyección',
+    externalLeagueId: 906,
+    season: 2026,
+    country: 'Argentina',
+  },
+  {
     slug: 'copa-argentina',
     name: 'Copa Argentina',
     externalLeagueId: 130,

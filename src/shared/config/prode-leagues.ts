@@ -37,6 +37,14 @@ export const ALLOWED_TOURNAMENTS = [
     aliases: ['primera b nacional', 'primera nacional', 'nacional b'],
   },
   {
+    slug: 'torneo-proyeccion',
+    name: 'Torneo Proyección',
+    type: 'league',
+    externalLeagueId: 906,
+    season: 2026,
+    aliases: ['torneo proyeccion', 'torneo proyección', 'reserve league'],
+  },
+  {
     slug: 'copa-argentina',
     name: 'Copa Argentina',
     type: 'cup',

@@ -28,6 +28,8 @@ import {
   isUpcomingStatus,
 } from '@/shared/utils/match-status'
 import {
+  ARGENTINA_TORNEO_PROYECCION_EXTERNAL_ID,
+  ARGENTINA_TORNEO_PROYECCION_KEY,
   getExcludedCompetitionReason,
   isExcludedCompetition,
 } from '@/shared/utils/competition-filter'
@@ -125,6 +127,21 @@ function isArgentinaReserve(match: ApiMatch) {
   )
 }
 
+function isArgentinaTorneoProyeccion(match: ApiMatch) {
+  const league = leagueText(match)
+
+  return (
+    isExactLeagueId(match, ARGENTINA_TORNEO_PROYECCION_EXTERNAL_ID) ||
+    (
+      countryText(match).includes('argentina') &&
+      (
+        league.includes('torneo proyeccion') ||
+        league === 'reserve league'
+      )
+    )
+  )
+}
+
 function isYouthLeague(match: ApiMatch) {
   if (isArgentinaReserve(match)) return false
 
@@ -188,6 +205,7 @@ function isExactLeagueName(match: ApiMatch, expectedName: string) {
 
 function getHomeExclusionReason(match: ApiMatch) {
   return getExcludedCompetitionReason({
+    leagueId: match.leagueId,
     league: match.league,
     leagueName: match.league,
     country: match.country,
@@ -320,6 +338,7 @@ const SECTION_TITLES: Record<string, string> = {
 }
 
 const HOME_LEAGUE_ID_TO_TOURNAMENT_KEY = new Map<number, string>([
+  [ARGENTINA_TORNEO_PROYECCION_EXTERNAL_ID, ARGENTINA_TORNEO_PROYECCION_KEY],
   [128, 'argentina-liga-profesional'],
   [129, 'argentina-primera-nacional'],
   [130, 'argentina-copa-argentina'],
@@ -411,8 +430,7 @@ const LEAGUE_RULES: LeagueRule[] = [
       return (
         countryText(match).includes('argentina') &&
         league.includes('copa de la liga') &&
-        !league.includes('reserve') &&
-        !league.includes('reserva')
+        !isArgentinaReserve(match)
       )
     },
   },
@@ -469,11 +487,11 @@ const LEAGUE_RULES: LeagueRule[] = [
     },
   },
   {
-    key: 'argentina-reserva',
+    key: ARGENTINA_TORNEO_PROYECCION_KEY,
     sectionKey: 'argentina',
     sectionTitle: 'Argentina',
-    baseTitle: 'Liga Profesional - Reserva',
-    match: (match) => isArgentinaReserve(match),
+    baseTitle: 'Torneo Proyección',
+    match: (match) => isArgentinaTorneoProyeccion(match),
   },
   {
     key: 'argentina-liga-femenina',
@@ -490,20 +508,6 @@ const LEAGUE_RULES: LeagueRule[] = [
           league.includes('primera division') ||
           league.includes('liga femenina')
         )
-      )
-    },
-  },
-  {
-    key: 'argentina-copa-de-la-liga-reserva',
-    sectionKey: 'argentina',
-    sectionTitle: 'Argentina',
-    baseTitle: 'Copa de la Liga - Reserva',
-    match: (match) => {
-      const league = leagueText(match)
-      return (
-        countryText(match).includes('argentina') &&
-        league.includes('copa de la liga') &&
-        (league.includes('reserve') || league.includes('reserva'))
       )
     },
   },

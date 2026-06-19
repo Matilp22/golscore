@@ -18,7 +18,13 @@ type CompetitionFilterInput =
       round?: string | null
       stage?: string | null
       group?: string | null
+      leagueId?: number | string | null
+      leagueExternalId?: number | string | null
+      externalId?: number | string | null
     }
+
+export const ARGENTINA_TORNEO_PROYECCION_KEY = 'argentina-torneo-proyeccion'
+export const ARGENTINA_TORNEO_PROYECCION_EXTERNAL_ID = 906
 
 export function normalizeCompetitionText(value: string) {
   return value
@@ -60,10 +66,32 @@ function collectCompetitionParts(input: CompetitionFilterInput): string[] {
   return parts.filter((part): part is string => Boolean(part))
 }
 
+function getCompetitionExternalId(input: CompetitionFilterInput) {
+  if (!input || typeof input === 'string') return null
+
+  const value = input.leagueId ?? input.leagueExternalId ?? input.externalId
+  const parsed = Number(value)
+
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function isArgentinaTorneoProyeccion(input: CompetitionFilterInput, text: string) {
+  if (getCompetitionExternalId(input) === ARGENTINA_TORNEO_PROYECCION_EXTERNAL_ID) {
+    return true
+  }
+
+  return (
+    text.includes(ARGENTINA_TORNEO_PROYECCION_KEY.replace(/-/g, ' ')) ||
+    (text.includes('argentina') && text.includes('torneo proyeccion'))
+  )
+}
+
 export function getExcludedCompetitionReason(input: CompetitionFilterInput) {
   const text = normalizeCompetitionText(collectCompetitionParts(input).join(' '))
 
   if (!text) return false
+
+  if (isArgentinaTorneoProyeccion(input, text)) return false
 
   if (/\b(women|woman|female|feminine|feminile|femenino|femenina|femenil|frauen|fem)\b/.test(text)) {
     return 'women'

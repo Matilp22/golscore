@@ -113,6 +113,7 @@ function dedupeEventRows(events: MatchEventRow[]) {
 
 function isVisibleHomeCompetition(match: Awaited<ReturnType<typeof getMatchesByDate>>[number]) {
   const excludedReason = getExcludedCompetitionReason({
+    leagueId: match.leagueId,
     league: match.league,
     leagueName: match.league,
     country: match.country,

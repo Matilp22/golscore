@@ -8,6 +8,7 @@ import {
   COPA_ARGENTINA_EXTERNAL_ID,
   LIGA_PROFESIONAL_ARGENTINA_EXTERNAL_ID,
 } from '@/shared/utils/league-rounds'
+import { ARGENTINA_TORNEO_PROYECCION_EXTERNAL_ID } from '@/shared/utils/competition-filter'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -23,6 +24,9 @@ const COMPETITION_EXTERNAL_IDS: Record<string, number> = {
   'argentina-copa-argentina': COPA_ARGENTINA_EXTERNAL_ID,
   'copa-argentina': COPA_ARGENTINA_EXTERNAL_ID,
   'copa argentina': COPA_ARGENTINA_EXTERNAL_ID,
+  'argentina-torneo-proyeccion': ARGENTINA_TORNEO_PROYECCION_EXTERNAL_ID,
+  'torneo-proyeccion': ARGENTINA_TORNEO_PROYECCION_EXTERNAL_ID,
+  'torneo proyeccion': ARGENTINA_TORNEO_PROYECCION_EXTERNAL_ID,
 }
 
 function jsonNoStore(body: unknown, init?: ResponseInit) {

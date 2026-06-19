@@ -1,4 +1,7 @@
-import { getExcludedCompetitionReason } from '@/shared/utils/competition-filter'
+import {
+  ARGENTINA_TORNEO_PROYECCION_EXTERNAL_ID,
+  getExcludedCompetitionReason,
+} from '@/shared/utils/competition-filter'
 
 export type HomeMatchVisibilityInput = {
   leagueId?: number | null
@@ -52,6 +55,7 @@ export const HOME_VISIBLE_LEAGUE_IDS = new Set([
   130,
   135,
   140,
+  ARGENTINA_TORNEO_PROYECCION_EXTERNAL_ID,
   848,
 ])
 
@@ -68,7 +72,11 @@ export function getHomeMatchVisibility(
 ): HomeMatchVisibilityResult {
   const league = normalizeSearchValue(input.league || '')
   const country = normalizeSearchValue(input.country || '')
+  const allowedLeagueId = Boolean(
+    input.leagueId && HOME_VISIBLE_LEAGUE_IDS.has(input.leagueId)
+  )
   const excludedReason = getExcludedCompetitionReason({
+    leagueId: input.leagueId,
     league: input.league,
     leagueName: input.league,
     country: input.country,
@@ -77,7 +85,7 @@ export function getHomeMatchVisibility(
     round: input.round,
   })
 
-  if (excludedReason) {
+  if (excludedReason && !allowedLeagueId) {
     return {
       included: false,
       reason: 'excludedCompetition',
@@ -85,7 +93,7 @@ export function getHomeMatchVisibility(
     }
   }
 
-  if (input.leagueId && HOME_VISIBLE_LEAGUE_IDS.has(input.leagueId)) {
+  if (allowedLeagueId) {
     return {
       included: true,
       reason: 'allowedLeagueId',

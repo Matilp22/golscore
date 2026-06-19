@@ -27,6 +27,10 @@ export const PRIVATE_TOURNAMENT_LEAGUE_OPTIONS = [
     externalId: '129',
     name: 'Primera Nacional',
   },
+  {
+    externalId: '906',
+    name: 'Torneo Proyección',
+  },
 ] as const
 
 type ApiErrorLike = {

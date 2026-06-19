@@ -54,6 +54,7 @@ function containsNormalizedPhrase(value: string, phrase: string) {
 
 function isVisibleHomeCompetition(match: VisibleHomeMatch) {
   const excludedReason = getExcludedCompetitionReason({
+    leagueId: match.leagueId,
     league: match.league,
     leagueName: match.league,
     country: match.country,
