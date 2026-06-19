@@ -1469,15 +1469,25 @@ export async function syncLiveMatches(
   const limit = Math.min(Math.max(options.limit ?? 120, 1), 300)
   const warnings: string[] = []
   const requestCounter: ApiRequestCounter = { count: 0 }
-  const liveFixtures = await fetchApiArray<ApiFixture>(
-    '/fixtures',
-    {
-      live: 'all',
-      timezone: ARGENTINA_TIME_ZONE,
-    },
-    'sync-live-matches:global-live',
-    requestCounter
-  )
+  let liveFixtures: ApiFixture[] = []
+
+  try {
+    liveFixtures = await fetchApiArray<ApiFixture>(
+      '/fixtures',
+      {
+        live: 'all',
+        timezone: ARGENTINA_TIME_ZONE,
+      },
+      'sync-live-matches:global-live',
+      requestCounter
+    )
+  } catch (error) {
+    warnings.push(
+      `No se pudo leer live=all desde API-Football; se continua con candidatos de Supabase: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    )
+  }
   const liveFixtureMap = new Map<number, ApiFixture>()
 
   for (const fixture of liveFixtures) {

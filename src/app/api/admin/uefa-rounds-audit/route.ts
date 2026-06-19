@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
-import { getFootballApiConfig } from '@/server/config/env'
+import { requestFootballApi } from '@/server/integrations/football-api-client'
 import {
   auditUefaKnockoutRound,
   getUefaKnockoutRoundLabel,
@@ -128,31 +128,18 @@ function serializeRoundAudit(matches: MatchRow[]) {
 
 async function fetchApiFootballRoundAudit(leagueExternalId: number, season: number | null) {
   const targetSeason = season ?? new Date().getFullYear()
-  const { apiKey, baseUrl } = getFootballApiConfig()
-  const url = new URL(`${baseUrl}/fixtures`)
-
-  url.searchParams.set('league', String(leagueExternalId))
-  url.searchParams.set('season', String(targetSeason))
-  url.searchParams.set('timezone', 'America/Argentina/Buenos_Aires')
-
-  console.info('[api-football-call]', {
-    source: 'admin:uefa-rounds-audit',
-    endpoint: '/fixtures',
-    params: Object.fromEntries(url.searchParams.entries()),
-  })
-
-  const response = await fetch(url, {
-    cache: 'no-store',
-    headers: {
-      'x-apisports-key': apiKey,
+  const { payload } = await requestFootballApi<ApiFixtureItem[]>(
+    '/fixtures',
+    {
+      league: leagueExternalId,
+      season: targetSeason,
+      timezone: 'America/Argentina/Buenos_Aires',
     },
-  })
-
-  if (!response.ok) {
-    throw new Error(`API-Football respondio ${response.status} para league ${leagueExternalId}.`)
-  }
-
-  const payload = (await response.json()) as { response?: ApiFixtureItem[]; results?: number }
+    {
+      logContext: 'admin:uefa-rounds-audit',
+      usageContext: 'admin-uefa-rounds-audit',
+    }
+  )
   const matches: MatchRow[] = (payload.response ?? []).map((fixture) => ({
     id: fixture.fixture?.id ?? crypto.randomUUID(),
     round: fixture.league?.round ?? null,

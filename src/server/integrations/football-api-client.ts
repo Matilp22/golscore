@@ -1,17 +1,80 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
+
+import { getSupabaseAdminClient } from '@/lib/supabase/admin'
+
 export type FootballApiPayload<T> = {
   errors?: Record<string, string>
   results?: number
   response?: T
 }
 
-type FootballApiRequestOptions = {
+export type FootballApiRequestErrorCode =
+  | 'missing_api_key'
+  | 'timeout'
+  | 'network_error'
+  | 'http_error'
+  | 'provider_error'
+  | 'rate_limit'
+  | 'invalid_json'
+
+export class FootballApiRequestError extends Error {
+  code: FootballApiRequestErrorCode
+  status?: number
+  endpoint: string
+  context: string
+  cause?: unknown
+
+  constructor(
+    message: string,
+    input: {
+      code: FootballApiRequestErrorCode
+      status?: number
+      endpoint: string
+      context: string
+      cause?: unknown
+    }
+  ) {
+    super(message)
+    this.name = 'FootballApiRequestError'
+    this.code = input.code
+    this.status = input.status
+    this.endpoint = input.endpoint
+    this.context = input.context
+    this.cause = input.cause
+  }
+}
+
+export type FootballApiRequestOptions = {
   logContext: string
+  usageContext?: string
+  timeoutMs?: number
+}
+
+export type FootballApiCallRecord = {
+  endpoint: string
+  context: string
+  status: number | null
+  ok: boolean
+  errorCode: FootballApiRequestErrorCode | null
+  durationMs: number
 }
 
 const RATE_LIMIT_BACKOFF_MS = 30 * 60 * 1000
+const DEFAULT_FOOTBALL_API_TIMEOUT_MS = 8000
+const USAGE_TRACKING_TIMEOUT_MS = 1200
 
 let rateLimitBackoffUntil = 0
 let lastBackoffLogAt = 0
+const footballApiCallAudit = new AsyncLocalStorage<FootballApiCallRecord[]>()
+
+export async function runWithFootballApiCallAudit<T>(
+  callback: () => Promise<T>
+): Promise<{ result: T; providerCalls: FootballApiCallRecord[] }> {
+  const providerCalls: FootballApiCallRecord[] = []
+  const result = await footballApiCallAudit.run(providerCalls, callback)
+
+  return { result, providerCalls }
+}
 
 function getFootballApiClientConfig() {
   const apiKey = process.env.FOOTBALL_API_KEY
@@ -80,6 +143,157 @@ function buildRateLimitPayload<T>(message: string): FootballApiPayload<T> {
   }
 }
 
+function getTimeoutMs(options: FootballApiRequestOptions) {
+  const configured = Number(process.env.FOOTBALL_API_TIMEOUT_MS)
+  const timeoutMs = options.timeoutMs ?? configured
+
+  return Number.isFinite(timeoutMs) && timeoutMs > 0
+    ? timeoutMs
+    : DEFAULT_FOOTBALL_API_TIMEOUT_MS
+}
+
+function normalizeEndpoint(path: string) {
+  const endpoint = path.split('?')[0]?.trim() || 'unknown'
+
+  return endpoint.startsWith('/') ? endpoint : `/${endpoint}`
+}
+
+function normalizeContextPart(value: string) {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[0-9a-f]{8,}/gi, 'id')
+    .replace(/\b\d+\b/g, 'id')
+    .replace(/[^a-z0-9:_-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^[-:_]+|[-:_]+$/g, '')
+}
+
+function normalizeUsageContext(options: FootballApiRequestOptions) {
+  const raw = options.usageContext?.trim() || options.logContext?.trim() || 'other'
+  const normalized = normalizeContextPart(raw)
+  const stablePrefix = normalized.split(':').find(Boolean)
+
+  return stablePrefix || 'other'
+}
+
+function isUsageTrackingEnabled() {
+  return process.env.FOOTBALL_API_USAGE_TRACKING_ENABLED === 'true'
+}
+
+function isTimeoutError(error: unknown) {
+  return (
+    error instanceof DOMException && error.name === 'AbortError'
+  ) || (
+    error instanceof Error && error.name === 'AbortError'
+  )
+}
+
+function startProviderCallAudit(endpoint: string, context: string) {
+  const providerCalls = footballApiCallAudit.getStore()
+
+  if (!providerCalls) return null
+
+  const record: FootballApiCallRecord = {
+    endpoint,
+    context,
+    status: null,
+    ok: false,
+    errorCode: null,
+    durationMs: 0,
+  }
+
+  providerCalls.push(record)
+
+  return record
+}
+
+async function withUsageTrackingTimeout<T>(promise: PromiseLike<T>) {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null
+
+  try {
+    return await Promise.race([
+      Promise.resolve(promise),
+      new Promise<T>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error('football_api_usage_tracking_timeout'))
+        }, USAGE_TRACKING_TIMEOUT_MS)
+      }),
+    ])
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId)
+  }
+}
+
+async function recordFootballApiUsage(input: {
+  endpoint: string
+  context: string
+  ok: boolean
+  status: number | null
+  errorCode: FootballApiRequestErrorCode | null
+  durationMs: number
+}) {
+  if (!isUsageTrackingEnabled()) return
+
+  try {
+    const supabase = getSupabaseAdminClient()
+    const response = await withUsageTrackingTimeout(
+      supabase.rpc('record_football_api_usage', {
+        p_endpoint: input.endpoint,
+        p_context: input.context,
+        p_ok: input.ok,
+        p_status: input.status,
+        p_error_code: input.errorCode,
+        p_duration_ms: Math.max(0, Math.round(input.durationMs)),
+      })
+    )
+
+    if (response.error) {
+      console.warn('[football-api] usage tracking failed', {
+        endpoint: input.endpoint,
+        context: input.context,
+        code: response.error.code ?? null,
+        message: response.error.message,
+      })
+    }
+  } catch (error) {
+    console.warn('[football-api] usage tracking skipped', {
+      endpoint: input.endpoint,
+      context: input.context,
+      message: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
+async function finishProviderCall(input: {
+  auditRecord: FootballApiCallRecord | null
+  endpoint: string
+  context: string
+  ok: boolean
+  status: number | null
+  errorCode: FootballApiRequestErrorCode | null
+  startedAt: number
+}) {
+  const durationMs = Date.now() - input.startedAt
+
+  if (input.auditRecord) {
+    input.auditRecord.status = input.status
+    input.auditRecord.ok = input.ok
+    input.auditRecord.errorCode = input.errorCode
+    input.auditRecord.durationMs = durationMs
+  }
+
+  await recordFootballApiUsage({
+    endpoint: input.endpoint,
+    context: input.context,
+    ok: input.ok,
+    status: input.status,
+    errorCode: input.errorCode,
+    durationMs,
+  })
+}
+
 export async function requestFootballApi<T>(
   path: string,
   params: Record<string, string | number | undefined>,
@@ -87,6 +301,8 @@ export async function requestFootballApi<T>(
 ) {
   const { apiKey, baseUrl, hasApiKey } = getFootballApiClientConfig()
   const url = new URL(`${baseUrl}${path}`)
+  const endpoint = normalizeEndpoint(path)
+  const usageContext = normalizeUsageContext(options)
   const shouldLog = process.env.NODE_ENV === 'development'
   const now = Date.now()
 
@@ -108,7 +324,11 @@ export async function requestFootballApi<T>(
   }
 
   if (!apiKey) {
-    throw new Error('Falta FOOTBALL_API_KEY en el entorno.')
+    throw new FootballApiRequestError('Falta FOOTBALL_API_KEY en el entorno.', {
+      code: 'missing_api_key',
+      endpoint,
+      context: usageContext,
+    })
   }
 
   if (now < rateLimitBackoffUntil) {
@@ -129,18 +349,82 @@ export async function requestFootballApi<T>(
     }
   }
 
-  const response = await fetch(url.toString(), {
-    headers: {
-      'x-apisports-key': apiKey,
-    },
-    cache: 'no-store',
-  })
+  const controller = new AbortController()
+  const timeoutMs = getTimeoutMs(options)
+  const startedAt = Date.now()
+  const auditRecord = startProviderCallAudit(endpoint, usageContext)
+  let timeoutReached = false
+  const timeoutId = setTimeout(() => {
+    timeoutReached = true
+    controller.abort()
+  }, timeoutMs)
+  let response: Response
+
+  try {
+    response = await fetch(url.toString(), {
+      headers: {
+        'x-apisports-key': apiKey,
+      },
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+  } catch (error) {
+    const code: FootballApiRequestErrorCode =
+      timeoutReached || isTimeoutError(error) ? 'timeout' : 'network_error'
+
+    await finishProviderCall({
+      auditRecord,
+      endpoint,
+      context: usageContext,
+      ok: false,
+      status: null,
+      errorCode: code,
+      startedAt,
+    })
+
+    throw new FootballApiRequestError(
+      code === 'timeout'
+        ? `API-Football supero el timeout de ${timeoutMs}ms.`
+        : 'No se pudo conectar con API-Football.',
+      {
+        code,
+        endpoint,
+        context: usageContext,
+        cause: error,
+      }
+    )
+  } finally {
+    clearTimeout(timeoutId)
+  }
 
   if (shouldLog) {
     console.info(`[football-api:${options.logContext}] status: ${response.status}`)
   }
 
-  const payload = (await response.json().catch(() => null)) as FootballApiPayload<T> | null
+  let payload: FootballApiPayload<T> | null = null
+
+  try {
+    payload = (await response.json()) as FootballApiPayload<T>
+  } catch (error) {
+    await finishProviderCall({
+      auditRecord,
+      endpoint,
+      context: usageContext,
+      ok: false,
+      status: response.status,
+      errorCode: 'invalid_json',
+      startedAt,
+    })
+
+    throw new FootballApiRequestError('API-Football no devolvio JSON valido.', {
+      code: 'invalid_json',
+      status: response.status,
+      endpoint,
+      context: usageContext,
+      cause: error,
+    })
+  }
+
   const responseLength = Array.isArray(payload?.response) ? payload.response.length : null
 
   if (shouldLog) {
@@ -154,6 +438,15 @@ export async function requestFootballApi<T>(
 
   if (isFootballApiRateLimit(response.status, payload?.errors)) {
     setRateLimitBackoff(getRetryAfterMs(response))
+    await finishProviderCall({
+      auditRecord,
+      endpoint,
+      context: usageContext,
+      ok: false,
+      status: response.status,
+      errorCode: 'rate_limit',
+      startedAt,
+    })
 
     return {
       status: response.status,
@@ -162,12 +455,58 @@ export async function requestFootballApi<T>(
   }
 
   if (!response.ok) {
-    throw new Error(`API-Football respondio ${response.status}`)
+    const hasProviderErrors = Boolean(payload?.errors && Object.keys(payload.errors).length > 0)
+    const code: FootballApiRequestErrorCode = hasProviderErrors ? 'provider_error' : 'http_error'
+
+    await finishProviderCall({
+      auditRecord,
+      endpoint,
+      context: usageContext,
+      ok: false,
+      status: response.status,
+      errorCode: code,
+      startedAt,
+    })
+
+    throw new FootballApiRequestError(`API-Football respondio ${response.status}`, {
+      code,
+      status: response.status,
+      endpoint,
+      context: usageContext,
+    })
   }
 
   if (!payload) {
-    throw new Error('API-Football no devolvio JSON valido.')
+    await finishProviderCall({
+      auditRecord,
+      endpoint,
+      context: usageContext,
+      ok: false,
+      status: response.status,
+      errorCode: 'invalid_json',
+      startedAt,
+    })
+
+    throw new FootballApiRequestError('API-Football no devolvio JSON valido.', {
+      code: 'invalid_json',
+      status: response.status,
+      endpoint,
+      context: usageContext,
+    })
   }
+
+  await finishProviderCall({
+    auditRecord,
+    endpoint,
+    context: usageContext,
+    ok: !(payload.errors && Object.keys(payload.errors).length > 0),
+    status: response.status,
+    errorCode:
+      payload.errors && Object.keys(payload.errors).length > 0
+        ? 'provider_error'
+        : null,
+    startedAt,
+  })
 
   return {
     status: response.status,

@@ -4,7 +4,7 @@ import {
   getHomeMatchesSourceSnapshot,
   type MatchListItem,
 } from '@/lib/api-football'
-import { getFootballApiConfig } from '@/server/config/env'
+import { requestFootballApi } from '@/server/integrations/football-api-client'
 import {
   formatMatchDateTimeArgentina,
   getArgentinaDateISO,
@@ -102,33 +102,17 @@ function sortByDateAndId<T extends { match_date_utc: string | null; external_id:
 }
 
 async function fetchApiFixturesForHomeAudit(date: string) {
-  const { apiKey, baseUrl } = getFootballApiConfig()
-  const url = new URL(`${baseUrl}/fixtures`)
-
-  url.searchParams.set('date', date)
-  url.searchParams.set('timezone', 'America/Argentina/Buenos_Aires')
-
-  console.info('[api-football-call]', {
-    source: 'admin:home-matches-audit',
-    endpoint: '/fixtures',
-    params: Object.fromEntries(url.searchParams.entries()),
-  })
-
-  const response = await fetch(url, {
-    cache: 'no-store',
-    headers: {
-      'x-apisports-key': apiKey,
+  const { payload } = await requestFootballApi<ApiAuditFixture[]>(
+    '/fixtures',
+    {
+      date,
+      timezone: 'America/Argentina/Buenos_Aires',
     },
-  })
-
-  if (!response.ok) {
-    throw new Error(`API-Football respondio ${response.status} para ${date}.`)
-  }
-
-  const payload = (await response.json()) as {
-    response?: ApiAuditFixture[]
-    results?: number
-  }
+    {
+      logContext: 'admin:home-matches-audit',
+      usageContext: 'admin-home-matches-audit',
+    }
+  )
 
   return payload.response ?? []
 }
