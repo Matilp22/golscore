@@ -44,6 +44,7 @@ import {
 } from '@/shared/seo'
 import { getRequestLocale } from '@/server/request-locale'
 import { getFootballPublicReadMode } from '@/server/football-public-read-mode'
+import { runWithFootballApiReadAudit } from '@/server/football-public-read-guard'
 import {
   getTournamentDisplayName,
   t,
@@ -1313,7 +1314,10 @@ export default async function HomePage({
     const readMode = getFootballPublicReadMode('home')
     const loadHomeMatches =
       readMode === 'cache-only' ? readCachedHomeMatchesByDate : getMatchesByDate
-    const enrichedMatches = await withGoalScorers(await loadHomeMatches(selectedDate))
+    const { result: enrichedMatches } = await runWithFootballApiReadAudit(
+      { route: 'home', cacheOnly: readMode === 'cache-only' },
+      async () => withGoalScorers(await loadHomeMatches(selectedDate))
+    )
     dateMatches = enrichedMatches
 
     if (process.env.NODE_ENV === 'development') {

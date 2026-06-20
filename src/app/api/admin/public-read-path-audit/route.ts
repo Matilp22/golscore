@@ -13,7 +13,7 @@ import {
 } from '@/lib/api-football'
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getFootballPublicReadMode } from '@/server/football-public-read-mode'
-import { runWithFootballApiCallAudit } from '@/server/integrations/football-api-client'
+import { runWithFootballApiReadAudit } from '@/server/integrations/football-api-client'
 import { buildMatchDetailViewModel } from '@/server/match-detail-view-model'
 import { getAllowedProdeLeagueIds } from '@/server/prode/scope'
 import { getWorldCupGroupStandings } from '@/server/prode/world-cup-groups'
@@ -24,6 +24,7 @@ export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 
 type AuditRoute = 'home' | 'league' | 'match-detail' | 'prode'
+type AuditMode = 'legacy' | 'cache-only'
 
 function jsonNoStore(body: unknown, init?: ResponseInit) {
   const response = NextResponse.json(body, init)
@@ -60,9 +61,36 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error)
 }
 
-async function auditRead<T>(callback: () => Promise<T>) {
+function getAuditMode(searchParams: URLSearchParams, route: AuditRoute): AuditMode {
+  const override = searchParams.get('mode')
+
+  if (override === 'legacy' || override === 'cache-only') return override
+
+  return getFootballPublicReadMode(route)
+}
+
+function getProviderWarnings(input: {
+  mode: AuditMode
+  providerCalls: unknown[]
+  blockedProviderCalls: unknown[]
+}) {
+  if (input.mode !== 'cache-only') return []
+  if (input.providerCalls.length > 0) return ['cache-only route called API-Football']
+  if (input.blockedProviderCalls.length > 0) {
+    return ['cache-only route attempted API-Football and was blocked']
+  }
+
+  return []
+}
+
+async function auditRead<T>(
+  input: { route: AuditRoute; mode: AuditMode },
+  callback: () => Promise<T>
+) {
   const startedAt = Date.now()
-  const audited = await runWithFootballApiCallAudit(async () => {
+  const audited = await runWithFootballApiReadAudit(
+    { route: input.route, cacheOnly: input.mode === 'cache-only' },
+    async () => {
     try {
       return {
         value: await callback(),
@@ -77,18 +105,23 @@ async function auditRead<T>(callback: () => Promise<T>) {
   })
 
   return {
+    mode: input.mode,
     value: audited.result.value,
     error: audited.result.error,
     providerCalls: audited.providerCalls,
+    blockedProviderCalls: audited.blockedProviderCalls,
     durationMs: Date.now() - startedAt,
   }
 }
 
 async function auditHome(searchParams: URLSearchParams) {
   const date = searchParams.get('date') || getArgentinaTodayISO()
-  const mode = getFootballPublicReadMode('home')
+  const mode = getAuditMode(searchParams, 'home')
   const loadMatches = mode === 'cache-only' ? readCachedHomeMatchesByDate : getMatchesByDate
-  const read = await auditRead(async () => withGoalScorers(await loadMatches(date)))
+  const read = await auditRead(
+    { route: 'home', mode },
+    async () => withGoalScorers(await loadMatches(date))
+  )
   const matches = read.value ?? []
 
   return {
@@ -99,6 +132,7 @@ async function auditHome(searchParams: URLSearchParams) {
       matches: mode === 'cache-only' ? 'supabase/cache' : 'legacy-loader',
       extras: 'supabase',
     },
+    dataSource: mode === 'cache-only' ? 'supabase/cache' : 'legacy-loader',
     timings: { totalMs: read.durationMs },
     counts: {
       matches: matches.length,
@@ -113,17 +147,16 @@ async function auditHome(searchParams: URLSearchParams) {
       broadcasters: matches.reduce((sum, match) => sum + (match.broadcasters?.length ?? 0), 0),
     },
     providerCallsDuringRead: read.providerCalls.length,
+    blockedProviderCalls: read.blockedProviderCalls.length,
     missingData: matches.length ? [] : ['matches'],
     syncRecommended: matches.length === 0,
-    warnings: mode === 'cache-only' && read.providerCalls.length > 0
-      ? ['cache-only route called API-Football']
-      : [],
+    warnings: getProviderWarnings(read),
     errors: read.error ? [read.error] : [],
   }
 }
 
 async function auditLeague(searchParams: URLSearchParams) {
-  const mode = getFootballPublicReadMode('league')
+  const mode = getAuditMode(searchParams, 'league')
   const leagueExternalId = readNumber(searchParams.get('leagueExternalId'))
   const season = readNumber(searchParams.get('season')) ?? new Date().getUTCFullYear()
 
@@ -133,9 +166,11 @@ async function auditLeague(searchParams: URLSearchParams) {
       route: 'league' as const,
       mode,
       sourceSummary: {},
+      dataSource: 'missing',
       timings: { totalMs: 0 },
       counts: {},
       providerCallsDuringRead: 0,
+      blockedProviderCalls: 0,
       missingData: ['leagueExternalId'],
       syncRecommended: false,
       warnings: [],
@@ -146,7 +181,7 @@ async function auditLeague(searchParams: URLSearchParams) {
   const loadFixtures = mode === 'cache-only' ? readCachedLeagueFixtures : getLeagueFixtures
   const loadStandings = mode === 'cache-only' ? readCachedLeagueStandings : getLeagueStandings
   const loadLeaders = mode === 'cache-only' ? readCachedLeagueLeaders : getLeagueLeaders
-  const read = await auditRead(async () => {
+  const read = await auditRead({ route: 'league', mode }, async () => {
     const [fixtures, standings, leaders] = await Promise.all([
       loadFixtures(leagueExternalId, season),
       loadStandings(leagueExternalId, season),
@@ -166,6 +201,7 @@ async function auditLeague(searchParams: URLSearchParams) {
       standings: mode === 'cache-only' ? 'football_standings_cache' : 'legacy-cache-or-provider',
       leaders: 'match_events',
     },
+    dataSource: mode === 'cache-only' ? 'supabase/cache' : 'legacy-loader',
     timings: { totalMs: read.durationMs },
     counts: {
       fixtures: data?.fixtures.length ?? 0,
@@ -182,15 +218,14 @@ async function auditLeague(searchParams: URLSearchParams) {
       data && !data.standings.length ? 'standings' : null,
     ].filter((item): item is string => Boolean(item)),
     syncRecommended: Boolean(data && (!data.fixtures.length || !data.standings.length)),
-    warnings: mode === 'cache-only' && read.providerCalls.length > 0
-      ? ['cache-only route called API-Football']
-      : [],
+    blockedProviderCalls: read.blockedProviderCalls.length,
+    warnings: getProviderWarnings(read),
     errors: read.error ? [read.error] : [],
   }
 }
 
 async function auditMatchDetail(searchParams: URLSearchParams) {
-  const mode = getFootballPublicReadMode('match-detail')
+  const mode = getAuditMode(searchParams, 'match-detail')
   const fixture = readNumber(searchParams.get('fixture'))
 
   if (!fixture) {
@@ -199,9 +234,11 @@ async function auditMatchDetail(searchParams: URLSearchParams) {
       route: 'match-detail' as const,
       mode,
       sourceSummary: {},
+      dataSource: 'missing',
       timings: { totalMs: 0 },
       counts: {},
       providerCallsDuringRead: 0,
+      blockedProviderCalls: 0,
       missingData: ['fixture'],
       syncRecommended: false,
       warnings: [],
@@ -209,7 +246,7 @@ async function auditMatchDetail(searchParams: URLSearchParams) {
     }
   }
 
-  const read = await auditRead(async () =>
+  const read = await auditRead({ route: 'match-detail', mode }, async () =>
     buildMatchDetailViewModel({
       fixtureExternalId: fixture,
       matchId: fixture,
@@ -225,6 +262,7 @@ async function auditMatchDetail(searchParams: URLSearchParams) {
       fixture: data?.fixture ? data.dataSource : 'missing',
       detail: 'matches/football_match_detail_cache/football_fixture_cache/match_events',
     },
+    dataSource: data?.fixture ? data.dataSource : 'missing',
     timings: { totalMs: read.durationMs },
     counts: {
       timelineEvents: data?.renderCounts.timelineEvents ?? 0,
@@ -234,21 +272,20 @@ async function auditMatchDetail(searchParams: URLSearchParams) {
       substitutes: data?.renderCounts.substitutesCount ?? 0,
     },
     providerCallsDuringRead: read.providerCalls.length,
+    blockedProviderCalls: read.blockedProviderCalls.length,
     missingData: data?.missingSections ?? ['fixture'],
     syncRecommended: data?.syncRecommended ?? true,
     warnings: [
       ...(data?.warnings ?? []),
-      mode === 'cache-only' && read.providerCalls.length > 0
-        ? 'cache-only route called API-Football'
-        : null,
+      ...getProviderWarnings(read),
     ].filter((warning): warning is string => Boolean(warning)),
     errors: [...(read.error ? [read.error] : []), ...(data?.errors ?? [])],
   }
 }
 
-async function auditProde() {
-  const mode = getFootballPublicReadMode('prode')
-  const read = await auditRead(async () => {
+async function auditProde(searchParams: URLSearchParams) {
+  const mode = getAuditMode(searchParams, 'prode')
+  const read = await auditRead({ route: 'prode', mode }, async () => {
     const supabase = getSupabaseAdminClient()
     const allowedLeagueIds = await getAllowedProdeLeagueIds(supabase)
     const matchesResponse = allowedLeagueIds.length
@@ -284,6 +321,7 @@ async function auditProde() {
           : 'football_standings_cache-or-legacy-fallback',
       worldCupExternalId: WORLD_CUP_EXTERNAL_ID,
     },
+    dataSource: mode === 'cache-only' ? 'supabase/cache' : 'legacy-loader',
     timings: { totalMs: read.durationMs },
     counts: {
       allowedLeagues: data?.allowedLeagues ?? 0,
@@ -292,11 +330,10 @@ async function auditProde() {
       worldCupStandingRows: data ? data.groups.reduce((sum, group) => sum + group.rows.length, 0) : 0,
     },
     providerCallsDuringRead: read.providerCalls.length,
+    blockedProviderCalls: read.blockedProviderCalls.length,
     missingData: data && !data.groups.length ? ['worldCupGroups'] : [],
     syncRecommended: Boolean(data && !data.groups.length),
-    warnings: mode === 'cache-only' && read.providerCalls.length > 0
-      ? ['cache-only route called API-Football']
-      : [],
+    warnings: getProviderWarnings(read),
     errors: read.error ? [read.error] : [],
   }
 }
@@ -312,7 +349,7 @@ export async function GET(request: Request) {
   if (route === 'home') return jsonNoStore(await auditHome(searchParams))
   if (route === 'league') return jsonNoStore(await auditLeague(searchParams))
   if (route === 'match-detail') return jsonNoStore(await auditMatchDetail(searchParams))
-  if (route === 'prode') return jsonNoStore(await auditProde())
+  if (route === 'prode') return jsonNoStore(await auditProde(searchParams))
 
   return jsonNoStore(
     {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getFootballPublicReadMode } from '@/server/football-public-read-mode'
+import { runWithFootballApiReadAudit } from '@/server/football-public-read-guard'
 import { getWorldCupGroupStandings } from '@/server/prode/world-cup-groups'
 import { DEFAULT_PRODE_TOURNAMENT_SLUG } from '@/shared/config/prode-leagues'
 import { WORLD_CUP_EXTERNAL_ID } from '@/shared/utils/league-rounds'
@@ -60,9 +61,13 @@ export async function GET(request: Request) {
     }
 
     const readMode = getFootballPublicReadMode('prode')
-    const groups = await getWorldCupGroupStandings(league.season ?? 2026, {
-      includeOfficialFallback: readMode !== 'cache-only',
-    })
+    const { result: groups } = await runWithFootballApiReadAudit(
+      { route: 'prode', cacheOnly: readMode === 'cache-only' },
+      async () =>
+        getWorldCupGroupStandings(league.season ?? 2026, {
+          includeOfficialFallback: readMode !== 'cache-only',
+        })
+    )
 
     return jsonNoStore({
       ok: true,

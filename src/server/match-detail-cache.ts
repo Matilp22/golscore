@@ -461,6 +461,7 @@ export type SyncMatchDetailsBulkResult = {
   ok: boolean
   selected: number
   processed: number
+  succeeded: number
   updated: number
   fixtureUpdated: number
   unchanged: number
@@ -498,6 +499,16 @@ export type SyncMatchDetailsBulkResult = {
   }
   items: SyncMatchDetailsBulkItem[]
   warnings: string[]
+  errors: Array<{
+    matchId: DbId
+    fixtureExternalId: number
+    errors: SerializedSyncError[]
+  }>
+  sampleErrors: Array<{
+    matchId: DbId
+    fixtureExternalId: number
+    errors: SerializedSyncError[]
+  }>
 }
 
 function toNumber(value: unknown) {
@@ -3886,6 +3897,14 @@ export async function syncMatchDetailsBulk(
       item.providerStatus === 'provider-no-detail-data'
   ).length
   const renderProblems = items.filter((item) => item.renderStatus === 'render-problem').length
+  const succeeded = items.filter((item) => !item.skipped && item.ok).length
+  const itemErrors = items
+    .filter((item) => item.errors.length > 0)
+    .map((item) => ({
+      matchId: item.matchId,
+      fixtureExternalId: item.fixtureExternalId,
+      errors: item.errors,
+    }))
 
   if (input.missingDetailsOnly && rows.length > selectedRows.length) {
     warnings.push('Se revisaron mas partidos que los sincronizados para priorizar los que tenian detalle incompleto.')
@@ -3895,6 +3914,7 @@ export async function syncMatchDetailsBulk(
     ok: failed === 0,
     selected: selectedRows.length,
     processed: items.filter((item) => !item.skipped).length,
+    succeeded,
     updated,
     fixtureUpdated,
     unchanged,
@@ -3932,6 +3952,8 @@ export async function syncMatchDetailsBulk(
     },
     items,
     warnings,
+    errors: itemErrors,
+    sampleErrors: itemErrors.slice(0, 20),
   }
 }
 

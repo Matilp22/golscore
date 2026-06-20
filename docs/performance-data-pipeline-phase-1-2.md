@@ -23,6 +23,8 @@ Archivo:
 
 - `supabase/migrations/20260619172633_football_api_usage_daily.sql`
 
+Estado: aplicada manualmente en Supabase. No volver a ejecutarla desde esta tarea.
+
 Crea:
 
 - `public.football_api_usage_daily`
@@ -48,6 +50,17 @@ drop table if exists public.football_api_usage_daily;
 ## 4. Feature flags
 
 Default: `legacy`.
+
+Variables a documentar en `.env.local.example`:
+
+- `FOOTBALL_API_TIMEOUT_MS=8000`
+- `FOOTBALL_API_USAGE_TRACKING_ENABLED=false`
+- `FOOTBALL_API_DAILY_LIMIT=75000`
+- `FOOTBALL_PUBLIC_READ_MODE=legacy`
+- `HOME_READ_MODE=legacy`
+- `LEAGUE_READ_MODE=legacy`
+- `MATCH_DETAIL_READ_MODE=legacy`
+- `PRODE_READ_MODE=legacy`
 
 Global:
 
@@ -117,6 +130,21 @@ Parametros:
 - `season`
 
 En `cache-only`, `providerCallsDuringRead` debe ser `0`.
+
+Tambien devuelve `blockedProviderCalls`. Si es mayor a `0`, algun path intento llamar al proveedor y el guard runtime lo bloqueo antes de ejecutar `fetch`.
+
+El parametro `mode=legacy|cache-only` puede usarse solo para auditoria admin/local sin modificar variables reales.
+
+## 5.1 Guard runtime
+
+Las lecturas publicas usan un guard server-side basado en `AsyncLocalStorage`.
+
+Reglas:
+
+- En `cache-only`, `requestFootballApi` lanza `provider_call_blocked_in_public_read` antes de ejecutar `fetch`.
+- Las llamadas bloqueadas no cuentan como request real.
+- Cron, admin y procesos sync no se ejecutan bajo este contexto cache-only.
+- El endpoint de auditoria reporta llamadas reales y bloqueadas por separado.
 
 ## 6. Como probar
 
@@ -196,8 +224,8 @@ Estados por uso diario:
 
 - `< 50000`: `ok`
 - `50000..64999`: `warning`
-- `65000..75000`: `danger`
-- `> 75000`: `exceeded`
+- `65000..74999`: `danger`
+- `>= 75000`: `exceeded`
 
 ## 10. Riesgos conocidos
 

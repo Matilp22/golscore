@@ -1,6 +1,8 @@
+import 'server-only'
+
 import { AsyncLocalStorage } from 'node:async_hooks'
 
-import { getSupabaseAdminClient } from '@/lib/supabase/admin'
+import { recordFootballApiUsage } from '@/server/integrations/football-api-usage'
 
 export type FootballApiPayload<T> = {
   errors?: Record<string, string>
@@ -16,6 +18,7 @@ export type FootballApiRequestErrorCode =
   | 'provider_error'
   | 'rate_limit'
   | 'invalid_json'
+  | 'provider_call_blocked_in_public_read'
 
 export class FootballApiRequestError extends Error {
   code: FootballApiRequestErrorCode
@@ -59,21 +62,52 @@ export type FootballApiCallRecord = {
   durationMs: number
 }
 
+type FootballApiReadAuditState = {
+  route: string
+  cacheOnly: boolean
+  providerCalls: FootballApiCallRecord[]
+  blockedProviderCalls: FootballApiCallRecord[]
+}
+
 const RATE_LIMIT_BACKOFF_MS = 30 * 60 * 1000
 const DEFAULT_FOOTBALL_API_TIMEOUT_MS = 8000
-const USAGE_TRACKING_TIMEOUT_MS = 1200
 
 let rateLimitBackoffUntil = 0
 let lastBackoffLogAt = 0
-const footballApiCallAudit = new AsyncLocalStorage<FootballApiCallRecord[]>()
+const footballApiReadAudit = new AsyncLocalStorage<FootballApiReadAuditState>()
 
 export async function runWithFootballApiCallAudit<T>(
   callback: () => Promise<T>
 ): Promise<{ result: T; providerCalls: FootballApiCallRecord[] }> {
-  const providerCalls: FootballApiCallRecord[] = []
-  const result = await footballApiCallAudit.run(providerCalls, callback)
+  const audited = await runWithFootballApiReadAudit(
+    { route: 'other', cacheOnly: false },
+    callback
+  )
 
-  return { result, providerCalls }
+  return { result: audited.result, providerCalls: audited.providerCalls }
+}
+
+export async function runWithFootballApiReadAudit<T>(
+  input: { route: string; cacheOnly: boolean },
+  callback: () => Promise<T>
+): Promise<{
+  result: T
+  providerCalls: FootballApiCallRecord[]
+  blockedProviderCalls: FootballApiCallRecord[]
+}> {
+  const state: FootballApiReadAuditState = {
+    route: input.route,
+    cacheOnly: input.cacheOnly,
+    providerCalls: [],
+    blockedProviderCalls: [],
+  }
+  const result = await footballApiReadAudit.run(state, callback)
+
+  return {
+    result,
+    providerCalls: state.providerCalls,
+    blockedProviderCalls: state.blockedProviderCalls,
+  }
 }
 
 function getFootballApiClientConfig() {
@@ -178,10 +212,6 @@ function normalizeUsageContext(options: FootballApiRequestOptions) {
   return stablePrefix || 'other'
 }
 
-function isUsageTrackingEnabled() {
-  return process.env.FOOTBALL_API_USAGE_TRACKING_ENABLED === 'true'
-}
-
 function isTimeoutError(error: unknown) {
   return (
     error instanceof DOMException && error.name === 'AbortError'
@@ -190,10 +220,36 @@ function isTimeoutError(error: unknown) {
   )
 }
 
-function startProviderCallAudit(endpoint: string, context: string) {
-  const providerCalls = footballApiCallAudit.getStore()
+function blockProviderCallInCacheOnlyRead(endpoint: string, context: string) {
+  const auditState = footballApiReadAudit.getStore()
 
-  if (!providerCalls) return null
+  if (!auditState?.cacheOnly) return
+
+  const record: FootballApiCallRecord = {
+    endpoint,
+    context,
+    status: null,
+    ok: false,
+    errorCode: 'provider_call_blocked_in_public_read',
+    durationMs: 0,
+  }
+
+  auditState.blockedProviderCalls.push(record)
+
+  throw new FootballApiRequestError(
+    `API-Football bloqueado durante lectura publica cache-only (${auditState.route}).`,
+    {
+      code: 'provider_call_blocked_in_public_read',
+      endpoint,
+      context,
+    }
+  )
+}
+
+function startProviderCallAudit(endpoint: string, context: string) {
+  const auditState = footballApiReadAudit.getStore()
+
+  if (!auditState) return null
 
   const record: FootballApiCallRecord = {
     endpoint,
@@ -204,66 +260,9 @@ function startProviderCallAudit(endpoint: string, context: string) {
     durationMs: 0,
   }
 
-  providerCalls.push(record)
+  auditState.providerCalls.push(record)
 
   return record
-}
-
-async function withUsageTrackingTimeout<T>(promise: PromiseLike<T>) {
-  let timeoutId: ReturnType<typeof setTimeout> | null = null
-
-  try {
-    return await Promise.race([
-      Promise.resolve(promise),
-      new Promise<T>((_, reject) => {
-        timeoutId = setTimeout(() => {
-          reject(new Error('football_api_usage_tracking_timeout'))
-        }, USAGE_TRACKING_TIMEOUT_MS)
-      }),
-    ])
-  } finally {
-    if (timeoutId) clearTimeout(timeoutId)
-  }
-}
-
-async function recordFootballApiUsage(input: {
-  endpoint: string
-  context: string
-  ok: boolean
-  status: number | null
-  errorCode: FootballApiRequestErrorCode | null
-  durationMs: number
-}) {
-  if (!isUsageTrackingEnabled()) return
-
-  try {
-    const supabase = getSupabaseAdminClient()
-    const response = await withUsageTrackingTimeout(
-      supabase.rpc('record_football_api_usage', {
-        p_endpoint: input.endpoint,
-        p_context: input.context,
-        p_ok: input.ok,
-        p_status: input.status,
-        p_error_code: input.errorCode,
-        p_duration_ms: Math.max(0, Math.round(input.durationMs)),
-      })
-    )
-
-    if (response.error) {
-      console.warn('[football-api] usage tracking failed', {
-        endpoint: input.endpoint,
-        context: input.context,
-        code: response.error.code ?? null,
-        message: response.error.message,
-      })
-    }
-  } catch (error) {
-    console.warn('[football-api] usage tracking skipped', {
-      endpoint: input.endpoint,
-      context: input.context,
-      message: error instanceof Error ? error.message : String(error),
-    })
-  }
 }
 
 async function finishProviderCall(input: {
@@ -322,6 +321,8 @@ export async function requestFootballApi<T>(
       params: Object.fromEntries(url.searchParams.entries()),
     })
   }
+
+  blockProviderCallInCacheOnlyRead(endpoint, usageContext)
 
   if (!apiKey) {
     throw new FootballApiRequestError('Falta FOOTBALL_API_KEY en el entorno.', {

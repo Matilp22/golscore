@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseServerClient } from '@/lib/supabase/server'
 import { getAllowedProdeLeagueIds } from '@/server/prode/scope'
 import { getFootballPublicReadMode } from '@/server/football-public-read-mode'
+import { runWithFootballApiReadAudit } from '@/server/football-public-read-guard'
 import {
   buildWorldCupTeamGroupIndex,
   getWorldCupGroupStandings,
@@ -255,12 +256,17 @@ export async function GET(request: Request) {
   )
   const worldCupSeason = worldCupLeague?.season ?? 2026
   const worldCupGroups = worldCupLeague
-    ? await getWorldCupGroupStandings(worldCupSeason)
-        .then((groups) =>
-          groups.length || readMode === 'cache-only'
-            ? groups
-            : getWorldCupGroupStandings(worldCupSeason, { includeOfficialFallback: true })
-        )
+    ? await runWithFootballApiReadAudit(
+        { route: 'prode', cacheOnly: readMode === 'cache-only' },
+        async () =>
+          getWorldCupGroupStandings(worldCupSeason)
+            .then((groups) =>
+              groups.length || readMode === 'cache-only'
+                ? groups
+                : getWorldCupGroupStandings(worldCupSeason, { includeOfficialFallback: true })
+            )
+      )
+        .then((audit) => audit.result)
         .catch((error) => {
           console.warn('[prode-matches] No se pudieron leer standings del Mundial.', {
             error: error instanceof Error ? error.message : String(error),

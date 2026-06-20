@@ -1505,6 +1505,11 @@ export async function syncLiveMatches(
     warnings
   )
   const items: SyncLiveMatchItem[] = []
+  const errors: Array<{
+    matchId: DbId
+    fixtureExternalId: DbId | null
+    message: string
+  }> = []
 
   for (const candidate of candidates) {
     try {
@@ -1517,6 +1522,11 @@ export async function syncLiveMatches(
         })
       )
     } catch (error) {
+      errors.push({
+        matchId: candidate.match.id,
+        fixtureExternalId: candidate.match.external_id,
+        message: error instanceof Error ? error.message : String(error),
+      })
       warnings.push(
         `No se pudo sincronizar match ${candidate.match.id}: ${
           error instanceof Error ? error.message : String(error)
@@ -1538,7 +1548,14 @@ export async function syncLiveMatches(
     },
     liveFixturesFromApi: liveFixtures.length,
     checked: candidates.length,
+    selected: candidates.length,
+    processed: items.length,
+    succeeded: items.length,
+    failed: errors.length,
+    skipped: Math.max(0, candidates.length - items.length - errors.length),
     summary: summarizeItems(items, requestCounter.count),
+    errors,
+    sampleErrors: errors.slice(0, 20),
     items,
     warnings,
   }

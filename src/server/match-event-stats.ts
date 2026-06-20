@@ -1052,6 +1052,13 @@ export async function syncCompetitionIncidents(input: {
       })
     }
   }
+  const itemErrors = items
+    .filter((item) => item.errors.length > 0)
+    .map((item) => ({
+      matchId: item.matchId,
+      fixtureExternalId: item.fixtureExternalId,
+      errors: item.errors,
+    }))
 
   return {
     ok: true,
@@ -1062,6 +1069,7 @@ export async function syncCompetitionIncidents(input: {
     selected: candidates.length,
     processed: items.length,
     synced: items.filter((item) => item.status === 'synced').length,
+    succeeded: items.filter((item) => item.status === 'synced').length,
     failed: items.filter((item) => item.status === 'failed').length,
     skipped: items.filter((item) => item.status === 'skipped').length,
     eventsBefore: items.reduce((sum, item) => sum + item.eventsBefore, 0),
@@ -1069,6 +1077,8 @@ export async function syncCompetitionIncidents(input: {
     providerEvents: items.reduce((sum, item) => sum + (item.providerEvents ?? 0), 0),
     matchesSynced: items.filter((item) => item.matchEventsUpserted > 0).length,
     eventsUpserted: items.reduce((sum, item) => sum + item.matchEventsUpserted, 0),
+    errors: itemErrors,
+    sampleErrors: itemErrors.slice(0, 20),
     items,
   }
 }

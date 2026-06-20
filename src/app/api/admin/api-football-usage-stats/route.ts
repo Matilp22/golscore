@@ -137,7 +137,7 @@ function aggregateBy(rows: UsageRow[], key: keyof Pick<UsageRow, 'day' | 'endpoi
 }
 
 function getUsageStatus(requests: number) {
-  if (requests > 75000) return 'exceeded'
+  if (requests >= 75000) return 'exceeded'
   if (requests >= 65000) return 'danger'
   if (requests >= 50000) return 'warning'
 
@@ -185,12 +185,15 @@ export async function GET(request: Request) {
           {
             ok: false,
             error: 'football_api_usage_daily_missing',
-            message:
-              'La tabla public.football_api_usage_daily no existe todavia. Aplicar la migracion aditiva antes de consultar metricas.',
-            range,
-          },
-          { status: 503 }
-        )
+        message:
+          'La tabla public.football_api_usage_daily no existe todavia. Aplicar la migracion aditiva antes de consultar metricas.',
+        range,
+        timezone: 'UTC',
+        warnings: [],
+        errors: ['football_api_usage_daily_missing'],
+      },
+      { status: 503 }
+    )
       }
 
       throw response.error
@@ -223,6 +226,7 @@ export async function GET(request: Request) {
 
     return jsonNoStore({
       ok: true,
+      timezone: 'UTC',
       range,
       dailyLimit,
       totalRequests: total.requests,
@@ -241,6 +245,7 @@ export async function GET(request: Request) {
       byEndpoint: aggregateBy(rows, 'endpoint'),
       byContext: aggregateBy(rows, 'context'),
       warnings,
+      errors: [],
       groupBy: searchParams.get('groupBy') ?? null,
     })
   } catch (error) {

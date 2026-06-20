@@ -89,6 +89,7 @@ import type { ConmebolCompetitionType } from '@/shared/utils/conmebol-rounds'
 import { buildSeoMetadata } from '@/shared/seo'
 import { getRequestLocale } from '@/server/request-locale'
 import { getFootballPublicReadMode } from '@/server/football-public-read-mode'
+import { runWithFootballApiReadAudit } from '@/server/football-public-read-guard'
 import { getTournamentDisplayName, type AppLocale } from '@/shared/i18n/locales'
 import { translateCountryName } from '@/shared/utils/country-names'
 
@@ -2474,12 +2475,37 @@ export default async function LigaPage({ params }: PageProps) {
   const displayOptions = getTournamentDisplayOptions(tournament)
   const conmebolCompetitionType = getConmebolCompetitionType(tournament.key)
   const readMode = getFootballPublicReadMode('league')
-  const loadLeagueFixtures =
-    readMode === 'cache-only' ? readCachedLeagueFixtures : getLeagueFixtures
-  const loadLeagueStandings =
-    readMode === 'cache-only' ? readCachedLeagueStandings : getLeagueStandings
-  const loadLeagueLeaders =
-    readMode === 'cache-only' ? readCachedLeagueLeaders : getLeagueLeaders
+  const guardLeagueRead = <T,>(callback: () => Promise<T>) =>
+    runWithFootballApiReadAudit(
+      { route: 'league', cacheOnly: readMode === 'cache-only' },
+      callback
+    ).then((audit) => audit.result)
+  const loadLeagueFixtures = (
+    leagueId: number,
+    season: number,
+    options: { includeEvents?: boolean } = {}
+  ) =>
+    guardLeagueRead(() =>
+      (readMode === 'cache-only' ? readCachedLeagueFixtures : getLeagueFixtures)(
+        leagueId,
+        season,
+        options
+      )
+    )
+  const loadLeagueStandings = (leagueId: number, season: number) =>
+    guardLeagueRead(() =>
+      (readMode === 'cache-only' ? readCachedLeagueStandings : getLeagueStandings)(
+        leagueId,
+        season
+      )
+    )
+  const loadLeagueLeaders = (leagueId: number, season: number) =>
+    guardLeagueRead(() =>
+      (readMode === 'cache-only' ? readCachedLeagueLeaders : getLeagueLeaders)(
+        leagueId,
+        season
+      )
+    )
   const copaArgentinaChampions =
     tournament.key === 'argentina-copa-argentina'
       ? await getCopaArgentinaChampions()
@@ -2592,12 +2618,14 @@ export default async function LigaPage({ params }: PageProps) {
   }
 
   if (conmebolCompetitionType && resolvedTournament) {
-    conmebolViewModel = await buildConmebolBracketViewModel({
-      competition: conmebolCompetitionType,
-      leagueExternalId: resolvedTournament.leagueId,
-      season: resolvedTournament.season,
-      readMode,
-    }).catch(() => null)
+    conmebolViewModel = await guardLeagueRead(() =>
+      buildConmebolBracketViewModel({
+        competition: conmebolCompetitionType,
+        leagueExternalId: resolvedTournament.leagueId,
+        season: resolvedTournament.season,
+        readMode,
+      }).catch(() => null)
+    )
   }
 
   const { primaryGroups, secondaryGroups } = splitPrimaryGroups(

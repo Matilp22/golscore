@@ -36,6 +36,8 @@ import { getRequestLocale } from '@/server/request-locale'
 import { t, type AppLocale } from '@/shared/i18n/locales'
 import { translateCountryName } from '@/shared/utils/country-names'
 import { buildMatchDetailViewModel } from '@/server/match-detail-view-model'
+import { getFootballPublicReadMode } from '@/server/football-public-read-mode'
+import { runWithFootballApiReadAudit } from '@/server/football-public-read-guard'
 import type { HeadToHeadViewModel } from '@/server/head-to-head'
 import type { MatchSummarySource } from '@/shared/utils/match-summary'
 import { buildSeoMetadata } from '@/shared/seo'
@@ -53,10 +55,17 @@ export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 
 const loadMatchDetailPageData = cache(async (id: string) =>
-  buildMatchDetailViewModel({
-    fixtureExternalId: id,
-    matchId: id,
-  })
+  runWithFootballApiReadAudit(
+    {
+      route: 'match-detail',
+      cacheOnly: getFootballPublicReadMode('match-detail') === 'cache-only',
+    },
+    async () =>
+      buildMatchDetailViewModel({
+        fixtureExternalId: id,
+        matchId: id,
+      })
+  ).then((audit) => audit.result)
 )
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
