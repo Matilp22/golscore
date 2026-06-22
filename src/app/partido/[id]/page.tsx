@@ -1553,37 +1553,100 @@ type LineupPlayerLookup = {
 
 type SubstitutionMap = ReturnType<typeof getSubstitutionMap>
 
+type PlayerNameLookupIndex = {
+  nameCounts: Map<string, number>
+  refCounts: Map<string, number>
+}
+
 function normalizePlayerLookupId(value?: number | string | null) {
   if (value === null || value === undefined) return ''
 
   return String(value).trim()
 }
 
+function incrementLookupCount(counts: Map<string, number>, key: string) {
+  if (!key) return
+
+  counts.set(key, (counts.get(key) ?? 0) + 1)
+}
+
+function buildPlayerNameLookupIndex(players: LineupPlayerLookup[]): PlayerNameLookupIndex {
+  const nameCounts = new Map<string, number>()
+  const refCounts = new Map<string, number>()
+
+  for (const player of players) {
+    incrementLookupCount(nameCounts, normalizeFootballEventText(player.name))
+    incrementLookupCount(refCounts, normalizeFootballPersonRef(player.name))
+  }
+
+  return {
+    nameCounts,
+    refCounts,
+  }
+}
+
+function buildLineupPlayerLookups(lineup?: MatchLineup | null): LineupPlayerLookup[] {
+  return [
+    ...(lineup?.startXI || []),
+    ...(lineup?.substitutes || []),
+  ].map((entry) => ({
+    id: entry.player?.id ?? null,
+    name: entry.player?.name ?? null,
+  }))
+}
+
+function isUniqueLookupKey(
+  lookupIndex: PlayerNameLookupIndex | undefined,
+  kind: 'name' | 'ref',
+  key: string
+) {
+  if (!key) return false
+  if (!lookupIndex) return true
+
+  const counts = kind === 'name' ? lookupIndex.nameCounts : lookupIndex.refCounts
+
+  return counts.get(key) === 1
+}
+
 function getPlayerSubstitutionEvents(
   player: LineupPlayerLookup,
-  substitutionMap: SubstitutionMap
+  substitutionMap: SubstitutionMap,
+  lookupIndex?: PlayerNameLookupIndex
 ) {
   const playerId = normalizePlayerLookupId(player.id)
   const playerKey = normalizeFootballEventText(player.name)
   const playerRef = normalizeFootballPersonRef(player.name)
+  const playerOutByName = playerKey && isUniqueLookupKey(lookupIndex, 'name', playerKey)
+    ? substitutionMap.byPlayerOutName.get(playerKey)
+    : null
+  const playerOutByRef = playerRef && isUniqueLookupKey(lookupIndex, 'ref', playerRef)
+    ? substitutionMap.byPlayerOutName.get(playerRef)
+    : null
+  const playerInByName = playerKey && isUniqueLookupKey(lookupIndex, 'name', playerKey)
+    ? substitutionMap.byPlayerInName.get(playerKey)
+    : null
+  const playerInByRef = playerRef && isUniqueLookupKey(lookupIndex, 'ref', playerRef)
+    ? substitutionMap.byPlayerInName.get(playerRef)
+    : null
 
   return {
     playerOutEvent:
       (playerId ? substitutionMap.byPlayerOutId.get(playerId) : null) ||
-      (playerKey ? substitutionMap.byPlayerOutName.get(playerKey) : null) ||
-      (playerRef ? substitutionMap.byPlayerOutName.get(playerRef) : null) ||
+      playerOutByName ||
+      playerOutByRef ||
       null,
     playerInEvent:
       (playerId ? substitutionMap.byPlayerInId.get(playerId) : null) ||
-      (playerKey ? substitutionMap.byPlayerInName.get(playerKey) : null) ||
-      (playerRef ? substitutionMap.byPlayerInName.get(playerRef) : null) ||
+      playerInByName ||
+      playerInByRef ||
       null,
   }
 }
 
 function findLineupPlayerByRef(
   players: PlayerWrapper[],
-  lookup: LineupPlayerLookup
+  lookup: LineupPlayerLookup,
+  lookupIndex?: PlayerNameLookupIndex
 ) {
   const lookupId = normalizePlayerLookupId(lookup.id)
   const lookupName = normalizeFootballEventText(lookup.name)
@@ -1595,10 +1658,22 @@ function findLineupPlayerByRef(
     if (lookupId && playerId && lookupId === playerId) return true
 
     const playerName = normalizeFootballEventText(player?.name)
-    if (lookupName && playerName && lookupName === playerName) return true
+    if (
+      lookupName &&
+      playerName &&
+      lookupName === playerName &&
+      isUniqueLookupKey(lookupIndex, 'name', playerName)
+    ) {
+      return true
+    }
 
     const playerRef = normalizeFootballPersonRef(player?.name)
-    return Boolean(lookupRef && playerRef && lookupRef === playerRef)
+    return Boolean(
+      lookupRef &&
+      playerRef &&
+      lookupRef === playerRef &&
+      isUniqueLookupKey(lookupIndex, 'ref', playerRef)
+    )
   }) ?? null
 }
 
@@ -1610,6 +1685,8 @@ function getPlayerFieldState(
     starters?: Array<{ id?: number | null; name?: string | null }>
     substitutes?: Array<{ id?: number | null; name?: string | null }>
     substitutePlayers?: PlayerWrapper[]
+    playerLookupIndex?: PlayerNameLookupIndex
+    substituteLookupIndex?: PlayerNameLookupIndex
   } = {}
 ): PlayerFieldState {
   const basePlayer = playerWrap.player || {}
@@ -1619,13 +1696,17 @@ function getPlayerFieldState(
     starters: substitutionContext.starters,
     substitutes: substitutionContext.substitutes,
   })
-  const { playerOutEvent: substitutionEvent } = getPlayerSubstitutionEvents(basePlayer, substitutionMap)
+  const { playerOutEvent: substitutionEvent } = getPlayerSubstitutionEvents(
+    basePlayer,
+    substitutionMap,
+    substitutionContext.playerLookupIndex
+  )
   const substitutePlayers = substitutionContext.substitutePlayers ?? []
   const replacementPlayerWrap = substitutionEvent
     ? findLineupPlayerByRef(substitutePlayers, {
         id: substitutionEvent.playerInId,
         name: substitutionEvent.playerInName,
-      })
+      }, substitutionContext.substituteLookupIndex)
     : null
   const activePlayer = replacementPlayerWrap?.player ?? (
     substitutionEvent?.playerInName
@@ -1811,6 +1892,11 @@ function PlayerOnField({
   const pos = getPlayerPosition(playerWrap, formation, side, playerIndex, lineupPlayers, fullField)
   const player = playerWrap.player || {}
   const style = getStyleForPlayer(playerWrap, teamName, isHome, lineup, kitColors)
+  const lineupPlayerLookups = buildLineupPlayerLookups(lineup)
+  const substitutePlayerLookups = (lineup?.substitutes || []).map((entry) => ({
+    id: entry.player?.id ?? null,
+    name: entry.player?.name ?? null,
+  }))
   const substitutionContext = {
     starters: (lineup?.startXI || []).map((entry) => ({
       id: entry.player?.id ?? null,
@@ -1821,6 +1907,8 @@ function PlayerOnField({
       name: entry.player?.name ?? null,
     })),
     substitutePlayers: lineup?.substitutes || [],
+    playerLookupIndex: buildPlayerNameLookupIndex(lineupPlayerLookups),
+    substituteLookupIndex: buildPlayerNameLookupIndex(substitutePlayerLookups),
   }
   const playerState = getPlayerFieldState(playerWrap, teamId, events, substitutionContext)
   const captainCandidateId = playerState.activePlayerId ?? player.id
@@ -1984,6 +2072,7 @@ function buildPanelPlayers({
       name: entry.player?.name ?? null,
     })),
   }
+  const playerLookupIndex = buildPlayerNameLookupIndex(buildLineupPlayerLookups(lineup))
   const substitutionMap = getSubstitutionMap(events, substitutionContext)
 
   return players.map((playerWrap, index) => {
@@ -1999,7 +2088,11 @@ function buildPanelPlayers({
         captainReference.name.trim().toLowerCase() === player.name.trim().toLowerCase()
       )
     )
-    const { playerOutEvent, playerInEvent } = getPlayerSubstitutionEvents(player, substitutionMap)
+    const { playerOutEvent, playerInEvent } = getPlayerSubstitutionEvents(
+      player,
+      substitutionMap,
+      playerLookupIndex
+    )
     const incidents = getPlayerIncidentsForLineup(
       { id: player.id, name: player.name ?? null },
       teamId,
