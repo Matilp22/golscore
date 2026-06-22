@@ -156,8 +156,15 @@ export function useShareCardAsImage(
         height,
         style: {
           backgroundColor: '#07100d',
+          bottom: 'auto',
           color: '#ffffff',
+          left: '0',
+          margin: '0',
           overflow: 'hidden',
+          position: 'relative',
+          right: 'auto',
+          top: '0',
+          transform: 'none',
         },
         filter: (node) => {
           if (!(node instanceof HTMLElement)) return true
