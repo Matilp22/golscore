@@ -165,7 +165,14 @@ const requiredStaticSignals = [
   'Desempate manual',
   'Mejores terceros',
   'WorldCupSimulationShareSnapshot',
+  'WorldCupBracketShareSnapshot',
   'Compartir simulaci',
+  "const shareTargetId = 'world-cup-simulation-share-bracket'",
+  'Llaves simuladas completas',
+  'SHARE_BRACKET_R32_ROW_STEP = 6',
+  'SHARE_BRACKET_MATCH_ROW_SPAN = 5',
+  'SHARE_BRACKET_ROW_UNIT_PX = 8',
+  'data-world-cup-share-bracket-card',
   'TrashIcon',
   'Borrar resultado simulado',
   'WorldCupScoreInput',
@@ -250,6 +257,10 @@ if (component.includes('onSelectWinner') || component.includes('Elegir ') || com
 
 if (component.includes('Limpiar')) {
   fail('Group fixture clear action must use the trash icon, not the Limpiar label.')
+}
+
+if (component.includes('world-cup-simulation-share-group')) {
+  fail('The simulation share target must always export the full bracket, not a selected group.')
 }
 
 if (/WorldCupSimulatedStandings[\s\S]*overflow-x-auto/.test(component)) {

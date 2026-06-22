@@ -1039,16 +1039,10 @@ export function WorldCupKnockoutSimulator({
   const champion = simulation.champion
     ? getDisplayTeamName(simulation.champion, locale)
     : 'A confirmar'
-  const shareTargetId = state.simulatorView === 'groups'
-    ? `world-cup-simulation-share-group-${state.selectedGroup}`
-    : 'world-cup-simulation-share-bracket'
-  const shareFileName = state.simulatorView === 'groups'
-    ? `hay-fulbo-mundial-2026-simulacion-grupo-${state.selectedGroup.toLowerCase()}.png`
-    : 'hay-fulbo-mundial-2026-llaves-simuladas.png'
+  const shareTargetId = 'world-cup-simulation-share-bracket'
+  const shareFileName = 'hay-fulbo-mundial-2026-llaves-simuladas.png'
   const shareTitle = 'Copa del Mundo 2026 - Simulacion'
-  const shareText = state.simulatorView === 'groups'
-    ? `Copa del Mundo 2026 - Grupo ${state.selectedGroup} simulado en Hay Fulbo`
-    : 'Copa del Mundo 2026 - Llaves simuladas en Hay Fulbo'
+  const shareText = 'Copa del Mundo 2026 - Llaves simuladas en Hay Fulbo'
 
   return (
     <div className="space-y-3">
@@ -1084,7 +1078,7 @@ export function WorldCupKnockoutSimulator({
             fileName={shareFileName}
             title={shareTitle}
             text={shareText}
-            url="/liga/selecciones-mundial"
+            url="/liga/selecciones-mundial#simulador-mundial"
             ariaLabel="Compartir simulación"
             buttonTitle="Compartir simulación"
           />
@@ -1151,10 +1145,6 @@ export function WorldCupKnockoutSimulator({
       )}
       <WorldCupSimulationShareSnapshot
         targetId={shareTargetId}
-        view={state.simulatorView}
-        model={groupSimulation}
-        selectedGroup={state.selectedGroup}
-        groupResults={state.groupResults}
         bracket={simulation}
         results={state.results}
         winners={state.winners}
@@ -1167,9 +1157,6 @@ export function WorldCupKnockoutSimulator({
 
 function WorldCupSimulationShareSnapshot({
   targetId,
-  view,
-  model,
-  selectedGroup,
   bracket,
   results,
   winners,
@@ -1177,25 +1164,18 @@ function WorldCupSimulationShareSnapshot({
   locale,
 }: {
   targetId: string
-  view: StoredSimulatorState['simulatorView']
-  model: ReturnType<typeof buildWorldCupSimulatedGroupFixtures>
-  selectedGroup: WorldCupGroupKey
-  groupResults: WorldCupGroupSimulationResults
   bracket: ReturnType<typeof buildWorldCupBracketSimulation>
   results: WorldCupBracketMatchResults
   winners: WorldCupBracketWinnerSelection
   champion: string | null
   locale: AppLocale
 }) {
-  const group = model.groups.find((entry) => entry.groupKey === selectedGroup) ?? model.groups[0]
-  const isBracket = view === 'bracket'
-
   return (
     <div
       id={targetId}
       aria-hidden="true"
       className="pointer-events-none fixed left-[-10000px] top-0 bg-[#07100d] text-white"
-      style={{ width: isBracket ? 1180 : 760 }}
+      style={{ width: 1440 }}
     >
       <div className="rounded-3xl border border-[#2a5c46] bg-[#07100d] p-5">
         <div className="mb-4 flex items-start justify-between gap-4">
@@ -1207,9 +1187,7 @@ function WorldCupSimulationShareSnapshot({
               Copa del Mundo 2026
             </h2>
             <p className="mt-1 text-sm font-bold text-[#9aa7b5]">
-              {isBracket
-                ? 'Llaves simuladas'
-                : `Grupo ${selectedGroup} - ${model.complete ? 'Simulación completa' : 'Clasificación provisional'}`}
+              Llaves simuladas completas
             </p>
           </div>
           {champion ? (
@@ -1219,74 +1197,215 @@ function WorldCupSimulationShareSnapshot({
           ) : null}
         </div>
 
-        {isBracket ? (
-          <div
-            className="grid grid-cols-5 gap-x-3"
-            style={{ gridTemplateRows: `28px repeat(${BRACKET_GRID_ROW_COUNT}, ${BRACKET_ROW_UNIT_PX}px)` }}
-          >
-            {bracket.rounds.map((round) => (
-              <BracketRoundColumn
-                key={round.key}
-                round={round}
-                thirdPlace={round.key === 'final' ? bracket.thirdPlace : null}
-                mode="simulator"
-                locale={locale}
-                selections={winners}
-                results={results}
-                interactive={false}
-              />
-            ))}
-          </div>
-        ) : group ? (
-          <WorldCupGroupShareSnapshot group={group} locale={locale} />
-        ) : null}
+        <WorldCupBracketShareSnapshot
+          bracket={bracket}
+          results={results}
+          winners={winners}
+          locale={locale}
+        />
       </div>
     </div>
   )
 }
 
-function WorldCupGroupShareSnapshot({
-  group,
+const SHARE_BRACKET_ROW_START = 2
+const SHARE_BRACKET_R32_ROW_STEP = 6
+const SHARE_BRACKET_MATCH_ROW_SPAN = 5
+const SHARE_BRACKET_ROW_UNIT_PX = 8
+const SHARE_BRACKET_GRID_ROW_COUNT =
+  SHARE_BRACKET_ROW_START + SHARE_BRACKET_R32_ROW_STEP * ROUND_VISUAL_ORDER.r32.length + SHARE_BRACKET_MATCH_ROW_SPAN
+const SHARE_BRACKET_GRID_ROWS: Record<WorldCupBracketRoundKey, Record<number, number>> = {
+  r32: buildSlotRowMap(ROUND_VISUAL_ORDER.r32, SHARE_BRACKET_ROW_START, SHARE_BRACKET_R32_ROW_STEP),
+  r16: buildSlotRowMap(
+    ROUND_VISUAL_ORDER.r16,
+    SHARE_BRACKET_ROW_START + SHARE_BRACKET_R32_ROW_STEP / 2,
+    SHARE_BRACKET_R32_ROW_STEP * 2
+  ),
+  qf: buildSlotRowMap(
+    ROUND_VISUAL_ORDER.qf,
+    SHARE_BRACKET_ROW_START + (SHARE_BRACKET_R32_ROW_STEP * 3) / 2,
+    SHARE_BRACKET_R32_ROW_STEP * 4
+  ),
+  sf: buildSlotRowMap(
+    ROUND_VISUAL_ORDER.sf,
+    SHARE_BRACKET_ROW_START + (SHARE_BRACKET_R32_ROW_STEP * 7) / 2,
+    SHARE_BRACKET_R32_ROW_STEP * 8
+  ),
+  final: { 104: SHARE_BRACKET_ROW_START + (SHARE_BRACKET_R32_ROW_STEP * 15) / 2 },
+}
+const SHARE_THIRD_PLACE_GRID_ROW =
+  SHARE_BRACKET_GRID_ROWS.final[104] + SHARE_BRACKET_MATCH_ROW_SPAN + 6
+
+function getShareBracketGridRow(roundKey: WorldCupBracketRoundKey, slot: number) {
+  return SHARE_BRACKET_GRID_ROWS[roundKey][slot] ?? SHARE_BRACKET_ROW_START
+}
+
+function WorldCupBracketShareSnapshot({
+  bracket,
+  results,
+  winners,
   locale,
 }: {
-  group: WorldCupSimulatedGroup
+  bracket: ReturnType<typeof buildWorldCupBracketSimulation>
+  results: WorldCupBracketMatchResults
+  winners: WorldCupBracketWinnerSelection
   locale: AppLocale
 }) {
   return (
-    <div className="grid gap-4">
-      <div className="rounded-2xl border border-white/8 bg-[#11161b]">
-        <div className="border-b border-white/8 px-3 py-2 text-[11px] font-black uppercase tracking-[0.08em] text-[#7ff0b2]">
-          Partidos del grupo
+    <div
+      className="grid grid-cols-5 gap-x-3"
+      style={{ gridTemplateRows: `24px repeat(${SHARE_BRACKET_GRID_ROW_COUNT}, ${SHARE_BRACKET_ROW_UNIT_PX}px)` }}
+    >
+      {bracket.rounds.map((round) => (
+        <WorldCupBracketShareRound
+          key={round.key}
+          round={round}
+          thirdPlace={round.key === 'final' ? bracket.thirdPlace : null}
+          results={results}
+          winners={winners}
+          locale={locale}
+        />
+      ))}
+    </div>
+  )
+}
+
+function WorldCupBracketShareRound({
+  round,
+  thirdPlace,
+  results,
+  winners,
+  locale,
+}: {
+  round: WorldCupBracketRound
+  thirdPlace?: WorldCupBracketMatch | null
+  results: WorldCupBracketMatchResults
+  winners: WorldCupBracketWinnerSelection
+  locale: AppLocale
+}) {
+  const gridColumn = ROUND_COLUMN_INDEX[round.key]
+
+  return (
+    <>
+      <h3
+        className="self-start rounded-lg border border-white/7 bg-[#101820] py-1 text-center text-[9px] font-black uppercase leading-tight tracking-[0.08em] text-[#7ff0b2]"
+        style={{ gridColumn, gridRow: 1 }}
+      >
+        {round.label}
+      </h3>
+      {getVisualMatches(round).map((match) => (
+        <div
+          key={match.id}
+          style={{
+            gridColumn,
+            gridRow: `${getShareBracketGridRow(round.key, match.slot)} / span ${SHARE_BRACKET_MATCH_ROW_SPAN}`,
+          }}
+        >
+          <WorldCupBracketShareMatchCard
+            match={match}
+            locale={locale}
+            result={results[match.id]}
+            selection={getSelectedWinner(match, winners)?.key}
+          />
         </div>
-        {group.fixtures.map((groupFixture) => {
-          const fixture = groupFixture.fixture
-          const homeName = translateCountryName(fixture.home, locale) || fixture.home
-          const awayName = translateCountryName(fixture.away, locale) || fixture.away
+      ))}
+      {thirdPlace ? (
+        <div
+          className="border-t border-[#d6a84f]/20 pt-1"
+          style={{
+            gridColumn,
+            gridRow: `${SHARE_THIRD_PLACE_GRID_ROW} / span ${SHARE_BRACKET_MATCH_ROW_SPAN + 1}`,
+          }}
+        >
+          <h4 className="mb-1 text-center text-[8px] font-black uppercase tracking-[0.08em] text-[#d6a84f]">
+            3er puesto
+          </h4>
+          <WorldCupBracketShareMatchCard
+            match={thirdPlace}
+            locale={locale}
+            result={results[thirdPlace.id]}
+            selection={getSelectedWinner(thirdPlace, winners)?.key}
+          />
+        </div>
+      ) : null}
+    </>
+  )
+}
 
-          return (
-            <div
-              key={fixture.id}
-              className="grid grid-cols-[90px_minmax(0,1fr)_70px_minmax(0,1fr)_76px] items-center gap-3 border-b border-white/8 px-3 py-2 text-xs last:border-b-0"
-            >
-              <span className="font-semibold text-[#8fa0b1]">{formatGroupFixtureDate(fixture.date)}</span>
-              <span className="truncate font-bold text-[#dce5ef]" title={homeName}>{homeName}</span>
-              <span className="text-center text-sm font-black text-white">
-                {groupFixture.complete ? `${groupFixture.goalsHome ?? '-'} - ${groupFixture.goalsAway ?? '-'}` : '-'}
-              </span>
-              <span className="truncate font-bold text-[#dce5ef]" title={awayName}>{awayName}</span>
-              <span className={`rounded-lg border px-2 py-1 text-center text-[9px] font-black uppercase ${
-                groupFixture.official
-                  ? 'border-[#7ff0b2]/25 bg-[#143624] text-[#7ff0b2]'
-                  : 'border-[#d6a84f]/25 bg-[#2a2112] text-[#f6d88a]'
-              }`}>
-                {groupFixture.official ? 'Oficial' : 'Simulado'}
-              </span>
-            </div>
-          )
-        })}
+function WorldCupBracketShareMatchCard({
+  match,
+  locale,
+  result,
+  selection,
+}: {
+  match: WorldCupBracketMatch
+  locale: AppLocale
+  result?: WorldCupBracketMatchResult
+  selection?: string
+}) {
+  const selectedWinnerKey = resolveKnockoutMatchWinner(match, result).winner?.key ?? selection
+
+  return (
+    <div
+      className="h-full overflow-hidden rounded-md border border-[#2a5c46] bg-[#111820] px-1.5 py-1 shadow-[inset_0_0_0_1px_rgba(127,240,178,0.05)]"
+      data-world-cup-share-bracket-card={`M${match.slot}`}
+    >
+      <div className="mb-0.5 flex items-center justify-between gap-1 text-[7px] font-black uppercase leading-none tracking-[0.08em] text-[#6f7d8b]">
+        <span>Partido {match.slot}</span>
       </div>
+      <WorldCupBracketShareTeamRow
+        match={match}
+        side="home"
+        locale={locale}
+        result={result}
+        selected={selectedWinnerKey === match.home.key}
+      />
+      <WorldCupBracketShareTeamRow
+        match={match}
+        side="away"
+        locale={locale}
+        result={result}
+        selected={selectedWinnerKey === match.away.key}
+      />
+    </div>
+  )
+}
 
-      <WorldCupSimulatedStandings group={group} locale={locale} />
+function WorldCupBracketShareTeamRow({
+  match,
+  side,
+  locale,
+  result,
+  selected,
+}: {
+  match: WorldCupBracketMatch
+  side: TeamSide
+  locale: AppLocale
+  result?: WorldCupBracketMatchResult
+  selected: boolean
+}) {
+  const team = match[side]
+  const displayName = getDisplayTeamName(team, locale)
+  const sideResult = getResultForSide(match, side, result)
+
+  return (
+    <div className={`grid h-[13px] grid-cols-[14px_minmax(0,1fr)_30px] items-center gap-1 rounded px-0.5 ${
+      selected ? 'bg-[#143624] text-[#7ff0b2]' : 'text-[#edf2f7]'
+    }`}>
+      <TeamLogo
+        src={team.logo}
+        alt={displayName}
+        size={12}
+        className="h-3 w-3 object-contain"
+        fallbackClassName="h-3 w-2.5"
+        unoptimized
+      />
+      <span className={`truncate text-[9px] font-bold leading-none ${team.placeholder ? 'text-[#98a5b3]' : ''}`} title={displayName}>
+        {displayName}
+      </span>
+      <span className="text-right text-[10px] font-black leading-none">
+        {formatScore(sideResult.goals, sideResult.penalties)}
+      </span>
     </div>
   )
 }
