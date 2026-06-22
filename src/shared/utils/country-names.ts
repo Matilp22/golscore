@@ -72,6 +72,7 @@ const COUNTRY_CODE_BY_NAME: Record<string, CountryCode> = {
   curazao: 'CW',
   cyprus: 'CY',
   czechia: 'CZ',
+  chequia: 'CZ',
   'czech republic': 'CZ',
   denmark: 'DK',
   dinamarca: 'DK',
@@ -83,6 +84,8 @@ const COUNTRY_CODE_BY_NAME: Record<string, CountryCode> = {
   'dr congo': 'CD',
   'congo dr': 'CD',
   'congo kinshasa': 'CD',
+  'republica democratica del congo': 'CD',
+  'rep democratica del congo': 'CD',
   estonia: 'EE',
   france: 'FR',
   francia: 'FR',
@@ -339,6 +342,15 @@ export function translateCountryName(
   if (locale === 'es') return FALLBACK_COUNTRY_NAMES_ES[key] ?? normalized
 
   return normalized
+}
+
+export function getCountryCodeForName(country: string | null | undefined) {
+  const normalized = normalizeCountryName(country)
+  if (!normalized) return ''
+
+  const key = normalizeKey(normalized)
+
+  return COUNTRY_CODE_BY_NAME[key] ?? ''
 }
 
 export function translateCountryNameToSpanish(country: string | null | undefined) {

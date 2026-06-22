@@ -174,6 +174,8 @@ const requiredStaticSignals = [
   'SHARE_BRACKET_ROW_UNIT_PX = 8',
   'data-world-cup-share-bracket-card',
   'getShareTeamMark',
+  'getCountryCodeForName',
+  'SHARE_FLAG_SVG_BY_CODE',
   'TrashIcon',
   'Borrar resultado simulado',
   'WorldCupScoreInput',

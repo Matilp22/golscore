@@ -43,7 +43,7 @@ import {
   type WorldCupSimulatedStandingRow,
 } from '@/shared/utils/world-cup-bracket-simulator'
 import { WORLD_CUP_GROUP_KEYS, type WorldCupGroupKey } from '@/shared/utils/world-cup-groups'
-import { translateCountryName } from '@/shared/utils/country-names'
+import { getCountryCodeForName, translateCountryName } from '@/shared/utils/country-names'
 import type { AppLocale } from '@/shared/i18n/locales'
 
 type WorldCupKnockoutSectionProps = {
@@ -1388,6 +1388,7 @@ function WorldCupBracketShareTeamRow({
   const displayName = getDisplayTeamName(team, locale)
   const sideResult = getResultForSide(match, side, result)
   const teamMark = getShareTeamMark(displayName, team.placeholder)
+  const flagBackground = getShareFlagBackground(displayName, team.placeholder)
 
   return (
     <div className={`grid h-[13px] grid-cols-[14px_minmax(0,1fr)_30px] items-center gap-1 rounded px-0.5 ${
@@ -1395,13 +1396,16 @@ function WorldCupBracketShareTeamRow({
     }`}>
       <span
         aria-hidden="true"
-        className={`grid h-3 w-3 place-items-center rounded-[3px] border text-[5px] font-black leading-none ${
-          team.placeholder
+        className={`grid h-3 w-3 place-items-center rounded-[3px] border text-[9px] font-black leading-none ${
+          flagBackground
+            ? 'border-white/20 bg-cover bg-center text-transparent'
+            : team.placeholder
             ? 'border-[#5c6875] bg-[#1b2530] text-[#9aa7b5]'
             : 'border-[#2a5c46] bg-[#132019] text-[#7ff0b2]'
         }`}
+        style={flagBackground ? { backgroundImage: flagBackground } : undefined}
       >
-        {teamMark}
+        {flagBackground ? '' : teamMark}
       </span>
       <span className={`truncate text-[9px] font-bold leading-none ${team.placeholder ? 'text-[#98a5b3]' : ''}`} title={displayName}>
         {displayName}
@@ -1428,6 +1432,60 @@ function getShareTeamMark(displayName: string, placeholder: boolean) {
     .join('')
 
   return letters || displayName.slice(0, 1).toUpperCase() || '?'
+}
+
+function getShareFlagBackground(displayName: string, placeholder: boolean) {
+  if (placeholder) return null
+
+  const code = getCountryCodeForName(displayName)
+  const svg = code ? SHARE_FLAG_SVG_BY_CODE[code] : null
+
+  return svg ? `url("data:image/svg+xml,${encodeURIComponent(svg)}")` : null
+}
+
+const flagSvg = (body: string, viewBox = '0 0 24 16') =>
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}">${body}</svg>`
+
+const horizontalFlag = (...colors: string[]) =>
+  flagSvg(colors.map((color, index) => `<path fill="${color}" d="M0 ${index * (16 / colors.length)}h24v${16 / colors.length}H0z"/>`).join(''))
+
+const verticalFlag = (...colors: string[]) =>
+  flagSvg(colors.map((color, index) => `<path fill="${color}" d="M${index * (24 / colors.length)} 0h${24 / colors.length}v16H${index * (24 / colors.length)}z"/>`).join(''))
+
+const SHARE_FLAG_SVG_BY_CODE: Record<string, string> = {
+  AR: flagSvg('<path fill="#75aadb" d="M0 0h24v16H0z"/><path fill="#fff" d="M0 5.33h24v5.34H0z"/><circle cx="12" cy="8" r="1.4" fill="#f6c343"/>'),
+  AT: horizontalFlag('#c8102e', '#fff', '#c8102e'),
+  AU: flagSvg('<path fill="#012169" d="M0 0h24v16H0z"/><path stroke="#fff" stroke-width="1.5" d="m1 1 8 5M9 1 1 6"/><path stroke="#c8102e" stroke-width=".8" d="m1 1 8 5M9 1 1 6"/><path fill="#fff" d="M15 4l.5 1.4H17l-1.2.8.5 1.3-1.3-.8-1.2.8.4-1.3-1.1-.8h1.4z"/>'),
+  BE: verticalFlag('#000', '#ffd90c', '#ef3340'),
+  BR: flagSvg('<path fill="#009b3a" d="M0 0h24v16H0z"/><path fill="#ffdf00" d="m12 2 9 6-9 6-9-6z"/><circle cx="12" cy="8" r="3" fill="#002776"/>'),
+  CA: flagSvg('<path fill="#d52b1e" d="M0 0h6v16H0zm18 0h6v16h-6z"/><path fill="#fff" d="M6 0h12v16H6z"/><path fill="#d52b1e" d="m12 3 1 3h2l-1.8 1.2.8 3-2-1.6-2 1.6.8-3L9 6h2z"/>'),
+  CD: flagSvg('<path fill="#007fff" d="M0 0h24v16H0z"/><path stroke="#f7d618" stroke-width="5" d="M-2 18 26-2"/><path stroke="#ce1021" stroke-width="3" d="M-2 18 26-2"/>'),
+  CH: flagSvg('<path fill="#d52b1e" d="M0 0h24v16H0z"/><path fill="#fff" d="M10 3h4v10h-4z"/><path fill="#fff" d="M7 6h10v4H7z"/>'),
+  CI: verticalFlag('#f77f00', '#fff', '#009e60'),
+  CO: flagSvg('<path fill="#fcd116" d="M0 0h24v8H0z"/><path fill="#003893" d="M0 8h24v4H0z"/><path fill="#ce1126" d="M0 12h24v4H0z"/>'),
+  CV: flagSvg('<path fill="#003893" d="M0 0h24v16H0z"/><path fill="#fff" d="M0 8h24v3H0z"/><path fill="#cf2027" d="M0 9h24v1H0z"/><circle cx="8" cy="7" r="1.2" fill="#f7d116"/>'),
+  CZ: flagSvg('<path fill="#fff" d="M0 0h24v8H0z"/><path fill="#d7141a" d="M0 8h24v8H0z"/><path fill="#11457e" d="M0 0 12 8 0 16z"/>'),
+  DE: horizontalFlag('#000', '#dd0000', '#ffce00'),
+  EC: flagSvg('<path fill="#fcd116" d="M0 0h24v8H0z"/><path fill="#003893" d="M0 8h24v4H0z"/><path fill="#ce1126" d="M0 12h24v4H0z"/><circle cx="12" cy="8" r="1" fill="#7a4a20"/>'),
+  EG: horizontalFlag('#ce1126', '#fff', '#000'),
+  ES: flagSvg('<path fill="#aa151b" d="M0 0h24v16H0z"/><path fill="#f1bf00" d="M0 4h24v8H0z"/>'),
+  FR: verticalFlag('#0055a4', '#fff', '#ef4135'),
+  GB: flagSvg('<path fill="#012169" d="M0 0h24v16H0z"/><path stroke="#fff" stroke-width="4" d="m0 0 24 16M24 0 0 16"/><path stroke="#c8102e" stroke-width="2" d="m0 0 24 16M24 0 0 16"/><path stroke="#fff" stroke-width="6" d="M12 0v16M0 8h24"/><path stroke="#c8102e" stroke-width="3" d="M12 0v16M0 8h24"/>'),
+  'GB-ENG': flagSvg('<path fill="#fff" d="M0 0h24v16H0z"/><path fill="#ce1126" d="M10 0h4v16h-4zM0 6h24v4H0z"/>'),
+  'GB-SCT': flagSvg('<path fill="#005eb8" d="M0 0h24v16H0z"/><path stroke="#fff" stroke-width="4" d="M0 0 24 16M24 0 0 16"/>'),
+  GH: flagSvg('<path fill="#ce1126" d="M0 0h24v5.33H0z"/><path fill="#fcd116" d="M0 5.33h24v5.34H0z"/><path fill="#006b3f" d="M0 10.67h24V16H0z"/><path fill="#000" d="m12 6.2.6 1.2 1.3.2-1 .9.3 1.3-1.2-.7-1.2.7.3-1.3-1-.9 1.3-.2z"/>'),
+  IR: horizontalFlag('#239f40', '#fff', '#da0000'),
+  JP: flagSvg('<path fill="#fff" d="M0 0h24v16H0z"/><circle cx="12" cy="8" r="4" fill="#bc002d"/>'),
+  KR: flagSvg('<path fill="#fff" d="M0 0h24v16H0z"/><circle cx="12" cy="8" r="3.2" fill="#c60c30"/><path fill="#003478" d="M8.8 8a3.2 3.2 0 0 0 6.4 0 1.6 1.6 0 0 1-3.2 0 1.6 1.6 0 0 0-3.2 0z"/><path stroke="#111" stroke-width=".8" d="M4 3h4M4 5h4M16 3h4M16 5h4M4 11h4M4 13h4M16 11h4M16 13h4"/>'),
+  MA: flagSvg('<path fill="#c1272d" d="M0 0h24v16H0z"/><path fill="none" stroke="#006233" stroke-width="1" d="m12 4 1.1 2.8 3 .2-2.3 1.9.8 2.9-2.6-1.6-2.6 1.6.8-2.9L7.9 7l3-.2z"/>'),
+  MX: flagSvg('<path fill="#006341" d="M0 0h8v16H0z"/><path fill="#fff" d="M8 0h8v16H8z"/><path fill="#ce1126" d="M16 0h8v16h-8z"/><circle cx="12" cy="8" r="1.2" fill="#8c6b2f"/>'),
+  NL: horizontalFlag('#ae1c28', '#fff', '#21468b'),
+  NO: flagSvg('<path fill="#ba0c2f" d="M0 0h24v16H0z"/><path fill="#fff" d="M6 0h4v16H6zM0 6h24v4H0z"/><path fill="#00205b" d="M7 0h2v16H7zM0 7h24v2H0z"/>'),
+  PT: flagSvg('<path fill="#006600" d="M0 0h10v16H0z"/><path fill="#ff0000" d="M10 0h14v16H10z"/><circle cx="10" cy="8" r="1.5" fill="#ffcc00"/>'),
+  PY: horizontalFlag('#d52b1e', '#fff', '#0038a8'),
+  SE: flagSvg('<path fill="#006aa7" d="M0 0h24v16H0z"/><path fill="#fecc00" d="M7 0h3v16H7zM0 6h24v3H0z"/>'),
+  US: flagSvg('<path fill="#b22234" d="M0 0h24v16H0z"/><path stroke="#fff" stroke-width="1.23" d="M0 1.23h24M0 3.69h24M0 6.15h24M0 8.61h24M0 11.07h24M0 13.53h24"/><path fill="#3c3b6e" d="M0 0h10v8.6H0z"/>'),
+  UY: flagSvg('<path fill="#fff" d="M0 0h24v16H0z"/><path stroke="#0038a8" stroke-width="1.7" d="M0 4h24M0 7.5h24M0 11h24M0 14.5h24"/><circle cx="4" cy="4" r="2" fill="#fcd116"/>'),
 }
 
 function WorldCupGroupSimulator({
