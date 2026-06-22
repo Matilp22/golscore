@@ -8,6 +8,7 @@ import CopaArgentinaMatchList from '@/frontend/components/CopaArgentinaMatchList
 import GroupStageGrid from '@/frontend/components/GroupStage'
 import LeaderListInteractive from '@/frontend/components/LeaderListInteractive'
 import TournamentChampionsButton from '@/frontend/components/TournamentChampionsButton'
+import WorldCupKnockoutSection from '@/frontend/components/WorldCupKnockoutSection'
 import {
   ConmebolFixtureAgenda,
   ConmebolKnockoutBracket,
@@ -3041,6 +3042,16 @@ export default async function LigaPage({ params }: PageProps) {
                   })}
                 />
 
+                {isWorldCupTournament ? (
+                  <WorldCupKnockoutSection
+                    groups={primaryGroups}
+                    fixtures={fixtures}
+                    leagueExternalId={resolvedTournament?.leagueId ?? null}
+                    season={resolvedTournament?.season ?? 2026}
+                    locale={locale}
+                  />
+                ) : null}
+
                 {knockoutRounds.length ? (
                   <BracketView
                     rounds={knockoutRounds}
@@ -3096,6 +3107,16 @@ export default async function LigaPage({ params }: PageProps) {
                 No hay tabla de posiciones disponible para este torneo.
               </p>
             </SectionCard>
+          ) : null}
+
+          {isWorldCupTournament && (!shouldRenderStandings || !displayPrimaryGroups.length) ? (
+            <WorldCupKnockoutSection
+              groups={primaryGroups}
+              fixtures={fixtures}
+              leagueExternalId={resolvedTournament?.leagueId ?? null}
+              season={resolvedTournament?.season ?? 2026}
+              locale={locale}
+            />
           ) : null}
 
           {visibleSecondaryGroups.length ? (

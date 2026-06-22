@@ -11,6 +11,8 @@ type ShareCardButtonProps = {
   title: string
   text: string
   url: string
+  ariaLabel?: string
+  buttonTitle?: string
 }
 
 function openExternal(url: string) {
@@ -23,6 +25,8 @@ export default function ShareCardButton({
   title,
   text,
   url,
+  ariaLabel = 'Compartir',
+  buttonTitle = 'Compartir',
 }: ShareCardButtonProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [localMessage, setLocalMessage] = useState('')
@@ -66,8 +70,8 @@ export default function ShareCardButton({
           setIsOpen((current) => !current)
         }}
         className="hf-button-secondary inline-flex h-10 w-10 items-center justify-center rounded-xl text-[#dce7f2] transition hover:text-white"
-        aria-label="Compartir"
-        title="Compartir"
+        aria-label={ariaLabel}
+        title={buttonTitle}
       >
         <svg
           aria-hidden="true"
