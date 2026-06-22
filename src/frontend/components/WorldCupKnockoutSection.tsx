@@ -1387,19 +1387,22 @@ function WorldCupBracketShareTeamRow({
   const team = match[side]
   const displayName = getDisplayTeamName(team, locale)
   const sideResult = getResultForSide(match, side, result)
+  const teamMark = getShareTeamMark(displayName, team.placeholder)
 
   return (
     <div className={`grid h-[13px] grid-cols-[14px_minmax(0,1fr)_30px] items-center gap-1 rounded px-0.5 ${
       selected ? 'bg-[#143624] text-[#7ff0b2]' : 'text-[#edf2f7]'
     }`}>
-      <TeamLogo
-        src={team.logo}
-        alt={displayName}
-        size={12}
-        className="h-3 w-3 object-contain"
-        fallbackClassName="h-3 w-2.5"
-        unoptimized
-      />
+      <span
+        aria-hidden="true"
+        className={`grid h-3 w-3 place-items-center rounded-[3px] border text-[5px] font-black leading-none ${
+          team.placeholder
+            ? 'border-[#5c6875] bg-[#1b2530] text-[#9aa7b5]'
+            : 'border-[#2a5c46] bg-[#132019] text-[#7ff0b2]'
+        }`}
+      >
+        {teamMark}
+      </span>
       <span className={`truncate text-[9px] font-bold leading-none ${team.placeholder ? 'text-[#98a5b3]' : ''}`} title={displayName}>
         {displayName}
       </span>
@@ -1408,6 +1411,23 @@ function WorldCupBracketShareTeamRow({
       </span>
     </div>
   )
+}
+
+function getShareTeamMark(displayName: string, placeholder: boolean) {
+  if (placeholder) return '?'
+
+  const letters = displayName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Za-z0-9\s]/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('')
+
+  return letters || displayName.slice(0, 1).toUpperCase() || '?'
 }
 
 function WorldCupGroupSimulator({

@@ -173,6 +173,7 @@ const requiredStaticSignals = [
   'SHARE_BRACKET_MATCH_ROW_SPAN = 5',
   'SHARE_BRACKET_ROW_UNIT_PX = 8',
   'data-world-cup-share-bracket-card',
+  'getShareTeamMark',
   'TrashIcon',
   'Borrar resultado simulado',
   'WorldCupScoreInput',
@@ -261,6 +262,16 @@ if (component.includes('Limpiar')) {
 
 if (component.includes('world-cup-simulation-share-group')) {
   fail('The simulation share target must always export the full bracket, not a selected group.')
+}
+
+const shareTeamRowStart = component.indexOf('function WorldCupBracketShareTeamRow')
+const shareTeamRowEnd = component.indexOf('function getShareTeamMark')
+const shareTeamRowSource = shareTeamRowStart >= 0 && shareTeamRowEnd > shareTeamRowStart
+  ? component.slice(shareTeamRowStart, shareTeamRowEnd)
+  : ''
+
+if (shareTeamRowSource.includes('<TeamLogo')) {
+  fail('The World Cup share snapshot must not depend on external image assets.')
 }
 
 if (/WorldCupSimulatedStandings[\s\S]*overflow-x-auto/.test(component)) {
