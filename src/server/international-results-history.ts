@@ -1,8 +1,12 @@
 import {
   buildHeadToHeadViewModel,
+  createEmptyHeadToHeadViewModel,
   createHeadToHeadCacheKey,
+  type HeadToHeadViewModel,
   type HeadToHeadTeam,
 } from '@/server/head-to-head'
+import type { MatchFixture } from '@/lib/api-football'
+import { pickTeamLogoUrl } from '@/shared/utils/asset-urls'
 
 const INTERNATIONAL_RESULTS_URL =
   'https://raw.githubusercontent.com/martj42/international_results/master/results.csv'
@@ -11,6 +15,8 @@ const INTERNATIONAL_RESULTS_SOURCE = {
   url: INTERNATIONAL_RESULTS_URL,
   license: 'CC0-1.0',
 }
+
+let cachedInternationalResultsHistoryPromise: Promise<InternationalResultRow[]> | null = null
 
 type InternationalResultRow = {
   date: string
@@ -187,6 +193,17 @@ export async function fetchInternationalResultsHistory() {
   }
 
   return parseInternationalResultsCsv(await response.text())
+}
+
+export async function fetchCachedInternationalResultsHistory() {
+  if (!cachedInternationalResultsHistoryPromise) {
+    cachedInternationalResultsHistoryPromise = fetchInternationalResultsHistory().catch((error) => {
+      cachedInternationalResultsHistoryPromise = null
+      throw error
+    })
+  }
+
+  return cachedInternationalResultsHistoryPromise
 }
 
 function getYearFromDate(date: string) {
@@ -468,4 +485,64 @@ export function getInternationalResultsCacheKey(homeTeam: HeadToHeadTeam, awayTe
   if (!homeTeam.externalId || !awayTeam.externalId) return null
 
   return createHeadToHeadCacheKey(homeTeam.externalId, awayTeam.externalId)
+}
+
+function toNullableNumber(value: unknown) {
+  if (value === null || value === undefined || String(value).trim() === '') return null
+
+  const parsed = Number(value)
+
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function getFixtureHeadToHeadTeam(
+  team: MatchFixture['teams']['home'],
+  fallbackName: string
+): HeadToHeadTeam {
+  const externalId = toNullableNumber(team.id)
+
+  return {
+    externalId,
+    name: team.name?.trim() || fallbackName,
+    logoUrl: pickTeamLogoUrl(team.logo_url ?? team.logoUrl ?? team.logo, externalId),
+  }
+}
+
+export async function buildInternationalResultsHeadToHeadForFixture(
+  fixture: MatchFixture
+): Promise<HeadToHeadViewModel> {
+  const homeTeam = getFixtureHeadToHeadTeam(fixture.teams.home, 'Local')
+  const awayTeam = getFixtureHeadToHeadTeam(fixture.teams.away, 'Visitante')
+
+  if (!homeTeam.externalId) {
+    return createEmptyHeadToHeadViewModel('missing_home_external_id')
+  }
+
+  if (!awayTeam.externalId) {
+    return createEmptyHeadToHeadViewModel('missing_away_external_id')
+  }
+
+  const cacheKey = createHeadToHeadCacheKey(homeTeam.externalId, awayTeam.externalId)
+  const rows = await fetchCachedInternationalResultsHistory()
+  const fixtures = getInternationalResultsForPair({
+    rows,
+    homeTeam,
+    awayTeam,
+  })
+  const payload = mergeInternationalResultsIntoHeadToHeadPayload({
+    payload: null,
+    fixtures,
+  })
+
+  return buildHeadToHeadViewModel({
+    currentMatch: {
+      fixtureExternalId: fixture.fixture.id,
+      date: fixture.fixture.date ?? null,
+    },
+    rawFixtures: payload,
+    perspectiveHomeTeam: homeTeam,
+    perspectiveAwayTeam: awayTeam,
+    cacheKey,
+    cacheExists: false,
+  })
 }

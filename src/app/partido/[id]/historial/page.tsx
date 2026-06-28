@@ -202,7 +202,7 @@ export default async function MatchHistoryPage({ params }: PageProps) {
               </div>
             ) : (
               <div className="px-4 py-6 text-sm text-[#8d98a7]">
-                No hay enfrentamientos previos cargados en Supabase para estos equipos.
+                No hay enfrentamientos previos registrados para estos equipos.
               </div>
             )}
           </section>

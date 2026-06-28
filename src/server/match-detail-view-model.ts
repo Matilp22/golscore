@@ -32,6 +32,7 @@ import {
   getCachedHeadToHeadForFixture,
   type HeadToHeadViewModel,
 } from '@/server/head-to-head'
+import { buildInternationalResultsHeadToHeadForFixture } from '@/server/international-results-history'
 
 type MatchDetailPayload = Awaited<ReturnType<typeof readMatchDetailFromSupabase>>
 
@@ -473,18 +474,61 @@ export async function buildMatchDetailViewModel(input: BuildMatchDetailViewModel
 
   if (!viewModel.fixture) return viewModel
 
+  let cachedHeadToHead: HeadToHeadViewModel
+
   try {
+    cachedHeadToHead = await getCachedHeadToHeadForFixture(viewModel.fixture)
+  } catch (error) {
+    cachedHeadToHead = createEmptyHeadToHeadViewModel('cache_empty', {
+      errors: [error instanceof Error ? error.message : 'No se pudo leer historial.'],
+    })
+  }
+
+  if (cachedHeadToHead.matches.length) {
     return {
       ...viewModel,
-      headToHead: await getCachedHeadToHeadForFixture(viewModel.fixture),
+      headToHead: cachedHeadToHead,
+    }
+  }
+
+  try {
+    const internationalHeadToHead = await buildInternationalResultsHeadToHeadForFixture(
+      viewModel.fixture
+    )
+
+    if (internationalHeadToHead.matches.length) {
+      return {
+        ...viewModel,
+        headToHead: {
+          ...internationalHeadToHead,
+          warnings: [
+            ...cachedHeadToHead.warnings,
+            ...internationalHeadToHead.warnings,
+          ],
+          errors: cachedHeadToHead.errors,
+        },
+      }
     }
   } catch (error) {
     return {
       ...viewModel,
-      headToHead: createEmptyHeadToHeadViewModel('cache_empty', {
-        errors: [error instanceof Error ? error.message : 'No se pudo leer historial.'],
-      }),
+      headToHead: {
+        ...cachedHeadToHead,
+        warnings: [
+          ...cachedHeadToHead.warnings,
+          'international_results_unavailable',
+        ],
+        errors: [
+          ...cachedHeadToHead.errors,
+          error instanceof Error ? error.message : 'No se pudo leer historial internacional.',
+        ],
+      },
     }
+  }
+
+  return {
+    ...viewModel,
+    headToHead: cachedHeadToHead,
   }
 }
 

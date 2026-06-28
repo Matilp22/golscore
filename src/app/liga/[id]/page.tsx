@@ -9,6 +9,7 @@ import GroupStageGrid from '@/frontend/components/GroupStage'
 import LeaderListInteractive from '@/frontend/components/LeaderListInteractive'
 import TournamentChampionsButton from '@/frontend/components/TournamentChampionsButton'
 import WorldCupKnockoutSection from '@/frontend/components/WorldCupKnockoutSection'
+import WorldCupScrollReset from '@/frontend/components/WorldCupScrollReset'
 import {
   ConmebolFixtureAgenda,
   ConmebolKnockoutBracket,
@@ -3074,6 +3075,7 @@ export default async function LigaPage({ params }: PageProps) {
 
   return (
     <div className="min-h-screen bg-transparent text-white">
+      {isWorldCupTournament ? <WorldCupScrollReset /> : null}
       <div className="w-full max-w-none px-0 py-3 lg:mx-auto lg:max-w-7xl lg:px-5 lg:py-6">
         <main className="w-full min-w-0 space-y-4">
           <header
