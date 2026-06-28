@@ -273,6 +273,7 @@ type BracketMatchCard = {
   id: string | number
   rowStart: number
   bracketPosition: number
+  officialSlot?: number | null
   date?: string | null
   participants: [BracketParticipant, BracketParticipant]
   homePenaltyScore?: number | null
@@ -395,11 +396,15 @@ function applyWinnerToMatch(match: BracketMatchCard, winnerKey?: string | null):
   }
 }
 
-function toBracketMatch(fixture: LeagueFixtureSummary): BracketMatchCard {
+function toBracketMatch(
+  fixture: LeagueFixtureSummary,
+  officialSlot: number | null = null
+): BracketMatchCard {
   return {
     id: fixture.id,
     rowStart: 1,
     bracketPosition: 0,
+    officialSlot,
     date: fixture.date,
     homePenaltyScore: fixture.homePenaltyScore ?? null,
     awayPenaltyScore: fixture.awayPenaltyScore ?? null,
@@ -420,14 +425,39 @@ function toBracketMatch(fixture: LeagueFixtureSummary): BracketMatchCard {
   }
 }
 
-function sortBracketMatchesByDate(matches: BracketMatchCard[]) {
-  return [...matches].sort((a, b) => {
-    const dateA = getFixtureTimestamp(a.date)
-    const dateB = getFixtureTimestamp(b.date)
-    if (dateA !== dateB) return dateA - dateB
+function compareBracketMatchesByDate(a: BracketMatchCard, b: BracketMatchCard) {
+  const dateA = getFixtureTimestamp(a.date)
+  const dateB = getFixtureTimestamp(b.date)
+  if (dateA !== dateB) return dateA - dateB
 
-    if (typeof a.id === 'number' && typeof b.id === 'number') return a.id - b.id
-    return String(a.id).localeCompare(String(b.id))
+  if (typeof a.id === 'number' && typeof b.id === 'number') return a.id - b.id
+  return String(a.id).localeCompare(String(b.id))
+}
+
+function sortBracketMatchesByDate(matches: BracketMatchCard[]) {
+  return [...matches].sort(compareBracketMatchesByDate)
+}
+
+function sortBracketMatchesForStage(
+  stageKey: BracketStageKey,
+  matches: BracketMatchCard[],
+  visualOrderByStage?: BracketVisualOrderByStage
+) {
+  const visualOrder = visualOrderByStage?.[stageKey]
+  if (!visualOrder?.length) return sortBracketMatchesByDate(matches)
+
+  const visualIndexBySlot = new Map(visualOrder.map((slot, index) => [slot, index]))
+
+  return [...matches].sort((a, b) => {
+    const aIndex = a.officialSlot ? visualIndexBySlot.get(a.officialSlot) : undefined
+    const bIndex = b.officialSlot ? visualIndexBySlot.get(b.officialSlot) : undefined
+    const aHasVisualIndex = aIndex !== undefined
+    const bHasVisualIndex = bIndex !== undefined
+
+    if (aHasVisualIndex && bHasVisualIndex && aIndex !== bIndex) return aIndex - bIndex
+    if (aHasVisualIndex !== bHasVisualIndex) return aHasVisualIndex ? -1 : 1
+
+    return compareBracketMatchesByDate(a, b)
   })
 }
 
@@ -445,14 +475,159 @@ type EmptyBracketConfig = {
   firstStageMatchesCount?: number
 }
 
-function groupBracketMatchesByStage(fixtures: LeagueFixtureSummary[]) {
+type BracketVisualOrderByStage = Partial<Record<BracketStageKey, number[]>>
+
+type WorldCupTeamSeed = {
+  kind: 'winner' | 'runnerUp' | 'third'
+  groupKey: string
+}
+
+type WorldCupSeedRule =
+  | { kind: 'winner' | 'runnerUp'; groupKey: string }
+  | { kind: 'third'; candidates: string[] }
+
+const WORLD_CUP_OFFICIAL_BRACKET_VISUAL_ORDER: BracketVisualOrderByStage = {
+  r32: [73, 75, 74, 77, 83, 84, 81, 82, 76, 78, 79, 80, 86, 88, 85, 87],
+  r16: [89, 90, 93, 94, 91, 92, 95, 96],
+  qf: [97, 98, 99, 100],
+  sf: [101, 102],
+  final: [104],
+}
+
+const WORLD_CUP_R32_SLOT_RULES: Array<{
+  slot: number
+  home: WorldCupSeedRule
+  away: WorldCupSeedRule
+}> = [
+  { slot: 73, home: { kind: 'runnerUp', groupKey: 'A' }, away: { kind: 'runnerUp', groupKey: 'B' } },
+  { slot: 74, home: { kind: 'winner', groupKey: 'E' }, away: { kind: 'third', candidates: ['A', 'B', 'C', 'D', 'F'] } },
+  { slot: 75, home: { kind: 'winner', groupKey: 'F' }, away: { kind: 'runnerUp', groupKey: 'C' } },
+  { slot: 76, home: { kind: 'winner', groupKey: 'C' }, away: { kind: 'runnerUp', groupKey: 'F' } },
+  { slot: 77, home: { kind: 'winner', groupKey: 'I' }, away: { kind: 'third', candidates: ['C', 'D', 'F', 'G', 'H'] } },
+  { slot: 78, home: { kind: 'runnerUp', groupKey: 'E' }, away: { kind: 'runnerUp', groupKey: 'I' } },
+  { slot: 79, home: { kind: 'winner', groupKey: 'A' }, away: { kind: 'third', candidates: ['C', 'E', 'F', 'H', 'I'] } },
+  { slot: 80, home: { kind: 'winner', groupKey: 'L' }, away: { kind: 'third', candidates: ['E', 'H', 'I', 'J', 'K'] } },
+  { slot: 81, home: { kind: 'winner', groupKey: 'D' }, away: { kind: 'third', candidates: ['B', 'E', 'F', 'I', 'J'] } },
+  { slot: 82, home: { kind: 'winner', groupKey: 'G' }, away: { kind: 'third', candidates: ['A', 'E', 'H', 'I', 'J'] } },
+  { slot: 83, home: { kind: 'runnerUp', groupKey: 'K' }, away: { kind: 'runnerUp', groupKey: 'L' } },
+  { slot: 84, home: { kind: 'winner', groupKey: 'H' }, away: { kind: 'runnerUp', groupKey: 'J' } },
+  { slot: 85, home: { kind: 'winner', groupKey: 'B' }, away: { kind: 'third', candidates: ['E', 'F', 'G', 'I', 'J'] } },
+  { slot: 86, home: { kind: 'winner', groupKey: 'J' }, away: { kind: 'runnerUp', groupKey: 'H' } },
+  { slot: 87, home: { kind: 'winner', groupKey: 'K' }, away: { kind: 'third', candidates: ['D', 'E', 'I', 'J', 'L'] } },
+  { slot: 88, home: { kind: 'runnerUp', groupKey: 'D' }, away: { kind: 'runnerUp', groupKey: 'G' } },
+]
+
+function getWorldCupSeedKind(rank: number): WorldCupTeamSeed['kind'] | null {
+  if (rank === 1) return 'winner'
+  if (rank === 2) return 'runnerUp'
+  if (rank === 3) return 'third'
+  return null
+}
+
+function buildWorldCupTeamSeedIndex(groups: LeagueStandingGroup[]) {
+  const index = new Map<string, WorldCupTeamSeed>()
+
+  for (const group of groups) {
+    const groupKey = getGroupKeyFromText(group.name)
+    if (!groupKey) continue
+
+    const rows = [...group.rows].sort((a, b) => {
+      const rankA = a.rank || Number.MAX_SAFE_INTEGER
+      const rankB = b.rank || Number.MAX_SAFE_INTEGER
+      if (rankA !== rankB) return rankA - rankB
+      return a.teamName.localeCompare(b.teamName, 'es-AR')
+    })
+
+    rows.forEach((row, indexInGroup) => {
+      const kind = getWorldCupSeedKind(row.rank || indexInGroup + 1)
+      if (!kind) return
+
+      for (const key of getTeamLookupKeys(row.teamId, row.teamName)) {
+        index.set(key, { kind, groupKey })
+      }
+    })
+  }
+
+  return index
+}
+
+function getFixtureSideWorldCupSeed(
+  fixture: LeagueFixtureSummary,
+  side: 'home' | 'away',
+  seedIndex: Map<string, WorldCupTeamSeed>
+) {
+  const teamId = side === 'home' ? fixture.homeId : fixture.awayId
+  const teamName = side === 'home' ? fixture.home : fixture.away
+
+  for (const key of getTeamLookupKeys(teamId, teamName)) {
+    const seed = seedIndex.get(key)
+    if (seed) return seed
+  }
+
+  return null
+}
+
+function worldCupSeedMatchesRule(seed: WorldCupTeamSeed | null, rule: WorldCupSeedRule) {
+  if (!seed || seed.kind !== rule.kind) return false
+
+  return rule.kind === 'third'
+    ? rule.candidates.includes(seed.groupKey)
+    : seed.groupKey === rule.groupKey
+}
+
+function getWorldCupRoundOf32OfficialSlot(
+  fixture: LeagueFixtureSummary,
+  seedIndex: Map<string, WorldCupTeamSeed>
+) {
+  const homeSeed = getFixtureSideWorldCupSeed(fixture, 'home', seedIndex)
+  const awaySeed = getFixtureSideWorldCupSeed(fixture, 'away', seedIndex)
+
+  for (const rule of WORLD_CUP_R32_SLOT_RULES) {
+    const direct =
+      worldCupSeedMatchesRule(homeSeed, rule.home) &&
+      worldCupSeedMatchesRule(awaySeed, rule.away)
+    const swapped =
+      worldCupSeedMatchesRule(homeSeed, rule.away) &&
+      worldCupSeedMatchesRule(awaySeed, rule.home)
+
+    if (direct || swapped) return rule.slot
+  }
+
+  return null
+}
+
+function buildWorldCupOfficialSlotByFixtureId(
+  rounds: ReturnType<typeof buildKnockoutRounds>,
+  groups: LeagueStandingGroup[]
+) {
+  const seedIndex = buildWorldCupTeamSeedIndex(groups)
+  if (!seedIndex.size) return new Map<string, number>()
+
+  const slotByFixtureId = new Map<string, number>()
+
+  for (const round of rounds) {
+    if (getBracketStageKey(round.round) !== 'r32') continue
+
+    for (const fixture of round.matches) {
+      const slot = getWorldCupRoundOf32OfficialSlot(fixture, seedIndex)
+      if (slot) slotByFixtureId.set(String(fixture.id), slot)
+    }
+  }
+
+  return slotByFixtureId
+}
+
+function groupBracketMatchesByStage(
+  fixtures: LeagueFixtureSummary[],
+  officialSlotByFixtureId?: Map<string, number>
+) {
   const groupedByStage = new Map<BracketStageKey, BracketMatchCard[]>()
   for (const fixture of fixtures) {
     const stageKey = getBracketStageKey(fixture.round)
     if (!stageKey) continue
 
     const current = groupedByStage.get(stageKey) || []
-    current.push(toBracketMatch(fixture))
+    current.push(toBracketMatch(fixture, officialSlotByFixtureId?.get(String(fixture.id)) ?? null))
     groupedByStage.set(stageKey, current)
   }
 
@@ -679,9 +854,14 @@ function buildBracketColumns(fixtures: LeagueFixtureSummary[]): BracketColumn[] 
 
 function buildGenericBracketColumns(
   fixtures: LeagueFixtureSummary[],
-  options: { advanceWinners?: boolean; emptyBracket?: EmptyBracketConfig } = {}
+  options: {
+    advanceWinners?: boolean
+    emptyBracket?: EmptyBracketConfig
+    officialSlotByFixtureId?: Map<string, number>
+    visualOrderByStage?: BracketVisualOrderByStage
+  } = {}
 ): BracketColumn[] {
-  const groupedByStage = groupBracketMatchesByStage(fixtures)
+  const groupedByStage = groupBracketMatchesByStage(fixtures, options.officialSlotByFixtureId)
   const actualStageKeys = BRACKET_STAGE_ORDER.filter((stageKey) => groupedByStage.has(stageKey))
   const firstStageKey = actualStageKeys[0] ?? options.emptyBracket?.firstStageKey
   if (!firstStageKey) return []
@@ -699,7 +879,11 @@ function buildGenericBracketColumns(
   let previousStageMatches: BracketMatchCard[] | undefined
 
   return stageKeys.map((stageKey, stageIndex) => {
-    const actualMatches = sortBracketMatchesByDate(groupedByStage.get(stageKey) || [])
+    const actualMatches = sortBracketMatchesForStage(
+      stageKey,
+      groupedByStage.get(stageKey) || [],
+      options.visualOrderByStage
+    )
     const expectedMatchesCount = Math.max(1, Math.ceil(firstStageMatchesCount / 2 ** stageIndex))
     const columnMatches = [
       ...actualMatches.map((match, matchIndex) => ({
@@ -2307,6 +2491,8 @@ function BracketView({
   useCopaArgentinaTree = false,
   advanceGenericWinners = false,
   emptyBracket,
+  officialSlotByFixtureId,
+  visualOrderByStage,
   locale = 'es',
   translateTeamNames = false,
 }: {
@@ -2314,6 +2500,8 @@ function BracketView({
   useCopaArgentinaTree?: boolean
   advanceGenericWinners?: boolean
   emptyBracket?: EmptyBracketConfig
+  officialSlotByFixtureId?: Map<string, number>
+  visualOrderByStage?: BracketVisualOrderByStage
   locale?: AppLocale
   translateTeamNames?: boolean
 }) {
@@ -2325,10 +2513,12 @@ function BracketView({
   )
   const columns = useCopaArgentinaTree
     ? buildBracketColumns(bracketFixtures)
-    : buildGenericBracketColumns(bracketFixtures, {
-        advanceWinners: advanceGenericWinners,
-        emptyBracket,
-      })
+      : buildGenericBracketColumns(bracketFixtures, {
+          advanceWinners: advanceGenericWinners,
+          emptyBracket,
+          officialSlotByFixtureId,
+          visualOrderByStage,
+        })
 
   if (!columns.length) return null
 
@@ -2775,6 +2965,113 @@ export default async function LigaPage({ params }: PageProps) {
       ? `Temporada ${resolvedTournament.season}`
       : 'Buscando información del torneo'
 
+  const worldCupOfficialSlotByFixtureId = isWorldCupTournament
+    ? buildWorldCupOfficialSlotByFixtureId(knockoutRounds, displayPrimaryGroups)
+    : undefined
+  const groupStageCardsSection = showGroupStageCards && displayPrimaryGroups.length ? (
+    <GroupStageGrid
+      groups={displayPrimaryGroups.map((group, index) => {
+        const groupId = getGroupId(group)
+        const thirdPlaceTable = isThirdPlaceTableGroup(group, isWorldCupTournament)
+        const tableLegendItems = getTableLegendItems(
+          group.rows,
+          displayOptions.rule,
+          displayOptions.protected,
+          thirdPlaceTable
+        )
+
+        return {
+          id: `${groupId}-${index}`,
+          title: getDisplayGroupName(group.name, { thirdPlaceTable }),
+          table: (
+            <>
+              <StandingsTable
+                rows={group.rows}
+                compact
+                fitNarrow
+                rule={displayOptions.rule}
+                allowLegacyFallback={false}
+                preferConfiguredRules
+                thirdPlaceTable={thirdPlaceTable}
+                translateTeamNames={isWorldCupTournament}
+                locale={locale}
+              />
+              {tableLegendItems.length ? (
+                <TableLegend items={tableLegendItems} />
+              ) : null}
+            </>
+          ),
+          fixtures: thirdPlaceTable ? null : (
+            <GroupFixtures
+              fixtures={fixturesByGroup.get(groupId) || []}
+              locale={locale}
+              translateTeamNames={isWorldCupTournament}
+            />
+          ),
+        }
+      })}
+    />
+  ) : null
+  const worldCupBracketSection = isWorldCupTournament && (knockoutRounds.length || emptyBracket) ? (
+    <WorldCupKnockoutSection
+      groups={primaryGroups}
+      fixtures={fixtures}
+      leagueExternalId={resolvedTournament?.leagueId ?? null}
+      season={resolvedTournament?.season ?? 2026}
+      locale={locale}
+    >
+      <BracketView
+        rounds={knockoutRounds}
+        advanceGenericWinners
+        emptyBracket={emptyBracket}
+        officialSlotByFixtureId={worldCupOfficialSlotByFixtureId}
+        visualOrderByStage={WORLD_CUP_OFFICIAL_BRACKET_VISUAL_ORDER}
+        locale={locale}
+        translateTeamNames
+      />
+    </WorldCupKnockoutSection>
+  ) : null
+  const leaderStatsSection = (
+    <div className="grid gap-4 xl:grid-cols-2">
+      <LeaderListInteractive
+        title="Goleadores"
+        rows={scorers}
+        accentClass="text-[#7ff0b2]"
+        statType="scorers"
+        leagueId={resolvedTournament?.leagueId}
+        season={resolvedTournament?.season}
+        translateTeamNames={isWorldCupTournament}
+      />
+      <LeaderListInteractive
+        title="Asistencias"
+        rows={assists}
+        accentClass="text-sky-300"
+        statType="assists"
+        leagueId={resolvedTournament?.leagueId}
+        season={resolvedTournament?.season}
+        translateTeamNames={isWorldCupTournament}
+      />
+      <LeaderListInteractive
+        title="Tarjetas amarillas"
+        rows={yellowCards}
+        accentClass="text-[#f3d36c]"
+        statType="yellowCards"
+        leagueId={resolvedTournament?.leagueId}
+        season={resolvedTournament?.season}
+        translateTeamNames={isWorldCupTournament}
+      />
+      <LeaderListInteractive
+        title="Tarjetas rojas"
+        rows={redCards}
+        accentClass="text-[#ff8f8f]"
+        statType="redCards"
+        leagueId={resolvedTournament?.leagueId}
+        season={resolvedTournament?.season}
+        translateTeamNames={isWorldCupTournament}
+      />
+    </div>
+  )
+
   return (
     <div className="min-h-screen bg-transparent text-white">
       <div className="w-full max-w-none px-0 py-3 lg:mx-auto lg:max-w-7xl lg:px-5 lg:py-6">
@@ -2854,6 +3151,10 @@ export default async function LigaPage({ params }: PageProps) {
               </p>
             </SectionCard>
           ) : null}
+
+          {worldCupBracketSection}
+
+          {isWorldCupTournament ? leaderStatsSection : null}
 
           {isUefaLeaguePhaseTournament ? (
             <>
@@ -3006,74 +3307,19 @@ export default async function LigaPage({ params }: PageProps) {
 
           {!isUefaLeaguePhaseTournament && !showConmebolGroupStage && shouldRenderStandings && displayPrimaryGroups.length ? (
             showGroupStageCards ? (
-              <>
-                <GroupStageGrid
-                  groups={displayPrimaryGroups.map((group, index) => {
-                    const groupId = getGroupId(group)
-                    const thirdPlaceTable = isThirdPlaceTableGroup(group, isWorldCupTournament)
-                    const tableLegendItems = getTableLegendItems(
-                      group.rows,
-                      displayOptions.rule,
-                      displayOptions.protected,
-                      thirdPlaceTable
-                    )
+              isWorldCupTournament ? null : (
+                <>
+                  {groupStageCardsSection}
 
-                    return {
-                      id: `${groupId}-${index}`,
-                      title: getDisplayGroupName(group.name, { thirdPlaceTable }),
-                      table: (
-                        <>
-                          <StandingsTable
-                            rows={group.rows}
-                            compact
-                            fitNarrow
-                            rule={displayOptions.rule}
-                            allowLegacyFallback={false}
-                            preferConfiguredRules
-                            thirdPlaceTable={thirdPlaceTable}
-                            translateTeamNames={isWorldCupTournament}
-                            locale={locale}
-                          />
-                          {tableLegendItems.length ? (
-                            <TableLegend items={tableLegendItems} />
-                          ) : null}
-                        </>
-                      ),
-                      fixtures: thirdPlaceTable ? null : (
-                        <GroupFixtures
-                          fixtures={fixturesByGroup.get(groupId) || []}
-                          locale={locale}
-                          translateTeamNames={isWorldCupTournament}
-                        />
-                      ),
-                    }
-                  })}
-                />
-
-                {isWorldCupTournament && (knockoutRounds.length || emptyBracket) ? (
-                  <WorldCupKnockoutSection
-                    groups={primaryGroups}
-                    fixtures={fixtures}
-                    leagueExternalId={resolvedTournament?.leagueId ?? null}
-                    season={resolvedTournament?.season ?? 2026}
-                    locale={locale}
-                  >
-                    <BracketView
-                      rounds={knockoutRounds}
-                      advanceGenericWinners
-                      emptyBracket={emptyBracket}
-                      locale={locale}
-                      translateTeamNames
-                    />
-                  </WorldCupKnockoutSection>
-                ) : knockoutRounds.length ? (
+                  {knockoutRounds.length ? (
                   <BracketView
                     rounds={knockoutRounds}
                     locale={locale}
                     translateTeamNames={false}
                   />
-                ) : null}
-              </>
+                  ) : null}
+                </>
+              )
             ) : (
               <div className={compactGroups ? 'grid gap-4 md:grid-cols-2' : 'space-y-4'}>
                 {displayPrimaryGroups.map((group) => {
@@ -3121,24 +3367,6 @@ export default async function LigaPage({ params }: PageProps) {
                 No hay tabla de posiciones disponible para este torneo.
               </p>
             </SectionCard>
-          ) : null}
-
-          {isWorldCupTournament && (!shouldRenderStandings || !displayPrimaryGroups.length) && (knockoutRounds.length || emptyBracket) ? (
-            <WorldCupKnockoutSection
-              groups={primaryGroups}
-              fixtures={fixtures}
-              leagueExternalId={resolvedTournament?.leagueId ?? null}
-              season={resolvedTournament?.season ?? 2026}
-              locale={locale}
-            >
-              <BracketView
-                rounds={knockoutRounds}
-                advanceGenericWinners
-                emptyBracket={emptyBracket}
-                locale={locale}
-                translateTeamNames
-              />
-            </WorldCupKnockoutSection>
           ) : null}
 
           {visibleSecondaryGroups.length ? (
@@ -3217,44 +3445,9 @@ export default async function LigaPage({ params }: PageProps) {
             </div>
           ) : null}
 
-          <div className="grid gap-4 xl:grid-cols-2">
-            <LeaderListInteractive
-              title="Goleadores"
-              rows={scorers}
-              accentClass="text-[#7ff0b2]"
-              statType="scorers"
-              leagueId={resolvedTournament?.leagueId}
-              season={resolvedTournament?.season}
-              translateTeamNames={isWorldCupTournament}
-            />
-            <LeaderListInteractive
-              title="Asistencias"
-              rows={assists}
-              accentClass="text-sky-300"
-              statType="assists"
-              leagueId={resolvedTournament?.leagueId}
-              season={resolvedTournament?.season}
-              translateTeamNames={isWorldCupTournament}
-            />
-            <LeaderListInteractive
-              title="Tarjetas amarillas"
-              rows={yellowCards}
-              accentClass="text-[#f3d36c]"
-              statType="yellowCards"
-              leagueId={resolvedTournament?.leagueId}
-              season={resolvedTournament?.season}
-              translateTeamNames={isWorldCupTournament}
-            />
-            <LeaderListInteractive
-              title="Tarjetas rojas"
-              rows={redCards}
-              accentClass="text-[#ff8f8f]"
-              statType="redCards"
-              leagueId={resolvedTournament?.leagueId}
-              season={resolvedTournament?.season}
-              translateTeamNames={isWorldCupTournament}
-            />
-          </div>
+          {!isWorldCupTournament ? leaderStatsSection : null}
+
+          {isWorldCupTournament ? groupStageCardsSection : null}
         </main>
       </div>
     </div>
