@@ -689,10 +689,13 @@ function buildGenericBracketColumns(
   const stageKeys = getBracketStageKeysFrom(firstStageKey)
   if (!stageKeys.length) return []
 
-  const firstStageMatchesCount =
-    groupedByStage.get(stageKeys[0])?.length ||
-    options.emptyBracket?.firstStageMatchesCount ||
-    BRACKET_STAGE_MATCH_COUNTS[firstStageKey]
+  const actualFirstStageMatchesCount = groupedByStage.get(stageKeys[0])?.length ?? 0
+  const configuredFirstStageMatchesCount =
+    options.emptyBracket?.firstStageMatchesCount ?? BRACKET_STAGE_MATCH_COUNTS[firstStageKey]
+  const firstStageMatchesCount = Math.max(
+    actualFirstStageMatchesCount,
+    configuredFirstStageMatchesCount
+  )
   let previousStageMatches: BracketMatchCard[] | undefined
 
   return stageKeys.map((stageKey, stageIndex) => {
@@ -2712,6 +2715,11 @@ export default async function LigaPage({ params }: PageProps) {
           firstStageKey: 'r64',
           firstStageMatchesCount: 32,
         } satisfies EmptyBracketConfig
+      : tournament.key === 'selecciones-mundial'
+        ? {
+            firstStageKey: 'r32',
+            firstStageMatchesCount: 16,
+          } satisfies EmptyBracketConfig
       : undefined
   const shouldRenderKnockoutBracket =
     displayOptions.showBracket &&
@@ -2965,7 +2973,7 @@ export default async function LigaPage({ params }: PageProps) {
             <BracketView
               rounds={knockoutRounds}
               useCopaArgentinaTree={tournament.key === 'argentina-copa-argentina'}
-              advanceGenericWinners={tournament.key === 'argentina-liga-profesional'}
+              advanceGenericWinners={tournament.key === 'argentina-liga-profesional' || isWorldCupTournament}
               emptyBracket={emptyBracket}
               locale={locale}
               translateTeamNames={isWorldCupTournament}
