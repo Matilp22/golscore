@@ -9,6 +9,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "verify:public-reads": "node scripts/verify-public-read-boundaries.mjs",
+    "verify:content-quality": "node scripts/verify-content-quality.mjs",
     "verify:world-cup-bracket": "node scripts/verify-world-cup-bracket.mjs"
   },
   "dependencies": {

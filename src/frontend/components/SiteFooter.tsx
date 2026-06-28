@@ -5,9 +5,13 @@ import LanguageSelector from '@/frontend/components/LanguageSelector'
 import { t, type AppLocale } from '@/shared/i18n/locales'
 
 const legalLinks = [
-  { href: '/privacy-policy', labelKey: 'footer.privacy' },
-  { href: '/terms', labelKey: 'footer.terms' },
-  { href: '/contact', labelKey: 'footer.contact' },
+  { href: '/quienes-somos', label: 'Quienes somos' },
+  { href: '/politica-editorial', label: 'Politica editorial' },
+  { href: '/fuentes-y-metodologia', label: 'Fuentes y metodologia' },
+  { href: '/contacto', labelKey: 'footer.contact' },
+  { href: '/privacidad', labelKey: 'footer.privacy' },
+  { href: '/terminos', labelKey: 'footer.terms' },
+  { href: '/cookies', label: 'Cookies' },
 ] as const
 
 export default function SiteFooter({ locale }: { locale: AppLocale }) {
@@ -39,7 +43,7 @@ export default function SiteFooter({ locale }: { locale: AppLocale }) {
                   href={link.href}
                   className="rounded-xl border border-white/8 bg-white/[0.035] px-3 py-2 transition hover:border-[#70ff9d]/28 hover:bg-[#70ff9d]/10 hover:text-white"
                 >
-                  {t(locale, link.labelKey)}
+                  {'labelKey' in link ? t(locale, link.labelKey) : link.label}
                 </Link>
               ))}
             </nav>

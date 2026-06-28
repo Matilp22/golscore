@@ -12,7 +12,9 @@ import SidebarNav from '@/frontend/components/SidebarNav'
 import GoogleAdSlot from '@/frontend/components/ads/GoogleAdSlot'
 import TournamentAudioController from '@/frontend/components/TournamentAudioController'
 import { useAuth } from '@/frontend/hooks/useAuth'
+import { HEADER_ACTIONS } from '@/frontend/navigation/sidebar-navigation'
 import { SIDEBAR_SECTION_CONFIGS } from '@/lib/tournament-pages'
+import { shouldAllowAdsOnRoute } from '@/shared/content-quality'
 import {
   getSupabaseBrowserClient,
   signOut,
@@ -46,6 +48,14 @@ function DrawerChevron({ open }: { open: boolean }) {
       <path d="M5.5 7.5 10 12l4.5-4.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
+}
+
+function getHeaderActionClassName(accent: (typeof HEADER_ACTIONS)[number]['accent']) {
+  if (accent === 'simulator') {
+    return 'inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl border border-[#fff0a8] bg-[#f6d88a] px-2 py-2 text-[10px] font-black text-[#181104] shadow-[0_10px_28px_rgba(246,216,138,0.24)] transition hover:bg-[#ffe8a8] sm:px-4 sm:text-sm'
+  }
+
+  return 'hf-button inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl px-3 py-2 text-sm font-black sm:px-4'
 }
 
 function MobileAccountSection({
@@ -206,6 +216,7 @@ export default function AppShell({ auth, children, locale }: AppShellProps) {
   const pathname = usePathname()
   const isHome = pathname === '/'
   const isAdmin = pathname?.startsWith('/admin') ?? false
+  const allowAds = shouldAllowAdsOnRoute(pathname || '/')
 
   useEffect(() => {
     if (!isOpen) return
@@ -280,18 +291,15 @@ export default function AppShell({ auth, children, locale }: AppShellProps) {
           </div>
 
           <div className="ml-auto flex min-w-0 shrink-0 items-center justify-end gap-2">
-            <Link
-              href="/liga/selecciones-mundial#simulador-mundial"
-              className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl border border-[#fff0a8] bg-[#f6d88a] px-2 py-2 text-[10px] font-black text-[#181104] shadow-[0_10px_28px_rgba(246,216,138,0.24)] transition hover:bg-[#ffe8a8] sm:px-4 sm:text-sm"
-            >
-              Simulador Mundial
-            </Link>
-            <Link
-              href="/prode"
-              className="hf-button inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl px-3 py-2 text-sm font-black sm:px-4"
-            >
-              Prode
-            </Link>
+            {HEADER_ACTIONS.map((action) => (
+              <Link
+                key={action.key}
+                href={action.href}
+                className={getHeaderActionClassName(action.accent)}
+              >
+                {action.label}
+              </Link>
+            ))}
             <div className="hidden lg:block">
               {auth}
             </div>
@@ -322,26 +330,10 @@ export default function AppShell({ auth, children, locale }: AppShellProps) {
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-2">
-              <div className="mb-2">
+              {sidebar}
+              <div className="mt-2">
                 <MobileAccountSection locale={locale} onNavigate={() => setIsOpen(false)} />
               </div>
-              <div className="mb-2 grid gap-2">
-                <Link
-                  href="/liga/selecciones-mundial#simulador-mundial"
-                  onClick={() => setIsOpen(false)}
-                  className="flex min-h-11 items-center justify-center rounded-xl border border-[#fff0a8] bg-[#f6d88a] px-3 py-2 text-sm font-black text-[#181104] shadow-[0_12px_28px_rgba(246,216,138,0.22)] transition hover:bg-[#ffe8a8]"
-                >
-                  Simulador Mundial
-                </Link>
-                <Link
-                  href="/prode"
-                  onClick={() => setIsOpen(false)}
-                  className="flex min-h-11 items-center justify-center rounded-xl border border-[#70ff9d]/45 bg-[#70ff9d] px-3 py-2 text-sm font-black text-[#041008] shadow-[0_12px_28px_rgba(33,212,111,0.22)] transition hover:brightness-105"
-                >
-                  Prode
-                </Link>
-              </div>
-              {sidebar}
             </div>
           </aside>
         </div>
@@ -353,7 +345,7 @@ export default function AppShell({ auth, children, locale }: AppShellProps) {
         </aside>
         <div className="min-w-0">
           {children}
-          <GoogleAdSlot className="mt-4" />
+          {allowAds ? <GoogleAdSlot className="mt-4" /> : null}
         </div>
       </div>
       <SiteFooter locale={locale} />

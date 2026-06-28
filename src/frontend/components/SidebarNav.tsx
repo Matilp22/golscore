@@ -1,9 +1,14 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 
 import { useAuth } from '@/frontend/hooks/useAuth'
+import {
+  getSidebarNavigationItems,
+  type SidebarNavigationGroup,
+} from '@/frontend/navigation/sidebar-navigation'
 import {
   getFavoriteLeagueErrorInfo,
   getUserFavoriteLeagues,
@@ -70,6 +75,64 @@ function writeLocalFavorites(favorites: string[]) {
   window.localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favorites))
 }
 
+function getSectionContainerClassName({
+  compact,
+  accent,
+  isActive = false,
+}: {
+  compact: boolean
+  accent?: SidebarNavigationGroup['accent']
+  isActive?: boolean
+}) {
+  const radius = compact ? 'rounded-xl' : 'rounded-2xl'
+
+  if (accent === 'news') {
+    const colors = isActive
+      ? 'border-[#4f8d9a]/45 bg-[#10282b]'
+      : 'border-[#355b6a]/45 bg-[#0b171d]'
+
+    return `overflow-hidden border shadow-[0_8px_24px_rgba(0,0,0,0.14)] ${colors} ${radius}`
+  }
+
+  if (accent === 'transfers') {
+    const colors = isActive
+      ? 'border-[#8c7444]/50 bg-[#2c2314]'
+      : 'border-[#6f5526]/45 bg-[#1c160d]'
+
+    return `overflow-hidden border shadow-[0_8px_24px_rgba(0,0,0,0.14)] ${colors} ${radius}`
+  }
+
+  return `overflow-hidden border border-[#70ff9d]/10 bg-[#0b1412]/90 shadow-[0_8px_24px_rgba(0,0,0,0.14)] ${radius}`
+}
+
+function getSectionTriggerClassName({
+  compact,
+  accent,
+  isActive = false,
+}: {
+  compact: boolean
+  accent?: SidebarNavigationGroup['accent']
+  isActive?: boolean
+}) {
+  const base = `flex w-full min-w-0 items-center justify-between gap-2 text-left transition ${
+    compact ? 'px-3 py-2' : 'px-3.5 py-2.5'
+  }`
+
+  if (accent === 'news') {
+    return isActive
+      ? `${base} !text-white hover:bg-[#4f8d9a]/12`
+      : `${base} !text-white hover:bg-[#4f8d9a]/10`
+  }
+
+  if (accent === 'transfers') {
+    return isActive
+      ? `${base} !text-white hover:bg-[#8c7444]/12`
+      : `${base} !text-white hover:bg-[#8c7444]/10`
+  }
+
+  return `${base} hover:bg-[#70ff9d]/10`
+}
+
 export default function SidebarNav({
   sections,
   highlightedTournamentKeys = [],
@@ -78,6 +141,7 @@ export default function SidebarNav({
   onNavigate,
 }: SidebarNavProps) {
   const { user } = useAuth()
+  const pathname = usePathname()
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({})
   const [favoriteKeys, setFavoriteKeys] = useState<string[]>([])
   const [remoteFavoriteUserId, setRemoteFavoriteUserId] = useState<string | null>(null)
@@ -193,9 +257,10 @@ export default function SidebarNav({
 
   function renderTournament(tournament: TournamentPageConfig) {
     const isFavorite = favoriteKeys.includes(tournament.key)
-    const isHighlighted = highlighted.has(tournament.key)
-    const linkClassName = 'min-w-0 flex-1 truncate px-2.5 py-2 text-sm'
     const href = `/liga/${tournament.key}`
+    const isCurrentTournament = pathname === href || pathname?.startsWith(`${href}/`)
+    const isHighlighted = highlighted.has(tournament.key) || Boolean(isCurrentTournament)
+    const linkClassName = 'min-w-0 flex-1 truncate px-2.5 py-2 text-sm'
     const tournamentTitle = getTournamentDisplayName(tournament.key, tournament.title, locale)
 
     return (
@@ -222,28 +287,67 @@ export default function SidebarNav({
     )
   }
 
-  const allSections = [
-    {
-      key: 'favorites',
-      title: t(locale, 'nav.favorites'),
-      tournaments: favoriteTournaments,
-      isFavorites: true,
-    },
-    ...visibleSections.map((section) => ({ ...section, isFavorites: false })),
-  ]
+  const navigationItems = getSidebarNavigationItems({
+    sections: visibleSections,
+    favoriteTournaments,
+    favoritesLabel: t(locale, 'nav.favorites'),
+  })
+
+  function isItemActive(item: SidebarNavigationGroup) {
+    if (item.type !== 'editorial') return false
+
+    return pathname === item.href || pathname?.startsWith(`${item.href}/`)
+  }
+
+  function renderEditorialItem(item: SidebarNavigationGroup) {
+    const isActive = isItemActive(item)
+
+    return (
+      <div
+        key={item.key}
+        className={getSectionContainerClassName({
+          compact,
+          accent: item.accent,
+          isActive,
+        })}
+      >
+        <Link
+          href={item.href}
+          onClick={onNavigate}
+          prefetch={false}
+          className={getSectionTriggerClassName({
+            compact,
+            accent: item.accent,
+            isActive,
+          })}
+          aria-current={isActive ? 'page' : undefined}
+        >
+          <span className="flex min-w-0 items-center gap-2 truncate text-sm font-semibold !text-white">
+            <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center !text-white">
+              {item.icon}
+            </span>
+            <span className="min-w-0 truncate !text-white">{item.label}</span>
+          </span>
+        </Link>
+      </div>
+    )
+  }
 
   return (
     <div className={compact ? 'space-y-1.5' : 'space-y-2'}>
-      {allSections.map((section) => {
-        const isOpen = openSections[section.key] ?? false
+      {navigationItems.map((item) => {
+        if (item.type === 'editorial') return renderEditorialItem(item)
+
+        const isOpen = openSections[item.key] ?? false
+        const isFavorites = item.type === 'favorite'
 
         return (
-          <div key={section.key} className={`overflow-hidden border border-[#70ff9d]/10 bg-[#0b1412]/90 shadow-[0_8px_24px_rgba(0,0,0,0.14)] ${compact ? 'rounded-xl' : 'rounded-2xl'}`}>
-            <button type="button" onClick={() => toggleSection(section.key)} className={`flex w-full min-w-0 items-center justify-between gap-2 text-left transition hover:bg-[#70ff9d]/10 ${compact ? 'px-3 py-2' : 'px-3.5 py-2.5'}`} aria-expanded={isOpen}>
+          <div key={item.key} className={getSectionContainerClassName({ compact })}>
+            <button type="button" onClick={() => toggleSection(item.key)} className={getSectionTriggerClassName({ compact })} aria-expanded={isOpen}>
               <span className="min-w-0 truncate text-sm font-semibold text-[#e4ebf3]">
-                {section.isFavorites
-                  ? section.title
-                  : getSectionDisplayName(section.key, section.title, locale)}
+                {isFavorites
+                  ? item.label
+                  : getSectionDisplayName(item.key, item.label, locale)}
               </span>
               <Chevron open={isOpen} />
             </button>
@@ -251,11 +355,11 @@ export default function SidebarNav({
             <div className="grid transition-[grid-template-rows,opacity] duration-200" style={{ gridTemplateRows: isOpen ? '1fr' : '0fr', opacity: isOpen ? 1 : 0 }}>
               <div className="overflow-hidden">
                 <div className="border-t border-white/6 px-2 pb-2 pt-1">
-                  {section.tournaments.length ? (
+                  {item.tournaments.length ? (
                     <div className={compact ? 'space-y-1' : 'space-y-1.5'}>
-                      {section.tournaments.map(renderTournament)}
+                      {item.tournaments.map(renderTournament)}
                     </div>
-                  ) : section.isFavorites ? (
+                  ) : isFavorites ? (
                     <p className="px-2 py-2 text-xs leading-5 text-[#8d98a7]">
                       {t(locale, 'nav.noFavorites')}
                     </p>

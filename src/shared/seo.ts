@@ -80,7 +80,7 @@ export function buildSeoMetadata({
     robots: noIndex
       ? {
           index: false,
-          follow: false,
+          follow: true,
         }
       : undefined,
   }
