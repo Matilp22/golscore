@@ -3050,21 +3050,27 @@ export default async function LigaPage({ params }: PageProps) {
                   })}
                 />
 
-                {isWorldCupTournament ? (
+                {isWorldCupTournament && (knockoutRounds.length || emptyBracket) ? (
                   <WorldCupKnockoutSection
                     groups={primaryGroups}
                     fixtures={fixtures}
                     leagueExternalId={resolvedTournament?.leagueId ?? null}
                     season={resolvedTournament?.season ?? 2026}
                     locale={locale}
-                  />
-                ) : null}
-
-                {knockoutRounds.length ? (
+                  >
+                    <BracketView
+                      rounds={knockoutRounds}
+                      advanceGenericWinners
+                      emptyBracket={emptyBracket}
+                      locale={locale}
+                      translateTeamNames
+                    />
+                  </WorldCupKnockoutSection>
+                ) : knockoutRounds.length ? (
                   <BracketView
                     rounds={knockoutRounds}
                     locale={locale}
-                    translateTeamNames={isWorldCupTournament}
+                    translateTeamNames={false}
                   />
                 ) : null}
               </>
@@ -3117,14 +3123,22 @@ export default async function LigaPage({ params }: PageProps) {
             </SectionCard>
           ) : null}
 
-          {isWorldCupTournament && (!shouldRenderStandings || !displayPrimaryGroups.length) ? (
+          {isWorldCupTournament && (!shouldRenderStandings || !displayPrimaryGroups.length) && (knockoutRounds.length || emptyBracket) ? (
             <WorldCupKnockoutSection
               groups={primaryGroups}
               fixtures={fixtures}
               leagueExternalId={resolvedTournament?.leagueId ?? null}
               season={resolvedTournament?.season ?? 2026}
               locale={locale}
-            />
+            >
+              <BracketView
+                rounds={knockoutRounds}
+                advanceGenericWinners
+                emptyBracket={emptyBracket}
+                locale={locale}
+                translateTeamNames
+              />
+            </WorldCupKnockoutSection>
           ) : null}
 
           {visibleSecondaryGroups.length ? (

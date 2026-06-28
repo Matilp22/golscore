@@ -8,6 +8,7 @@ import {
   type ChangeEvent,
   type ClipboardEvent,
   type FocusEvent,
+  type ReactNode,
   type WheelEvent,
 } from 'react'
 
@@ -52,6 +53,7 @@ type WorldCupKnockoutSectionProps = {
   leagueExternalId?: number | null
   season?: number | null
   locale?: AppLocale
+  children?: ReactNode
 }
 
 type StoredSimulatorState = {
@@ -2060,8 +2062,10 @@ export default function WorldCupKnockoutSection({
   leagueExternalId,
   season = 2026,
   locale = 'es',
+  children,
 }: WorldCupKnockoutSectionProps) {
   const [activeTab, setActiveTab] = useState<WorldCupKnockoutTab>(getInitialWorldCupKnockoutTab)
+  const useExternalOfficialView = Boolean(children)
 
   useEffect(() => {
     const syncHashTab = () => {
@@ -2075,6 +2079,67 @@ export default function WorldCupKnockoutSection({
 
     return () => window.removeEventListener('hashchange', syncHashTab)
   }, [])
+
+  const officialView = children ?? (
+    <WorldCupOfficialBracket
+      groups={groups}
+      fixtures={fixtures}
+      locale={locale}
+    />
+  )
+  const simulatorView = (
+    <WorldCupKnockoutSimulator
+      groups={groups}
+      fixtures={fixtures}
+      leagueExternalId={leagueExternalId}
+      season={season}
+      locale={locale}
+    />
+  )
+
+  if (useExternalOfficialView) {
+    return (
+      <section id="simulador-mundial" className="w-full scroll-mt-20 space-y-3">
+        <div className="hf-card overflow-hidden rounded-3xl border border-white/7 bg-[#13181d] p-2">
+          <div className="flex items-center justify-between gap-2" role="tablist" aria-label="Llaves Copa del Mundo 2026">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'official'}
+              onClick={() => setActiveTab('official')}
+              className={`min-h-10 flex-1 rounded-xl border px-3 text-sm font-black transition sm:max-w-[160px] ${
+                activeTab === 'official'
+                  ? 'border-[#7ff0b2]/65 bg-[#143624] text-[#7ff0b2]'
+                  : 'border-white/8 bg-[#0d1217] text-[#8d98a7] hover:text-white'
+              }`}
+            >
+              Llaves
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'simulator'}
+              onClick={() => setActiveTab('simulator')}
+              className={`min-h-10 flex-1 rounded-xl border px-3 text-sm font-black transition sm:max-w-[160px] ${
+                activeTab === 'simulator'
+                  ? 'border-[#7ff0b2]/65 bg-[#143624] text-[#7ff0b2]'
+                  : 'border-white/8 bg-[#0d1217] text-[#8d98a7] hover:text-white'
+              }`}
+            >
+              Simulador
+            </button>
+          </div>
+        </div>
+        {activeTab === 'official' ? (
+          officialView
+        ) : (
+          <div className="hf-card overflow-hidden rounded-3xl p-3">
+            {simulatorView}
+          </div>
+        )}
+      </section>
+    )
+  }
 
   return (
     <section id="simulador-mundial" className="hf-card w-full scroll-mt-20 overflow-hidden rounded-3xl">
@@ -2109,21 +2174,7 @@ export default function WorldCupKnockoutSection({
         </div>
       </div>
       <div className="p-3">
-        {activeTab === 'official' ? (
-          <WorldCupOfficialBracket
-            groups={groups}
-            fixtures={fixtures}
-            locale={locale}
-          />
-        ) : (
-          <WorldCupKnockoutSimulator
-            groups={groups}
-            fixtures={fixtures}
-            leagueExternalId={leagueExternalId}
-            season={season}
-            locale={locale}
-          />
-        )}
+        {activeTab === 'official' ? officialView : simulatorView}
       </div>
     </section>
   )
