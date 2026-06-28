@@ -1231,6 +1231,23 @@ function buildNextRound(
   }
 }
 
+function mergeOfficialMatchesIntoRound(
+  baseRound: WorldCupBracketRound,
+  officialMatches: WorldCupBracketMatch[]
+): WorldCupBracketRound {
+  if (!officialMatches.length) return baseRound
+
+  const officialBySlot = new Map(officialMatches.map((match) => [match.slot, match]))
+  const mergedMatches = baseRound.matches.map((match) => officialBySlot.get(match.slot) ?? match)
+  const baseSlots = new Set(baseRound.matches.map((match) => match.slot))
+  const extraOfficialMatches = officialMatches.filter((match) => !baseSlots.has(match.slot))
+
+  return {
+    ...baseRound,
+    matches: [...mergedMatches, ...extraOfficialMatches],
+  }
+}
+
 export function getSelectedWinner(
   match: WorldCupBracketMatch | undefined,
   selections: WorldCupBracketWinnerSelection
@@ -1618,21 +1635,13 @@ export function buildWorldCupOfficialBracket(
       .sort(compareLeagueFixturesByStableSlot)
       .map((fixture, index) => toOfficialBracketMatch(fixture, roundKey, baseSlot + index))
 
-    if (officialMatches.length) {
-      rounds.push({
-        key: roundKey,
-        label: ROUND_LABELS[roundKey],
-        matches: officialMatches,
-      })
-      continue
-    }
-
     if (roundKey === 'r32') {
-      rounds.push(projected.rounds[0])
+      rounds.push(mergeOfficialMatchesIntoRound(projected.rounds[0], officialMatches))
       continue
     }
 
-    rounds.push(buildNextRound(rounds[rounds.length - 1], roundKey, {}, true))
+    const baseRound = buildNextRound(rounds[rounds.length - 1], roundKey, {}, true)
+    rounds.push(mergeOfficialMatchesIntoRound(baseRound, officialMatches))
   }
 
   const semiFinalRound = rounds.find((round) => round.key === 'sf')

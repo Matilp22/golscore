@@ -401,6 +401,25 @@ function makeFixture(id, groupKey, groupIndex, homeIndex, awayIndex, statusShort
   }
 }
 
+function makeKnockoutFixture(id, slot, home, away) {
+  return {
+    id,
+    round: 'Round of 32',
+    bracket_slot: slot,
+    date: `2026-06-${String(Math.min(30, slot - 45)).padStart(2, '0')}T18:00:00.000Z`,
+    statusShort: 'NS',
+    minute: null,
+    home,
+    homeId: slot * 10 + 1,
+    away,
+    awayId: slot * 10 + 2,
+    homeLogo: `/logos/${slot}-home.png`,
+    awayLogo: `/logos/${slot}-away.png`,
+    goalsHome: null,
+    goalsAway: null,
+  }
+}
+
 function makeFixturesAndResults() {
   const fixtures = []
   const results = {}
@@ -518,6 +537,23 @@ function runFunctionalChecks() {
   expectPlaceholderSources('sf', 101, 97, 98)
   expectPlaceholderSources('sf', 102, 99, 100)
   expectPlaceholderSources('final', 104, 101, 102)
+
+  const partialOfficialBracket = utilModule.buildWorldCupOfficialBracket(groups, [
+    makeKnockoutFixture(2001, 73, 'Sudafrica', 'Canada'),
+    makeKnockoutFixture(2002, 74, 'Brasil', 'Japon'),
+    makeKnockoutFixture(2003, 75, 'Paises Bajos', 'Marruecos'),
+    makeKnockoutFixture(2004, 76, 'Alemania', 'Paraguay'),
+  ])
+  const partialOfficialR32 = partialOfficialBracket.rounds.find((round) => round.key === 'r32')
+  const partialOfficialR16 = partialOfficialBracket.rounds.find((round) => round.key === 'r16')
+  const partialOfficialSlot73 = partialOfficialR32?.matches.find((match) => match.slot === 73)
+  const partialProjectedSlot77 = partialOfficialR32?.matches.find((match) => match.slot === 77)
+
+  assert(partialOfficialR32?.matches.length === 16, 'Functional check: partial official round-of-32 fixtures must not truncate the bracket.')
+  assert(partialOfficialR16?.matches.length === 8, 'Functional check: partial official round-of-32 fixtures must still feed eight round-of-16 placeholders.')
+  assert(partialOfficialSlot73?.fixtureId === 2001, 'Functional check: official fixture M73 should override projected slot M73.')
+  assert(partialProjectedSlot77?.fixtureId === undefined, 'Functional check: missing official M77 should stay as projected bracket slot, not disappear.')
+
   assert(
     bracket.thirdPlace?.slot === 103 &&
       bracket.thirdPlace.home.name === 'Perdedor Semifinal 101' &&
