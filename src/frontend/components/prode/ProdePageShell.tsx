@@ -1,6 +1,10 @@
+'use client'
+
 import Image from 'next/image'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
+import { useState } from 'react'
+import GlobalSearch from '@/frontend/components/global/GlobalSearch'
 
 type ProdePageShellProps = {
   title: string
@@ -132,6 +136,9 @@ export default function ProdePageShell({
   action,
   secondaryAction,
 }: ProdePageShellProps) {
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
+
   return (
     <div className="hf-prode-shell">
       <aside className="hf-prode-sidebar">
@@ -154,7 +161,12 @@ export default function ProdePageShell({
 
       <main className="hf-prode-main">
         <header className="hf-prode-header">
-          <button type="button" className="hf-prode-icon-button lg:hidden" aria-label="Abrir menu">
+          <button
+            type="button"
+            className="hf-prode-icon-button lg:hidden"
+            aria-label="Abrir menu"
+            onClick={() => setIsMenuOpen(true)}
+          >
             <Icon name="menu" />
           </button>
           <Link href="/" className="hf-prode-mobile-logo lg:hidden" aria-label="Hay Fulbo inicio">
@@ -169,7 +181,12 @@ export default function ProdePageShell({
             <Link href="/prode/torneos" className="hf-prode-pill">Torneos</Link>
             <Link href="/liga/selecciones-mundial" className="hf-prode-pill">Mundial</Link>
           </div>
-          <button type="button" className="hf-prode-icon-button" aria-label="Buscar">
+          <button
+            type="button"
+            className="hf-prode-icon-button"
+            aria-label="Buscar"
+            onClick={() => setIsSearchOpen(true)}
+          >
             <Icon name="search" />
           </button>
         </header>
@@ -211,6 +228,40 @@ export default function ProdePageShell({
           </Link>
         ))}
       </nav>
+
+      {isMenuOpen ? (
+        <div className="hf-prode-mobile-menu lg:hidden">
+          <button
+            type="button"
+            className="hf-prode-mobile-menu-backdrop"
+            aria-label="Cerrar menu"
+            onClick={() => setIsMenuOpen(false)}
+          />
+          <div className="hf-prode-mobile-menu-panel">
+            <div className="hf-prode-mobile-menu-head">
+              <Image src={HF_LOGO_SRC} alt="Hay Fulbo" width={134} height={91} priority className="h-auto w-[86px]" />
+              <button type="button" onClick={() => setIsMenuOpen(false)} aria-label="Cerrar menu">
+                x
+              </button>
+            </div>
+            <nav aria-label="Menu Prode mobile">
+              {prodeNavItems.map((item) => (
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  className={item.active ? 'is-active' : ''}
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  <Icon name={item.icon} className="h-5 w-5" />
+                  <span>{item.label}</span>
+                </Link>
+              ))}
+            </nav>
+          </div>
+        </div>
+      ) : null}
+
+      <GlobalSearch open={isSearchOpen} onOpenChange={setIsSearchOpen} />
     </div>
   )
 }

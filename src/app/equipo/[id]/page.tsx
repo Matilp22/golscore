@@ -1,5 +1,6 @@
 import SafeImage from '@/frontend/components/SafeImage'
 import { PlayerPhoto, TeamLogo } from '@/frontend/components/AssetImage'
+import FavoriteTeamButton from '@/frontend/components/favorites/FavoriteTeamButton'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { buildSeoMetadata } from '@/shared/seo'
@@ -319,6 +320,17 @@ export default async function EquipoPage({ params }: PageProps) {
             </div>
 
             <div className="grid gap-2 text-sm md:grid-cols-3">
+              <div className="flex items-center justify-start md:col-span-3 md:justify-end">
+                <FavoriteTeamButton
+                  team={{
+                    id: String(team.id || id),
+                    name: team.name,
+                    logoUrl: team.logo_url ?? team.logo ?? team.logoUrl ?? null,
+                    country: teamCountry,
+                    href: `/equipo/${team.id || id}`,
+                  }}
+                />
+              </div>
               <div className="rounded-xl border border-white/6 bg-black/20 px-2 py-2.5 md:px-3">
                 <p className="text-[11px] uppercase tracking-[0.14em] text-[#8d98a7]">Fundado</p>
                 <p className="mt-1 font-semibold text-white">{team.founded || 'No disponible'}</p>
