@@ -216,10 +216,16 @@ export default function AppShell({ auth, children, locale }: AppShellProps) {
   const pathname = usePathname()
   const isHome = pathname === '/'
   const isAdmin = pathname?.startsWith('/admin') ?? false
+  const isWorldCupRedesign = pathname === '/liga/selecciones-mundial'
+  const isProdeRedesign = pathname?.startsWith('/prode') ?? false
+  const isStandaloneExperience = isWorldCupRedesign || isProdeRedesign
   const allowAds = shouldAllowAdsOnRoute(pathname || '/')
 
   useEffect(() => {
-    if (!isOpen) return
+    if (!isOpen || isStandaloneExperience) {
+      if (isStandaloneExperience) document.body.style.overflow = ''
+      return
+    }
 
     function handleKeydown(event: KeyboardEvent) {
       if (event.key === 'Escape') setIsOpen(false)
@@ -232,7 +238,7 @@ export default function AppShell({ auth, children, locale }: AppShellProps) {
       document.body.style.overflow = ''
       document.removeEventListener('keydown', handleKeydown)
     }
-  }, [isOpen])
+  }, [isOpen, isStandaloneExperience])
 
   if (isAdmin) {
     return (
@@ -241,6 +247,16 @@ export default function AppShell({ auth, children, locale }: AppShellProps) {
           {children}
         </main>
         <SiteFooter locale={locale} />
+      </LocaleProvider>
+    )
+  }
+
+  if (isStandaloneExperience) {
+    return (
+      <LocaleProvider locale={locale}>
+        <AppAudioPreferenceBridge />
+        <TournamentAudioController />
+        {children}
       </LocaleProvider>
     )
   }
