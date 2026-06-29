@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Analytics } from '@vercel/analytics/next'
 import AppShell from '@/frontend/components/AppShell'
+import PageScrollRestoration from '@/frontend/components/PageScrollRestoration'
 import PwaInstallPrompt from '@/frontend/components/PwaInstallPrompt'
 import AuthStatus from '@/frontend/components/auth/AuthStatus'
 import GoogleAdSense from '@/frontend/components/ads/GoogleAdSense'
@@ -74,6 +75,7 @@ export default async function RootLayout({
   return (
     <html lang={locale} className="h-full antialiased">
       <body className="flex min-h-full flex-col bg-[#06100d] text-white">
+        <PageScrollRestoration />
         <AppShell auth={<AuthStatus />} locale={locale}>
           {children}
         </AppShell>
