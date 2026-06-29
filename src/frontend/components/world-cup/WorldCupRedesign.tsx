@@ -62,6 +62,7 @@ type IconName =
   | 'pin'
 
 const HF_LOGO_SRC = '/brand/hf-logo.png'
+const WORLD_CUP_TROPHY_SRC = '/brand/competitions/world-cup-trophy-cutout.png'
 const TODAY_FIXTURE_LIMIT = 4
 
 const sidebarItems: Array<{ label: string; href: string; icon: IconName; active?: boolean; badge?: string }> = [
@@ -87,10 +88,10 @@ const mobileQuickItems: Array<{ label: string; href: string; icon: IconName; act
 
 const mobileBottomItems: Array<{ label: string; href: string; icon: IconName; active?: boolean }> = [
   { label: 'Inicio', href: '/', icon: 'home', active: true },
-  { label: 'En vivo', href: '#partidos', icon: 'live' },
+  { label: 'Prode', href: '/prode', icon: 'trophy' },
   { label: 'Equipos', href: '#mundial-grupos', icon: 'shield' },
   { label: 'Posiciones', href: '#posiciones', icon: 'chart' },
-  { label: 'Prode', href: '/prode', icon: 'trophy' },
+  { label: 'En vivo', href: '#partidos', icon: 'live' },
 ]
 
 const tabs = ['Fase de grupos', 'Posiciones', 'Goleadores', 'Equipos', 'Sedes', 'Historia']
@@ -524,15 +525,20 @@ function WorldCupHero({ title, subtitle }: { title: string; subtitle: string }) 
         </div>
       </div>
 
-      <div className="hf-world-hero-mark" aria-hidden="true">2026</div>
+      <div className="hf-world-hero-mark" aria-hidden="true">
+        <span>20</span>
+        <span>26</span>
+      </div>
       <div className="hf-world-hero-brush" aria-hidden="true" />
       <div className="hf-world-hero-emblem" aria-hidden="true">
-        <span className="hf-world-hero-emblem-year">26</span>
-        <span className="hf-world-abstract-trophy">
-          <span className="hf-world-abstract-trophy-cup" />
-          <span className="hf-world-abstract-trophy-stem" />
-          <span className="hf-world-abstract-trophy-base" />
-        </span>
+        <Image
+          src={WORLD_CUP_TROPHY_SRC}
+          alt=""
+          width={167}
+          height={349}
+          priority
+          className="hf-world-hero-trophy"
+        />
       </div>
       <span className="sr-only">{title}</span>
     </section>

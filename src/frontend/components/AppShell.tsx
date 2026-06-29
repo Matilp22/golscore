@@ -93,7 +93,7 @@ const MOBILE_BOTTOM_ITEMS: Array<{
   opensFavorites?: boolean
 }> = [
   { key: 'home', label: 'Inicio', href: '/', icon: 'home' },
-  { key: 'matches', label: 'Partidos', href: '/#partidos', icon: 'ball' },
+  { key: 'prode', label: 'Prode', href: '/prode', icon: 'trophy' },
   { key: 'favorites', label: 'Favoritos', icon: 'star', opensFavorites: true },
   { key: 'news', label: 'Noticias', href: '/noticias', icon: 'news' },
   { key: 'profile', label: 'Perfil', href: '/perfil', icon: 'user' },
@@ -588,6 +588,8 @@ export default function AppShell({ auth, children, locale }: AppShellProps) {
               ? pathname === '/'
               : item.key === 'news'
                 ? pathname?.startsWith('/noticias')
+                : item.key === 'prode'
+                  ? pathname?.startsWith('/prode')
                 : item.key === 'profile'
                   ? pathname === '/perfil' || pathname === '/login'
                   : false
