@@ -73,6 +73,7 @@ type ShellIconName =
   | 'search'
   | 'bell'
   | 'user'
+  | 'more'
 
 const PRIMARY_NAV_ITEMS: Array<{ key: string; label: string; href: string; icon: ShellIconName }> = [
   { key: 'home', label: 'Inicio', href: '/', icon: 'home' },
@@ -91,12 +92,27 @@ const MOBILE_BOTTOM_ITEMS: Array<{
   href?: string
   icon: ShellIconName
   opensFavorites?: boolean
+  opensMore?: boolean
 }> = [
   { key: 'home', label: 'Inicio', href: '/', icon: 'home' },
   { key: 'prode', label: 'Prode', href: '/prode', icon: 'trophy' },
   { key: 'favorites', label: 'Favoritos', icon: 'star', opensFavorites: true },
+  { key: 'competitions', label: 'Competiciones', href: '/competiciones', icon: 'trophy' },
+  { key: 'more', label: 'Mas', icon: 'more', opensMore: true },
+]
+
+const MOBILE_MORE_ITEMS: Array<{
+  key: string
+  label: string
+  href: string
+  icon: ShellIconName
+  needsAuthRoute?: boolean
+}> = [
   { key: 'news', label: 'Noticias', href: '/noticias', icon: 'news' },
-  { key: 'profile', label: 'Perfil', href: '/perfil', icon: 'user' },
+  { key: 'matches', label: 'Partidos', href: '/#partidos', icon: 'ball' },
+  { key: 'stats', label: 'Estadisticas', href: '/estadisticas', icon: 'chart' },
+  { key: 'teams', label: 'Equipos', href: '/equipos', icon: 'shield' },
+  { key: 'profile', label: 'Perfil', href: '/perfil', icon: 'user', needsAuthRoute: true },
 ]
 
 function ShellIcon({ name, className = 'h-5 w-5' }: { name: ShellIconName; className?: string }) {
@@ -188,6 +204,14 @@ function ShellIcon({ name, className = 'h-5 w-5' }: { name: ShellIconName; class
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true" className={className}>
         <path {...common} d="M15 17H9m9-1v-4.5a6 6 0 0 0-12 0V16l-1.5 2h15L18 16Zm-4.2 4a2 2 0 0 1-3.6 0" />
+      </svg>
+    )
+  }
+
+  if (name === 'more') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" className={className}>
+        <path {...common} d="M5 12h.01M12 12h.01M19 12h.01" />
       </svg>
     )
   }
@@ -356,6 +380,7 @@ export default function AppShell({ auth, children, locale }: AppShellProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isFavoritesOpen, setIsFavoritesOpen] = useState(false)
+  const [isMoreOpen, setIsMoreOpen] = useState(false)
   const pathname = usePathname()
   const { user } = useAuth()
   const isHome = pathname === '/'
@@ -583,17 +608,48 @@ export default function AppShell({ auth, children, locale }: AppShellProps) {
         </div>
       ) : null}
 
+      {isMoreOpen ? (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/45"
+            aria-label="Cerrar mas opciones"
+            onClick={() => setIsMoreOpen(false)}
+          />
+          <div className="hf-mobile-favorites-panel hf-mobile-more-panel">
+            <div className="hf-mobile-favorites-head">
+              <strong>Mas secciones</strong>
+              <button type="button" onClick={() => setIsMoreOpen(false)} aria-label="Cerrar mas opciones">
+                x
+              </button>
+            </div>
+            <div className="hf-mobile-more-list">
+              {MOBILE_MORE_ITEMS.map((item) => (
+                <Link
+                  key={item.key}
+                  href={item.needsAuthRoute ? (user ? '/perfil' : '/login') : item.href}
+                  onClick={() => setIsMoreOpen(false)}
+                >
+                  <ShellIcon name={item.icon} />
+                  <span>{item.label}</span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <nav className="hf-mobile-bottom-nav lg:hidden" aria-label="Navegacion principal mobile">
         {MOBILE_BOTTOM_ITEMS.map((item) => {
           const active =
             item.key === 'home'
               ? pathname === '/'
-              : item.key === 'news'
-                ? pathname?.startsWith('/noticias')
+              : item.key === 'competitions'
+                ? pathname === '/competiciones' || (pathname?.startsWith('/seccion') ?? false)
                 : item.key === 'prode'
                   ? pathname?.startsWith('/prode')
-                : item.key === 'profile'
-                  ? pathname === '/perfil' || pathname === '/login'
+                : item.key === 'more'
+                  ? isMoreOpen
                   : false
 
           if (item.opensFavorites) {
@@ -601,8 +657,29 @@ export default function AppShell({ auth, children, locale }: AppShellProps) {
               <button
                 key={item.key}
                 type="button"
-                onClick={() => setIsFavoritesOpen(true)}
+                onClick={() => {
+                  setIsMoreOpen(false)
+                  setIsFavoritesOpen(true)
+                }}
                 aria-label="Abrir favoritos"
+              >
+                <ShellIcon name={item.icon} />
+                <span>{item.label}</span>
+              </button>
+            )
+          }
+
+          if (item.opensMore) {
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => {
+                  setIsFavoritesOpen(false)
+                  setIsMoreOpen(true)
+                }}
+                aria-label="Abrir mas secciones"
+                className={active ? 'is-active' : ''}
               >
                 <ShellIcon name={item.icon} />
                 <span>{item.label}</span>
@@ -613,7 +690,7 @@ export default function AppShell({ auth, children, locale }: AppShellProps) {
           return (
             <Link
               key={item.key}
-              href={item.key === 'profile' ? (user ? '/perfil' : '/login') : item.href || '/'}
+              href={item.href || '/'}
               className={active ? 'is-active' : ''}
               aria-current={active ? 'page' : undefined}
             >

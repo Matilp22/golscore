@@ -4,10 +4,11 @@ import type { ReactNode } from 'react'
 import { LeagueLogo, TeamLogo } from '@/frontend/components/AssetImage'
 import MatchReminderButton from '@/frontend/components/matches/MatchReminderButton'
 import SafeImage from '@/frontend/components/SafeImage'
-import type { MatchListItemWithGoalScorers } from '@/lib/api-football'
+import type { MatchGoalScorer, MatchListItemWithGoalScorers } from '@/lib/api-football'
 import { formatEditorialCategory } from '@/shared/editorial-format'
 import { t, type AppLocale } from '@/shared/i18n/locales'
 import { getTeamDisplayName } from '@/shared/utils/team-display'
+import { formatEventMinute } from '@/shared/utils/event-minute'
 import {
   isFinishedStatus,
   isLiveStatus,
@@ -163,18 +164,47 @@ function BroadcastPill({ match, compact = false }: { match: HfHomeMatch; compact
   )
 }
 
+function formatGoalScorer(goal: MatchGoalScorer) {
+  const suffix =
+    goal.kind === 'penalty'
+      ? ' pen.'
+      : goal.kind === 'own-goal'
+        ? ' e/c'
+        : ''
+
+  return `${goal.player} ${formatEventMinute(goal.minute, goal.extraMinute)}${suffix}`
+}
+
+function TeamScorers({
+  goals,
+  align = 'center',
+}: {
+  goals?: MatchGoalScorer[]
+  align?: 'left' | 'center' | 'right'
+}) {
+  if (!goals?.length) return null
+
+  return (
+    <small className={`hf-home-team-scorers is-${align}`}>
+      {goals.map(formatGoalScorer).join('; ')}
+    </small>
+  )
+}
+
 function TeamBlock({
   name,
   logo,
   league,
   country,
   locale,
+  scorers,
 }: {
   name: string
   logo?: string
   league: string
   country?: string
   locale: AppLocale
+  scorers?: MatchGoalScorer[]
 }) {
   const displayName = getTeamDisplayName({ name, league, country, locale })
 
@@ -188,6 +218,7 @@ function TeamBlock({
         fallbackClassName="h-11 w-10"
       />
       <span>{displayName}</span>
+      <TeamScorers goals={scorers} />
     </div>
   )
 }
@@ -215,6 +246,7 @@ function LiveMatchCard({ match, locale }: { match: HfHomeMatch; locale: AppLocal
           league={match.league}
           country={match.country}
           locale={locale}
+          scorers={match.goalScorers?.home}
         />
         <div className="hf-home-score-center">
           <strong>{centerValue}</strong>
@@ -228,6 +260,7 @@ function LiveMatchCard({ match, locale }: { match: HfHomeMatch; locale: AppLocal
           league={match.league}
           country={match.country}
           locale={locale}
+          scorers={match.goalScorers?.away}
         />
       </div>
 
@@ -261,7 +294,10 @@ function UpcomingMatchRow({ match, locale }: { match: HfHomeMatch; locale: AppLo
           <strong>{match.displayTime}</strong>
         </div>
         <div className="hf-home-upcoming-team is-home">
-          <span>{homeName}</span>
+          <div className="hf-home-upcoming-team-copy">
+            <span>{homeName}</span>
+            <TeamScorers goals={match.goalScorers?.home} align="right" />
+          </div>
           <TeamLogo src={match.homeLogo} alt={homeName} size={34} className="h-full w-full object-contain" />
         </div>
         <div className="hf-home-upcoming-center">
@@ -270,7 +306,10 @@ function UpcomingMatchRow({ match, locale }: { match: HfHomeMatch; locale: AppLo
         </div>
         <div className="hf-home-upcoming-team is-away">
           <TeamLogo src={match.awayLogo} alt={awayName} size={34} className="h-full w-full object-contain" />
-          <span>{awayName}</span>
+          <div className="hf-home-upcoming-team-copy">
+            <span>{awayName}</span>
+            <TeamScorers goals={match.goalScorers?.away} align="left" />
+          </div>
         </div>
       </Link>
       <div className="hf-home-upcoming-actions">

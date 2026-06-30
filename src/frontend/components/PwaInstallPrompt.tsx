@@ -7,10 +7,24 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
 }
 
+const PWA_INSTALL_DISMISSED_KEY = 'hf:pwa-install-dismissed:v1'
+
 function isIosDevice() {
   if (typeof navigator === 'undefined') return false
 
   return /iphone|ipad|ipod/i.test(navigator.userAgent)
+}
+
+function getStoredDismissed() {
+  if (typeof window === 'undefined') return false
+
+  return window.localStorage.getItem(PWA_INSTALL_DISMISSED_KEY) === '1'
+}
+
+function storeDismissed() {
+  if (typeof window === 'undefined') return
+
+  window.localStorage.setItem(PWA_INSTALL_DISMISSED_KEY, '1')
 }
 
 function isStandaloneDisplay() {
@@ -24,7 +38,7 @@ function isStandaloneDisplay() {
 
 export default function PwaInstallPrompt() {
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
-  const [dismissed, setDismissed] = useState(false)
+  const [dismissed, setDismissed] = useState(() => getStoredDismissed())
   const [isStandalone, setIsStandalone] = useState(() => isStandaloneDisplay())
   const isIos = useMemo(() => isIosDevice(), [])
 
@@ -43,12 +57,12 @@ export default function PwaInstallPrompt() {
     function handleBeforeInstallPrompt(event: Event) {
       event.preventDefault()
       setInstallPrompt(event as BeforeInstallPromptEvent)
-      setDismissed(false)
     }
 
     function handleAppInstalled() {
       setIsStandalone(true)
       setDismissed(true)
+      storeDismissed()
     }
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
@@ -69,6 +83,12 @@ export default function PwaInstallPrompt() {
     await installPrompt.userChoice
     setInstallPrompt(null)
     setDismissed(true)
+    storeDismissed()
+  }
+
+  function dismissPrompt() {
+    setDismissed(true)
+    storeDismissed()
   }
 
   return (
@@ -85,7 +105,7 @@ export default function PwaInstallPrompt() {
 
         <button
           type="button"
-          onClick={() => setDismissed(true)}
+          onClick={dismissPrompt}
           className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/8 bg-white/[0.03] text-sm font-bold text-[#c7d0da] transition hover:bg-white/[0.08]"
           aria-label="Cerrar aviso de instalacion"
         >

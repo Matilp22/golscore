@@ -35,6 +35,7 @@ import { isFinishedStatus } from '@/shared/utils/match-status'
 import { getRequestLocale } from '@/server/request-locale'
 import { t, type AppLocale } from '@/shared/i18n/locales'
 import { translateCountryName } from '@/shared/utils/country-names'
+import { TOURNAMENT_PAGE_CONFIGS } from '@/shared/config/tournament-pages'
 import { buildMatchDetailViewModel } from '@/server/match-detail-view-model'
 import { getFootballPublicReadMode } from '@/server/football-public-read-mode'
 import { runWithFootballApiReadAudit } from '@/server/football-public-read-guard'
@@ -249,6 +250,39 @@ function translateLeagueName(name: string) {
   }
 
   return map[name] || name
+}
+
+function normalizeTournamentSearch(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+}
+
+function getTournamentHref(fixture: MatchFixture) {
+  const leagueName = fixture.league.name.trim()
+  const normalizedLeague = normalizeTournamentSearch(leagueName)
+
+  if (
+    (normalizedLeague === 'world cup' ||
+      normalizedLeague === 'fifa world cup' ||
+      normalizedLeague === 'copa del mundo') &&
+    !normalizedLeague.includes('qualification') &&
+    !normalizedLeague.includes('eliminatoria')
+  ) {
+    return '/liga/selecciones-mundial'
+  }
+
+  const config = TOURNAMENT_PAGE_CONFIGS.find((tournament) =>
+    tournament.searchTerms.some(
+      (term) => normalizeTournamentSearch(term) === normalizedLeague
+    )
+  )
+
+  return config ? `/liga/${config.key}` : null
 }
 
 function isInternationalTeamFixture(fixture: MatchFixture) {
@@ -1465,11 +1499,6 @@ function MatchHistorySection({
       ) : (
         <div className="px-3 py-5 text-sm text-[#8d98a7] md:px-4">
           <p>{getHeadToHeadEmptyMessage(history.renderReadiness, locale)}</p>
-          {history.cacheKey ? (
-            <p className="mt-2 text-xs text-[#607083]">
-              Cache: {history.cacheKey}
-            </p>
-          ) : null}
         </div>
       )}
     </div>
@@ -1996,26 +2025,29 @@ function FormationPitch({
   const visibleTeamName = displayName || teamName
 
   return (
-    <div className="w-full overflow-hidden rounded-2xl border border-[#25553d] bg-[linear-gradient(180deg,#163828_0%,#12281d_12%,#0f1317_100%)]">
-      <div className="flex items-center justify-between gap-2 border-b border-[#25553d] bg-black/10 px-2 py-2 md:px-4 md:py-3">
+    <div
+      data-match-detail="formation-pitch"
+      className="w-full overflow-hidden rounded-2xl border border-white/30 bg-[#46a91b] text-white"
+    >
+      <div className="flex items-center justify-between gap-2 border-b border-white/25 bg-black/20 px-2 py-2 md:px-4 md:py-3">
         <div className="flex min-w-0 items-center gap-3">
           <TeamLogo logo={teamLogo} name={visibleTeamName} size="sm" />
-          <span className="truncate font-bold text-white">{visibleTeamName}</span>
+          <span className="truncate text-[clamp(0.9rem,2.3vw,1.16rem)] font-black text-white">{visibleTeamName}</span>
         </div>
-        <span className="shrink-0 text-sm font-semibold text-[#dbe7de]">
+        <span className="shrink-0 text-sm font-bold text-white">
           {formation || 'Sin formación real'}
         </span>
       </div>
 
-      <div className="relative min-h-[500px] w-full min-w-0 overflow-hidden bg-transparent sm:min-h-[610px] lg:min-h-[680px]">
-        <div className="absolute inset-x-0 top-1/2 h-px bg-[#4ea170]/50" />
-        <div className="absolute left-1/2 top-1/2 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#4ea170]/40" />
-        <div className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#7ff0b2]/40" />
+      <div className="relative min-h-[500px] w-full min-w-0 overflow-hidden bg-[#46a91b] sm:min-h-[610px] lg:min-h-[680px]">
+        <div className="absolute inset-x-0 top-1/2 h-px bg-white/45" />
+        <div className="absolute left-1/2 top-1/2 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/45" />
+        <div className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/70" />
 
-        <div className="absolute left-1/2 top-0 h-16 w-36 -translate-x-1/2 border-x border-b border-[#4ea170]/40 sm:w-40" />
-        <div className="absolute left-1/2 top-0 h-7 w-16 -translate-x-1/2 border-x border-b border-[#4ea170]/40 sm:w-20" />
-        <div className="absolute left-1/2 bottom-0 h-16 w-36 -translate-x-1/2 border-x border-t border-[#4ea170]/40 sm:w-40" />
-        <div className="absolute left-1/2 bottom-0 h-7 w-16 -translate-x-1/2 border-x border-t border-[#4ea170]/40 sm:w-20" />
+        <div className="absolute left-1/2 top-0 h-16 w-36 -translate-x-1/2 border-x border-b border-white/45 sm:w-40" />
+        <div className="absolute left-1/2 top-0 h-7 w-16 -translate-x-1/2 border-x border-b border-white/45 sm:w-20" />
+        <div className="absolute left-1/2 bottom-0 h-16 w-36 -translate-x-1/2 border-x border-t border-white/45 sm:w-40" />
+        <div className="absolute left-1/2 bottom-0 h-7 w-16 -translate-x-1/2 border-x border-t border-white/45 sm:w-20" />
 
         {starters.map((playerWrap, index) => (
           <PlayerOnField
@@ -2291,13 +2323,15 @@ export default async function PartidoDetallePage({ params }: PageProps) {
   const statsShareId = `match-stats-card-${fixture.fixture.id}`
   const historyShareId = `match-history-card-${fixture.fixture.id}`
   const matchDetailHref = `/partido/${id}`
+  const tournamentHref = getTournamentHref(fixture)
+  const tournamentName = translateLeagueName(fixture.league.name)
   const shareTitle = `${homeTeamDisplayName} vs ${awayTeamDisplayName} | Hay Fulbo`
   const shareText = `${homeTeamDisplayName} ${formatMatchScoreWithPenalties({
     goalsHome: goals.home,
     goalsAway: goals.away,
     homePenaltyScore: penaltyScore.home,
     awayPenaltyScore: penaltyScore.away,
-  })} ${awayTeamDisplayName} - ${translateLeagueName(fixture.league.name)}`
+  })} ${awayTeamDisplayName} - ${tournamentName}`
   const renderedAtMs = Date.parse(renderedAt)
   const matchKickoffMs = Date.parse(fixture.fixture.date)
   const isMatchInActiveWindow =
@@ -2352,9 +2386,18 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                 <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#7ff0b2]">
                   HF · Hay Fulbo
                 </p>
-                <h1 className="mt-1 text-base font-bold text-white md:text-xl">
-                  {translateLeagueName(fixture.league.name)}
-                </h1>
+                {tournamentHref ? (
+                  <Link
+                    href={tournamentHref}
+                    className="mt-1 inline-flex max-w-full text-base font-bold text-white underline-offset-4 transition hover:text-[#7ff0b2] hover:underline md:text-xl"
+                  >
+                    <span className="truncate">{tournamentName}</span>
+                  </Link>
+                ) : (
+                  <h1 className="mt-1 text-base font-bold text-white md:text-xl">
+                    {tournamentName}
+                  </h1>
+                )}
                 <p className="mt-2 inline-flex rounded-xl border border-[#25553d] bg-[#163828] px-3 py-1.5 text-xs font-black text-[#b8f7d2] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
                   {formatHeaderDateTime(fixture.fixture.date, locale)}
                 </p>

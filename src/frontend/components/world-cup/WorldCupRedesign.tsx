@@ -60,7 +60,7 @@ type IconName =
   | 'more'
   | 'pin'
 
-const WORLD_CUP_TROPHY_SRC = '/brand/competitions/world-cup-trophy-cutout.png'
+const WORLD_CUP_TROPHY_SRC = '/brand/competitions/world-cup-trophy-transparent.png'
 const TODAY_FIXTURE_LIMIT = 4
 
 const mobileQuickItems: Array<{ label: string; href: string; icon: IconName; active?: boolean }> = [
@@ -117,29 +117,36 @@ const worldCupVenues: Array<{
   },
 ]
 
-const worldCupHistory: Array<{ year: string; host: string; champion: string }> = [
-  { year: '1930', host: 'Uruguay', champion: 'Uruguay' },
-  { year: '1934', host: 'Italia', champion: 'Italia' },
-  { year: '1938', host: 'Francia', champion: 'Italia' },
-  { year: '1950', host: 'Brasil', champion: 'Uruguay' },
-  { year: '1954', host: 'Suiza', champion: 'Alemania Federal' },
-  { year: '1958', host: 'Suecia', champion: 'Brasil' },
-  { year: '1962', host: 'Chile', champion: 'Brasil' },
-  { year: '1966', host: 'Inglaterra', champion: 'Inglaterra' },
-  { year: '1970', host: 'Mexico', champion: 'Brasil' },
-  { year: '1974', host: 'Alemania Federal', champion: 'Alemania Federal' },
-  { year: '1978', host: 'Argentina', champion: 'Argentina' },
-  { year: '1982', host: 'Espana', champion: 'Italia' },
-  { year: '1986', host: 'Mexico', champion: 'Argentina' },
-  { year: '1990', host: 'Italia', champion: 'Alemania Federal' },
-  { year: '1994', host: 'Estados Unidos', champion: 'Brasil' },
-  { year: '1998', host: 'Francia', champion: 'Francia' },
-  { year: '2002', host: 'Corea del Sur / Japon', champion: 'Brasil' },
-  { year: '2006', host: 'Alemania', champion: 'Italia' },
-  { year: '2010', host: 'Sudafrica', champion: 'Espana' },
-  { year: '2014', host: 'Brasil', champion: 'Alemania' },
-  { year: '2018', host: 'Rusia', champion: 'Francia' },
-  { year: '2022', host: 'Qatar', champion: 'Argentina' },
+const worldCupHistory: Array<{
+  year: string
+  host: string
+  champion: string
+  flag: string
+  result: string
+  venue: string
+}> = [
+  { year: '1930', host: 'Uruguay', champion: 'Uruguay', flag: '🇺🇾', result: 'Uruguay 4-2 Argentina', venue: 'Estadio Centenario, Montevideo' },
+  { year: '1934', host: 'Italia', champion: 'Italia', flag: '🇮🇹', result: 'Italia 2-1 Checoslovaquia', venue: 'Stadio Nazionale PNF, Roma' },
+  { year: '1938', host: 'Francia', champion: 'Italia', flag: '🇮🇹', result: 'Italia 4-2 Hungria', venue: 'Stade Olympique, Colombes' },
+  { year: '1950', host: 'Brasil', champion: 'Uruguay', flag: '🇺🇾', result: 'Uruguay 2-1 Brasil', venue: 'Maracana, Rio de Janeiro' },
+  { year: '1954', host: 'Suiza', champion: 'Alemania Federal', flag: '🇩🇪', result: 'Alemania Federal 3-2 Hungria', venue: 'Wankdorfstadion, Berna' },
+  { year: '1958', host: 'Suecia', champion: 'Brasil', flag: '🇧🇷', result: 'Brasil 5-2 Suecia', venue: 'Rasunda, Solna' },
+  { year: '1962', host: 'Chile', champion: 'Brasil', flag: '🇧🇷', result: 'Brasil 3-1 Checoslovaquia', venue: 'Estadio Nacional, Santiago' },
+  { year: '1966', host: 'Inglaterra', champion: 'Inglaterra', flag: '🇬🇧', result: 'Inglaterra 4-2 Alemania Federal', venue: 'Wembley, Londres' },
+  { year: '1970', host: 'Mexico', champion: 'Brasil', flag: '🇧🇷', result: 'Brasil 4-1 Italia', venue: 'Estadio Azteca, Ciudad de Mexico' },
+  { year: '1974', host: 'Alemania Federal', champion: 'Alemania Federal', flag: '🇩🇪', result: 'Alemania Federal 2-1 Paises Bajos', venue: 'Olympiastadion, Munich' },
+  { year: '1978', host: 'Argentina', champion: 'Argentina', flag: '🇦🇷', result: 'Argentina 3-1 Paises Bajos', venue: 'Monumental, Buenos Aires' },
+  { year: '1982', host: 'Espana', champion: 'Italia', flag: '🇮🇹', result: 'Italia 3-1 Alemania Federal', venue: 'Santiago Bernabeu, Madrid' },
+  { year: '1986', host: 'Mexico', champion: 'Argentina', flag: '🇦🇷', result: 'Argentina 3-2 Alemania Federal', venue: 'Estadio Azteca, Ciudad de Mexico' },
+  { year: '1990', host: 'Italia', champion: 'Alemania Federal', flag: '🇩🇪', result: 'Alemania Federal 1-0 Argentina', venue: 'Olimpico, Roma' },
+  { year: '1994', host: 'Estados Unidos', champion: 'Brasil', flag: '🇧🇷', result: 'Brasil 0-0 Italia (3-2 pen.)', venue: 'Rose Bowl, Pasadena' },
+  { year: '1998', host: 'Francia', champion: 'Francia', flag: '🇫🇷', result: 'Francia 3-0 Brasil', venue: 'Stade de France, Saint-Denis' },
+  { year: '2002', host: 'Corea del Sur / Japon', champion: 'Brasil', flag: '🇧🇷', result: 'Brasil 2-0 Alemania', venue: 'Yokohama International Stadium' },
+  { year: '2006', host: 'Alemania', champion: 'Italia', flag: '🇮🇹', result: 'Italia 1-1 Francia (5-3 pen.)', venue: 'Olympiastadion, Berlin' },
+  { year: '2010', host: 'Sudafrica', champion: 'Espana', flag: '🇪🇸', result: 'Espana 1-0 Paises Bajos', venue: 'Soccer City, Johannesburgo' },
+  { year: '2014', host: 'Brasil', champion: 'Alemania', flag: '🇩🇪', result: 'Alemania 1-0 Argentina', venue: 'Maracana, Rio de Janeiro' },
+  { year: '2018', host: 'Rusia', champion: 'Francia', flag: '🇫🇷', result: 'Francia 4-2 Croacia', venue: 'Luzhniki, Moscu' },
+  { year: '2022', host: 'Qatar', champion: 'Argentina', flag: '🇦🇷', result: 'Argentina 3-3 Francia (4-2 pen.)', venue: 'Lusail Stadium' },
 ]
 
 function Icon({ name, className = 'h-5 w-5' }: { name: IconName; className?: string }) {
@@ -630,7 +637,7 @@ function MatchesPanel({
 
   return (
     <section id="partidos" className="min-w-0">
-      <SectionTitle title="PARTIDOS DE HOY" href="#fase-de-grupos" />
+      <SectionTitle title="PARTIDOS DE HOY" href="#fase-eliminatoria" />
       {showingUpcomingFallback && fixtures.length ? (
         <p className="-mt-2 mb-3 text-xs font-bold text-[var(--hf-world-muted)]">
           No hay partidos para hoy. Mostrando los proximos disponibles.
@@ -657,7 +664,7 @@ function MatchesPanel({
         </div>
       ) : null}
 
-      <a href="#fase-de-grupos" className="hf-world-all-matches">
+      <a href="#fase-eliminatoria" className="hf-world-all-matches">
         VER TODOS LOS PARTIDOS
         <span aria-hidden="true">&gt;</span>
       </a>
@@ -799,11 +806,20 @@ function HistorySection() {
       </article>
       <div className="hf-world-history-grid">
         {worldCupHistory.map((item) => (
-          <article key={item.year} className="hf-world-history-card">
-            <strong>{item.year}</strong>
-            <span>{item.host}</span>
-            <b>{item.champion}</b>
-          </article>
+          <details key={item.year} className="hf-world-history-card">
+            <summary>
+              <span className="hf-world-history-flag" aria-label={`Bandera de ${item.champion}`}>
+                {item.flag}
+              </span>
+              <strong>{item.year}</strong>
+              <span>{item.host}</span>
+              <b>{item.champion}</b>
+            </summary>
+            <div className="hf-world-history-detail">
+              <p><span>Final</span>{item.result}</p>
+              <p><span>Sede</span>{item.venue}</p>
+            </div>
+          </details>
         ))}
       </div>
     </div>
@@ -811,12 +827,14 @@ function HistorySection() {
 }
 
 function FullSections({
+  fixtures,
   groupStageSection,
   bracketSection,
   leaderStatsSection,
   standings,
   locale,
 }: {
+  fixtures: LeagueFixtureSummary[]
   groupStageSection?: ReactNode
   bracketSection?: ReactNode
   leaderStatsSection?: ReactNode
@@ -837,8 +855,17 @@ function FullSections({
       bracketContent={
         bracketSection ? (
           <>
-          <SectionTitle title="FASE ELIMINATORIA" />
-          <div className="hf-world-legacy-section">{bracketSection}</div>
+            <div className="hf-world-content-grid">
+              <div className="min-w-0">
+                <MatchesPanel fixtures={fixtures} locale={locale} />
+              </div>
+
+              <aside className="hf-world-side-column">
+                <NewsCard />
+              </aside>
+            </div>
+            <SectionTitle title="FASE ELIMINATORIA" />
+            <div className="hf-world-legacy-section">{bracketSection}</div>
           </>
         ) : undefined
       }
@@ -901,17 +928,8 @@ export default function WorldCupRedesign({
           </div>
         ) : null}
 
-        <div className="hf-world-content-grid">
-          <div className="min-w-0">
-            <MatchesPanel fixtures={fixtures} locale={locale} />
-          </div>
-
-          <aside className="hf-world-side-column">
-            <NewsCard />
-          </aside>
-        </div>
-
         <FullSections
+          fixtures={fixtures}
           groupStageSection={groupStageSection}
           bracketSection={bracketSection}
           leaderStatsSection={leaderStatsSection}

@@ -33,6 +33,7 @@ const panelIds: WorldCupPanelId[] = [
 function getPanelFromHash(hash: string, fallback: WorldCupPanelId): WorldCupPanelId {
   const target = hash.replace(/^#/, '')
 
+  if (target === 'partidos') return 'fase-eliminatoria'
   if (target.startsWith('group-')) return 'fase-de-grupos'
   if (panelIds.includes(target as WorldCupPanelId)) return target as WorldCupPanelId
 
@@ -83,10 +84,10 @@ export default function WorldCupTabbedSections({
 
   useEffect(() => {
     const hashTarget = window.location.hash.replace(/^#/, '')
-    const targetId = hashTarget || activePanel
+    if (!hashTarget) return
 
     window.requestAnimationFrame(() => {
-      document.getElementById(targetId)?.scrollIntoView({ block: 'start', behavior: 'auto' })
+      document.getElementById(hashTarget)?.scrollIntoView({ block: 'start', behavior: 'auto' })
     })
   }, [activePanel])
 

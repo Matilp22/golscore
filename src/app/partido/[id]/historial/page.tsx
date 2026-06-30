@@ -130,6 +130,35 @@ export default async function MatchHistoryPage({ params }: PageProps) {
             </section>
           ) : null}
 
+          <section className="grid gap-3 md:grid-cols-4">
+            <div className="hf-card rounded-2xl p-4 text-center">
+              <p className="text-2xl font-black text-white">{history.summary.homePerspectiveWins}</p>
+              <p className="mt-1 truncate text-xs font-bold uppercase tracking-[0.08em] text-[#8d98a7]">
+                Gano {history.homeTeam.name}
+              </p>
+            </div>
+            <div className="hf-card rounded-2xl p-4 text-center">
+              <p className="text-2xl font-black text-white">{history.summary.draws}</p>
+              <p className="mt-1 text-xs font-bold uppercase tracking-[0.08em] text-[#8d98a7]">
+                Empates
+              </p>
+            </div>
+            <div className="hf-card rounded-2xl p-4 text-center">
+              <p className="text-2xl font-black text-white">{history.summary.awayPerspectiveWins}</p>
+              <p className="mt-1 truncate text-xs font-bold uppercase tracking-[0.08em] text-[#8d98a7]">
+                Gano {history.awayTeam.name}
+              </p>
+            </div>
+            <div className="hf-card rounded-2xl p-4 text-center">
+              <p className="text-2xl font-black text-white">
+                {history.summary.homePerspectiveGoals} - {history.summary.awayPerspectiveGoals}
+              </p>
+              <p className="mt-1 text-xs font-bold uppercase tracking-[0.08em] text-[#8d98a7]">
+                Goles
+              </p>
+            </div>
+          </section>
+
           <section id={historyShareId} className="hf-card overflow-hidden rounded-2xl">
             <div className="hf-section-head flex items-center justify-between gap-3 px-3 py-3 md:px-4">
               <span aria-hidden="true" className="h-10 w-10" />

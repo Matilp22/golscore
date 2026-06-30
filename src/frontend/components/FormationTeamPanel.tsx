@@ -43,6 +43,7 @@ type FormationTeamPanelProps = {
   activeTab?: LineupPanelTab
   onActiveTabChange?: (tab: LineupPanelTab) => void
   showTabs?: boolean
+  showTitle?: boolean
   framed?: boolean
 }
 
@@ -185,6 +186,7 @@ export default function FormationTeamPanel({
   activeTab,
   onActiveTabChange,
   showTabs = true,
+  showTitle = true,
   framed = true,
 }: FormationTeamPanelProps) {
   const { t } = useTranslations()
@@ -202,9 +204,13 @@ export default function FormationTeamPanel({
           : 'w-full min-w-0 p-0'
       }
     >
-      <div className={`${align === 'right' ? 'text-right' : 'text-left'}`}>
-        <h4 className="text-sm font-bold uppercase tracking-[0.14em] text-[#f3f6fa]">{title}</h4>
-      </div>
+      {showTitle ? (
+        <div className={`${align === 'right' ? 'text-right' : 'text-left'}`}>
+          <h4 className="truncate text-[clamp(0.9rem,2.2vw,1.12rem)] font-black uppercase tracking-[0.08em] text-white">
+            {title}
+          </h4>
+        </div>
+      ) : null}
 
       <div className="mt-2 rounded-xl border border-white/6 bg-[#161a20] px-2 py-1.5 md:mt-3 md:px-3 md:py-2">
         <p className="text-[11px] uppercase tracking-wide text-[#8d98a7]">{t('lineup.coach')}</p>
@@ -289,7 +295,7 @@ function PlayerSection({
             <PlayerRow key={player.id} player={player} align={align} />
           ))
         ) : (
-          <p className="rounded-xl border border-white/6 bg-[#161a20] px-2 py-2 text-sm text-[#8d98a7]">
+          <p className="rounded-xl border border-white/6 bg-[#161a20] px-2 py-2 text-sm font-semibold text-white/80">
             {t('lineup.noPlayers')}
           </p>
         )}
@@ -326,7 +332,7 @@ function PlayerRow({
           {player.name}
         </p>
         {translatePosition(player.position) ? (
-          <p className="mt-0.5 truncate text-[9px] font-semibold uppercase tracking-[0.06em] text-[#8d98a7] sm:text-[10px]">
+          <p className="mt-0.5 truncate text-[9px] font-semibold uppercase tracking-[0.06em] text-white/80 sm:text-[10px]">
             <span className="sm:hidden">{translatePositionShort(player.position)}</span>
             <span className="hidden sm:inline">{translatePosition(player.position)}</span>
           </p>
@@ -345,7 +351,7 @@ function PlayerRow({
                 ? formatEventMinute(player.substitutionMinute, player.substitutionExtraMinute)
                 : ''}
             </p>
-            <p className="truncate text-[9px] text-[#9fb0c2] sm:text-[10px]">
+            <p className="truncate text-[9px] font-semibold text-white/80 sm:text-[10px]">
               {player.substitutionLabel} {player.replacedPlayerName}
             </p>
           </div>

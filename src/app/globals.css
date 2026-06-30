@@ -1075,8 +1075,35 @@ select {
 }
 
 .hf-mobile-bottom-nav a.is-active,
+.hf-mobile-bottom-nav button.is-active,
 .hf-mobile-bottom-nav button:focus-visible,
 .hf-mobile-bottom-nav a:focus-visible {
+  color: var(--hf-green-2);
+}
+
+.hf-mobile-more-list {
+  display: grid;
+  gap: 8px;
+}
+
+.hf-mobile-more-list a {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.055);
+  padding: 0 12px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.hf-mobile-more-list a:hover,
+.hf-mobile-more-list a:focus-visible {
+  border-color: rgba(112, 255, 157, 0.34);
+  background: rgba(112, 255, 157, 0.1);
   color: var(--hf-green-2);
 }
 
@@ -1247,6 +1274,26 @@ select {
   white-space: nowrap;
 }
 
+.hf-home-team-scorers {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--hf-muted);
+  font-size: 10px;
+  font-weight: 850;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hf-home-team-scorers.is-left {
+  text-align: left;
+}
+
+.hf-home-team-scorers.is-right {
+  text-align: right;
+}
+
 .hf-home-score-center {
   display: grid;
   justify-items: center;
@@ -1375,11 +1422,24 @@ select {
   font-weight: 850;
 }
 
-.hf-home-upcoming-team span {
+.hf-home-upcoming-team span,
+.hf-home-upcoming-team-copy {
   min-width: 0;
+}
+
+.hf-home-upcoming-team span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.hf-home-upcoming-team-copy {
+  display: grid;
+  gap: 2px;
+}
+
+.hf-home-upcoming-team-copy .hf-home-team-scorers {
+  font-size: 10px;
 }
 
 .hf-home-upcoming-team.is-home {
@@ -2662,15 +2722,38 @@ select {
 }
 
 .hf-world-history-card {
-  display: grid;
-  gap: 4px;
+  display: block;
   padding: 12px;
 }
 
+.hf-world-history-card summary {
+  display: grid;
+  cursor: pointer;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 8px;
+  list-style: none;
+}
+
+.hf-world-history-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.hf-world-history-flag {
+  grid-row: span 3;
+  align-self: center;
+  font-size: 24px;
+  filter: drop-shadow(0 5px 10px rgba(7, 27, 47, 0.14));
+}
+
 .hf-world-history-card strong {
-  color: var(--hf-world-green);
+  background: linear-gradient(180deg, #fff2a6 0%, #f5c84b 38%, #b77812 100%);
+  background-clip: text;
+  color: #d5a940;
   font-size: 18px;
   font-weight: 1000;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 10px rgba(245, 200, 75, 0.18);
 }
 
 .hf-world-history-card span {
@@ -2683,6 +2766,30 @@ select {
   color: var(--hf-world-navy);
   font-size: 12px;
   font-weight: 1000;
+}
+
+.hf-world-history-detail {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+  border-top: 1px solid rgba(7, 27, 47, 0.08);
+  padding-top: 10px;
+}
+
+.hf-world-history-detail p {
+  display: grid;
+  gap: 2px;
+  color: var(--hf-world-navy);
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.hf-world-history-detail p span {
+  color: var(--hf-world-muted);
+  font-size: 10px;
+  font-weight: 1000;
+  text-transform: uppercase;
 }
 
 .hf-world-alert {
@@ -4079,4 +4186,39 @@ select {
   .hf-home-tv-pill {
     max-width: 240px;
   }
+}
+
+.hf-global-main [data-match-detail="formation-pitch"],
+.hf-global-main [data-match-detail="formation-pitch"] .text-white,
+.hf-global-main [data-match-detail="formation-pitch"] [class*="text-white"],
+.hf-global-main [data-match-detail="formation-pitch"] p,
+.hf-global-main [data-match-detail="formation-pitch"] span {
+  color: #fff !important;
+}
+
+.hf-global-main [data-match-detail="formation-pitch"] [class*="bg-black"] {
+  background: rgba(0, 0, 0, 0.18) !important;
+}
+
+.hf-global-main [data-match-detail="formation-pitch"] [class*="border-white"] {
+  border-color: rgba(255, 255, 255, 0.42) !important;
+}
+
+.hf-global-main [data-match-detail="lineup-tabs"],
+.hf-global-main [data-match-detail="lineup-tabs"] .text-white,
+.hf-global-main [data-match-detail="lineup-tabs"] [class*="text-white"],
+.hf-global-main [data-match-detail="lineup-tabs"] [class*="text-[#8d98a7]"],
+.hf-global-main [data-match-detail="lineup-tabs"] [class*="text-[#9fb0c2]"],
+.hf-global-main [data-match-detail="lineup-player"],
+.hf-global-main [data-match-detail="lineup-player"] p,
+.hf-global-main [data-match-detail="lineup-player"] span,
+.hf-global-main [data-match-detail="lineup-player"] strong,
+.hf-global-main [data-match-detail="lineup-player"] small {
+  color: #fff !important;
+}
+
+.hf-global-main [data-match-detail="lineup-tabs"] [class*="bg-[#111418]"],
+.hf-global-main [data-match-detail="lineup-tabs"] [class*="bg-[#161a20]"],
+.hf-global-main [data-match-detail="lineup-player"] {
+  background: rgba(7, 27, 47, 0.9) !important;
 }

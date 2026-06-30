@@ -81,10 +81,10 @@ export default function LineupTabs({ teams }: LineupTabsProps) {
       </div>
 
       <div className="rounded-2xl border border-white/8 bg-[#111418] p-2 sm:p-3 md:p-4">
-        <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-b border-white/6 pb-3 text-[11px] font-black uppercase tracking-[0.12em] text-[#8d98a7]">
-          <span className="truncate text-left">{teams[0]?.title ?? t('prode.home')}</span>
+        <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-b border-white/6 pb-3 font-black uppercase tracking-[0.08em] text-white">
+          <span className="truncate text-left text-[clamp(0.78rem,2.7vw,1.08rem)] leading-none">{teams[0]?.title ?? t('prode.home')}</span>
           <span className="rounded-full border border-[#70ff9d]/20 bg-[#70ff9d]/10 px-2 py-1 text-[#70ff9d]">vs</span>
-          <span className="truncate text-right">{teams[1]?.title ?? t('prode.away')}</span>
+          <span className="truncate text-right text-[clamp(0.78rem,2.7vw,1.08rem)] leading-none">{teams[1]?.title ?? t('prode.away')}</span>
         </div>
       <div className="grid grid-cols-2 gap-2 sm:gap-3 md:gap-4">
         {teams.map((team) => (
@@ -98,6 +98,7 @@ export default function LineupTabs({ teams }: LineupTabsProps) {
             activeTab={activeTab}
             onActiveTabChange={setActiveTab}
             showTabs={false}
+            showTitle={false}
             framed={false}
           />
         ))}
