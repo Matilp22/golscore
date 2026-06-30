@@ -61,22 +61,8 @@ type IconName =
   | 'more'
   | 'pin'
 
-const HF_LOGO_SRC = '/brand/hf-logo.png'
 const WORLD_CUP_TROPHY_SRC = '/brand/competitions/world-cup-trophy-cutout.png'
 const TODAY_FIXTURE_LIMIT = 4
-
-const sidebarItems: Array<{ label: string; href: string; icon: IconName; active?: boolean; badge?: string }> = [
-  { label: 'Mundial', href: '#mundial', icon: 'home', active: true },
-  { label: 'En vivo', href: '#partidos', icon: 'live' },
-  { label: 'Proximos', href: '#partidos', icon: 'calendar' },
-  { label: 'Finalizados', href: '#partidos', icon: 'clock' },
-  { label: 'Equipos', href: '#mundial-grupos', icon: 'shield' },
-  { label: 'Posiciones', href: '#posiciones', icon: 'chart' },
-  { label: 'Estadisticas', href: '#goleadores', icon: 'chart' },
-  { label: 'Llaves', href: '#llaves', icon: 'bracket' },
-  { label: 'Noticias', href: '#noticias', icon: 'news' },
-  { label: 'Prode', href: '/prode', icon: 'trophy', badge: 'Nuevo' },
-]
 
 const mobileQuickItems: Array<{ label: string; href: string; icon: IconName; active?: boolean }> = [
   { label: 'En vivo', href: '#partidos', icon: 'live', active: true },
@@ -84,14 +70,6 @@ const mobileQuickItems: Array<{ label: string; href: string; icon: IconName; act
   { label: 'Posiciones', href: '#posiciones', icon: 'chart' },
   { label: 'Equipos', href: '#mundial-grupos', icon: 'shield' },
   { label: 'Mas', href: '#llaves', icon: 'more' },
-]
-
-const mobileBottomItems: Array<{ label: string; href: string; icon: IconName; active?: boolean }> = [
-  { label: 'Inicio', href: '/', icon: 'home', active: true },
-  { label: 'Prode', href: '/prode', icon: 'trophy' },
-  { label: 'Equipos', href: '#mundial-grupos', icon: 'shield' },
-  { label: 'Posiciones', href: '#posiciones', icon: 'chart' },
-  { label: 'En vivo', href: '#partidos', icon: 'live' },
 ]
 
 const tabs = ['Fase de grupos', 'Posiciones', 'Goleadores', 'Equipos', 'Sedes', 'Historia']
@@ -331,6 +309,12 @@ function getMatchSubLabel(fixture: LeagueFixtureSummary) {
   return getFixtureDayText(fixture)
 }
 
+function getLiveMatchCenterSubLabel(fixture: LeagueFixtureSummary) {
+  const label = getMatchSubLabel(fixture)
+
+  return label.toLowerCase() === 'en vivo' ? '' : label
+}
+
 function getVisibleFixtures(fixtures: LeagueFixtureSummary[]) {
   const today = getArgentinaTodayISO()
   const sorted = sortFixturesByDate(fixtures)
@@ -417,91 +401,6 @@ function TeamBadge({
   )
 }
 
-function WorldCupSidebar() {
-  return (
-    <aside className="hf-world-sidebar hidden lg:flex">
-      <Link href="/" aria-label="Hay Fulbo inicio" className="hf-world-logo-link">
-        <Image src={HF_LOGO_SRC} alt="Hay Fulbo" width={134} height={91} priority className="h-auto w-[108px]" />
-      </Link>
-
-      <nav aria-label="Navegacion Mundial" className="mt-6 flex min-h-0 flex-1 flex-col gap-1.5">
-        {sidebarItems.map((item, index) => (
-          <Link
-            key={item.label}
-            href={item.href}
-            className={`hf-world-sidebar-item ${item.active ? 'is-active' : ''} ${index === 4 ? 'mt-4 border-t border-[rgba(7,27,47,0.1)] pt-4' : ''}`}
-          >
-            <Icon name={item.icon} className="h-5 w-5" />
-            <span className="min-w-0 truncate">{item.label}</span>
-            {item.badge ? <span className="hf-world-sidebar-badge">{item.badge}</span> : null}
-          </Link>
-        ))}
-      </nav>
-
-      <Link href="/prode" className="hf-world-prode-card">
-        <span className="block text-xl font-black leading-tight">PRODE<br />MUNDIAL</span>
-        <span className="mt-2 block text-xs font-semibold text-white/75">Juga y gana premios increibles</span>
-        <span className="mt-4 inline-flex rounded-lg bg-[var(--hf-world-green)] px-4 py-2 text-xs font-black text-[var(--hf-world-navy)]">
-          JUGAR AHORA
-        </span>
-      </Link>
-    </aside>
-  )
-}
-
-function DateSwitch() {
-  return (
-    <div className="hf-world-date-switch" aria-label="Selector de fecha">
-      {['Ayer', 'Hoy', 'Manana'].map((label) => (
-        <button
-          key={label}
-          type="button"
-          className={label === 'Hoy' ? 'is-active' : ''}
-          aria-pressed={label === 'Hoy'}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
-  )
-}
-
-function WorldCupHeader() {
-  return (
-    <header className="hf-world-header">
-      <button type="button" className="hf-world-icon-button lg:hidden" aria-label="Abrir menu">
-        <Icon name="menu" />
-      </button>
-
-      <Link href="/" className="hidden items-center gap-4 lg:flex" aria-label="Hay Fulbo inicio">
-        <Image src={HF_LOGO_SRC} alt="Hay Fulbo" width={134} height={91} priority className="h-auto w-[64px]" />
-        <span className="text-2xl font-black tracking-[0] text-[var(--hf-world-navy)]">HAY FULBO</span>
-      </Link>
-
-      <Link href="/" className="lg:hidden" aria-label="Hay Fulbo inicio">
-        <Image src={HF_LOGO_SRC} alt="Hay Fulbo" width={134} height={91} priority className="h-auto w-[88px]" />
-      </Link>
-
-      <div className="hidden flex-1 justify-center lg:flex">
-        <DateSwitch />
-      </div>
-
-      <div className="flex items-center gap-2">
-        <button type="button" className="hf-world-icon-button" aria-label="Buscar">
-          <Icon name="search" />
-        </button>
-        <button type="button" className="hf-world-icon-button hidden lg:inline-flex" aria-label="Mi cuenta">
-          <Icon name="user" />
-        </button>
-      </div>
-
-      <div className="col-span-3 flex justify-center lg:hidden">
-        <DateSwitch />
-      </div>
-    </header>
-  )
-}
-
 function WorldCupHero({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <section id="mundial" className="hf-world-hero">
@@ -534,8 +433,8 @@ function WorldCupHero({ title, subtitle }: { title: string; subtitle: string }) 
         <Image
           src={WORLD_CUP_TROPHY_SRC}
           alt=""
-          width={207}
-          height={505}
+          width={300}
+          height={503}
           priority
           className="hf-world-hero-trophy"
         />
@@ -587,6 +486,7 @@ function SectionTitle({ title, href }: { title: string; href?: string }) {
 function LiveMatchCard({ fixture, locale }: { fixture: LeagueFixtureSummary; locale: AppLocale }) {
   const live = isLiveStatus(fixture.statusShort)
   const badgeLabel = live ? 'EN VIVO' : isFinishedStatus(fixture.statusShort) ? 'FINALIZADO' : 'PROXIMO'
+  const centerSubLabel = live ? getLiveMatchCenterSubLabel(fixture) : getMatchSubLabel(fixture)
 
   return (
     <Link href={`/partido/${fixture.id}`} className="hf-world-live-card">
@@ -602,9 +502,11 @@ function LiveMatchCard({ fixture, locale }: { fixture: LeagueFixtureSummary; loc
         />
         <div className="min-w-[96px] text-center">
           <div className="text-5xl font-black leading-none text-white">{hasScore(fixture) ? getFixtureScore(fixture) : 'vs'}</div>
-          <div className={`mt-2 text-base font-black ${live ? 'text-[var(--hf-world-coral)]' : 'text-white/72'}`}>
-            {getMatchSubLabel(fixture)}
-          </div>
+          {centerSubLabel ? (
+            <div className={`mt-2 text-base font-black ${live ? 'text-[var(--hf-world-coral)]' : 'text-white/72'}`}>
+              {centerSubLabel}
+            </div>
+          ) : null}
         </div>
         <TeamBadge
           name={fixture.away}
@@ -836,19 +738,6 @@ function QuickAccessMobile() {
   )
 }
 
-function MobileBottomNav() {
-  return (
-    <nav className="hf-world-bottom-nav lg:hidden" aria-label="Navegacion principal Mundial">
-      {mobileBottomItems.map((item) => (
-        <Link key={item.label} href={item.href} className={item.active ? 'is-active' : ''}>
-          <Icon name={item.icon} className="h-5 w-5" />
-          <span>{item.label}</span>
-        </Link>
-      ))}
-    </nav>
-  )
-}
-
 function FullSections({
   groupStageSection,
   bracketSection,
@@ -902,11 +791,8 @@ export default function WorldCupRedesign({
   const primaryGroup = getPrimaryStandingGroup(standings)
 
   return (
-    <div className="hf-world-shell">
-      <WorldCupSidebar />
-
+    <div className="hf-world-shell hf-world-shell-embedded">
       <div className="hf-world-main">
-        <WorldCupHeader />
         <WorldCupHero title={title} subtitle={subtitle} />
         <div className="hf-world-mobile-dots lg:hidden" aria-hidden="true">
           <span className="is-active" />
@@ -946,8 +832,6 @@ export default function WorldCupRedesign({
           leaderStatsSection={leaderStatsSection}
         />
       </div>
-
-      <MobileBottomNav />
     </div>
   )
 }

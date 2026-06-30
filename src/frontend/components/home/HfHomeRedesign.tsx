@@ -398,6 +398,13 @@ export default function HfHomeRedesign({
   const upcomingMatches = allMatches.filter((match) => isUpcomingStatus(match.statusShort)).slice(0, 3)
   const featuredCompetitions = competitions.slice(0, 5)
   const featuredArticles = articles.slice(0, 3)
+  const todayValue = dayOptions.find((day) => day.label.toLowerCase() === 'hoy')?.value
+  const isPastDate = Boolean(todayValue && selectedDate < todayValue)
+  const allCompetitionMatchesSection = competitions.length ? (
+    <AllCompetitionMatches competitions={competitions} locale={locale} />
+  ) : dataError ? null : (
+    <div className="hf-home-empty-card">{noMatchesLabel}</div>
+  )
 
   return (
     <div className="hf-home-page">
@@ -425,48 +432,54 @@ export default function HfHomeRedesign({
         <div className="hf-home-alert">{dataError}</div>
       ) : null}
 
-      <section>
-        <SectionHeader title="En vivo" href="/#partidos" count={liveMatches.length} live />
-        {liveMatches.length ? (
-          <>
-            <div className="hf-home-live-grid">
-              {liveMatches.slice(0, 3).map((match) => (
-                <LiveMatchCard key={match.id} match={match} locale={locale} />
-              ))}
-            </div>
-            <div className="hf-home-carousel-dots" aria-hidden="true">
-              <span className="is-active" />
-              <span />
-              <span />
-              <span />
-            </div>
-          </>
-        ) : (
-          <div className="hf-home-empty-card">No hay partidos en vivo ahora.</div>
-        )}
-      </section>
+      {isPastDate ? (
+        allCompetitionMatchesSection
+      ) : (
+        <>
+          <section>
+            <SectionHeader title="En vivo" href="/#partidos" count={liveMatches.length} live />
+            {liveMatches.length ? (
+              <>
+                <div className="hf-home-live-grid">
+                  {liveMatches.slice(0, 3).map((match) => (
+                    <LiveMatchCard key={match.id} match={match} locale={locale} />
+                  ))}
+                </div>
+                <div className="hf-home-carousel-dots" aria-hidden="true">
+                  <span className="is-active" />
+                  <span />
+                  <span />
+                  <span />
+                </div>
+              </>
+            ) : (
+              <div className="hf-home-empty-card">No hay partidos en vivo ahora.</div>
+            )}
+          </section>
+
+          <section>
+            <SectionHeader title="Proximos partidos" href="/#partidos" />
+            {upcomingMatches.length ? (
+              <div className="hf-home-upcoming-list">
+                {upcomingMatches.map((match) => (
+                  <UpcomingMatchRow key={match.id} match={match} locale={locale} />
+                ))}
+              </div>
+            ) : (
+              <div className="hf-home-empty-card">No hay proximos partidos para esta fecha.</div>
+            )}
+          </section>
+        </>
+      )}
 
       <section>
-        <SectionHeader title="Proximos partidos" href="/#partidos" />
-        {upcomingMatches.length ? (
-          <div className="hf-home-upcoming-list">
-            {upcomingMatches.map((match) => (
-              <UpcomingMatchRow key={match.id} match={match} locale={locale} />
-            ))}
-          </div>
-        ) : (
-          <div className="hf-home-empty-card">No hay proximos partidos para esta fecha.</div>
-        )}
-      </section>
-
-      <section>
-        <SectionHeader title="Competiciones destacadas" href="/seccion/internacional" />
+        <SectionHeader title="Competiciones destacadas" href="/competiciones" />
         {featuredCompetitions.length ? (
           <div className="hf-home-competitions">
             {featuredCompetitions.map((competition) => (
               <CompetitionCard key={competition.key} competition={competition} />
             ))}
-            <Link href="/seccion/internacional" className="hf-home-competition-card is-more">
+            <Link href="/competiciones" className="hf-home-competition-card is-more">
               <span className="hf-home-more-circle">
                 <Icon name="chevron" className="h-5 w-5" />
               </span>
@@ -491,11 +504,7 @@ export default function HfHomeRedesign({
         )}
       </section>
 
-      {competitions.length ? (
-        <AllCompetitionMatches competitions={competitions} locale={locale} />
-      ) : dataError ? null : (
-        <div className="hf-home-empty-card">{noMatchesLabel}</div>
-      )}
+      {isPastDate ? null : allCompetitionMatchesSection}
     </div>
   )
 }

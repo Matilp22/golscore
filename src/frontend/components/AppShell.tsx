@@ -77,11 +77,11 @@ type ShellIconName =
 const PRIMARY_NAV_ITEMS: Array<{ key: string; label: string; href: string; icon: ShellIconName }> = [
   { key: 'home', label: 'Inicio', href: '/', icon: 'home' },
   { key: 'matches', label: 'Partidos', href: '/#partidos', icon: 'ball' },
-  { key: 'competitions', label: 'Competiciones', href: '/seccion/internacional', icon: 'trophy' },
-  { key: 'teams', label: 'Equipos', href: '/seccion/argentina', icon: 'shield' },
-  { key: 'tables', label: 'Tablas', href: '/liga/selecciones-mundial#posiciones', icon: 'table' },
+  { key: 'competitions', label: 'Competiciones', href: '/competiciones', icon: 'trophy' },
+  { key: 'teams', label: 'Equipos', href: '/equipos', icon: 'shield' },
+  { key: 'tables', label: 'Tablas', href: '/tablas', icon: 'table' },
   { key: 'news', label: 'Noticias', href: '/noticias', icon: 'news' },
-  { key: 'stats', label: 'Estadisticas', href: '/liga/selecciones-mundial#estadisticas', icon: 'chart' },
+  { key: 'stats', label: 'Estadisticas', href: '/estadisticas', icon: 'chart' },
   { key: 'favorites', label: 'Favoritos', href: '/#favoritos', icon: 'star' },
 ]
 
@@ -360,9 +360,8 @@ export default function AppShell({ auth, children, locale }: AppShellProps) {
   const { user } = useAuth()
   const isHome = pathname === '/'
   const isAdmin = pathname?.startsWith('/admin') ?? false
-  const isWorldCupRedesign = pathname === '/liga/selecciones-mundial'
   const isProdeRedesign = pathname?.startsWith('/prode') ?? false
-  const isStandaloneExperience = isWorldCupRedesign || isProdeRedesign
+  const isStandaloneExperience = isProdeRedesign
   const allowAds = shouldAllowAdsOnRoute(pathname || '/')
 
   useEffect(() => {
@@ -416,7 +415,10 @@ export default function AppShell({ auth, children, locale }: AppShellProps) {
   const isPrimaryActive = (item: (typeof PRIMARY_NAV_ITEMS)[number]) => {
     if (item.key === 'home') return pathname === '/'
     if (item.key === 'news') return pathname?.startsWith('/noticias') ?? false
-    if (item.key === 'competitions') return pathname?.startsWith('/seccion') ?? false
+    if (item.key === 'competitions') return pathname === '/competiciones' || (pathname?.startsWith('/seccion') ?? false)
+    if (item.key === 'teams') return pathname?.startsWith('/equipos') ?? false
+    if (item.key === 'tables') return pathname?.startsWith('/tablas') ?? false
+    if (item.key === 'stats') return pathname?.startsWith('/estadisticas') ?? false
     if (item.key === 'favorites') return false
 
     return pathname === item.href
