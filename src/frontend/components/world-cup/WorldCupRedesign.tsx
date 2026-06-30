@@ -679,7 +679,11 @@ function MatchesPanel({
       ) : null}
 
       {featured ? (
-        <LiveMatchCard fixture={featured} locale={locale} />
+        isLiveStatus(featured.statusShort) ? (
+          <LiveMatchCard fixture={featured} locale={locale} />
+        ) : (
+          <MatchRow fixture={featured} locale={locale} />
+        )
       ) : (
         <div className="hf-world-empty-card">
           Todavia no hay partidos sincronizados para esta fecha.
