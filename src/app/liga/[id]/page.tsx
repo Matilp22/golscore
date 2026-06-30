@@ -3083,7 +3083,6 @@ export default async function LigaPage({ params }: PageProps) {
           subtitle="Estados Unidos, Mexico, Canada"
           fixtures={fixtures}
           standings={displayPrimaryGroups}
-          scorers={scorers}
           locale={locale}
           errorMessage={errorMessage}
           hasTournamentData={hasTournamentData}

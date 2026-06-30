@@ -2,11 +2,10 @@ import Image from 'next/image'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 
-import { PlayerPhoto, TeamLogo } from '@/frontend/components/AssetImage'
+import { TeamLogo } from '@/frontend/components/AssetImage'
 import type {
   LeagueFixtureSummary,
   LeagueStandingGroup,
-  TopPlayerRow,
 } from '@/lib/api-football'
 import {
   addDaysToISO,
@@ -28,13 +27,13 @@ import {
 } from '@/shared/utils/match-status'
 import { getWorldCupGroupKey, WORLD_CUP_GROUP_KEYS } from '@/shared/utils/world-cup-groups'
 import type { AppLocale } from '@/shared/i18n/locales'
+import WorldCupTabbedSections from './WorldCupTabbedSections'
 
 type WorldCupRedesignProps = {
   title: string
   subtitle: string
   fixtures: LeagueFixtureSummary[]
   standings: LeagueStandingGroup[]
-  scorers: TopPlayerRow[]
   locale: AppLocale
   errorMessage?: string | null
   hasTournamentData: boolean
@@ -419,40 +418,10 @@ function getVisibleFixtures(fixtures: LeagueFixtureSummary[]) {
   }
 }
 
-function getPrimaryStandingGroup(groups: LeagueStandingGroup[]) {
-  return groups.find((group) => getWorldCupGroupKey(group.name) && group.rows.length) ?? groups.find((group) => group.rows.length) ?? null
-}
-
 function getGroupDisplayName(name: string) {
   const groupKey = getWorldCupGroupKey(name)
 
   return groupKey ? `Grupo ${groupKey}` : name.replace(/^Group/i, 'Grupo')
-}
-
-function getTopStandingRows(group: LeagueStandingGroup | null) {
-  if (!group) return []
-
-  return [...group.rows]
-    .sort((a, b) => {
-      if (a.rank !== b.rank) return a.rank - b.rank
-      if (b.points !== a.points) return b.points - a.points
-      return a.teamName.localeCompare(b.teamName, 'es-AR')
-    })
-    .slice(0, 4)
-}
-
-function getBestDefenseRows(groups: LeagueStandingGroup[]) {
-  return groups
-    .flatMap((group) => group.rows)
-    .filter((row) => row.played > 0)
-    .sort((a, b) => {
-      if (a.goalsAgainst !== b.goalsAgainst) return a.goalsAgainst - b.goalsAgainst
-      if (b.played !== a.played) return b.played - a.played
-      if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference
-
-      return a.teamName.localeCompare(b.teamName, 'es-AR')
-    })
-    .slice(0, 3)
 }
 
 function TeamBadge({
@@ -696,143 +665,6 @@ function MatchesPanel({
   )
 }
 
-function StandingsCard({
-  group,
-  locale,
-}: {
-  group: LeagueStandingGroup | null
-  locale: AppLocale
-}) {
-  const rows = getTopStandingRows(group)
-
-  return (
-    <section id="grupo-destacado" className="hf-world-side-card">
-      <div className="hf-world-side-card-head">
-        <h2>GRUPO DESTACADO</h2>
-        <a href="#fase-de-grupos">Ver grupos</a>
-      </div>
-      <p className="mb-3 text-sm font-black text-[var(--hf-world-navy)]">
-        {group ? getGroupDisplayName(group.name) : 'Grupo'}
-      </p>
-
-      {rows.length ? (
-        <div className="overflow-hidden rounded-xl border border-[var(--hf-world-border)]">
-          <table className="hf-world-standings-table">
-            <thead>
-              <tr>
-                <th aria-label="Posicion" />
-                <th>Equipo</th>
-                <th>PJ</th>
-                <th>DG</th>
-                <th>PTS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, index) => (
-                <tr key={`${row.teamId ?? row.teamName}-${row.rank}`} className={index === 0 ? 'is-leading' : ''}>
-                  <td>{row.rank}</td>
-                  <td>
-                    <span className="flex min-w-0 items-center gap-2">
-                      <TeamLogo
-                        src={row.teamLogo}
-                        team={{ id: row.teamId, name: row.teamName, logo: row.teamLogo }}
-                        alt={getTeamName(row.teamName, locale)}
-                        size={20}
-                        className="h-5 w-5 object-contain"
-                      />
-                      <span className="min-w-0 truncate">{getTeamName(row.teamName, locale)}</span>
-                    </span>
-                  </td>
-                  <td>{row.played}</td>
-                  <td>{row.goalDifference > 0 ? `+${row.goalDifference}` : row.goalDifference}</td>
-                  <td>{row.points}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <div className="hf-world-empty-card is-compact">
-          La tabla se va a mostrar cuando haya posiciones sincronizadas.
-        </div>
-      )}
-    </section>
-  )
-}
-
-function StatisticsCard({
-  scorers,
-  standings,
-  locale,
-}: {
-  scorers: TopPlayerRow[]
-  standings: LeagueStandingGroup[]
-  locale: AppLocale
-}) {
-  const rows = scorers.slice(0, 2)
-  const bestDefenses = getBestDefenseRows(standings)
-  const bestDefense = bestDefenses[0] ?? null
-
-  return (
-    <section id="estadisticas-resumen" className="hf-world-side-card">
-      <div className="hf-world-side-card-head">
-        <h2>ESTADISTICAS</h2>
-        <a href="#estadisticas">Ver todos</a>
-      </div>
-
-      <div className="space-y-3">
-        {rows.length ? (
-          rows.map((row, index) => (
-            <div key={`${row.playerId ?? row.name}-${index}`} className="grid grid-cols-[20px_38px_minmax(0,1fr)_auto] items-center gap-3">
-              <span className="text-sm font-black text-[var(--hf-world-navy)]">{index + 1}</span>
-              <PlayerPhoto
-                src={row.photo}
-                player={{ id: row.playerId, name: row.name, photo: row.photo }}
-                alt={row.name}
-                size={38}
-                className="h-full w-full rounded-full object-cover"
-              />
-              <div className="min-w-0">
-                <p className="truncate text-sm font-black text-[var(--hf-world-navy)]">{row.name}</p>
-                <p className="truncate text-xs font-semibold text-[var(--hf-world-muted)]">{row.teamName ?? 'Seleccion'}</p>
-              </div>
-              <span className="text-base font-black text-[var(--hf-world-navy)]">{row.value}</span>
-            </div>
-          ))
-        ) : (
-          <div className="hf-world-stat-row">
-            <span>Goleadores</span>
-            <strong>Pendiente</strong>
-          </div>
-        )}
-
-        <div className="hf-world-stat-grid">
-          <div className="hf-world-stat-row">
-            <span>Asistencias</span>
-            <strong>Datos al sincronizar</strong>
-          </div>
-          <div className="hf-world-stat-row">
-            <span>Amarillas</span>
-            <strong>Datos al sincronizar</strong>
-          </div>
-          <div className="hf-world-stat-row">
-            <span>Rojas</span>
-            <strong>Datos al sincronizar</strong>
-          </div>
-          <div className="hf-world-stat-row">
-            <span>Valla menos vencida</span>
-            <strong>
-              {bestDefense
-                ? `${getTeamName(bestDefense.teamName, locale)} - ${bestDefense.goalsAgainst} GC`
-                : 'Pendiente'}
-            </strong>
-          </div>
-        </div>
-      </div>
-    </section>
-  )
-}
-
 function NewsCard() {
   return (
     <section id="noticias" className="hf-world-side-card">
@@ -880,7 +712,7 @@ function SelectionsSection({
     })
 
   return (
-    <section id="selecciones" className="min-w-0 scroll-mt-28">
+    <div className="min-w-0">
       <SectionTitle title="SELECCIONES" />
       {groups.length ? (
         <div className="hf-world-selection-groups">
@@ -925,13 +757,13 @@ function SelectionsSection({
           Las selecciones se van a mostrar agrupadas cuando haya posiciones sincronizadas.
         </div>
       )}
-    </section>
+    </div>
   )
 }
 
 function VenuesSection() {
   return (
-    <section id="sedes" className="min-w-0 scroll-mt-28">
+    <div className="min-w-0">
       <SectionTitle title="SEDES" />
       <div className="hf-world-venue-grid">
         {worldCupVenues.map((host) => (
@@ -948,13 +780,13 @@ function VenuesSection() {
           </article>
         ))}
       </div>
-    </section>
+    </div>
   )
 }
 
 function HistorySection() {
   return (
-    <section id="historia" className="min-w-0 scroll-mt-28">
+    <div className="min-w-0">
       <SectionTitle title="HISTORIA" />
       <article className="hf-world-history-intro">
         <h3>La copa que ordena el mapa del futbol</h3>
@@ -974,7 +806,7 @@ function HistorySection() {
           </article>
         ))}
       </div>
-    </section>
+    </div>
   )
 }
 
@@ -991,34 +823,46 @@ function FullSections({
   standings: LeagueStandingGroup[]
   locale: AppLocale
 }) {
+  const defaultPanel = bracketSection
+    ? 'fase-eliminatoria'
+    : groupStageSection
+      ? 'fase-de-grupos'
+      : leaderStatsSection
+        ? 'estadisticas'
+        : 'selecciones'
+
   return (
-    <div className="mt-5 space-y-5">
-      {bracketSection ? (
-        <section id="fase-eliminatoria" className="min-w-0 scroll-mt-28">
+    <WorldCupTabbedSections
+      defaultPanel={defaultPanel}
+      bracketContent={
+        bracketSection ? (
+          <>
           <SectionTitle title="FASE ELIMINATORIA" />
           <div className="hf-world-legacy-section">{bracketSection}</div>
-        </section>
-      ) : null}
-
-      {groupStageSection ? (
-        <section id="fase-de-grupos" className="min-w-0 scroll-mt-28">
+          </>
+        ) : undefined
+      }
+      groupStageContent={
+        groupStageSection ? (
+          <>
           <SectionTitle title="FASE DE GRUPOS" />
           <WorldCupGroupFilter />
           <div className="hf-world-legacy-section is-group-stage">{groupStageSection}</div>
-        </section>
-      ) : null}
-
-      {leaderStatsSection ? (
-        <section id="estadisticas" className="min-w-0 scroll-mt-28">
+          </>
+        ) : undefined
+      }
+      statsContent={
+        leaderStatsSection ? (
+          <>
           <SectionTitle title="ESTADISTICAS" />
           <div className="hf-world-legacy-section">{leaderStatsSection}</div>
-        </section>
-      ) : null}
-
-      <SelectionsSection standings={standings} locale={locale} />
-      <VenuesSection />
-      <HistorySection />
-    </div>
+          </>
+        ) : undefined
+      }
+      selectionsContent={<SelectionsSection standings={standings} locale={locale} />}
+      venuesContent={<VenuesSection />}
+      historyContent={<HistorySection />}
+    />
   )
 }
 
@@ -1027,7 +871,6 @@ export default function WorldCupRedesign({
   subtitle,
   fixtures,
   standings,
-  scorers,
   locale,
   errorMessage,
   hasTournamentData,
@@ -1035,8 +878,6 @@ export default function WorldCupRedesign({
   groupStageSection,
   leaderStatsSection,
 }: WorldCupRedesignProps) {
-  const primaryGroup = getPrimaryStandingGroup(standings)
-
   return (
     <div className="hf-world-shell hf-world-shell-embedded">
       <div className="hf-world-main">
@@ -1066,8 +907,6 @@ export default function WorldCupRedesign({
           </div>
 
           <aside className="hf-world-side-column">
-            <StandingsCard group={primaryGroup} locale={locale} />
-            <StatisticsCard scorers={scorers} standings={standings} locale={locale} />
             <NewsCard />
           </aside>
         </div>
