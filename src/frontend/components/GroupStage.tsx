@@ -52,11 +52,13 @@ export function GroupTabs({ activeTab, onChange }: GroupTabsProps) {
 }
 
 export function GroupStageCard({
+  id,
   title,
   table,
   fixtures,
   defaultTab = 'table',
 }: {
+  id?: string
   title: string
   table: ReactNode
   fixtures?: ReactNode | null
@@ -69,7 +71,7 @@ export function GroupStageCard({
   const visibleTab = hasFixtures ? activeTab : 'table'
 
   return (
-    <section className="min-w-0 overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
+    <section id={id} className="min-w-0 scroll-mt-28 overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
       <div className="flex min-w-0 items-center justify-between gap-2 border-b border-white/6 bg-[#13181d] px-2 py-1.5 md:px-3 md:py-2">
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-sm font-semibold text-white md:text-base md:font-bold">{title}</h2>
@@ -95,6 +97,7 @@ export default function GroupStageGrid({
     <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2">
       {groups.map((group) => (
         <GroupStageCard
+          id={group.id}
           key={group.id}
           title={group.title}
           table={group.table}

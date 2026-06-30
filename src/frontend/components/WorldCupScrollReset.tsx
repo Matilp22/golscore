@@ -19,7 +19,15 @@ export default function WorldCupScrollReset() {
       }
 
       frame = window.requestAnimationFrame(() => {
-        window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+        const targetId = window.location.hash.slice(1)
+        const target = targetId ? document.getElementById(targetId) : null
+
+        if (target) {
+          target.scrollIntoView({ block: 'start', behavior: 'auto' })
+        } else {
+          window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+        }
+
         frame = null
       })
     }

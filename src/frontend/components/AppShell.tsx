@@ -79,7 +79,7 @@ const PRIMARY_NAV_ITEMS: Array<{ key: string; label: string; href: string; icon:
   { key: 'matches', label: 'Partidos', href: '/#partidos', icon: 'ball' },
   { key: 'competitions', label: 'Competiciones', href: '/competiciones', icon: 'trophy' },
   { key: 'teams', label: 'Equipos', href: '/equipos', icon: 'shield' },
-  { key: 'tables', label: 'Tablas', href: '/tablas', icon: 'table' },
+  { key: 'prode', label: 'Prode', href: '/prode', icon: 'trophy' },
   { key: 'news', label: 'Noticias', href: '/noticias', icon: 'news' },
   { key: 'stats', label: 'Estadisticas', href: '/estadisticas', icon: 'chart' },
   { key: 'favorites', label: 'Favoritos', href: '/#favoritos', icon: 'star' },
@@ -417,7 +417,7 @@ export default function AppShell({ auth, children, locale }: AppShellProps) {
     if (item.key === 'news') return pathname?.startsWith('/noticias') ?? false
     if (item.key === 'competitions') return pathname === '/competiciones' || (pathname?.startsWith('/seccion') ?? false)
     if (item.key === 'teams') return pathname?.startsWith('/equipos') ?? false
-    if (item.key === 'tables') return pathname?.startsWith('/tablas') ?? false
+    if (item.key === 'prode') return pathname?.startsWith('/prode') ?? false
     if (item.key === 'stats') return pathname?.startsWith('/estadisticas') ?? false
     if (item.key === 'favorites') return false
 

@@ -2972,7 +2972,7 @@ export default async function LigaPage({ params }: PageProps) {
     : undefined
   const groupStageCardsSection = showGroupStageCards && displayPrimaryGroups.length ? (
     <GroupStageGrid
-      groups={displayPrimaryGroups.map((group, index) => {
+      groups={displayPrimaryGroups.map((group) => {
         const groupId = getGroupId(group)
         const thirdPlaceTable = isThirdPlaceTableGroup(group, isWorldCupTournament)
         const tableLegendItems = getTableLegendItems(
@@ -2983,7 +2983,7 @@ export default async function LigaPage({ params }: PageProps) {
         )
 
         return {
-          id: `${groupId}-${index}`,
+          id: groupId,
           title: getDisplayGroupName(group.name, { thirdPlaceTable }),
           table: (
             <>

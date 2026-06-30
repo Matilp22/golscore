@@ -66,13 +66,82 @@ const TODAY_FIXTURE_LIMIT = 4
 
 const mobileQuickItems: Array<{ label: string; href: string; icon: IconName; active?: boolean }> = [
   { label: 'En vivo', href: '#partidos', icon: 'live', active: true },
-  { label: 'Proximos', href: '#partidos', icon: 'calendar' },
-  { label: 'Posiciones', href: '#posiciones', icon: 'chart' },
-  { label: 'Equipos', href: '#mundial-grupos', icon: 'shield' },
-  { label: 'Mas', href: '#llaves', icon: 'more' },
+  { label: 'Llaves', href: '#fase-eliminatoria', icon: 'bracket' },
+  { label: 'Prode', href: '/prode', icon: 'trophy' },
+  { label: 'Selecciones', href: '#selecciones', icon: 'shield' },
+  { label: 'Mas', href: '#sedes', icon: 'more' },
 ]
 
-const tabs = ['Fase de grupos', 'Posiciones', 'Goleadores', 'Equipos', 'Sedes', 'Historia']
+const worldCupTabs: Array<{ label: string; href: string; active?: boolean }> = [
+  { label: 'Fase eliminatoria', href: '#fase-eliminatoria', active: true },
+  { label: 'Fase de grupos', href: '#fase-de-grupos' },
+  { label: 'Estadisticas', href: '#estadisticas' },
+  { label: 'Selecciones', href: '#selecciones' },
+  { label: 'Sedes', href: '#sedes' },
+  { label: 'Historia', href: '#historia' },
+]
+
+const worldCupVenues: Array<{
+  country: string
+  venues: Array<{ name: string; city: string }>
+}> = [
+  {
+    country: 'Mexico',
+    venues: [
+      { name: 'Estadio Azteca', city: 'Ciudad de Mexico' },
+      { name: 'Estadio Guadalajara', city: 'Zapopan' },
+      { name: 'Estadio Monterrey', city: 'Guadalupe' },
+    ],
+  },
+  {
+    country: 'Canada',
+    venues: [
+      { name: 'BC Place', city: 'Vancouver' },
+      { name: 'Toronto Stadium', city: 'Toronto' },
+    ],
+  },
+  {
+    country: 'Estados Unidos',
+    venues: [
+      { name: 'MetLife Stadium', city: 'New York / New Jersey' },
+      { name: 'AT&T Stadium', city: 'Dallas' },
+      { name: 'SoFi Stadium', city: 'Los Angeles' },
+      { name: 'Hard Rock Stadium', city: 'Miami' },
+      { name: 'Gillette Stadium', city: 'Boston' },
+      { name: 'NRG Stadium', city: 'Houston' },
+      { name: 'Lincoln Financial Field', city: 'Philadelphia' },
+      { name: 'Lumen Field', city: 'Seattle' },
+      { name: "Levi's Stadium", city: 'San Francisco Bay Area' },
+      { name: 'Mercedes-Benz Stadium', city: 'Atlanta' },
+      { name: 'Arrowhead Stadium', city: 'Kansas City' },
+    ],
+  },
+]
+
+const worldCupHistory: Array<{ year: string; host: string; champion: string }> = [
+  { year: '1930', host: 'Uruguay', champion: 'Uruguay' },
+  { year: '1934', host: 'Italia', champion: 'Italia' },
+  { year: '1938', host: 'Francia', champion: 'Italia' },
+  { year: '1950', host: 'Brasil', champion: 'Uruguay' },
+  { year: '1954', host: 'Suiza', champion: 'Alemania Federal' },
+  { year: '1958', host: 'Suecia', champion: 'Brasil' },
+  { year: '1962', host: 'Chile', champion: 'Brasil' },
+  { year: '1966', host: 'Inglaterra', champion: 'Inglaterra' },
+  { year: '1970', host: 'Mexico', champion: 'Brasil' },
+  { year: '1974', host: 'Alemania Federal', champion: 'Alemania Federal' },
+  { year: '1978', host: 'Argentina', champion: 'Argentina' },
+  { year: '1982', host: 'Espana', champion: 'Italia' },
+  { year: '1986', host: 'Mexico', champion: 'Argentina' },
+  { year: '1990', host: 'Italia', champion: 'Alemania Federal' },
+  { year: '1994', host: 'Estados Unidos', champion: 'Brasil' },
+  { year: '1998', host: 'Francia', champion: 'Francia' },
+  { year: '2002', host: 'Corea del Sur / Japon', champion: 'Brasil' },
+  { year: '2006', host: 'Alemania', champion: 'Italia' },
+  { year: '2010', host: 'Sudafrica', champion: 'Espana' },
+  { year: '2014', host: 'Brasil', champion: 'Alemania' },
+  { year: '2018', host: 'Rusia', champion: 'Francia' },
+  { year: '2022', host: 'Qatar', champion: 'Argentina' },
+]
 
 function Icon({ name, className = 'h-5 w-5' }: { name: IconName; className?: string }) {
   const common = {
@@ -354,6 +423,12 @@ function getPrimaryStandingGroup(groups: LeagueStandingGroup[]) {
   return groups.find((group) => getWorldCupGroupKey(group.name) && group.rows.length) ?? groups.find((group) => group.rows.length) ?? null
 }
 
+function getGroupDisplayName(name: string) {
+  const groupKey = getWorldCupGroupKey(name)
+
+  return groupKey ? `Grupo ${groupKey}` : name.replace(/^Group/i, 'Grupo')
+}
+
 function getTopStandingRows(group: LeagueStandingGroup | null) {
   if (!group) return []
 
@@ -364,6 +439,20 @@ function getTopStandingRows(group: LeagueStandingGroup | null) {
       return a.teamName.localeCompare(b.teamName, 'es-AR')
     })
     .slice(0, 4)
+}
+
+function getBestDefenseRows(groups: LeagueStandingGroup[]) {
+  return groups
+    .flatMap((group) => group.rows)
+    .filter((row) => row.played > 0)
+    .sort((a, b) => {
+      if (a.goalsAgainst !== b.goalsAgainst) return a.goalsAgainst - b.goalsAgainst
+      if (b.played !== a.played) return b.played - a.played
+      if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference
+
+      return a.teamName.localeCompare(b.teamName, 'es-AR')
+    })
+    .slice(0, 3)
 }
 
 function TeamBadge({
@@ -447,9 +536,9 @@ function WorldCupHero({ title, subtitle }: { title: string; subtitle: string }) 
 function WorldCupTabs() {
   return (
     <nav className="hf-world-tabs" aria-label="Secciones del Mundial">
-      {tabs.map((tab, index) => (
-        <a key={tab} href={index === 0 ? '#partidos' : index === 1 ? '#posiciones' : index === 2 ? '#goleadores' : '#mundial-grupos'} className={index === 0 ? 'is-active' : ''}>
-          {tab}
+      {worldCupTabs.map((tab) => (
+        <a key={tab.href} href={tab.href} className={tab.active ? 'is-active' : ''}>
+          {tab.label}
         </a>
       ))}
     </nav>
@@ -458,14 +547,13 @@ function WorldCupTabs() {
 
 function WorldCupGroupFilter() {
   return (
-    <div className="hf-world-chip-row" aria-label="Filtro de grupos">
-      <a href="#partidos" className="is-active">Todos</a>
+    <nav className="hf-world-group-jump-row" aria-label="Grupos del Mundial">
       {WORLD_CUP_GROUP_KEYS.map((groupKey) => (
-        <a key={groupKey} href="#mundial-grupos">
+        <a key={groupKey} href={`#group-${groupKey}`}>
           Grupo {groupKey}
         </a>
       ))}
-    </div>
+    </nav>
   )
 }
 
@@ -573,7 +661,7 @@ function MatchesPanel({
 
   return (
     <section id="partidos" className="min-w-0">
-      <SectionTitle title="PARTIDOS DE HOY" href="#mundial-grupos" />
+      <SectionTitle title="PARTIDOS DE HOY" href="#fase-de-grupos" />
       {showingUpcomingFallback && fixtures.length ? (
         <p className="-mt-2 mb-3 text-xs font-bold text-[var(--hf-world-muted)]">
           No hay partidos para hoy. Mostrando los proximos disponibles.
@@ -600,7 +688,7 @@ function MatchesPanel({
         </div>
       ) : null}
 
-      <a href="#mundial-grupos" className="hf-world-all-matches">
+      <a href="#fase-de-grupos" className="hf-world-all-matches">
         VER TODOS LOS PARTIDOS
         <span aria-hidden="true">&gt;</span>
       </a>
@@ -618,13 +706,13 @@ function StandingsCard({
   const rows = getTopStandingRows(group)
 
   return (
-    <section id="posiciones" className="hf-world-side-card">
+    <section id="grupo-destacado" className="hf-world-side-card">
       <div className="hf-world-side-card-head">
-        <h2>POSICIONES</h2>
-        <a href="#mundial-grupos">Ver todas</a>
+        <h2>GRUPO DESTACADO</h2>
+        <a href="#fase-de-grupos">Ver grupos</a>
       </div>
       <p className="mb-3 text-sm font-black text-[var(--hf-world-navy)]">
-        {group ? group.name.replace(/^Group/i, 'Grupo') : 'Grupo'}
+        {group ? getGroupDisplayName(group.name) : 'Grupo'}
       </p>
 
       {rows.length ? (
@@ -672,19 +760,29 @@ function StandingsCard({
   )
 }
 
-function ScorersCard({ scorers }: { scorers: TopPlayerRow[] }) {
-  const rows = scorers.slice(0, 3)
+function StatisticsCard({
+  scorers,
+  standings,
+  locale,
+}: {
+  scorers: TopPlayerRow[]
+  standings: LeagueStandingGroup[]
+  locale: AppLocale
+}) {
+  const rows = scorers.slice(0, 2)
+  const bestDefenses = getBestDefenseRows(standings)
+  const bestDefense = bestDefenses[0] ?? null
 
   return (
-    <section id="goleadores" className="hf-world-side-card">
+    <section id="estadisticas-resumen" className="hf-world-side-card">
       <div className="hf-world-side-card-head">
-        <h2>GOLEADORES</h2>
+        <h2>ESTADISTICAS</h2>
         <a href="#estadisticas">Ver todos</a>
       </div>
 
-      {rows.length ? (
-        <div className="space-y-3">
-          {rows.map((row, index) => (
+      <div className="space-y-3">
+        {rows.length ? (
+          rows.map((row, index) => (
             <div key={`${row.playerId ?? row.name}-${index}`} className="grid grid-cols-[20px_38px_minmax(0,1fr)_auto] items-center gap-3">
               <span className="text-sm font-black text-[var(--hf-world-navy)]">{index + 1}</span>
               <PlayerPhoto
@@ -700,13 +798,37 @@ function ScorersCard({ scorers }: { scorers: TopPlayerRow[] }) {
               </div>
               <span className="text-base font-black text-[var(--hf-world-navy)]">{row.value}</span>
             </div>
-          ))}
+          ))
+        ) : (
+          <div className="hf-world-stat-row">
+            <span>Goleadores</span>
+            <strong>Pendiente</strong>
+          </div>
+        )}
+
+        <div className="hf-world-stat-grid">
+          <div className="hf-world-stat-row">
+            <span>Asistencias</span>
+            <strong>Datos al sincronizar</strong>
+          </div>
+          <div className="hf-world-stat-row">
+            <span>Amarillas</span>
+            <strong>Datos al sincronizar</strong>
+          </div>
+          <div className="hf-world-stat-row">
+            <span>Rojas</span>
+            <strong>Datos al sincronizar</strong>
+          </div>
+          <div className="hf-world-stat-row">
+            <span>Valla menos vencida</span>
+            <strong>
+              {bestDefense
+                ? `${getTeamName(bestDefense.teamName, locale)} - ${bestDefense.goalsAgainst} GC`
+                : 'Pendiente'}
+            </strong>
+          </div>
         </div>
-      ) : (
-        <div className="hf-world-empty-card is-compact">
-          Los goleadores se van a mostrar cuando haya estadisticas.
-        </div>
-      )}
+      </div>
     </section>
   )
 }
@@ -738,39 +860,164 @@ function QuickAccessMobile() {
   )
 }
 
+function SelectionsSection({
+  standings,
+  locale,
+}: {
+  standings: LeagueStandingGroup[]
+  locale: AppLocale
+}) {
+  const groups = standings
+    .filter((group) => getWorldCupGroupKey(group.name) && group.rows.length)
+    .sort((a, b) => {
+      const aKey = getWorldCupGroupKey(a.name) ?? ''
+      const bKey = getWorldCupGroupKey(b.name) ?? ''
+
+      return (
+        WORLD_CUP_GROUP_KEYS.indexOf(aKey as (typeof WORLD_CUP_GROUP_KEYS)[number]) -
+        WORLD_CUP_GROUP_KEYS.indexOf(bKey as (typeof WORLD_CUP_GROUP_KEYS)[number])
+      )
+    })
+
+  return (
+    <section id="selecciones" className="min-w-0 scroll-mt-28">
+      <SectionTitle title="SELECCIONES" />
+      {groups.length ? (
+        <div className="hf-world-selection-groups">
+          {groups.map((group) => (
+            <div key={group.name} className="hf-world-selection-group">
+              <h3>{getGroupDisplayName(group.name)}</h3>
+              <div className="hf-world-selection-row">
+                {group.rows.map((row) => {
+                  const cardContent = (
+                    <>
+                      <TeamLogo
+                        src={row.teamLogo}
+                        team={{ id: row.teamId, name: row.teamName, logo: row.teamLogo }}
+                        alt={getTeamName(row.teamName, locale)}
+                        size={42}
+                        className="h-11 w-11 object-contain"
+                      />
+                      <span>{getTeamName(row.teamName, locale)}</span>
+                    </>
+                  )
+
+                  return row.teamId ? (
+                    <Link
+                      key={row.teamId}
+                      href={`/equipo/${row.teamId}`}
+                      className="hf-world-selection-card"
+                    >
+                      {cardContent}
+                    </Link>
+                  ) : (
+                    <div key={row.teamName} className="hf-world-selection-card" aria-disabled="true">
+                      {cardContent}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="hf-world-empty-card">
+          Las selecciones se van a mostrar agrupadas cuando haya posiciones sincronizadas.
+        </div>
+      )}
+    </section>
+  )
+}
+
+function VenuesSection() {
+  return (
+    <section id="sedes" className="min-w-0 scroll-mt-28">
+      <SectionTitle title="SEDES" />
+      <div className="hf-world-venue-grid">
+        {worldCupVenues.map((host) => (
+          <article key={host.country} className="hf-world-info-card">
+            <h3>{host.country}</h3>
+            <div className="hf-world-venue-list">
+              {host.venues.map((venue) => (
+                <div key={`${host.country}-${venue.name}`} className="hf-world-venue-item">
+                  <strong>{venue.name}</strong>
+                  <span>{venue.city}</span>
+                </div>
+              ))}
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function HistorySection() {
+  return (
+    <section id="historia" className="min-w-0 scroll-mt-28">
+      <SectionTitle title="HISTORIA" />
+      <article className="hf-world-history-intro">
+        <h3>La copa que ordena el mapa del futbol</h3>
+        <p>
+          El Mundial nacio en 1930 y se transformo en la competencia mas influyente
+          del futbol de selecciones: identidad, generaciones, estadios historicos y
+          campeones que marcaron epocas. La edicion 2026 abre una etapa nueva con
+          48 equipos y tres paises anfitriones.
+        </p>
+      </article>
+      <div className="hf-world-history-grid">
+        {worldCupHistory.map((item) => (
+          <article key={item.year} className="hf-world-history-card">
+            <strong>{item.year}</strong>
+            <span>{item.host}</span>
+            <b>{item.champion}</b>
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 function FullSections({
   groupStageSection,
   bracketSection,
   leaderStatsSection,
+  standings,
+  locale,
 }: {
   groupStageSection?: ReactNode
   bracketSection?: ReactNode
   leaderStatsSection?: ReactNode
+  standings: LeagueStandingGroup[]
+  locale: AppLocale
 }) {
-  if (!groupStageSection && !bracketSection && !leaderStatsSection) return null
-
   return (
     <div className="mt-5 space-y-5">
-      {groupStageSection ? (
-        <section id="mundial-grupos" className="min-w-0">
-          <SectionTitle title="FASE DE GRUPOS COMPLETA" />
-          <div className="hf-world-legacy-section">{groupStageSection}</div>
-        </section>
-      ) : null}
-
       {bracketSection ? (
-        <section id="llaves" className="min-w-0">
-          <SectionTitle title="LLAVES Y SIMULADOR" />
+        <section id="fase-eliminatoria" className="min-w-0 scroll-mt-28">
+          <SectionTitle title="FASE ELIMINATORIA" />
           <div className="hf-world-legacy-section">{bracketSection}</div>
         </section>
       ) : null}
 
+      {groupStageSection ? (
+        <section id="fase-de-grupos" className="min-w-0 scroll-mt-28">
+          <SectionTitle title="FASE DE GRUPOS" />
+          <WorldCupGroupFilter />
+          <div className="hf-world-legacy-section is-group-stage">{groupStageSection}</div>
+        </section>
+      ) : null}
+
       {leaderStatsSection ? (
-        <section id="estadisticas" className="min-w-0">
-          <SectionTitle title="ESTADISTICAS COMPLETAS" />
+        <section id="estadisticas" className="min-w-0 scroll-mt-28">
+          <SectionTitle title="ESTADISTICAS" />
           <div className="hf-world-legacy-section">{leaderStatsSection}</div>
         </section>
       ) : null}
+
+      <SelectionsSection standings={standings} locale={locale} />
+      <VenuesSection />
+      <HistorySection />
     </div>
   )
 }
@@ -802,7 +1049,6 @@ export default function WorldCupRedesign({
         </div>
         <QuickAccessMobile />
         <WorldCupTabs />
-        <WorldCupGroupFilter />
 
         {errorMessage ? (
           <div className="hf-world-alert">{errorMessage}</div>
@@ -821,7 +1067,7 @@ export default function WorldCupRedesign({
 
           <aside className="hf-world-side-column">
             <StandingsCard group={primaryGroup} locale={locale} />
-            <ScorersCard scorers={scorers} />
+            <StatisticsCard scorers={scorers} standings={standings} locale={locale} />
             <NewsCard />
           </aside>
         </div>
@@ -830,6 +1076,8 @@ export default function WorldCupRedesign({
           groupStageSection={groupStageSection}
           bracketSection={bracketSection}
           leaderStatsSection={leaderStatsSection}
+          standings={standings}
+          locale={locale}
         />
       </div>
     </div>
