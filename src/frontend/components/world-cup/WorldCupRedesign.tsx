@@ -534,8 +534,8 @@ function WorldCupHero({ title, subtitle }: { title: string; subtitle: string }) 
         <Image
           src={WORLD_CUP_TROPHY_SRC}
           alt=""
-          width={167}
-          height={349}
+          width={207}
+          height={505}
           priority
           className="hf-world-hero-trophy"
         />
