@@ -46,6 +46,18 @@ const PAGES: GlobalActionPage[] = [
     href: '/prode',
   },
   {
+    key: 'mi-torneito',
+    title: 'Mi Torneito',
+    description: 'Crea y administra torneos amateur con fixture y tabla.',
+    href: '/mi-torneito',
+  },
+  {
+    key: 'mi-torneito-admin',
+    title: 'Admin Mi Torneito',
+    description: 'Panel para organizadores de torneos asignados.',
+    href: '/mi-torneito/admin',
+  },
+  {
     key: 'noticias',
     title: 'Noticias',
     description: 'Notas y guias de Hay Fulbo.',

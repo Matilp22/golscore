@@ -1392,8 +1392,8 @@ function MatchHistorySection({
     preferCountryTeamNames ? translateCountryName(name, locale) || name : name
 
   return (
-    <div id={shareId} className="hf-card w-full overflow-hidden rounded-2xl">
-      <div className="hf-section-head px-2 py-3 md:px-4">
+    <div id={shareId} data-match-detail="history-card" className="hf-card w-full overflow-hidden rounded-2xl">
+      <div className="hf-section-head hf-match-history-head px-2 py-3 md:px-4">
         <div className="flex items-center justify-between gap-3">
           <span aria-hidden="true" className="h-10 w-10" />
           <div className="min-w-0 text-center">
@@ -2730,7 +2730,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
           </section>
 
           <aside className="space-y-4">
-            <div id={statsShareId} className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
+            <div id={statsShareId} data-match-detail="stats-card" className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
               <div className="border-b border-white/6 bg-[#13181d] px-2 py-3 md:px-4">
                 <div className="flex items-center justify-between gap-3">
                   <span aria-hidden="true" className="h-10 w-10" />

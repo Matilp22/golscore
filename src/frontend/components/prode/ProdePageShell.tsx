@@ -22,14 +22,23 @@ type ProdePageShellProps = {
   }
 }
 
-type IconName = 'home' | 'live' | 'calendar' | 'chart' | 'shield' | 'trophy' | 'search' | 'menu' | 'more'
+type IconName =
+  | 'home'
+  | 'live'
+  | 'calendar'
+  | 'chart'
+  | 'shield'
+  | 'trophy'
+  | 'search'
+  | 'menu'
+  | 'more'
 type ProdeNavItem = { label: string; href: string; icon: IconName; active?: boolean }
 
 const HF_LOGO_SRC = '/brand/hf-logo.png'
 
 const prodeNavItems: ProdeNavItem[] = [
   { label: 'Inicio', href: '/', icon: 'home' },
-  { label: 'Mundial', href: '/liga/selecciones-mundial', icon: 'trophy' },
+  { label: 'Competiciones', href: '/competiciones', icon: 'trophy' },
   { label: 'En vivo', href: '/#en-vivo', icon: 'live' },
   { label: 'Proximos', href: '/#proximos', icon: 'calendar' },
   { label: 'Posiciones', href: '/liga/selecciones-mundial#posiciones', icon: 'chart' },
@@ -39,10 +48,10 @@ const prodeNavItems: ProdeNavItem[] = [
 
 const bottomNavItems: ProdeNavItem[] = [
   { label: 'Inicio', href: '/', icon: 'home' },
-  { label: 'Mundial', href: '/liga/selecciones-mundial', icon: 'trophy' },
+  { label: 'Competiciones', href: '/competiciones', icon: 'trophy' },
   { label: 'Ranking', href: '#ranking', icon: 'chart' },
   { label: 'Prode', href: '/prode', icon: 'trophy', active: true },
-  { label: 'Mas', href: '/prode/torneos', icon: 'more' },
+  { label: 'Torneos', href: '/prode/torneos', icon: 'more' },
 ]
 
 function Icon({ name, className = 'h-5 w-5' }: { name: IconName; className?: string }) {
@@ -141,24 +150,6 @@ export default function ProdePageShell({
 
   return (
     <div className="hf-prode-shell">
-      <aside className="hf-prode-sidebar">
-        <Link href="/" aria-label="Hay Fulbo inicio" className="hf-prode-logo-link">
-          <Image src={HF_LOGO_SRC} alt="Hay Fulbo" width={134} height={91} priority className="h-auto w-[108px]" />
-        </Link>
-        <nav aria-label="Navegacion Prode" className="mt-6 flex flex-1 flex-col gap-1.5">
-          {prodeNavItems.map((item) => (
-            <Link key={item.label} href={item.href} className={`hf-prode-sidebar-item ${item.active ? 'is-active' : ''}`}>
-              <Icon name={item.icon} className="h-5 w-5" />
-              <span className="min-w-0 truncate">{item.label}</span>
-            </Link>
-          ))}
-        </nav>
-        <div className="hf-prode-sidebar-card">
-          <span className="text-xl font-black leading-tight">PRODE<br />MUNDIAL</span>
-          <span className="mt-2 block text-xs font-semibold text-white/75">Pronostica, suma puntos y competi con amigos.</span>
-        </div>
-      </aside>
-
       <main className="hf-prode-main">
         <header className="hf-prode-header">
           <button

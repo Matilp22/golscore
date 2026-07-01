@@ -77,7 +77,7 @@ type ShellIconName =
 
 const PRIMARY_NAV_ITEMS: Array<{ key: string; label: string; href: string; icon: ShellIconName }> = [
   { key: 'home', label: 'Inicio', href: '/', icon: 'home' },
-  { key: 'matches', label: 'Partidos', href: '/#partidos', icon: 'ball' },
+  { key: 'mi-torneito', label: 'Mi Torneito', href: '/mi-torneito', icon: 'trophy' },
   { key: 'competitions', label: 'Competiciones', href: '/competiciones', icon: 'trophy' },
   { key: 'teams', label: 'Equipos', href: '/equipos', icon: 'shield' },
   { key: 'prode', label: 'Prode', href: '/prode', icon: 'trophy' },
@@ -108,6 +108,7 @@ const MOBILE_MORE_ITEMS: Array<{
   icon: ShellIconName
   needsAuthRoute?: boolean
 }> = [
+  { key: 'mi-torneito', label: 'Mi Torneito', href: '/mi-torneito', icon: 'trophy' },
   { key: 'news', label: 'Noticias', href: '/noticias', icon: 'news' },
   { key: 'matches', label: 'Partidos', href: '/#partidos', icon: 'ball' },
   { key: 'stats', label: 'Estadisticas', href: '/estadisticas', icon: 'chart' },
@@ -385,8 +386,8 @@ export default function AppShell({ auth, children, locale }: AppShellProps) {
   const { user } = useAuth()
   const isHome = pathname === '/'
   const isAdmin = pathname?.startsWith('/admin') ?? false
-  const isProdeRedesign = pathname?.startsWith('/prode') ?? false
-  const isStandaloneExperience = isProdeRedesign
+  const isProdeRoute = pathname?.startsWith('/prode') ?? false
+  const isStandaloneExperience = false
   const allowAds = shouldAllowAdsOnRoute(pathname || '/')
 
   useEffect(() => {
@@ -419,16 +420,6 @@ export default function AppShell({ auth, children, locale }: AppShellProps) {
     )
   }
 
-  if (isStandaloneExperience) {
-    return (
-      <LocaleProvider locale={locale}>
-        <AppAudioPreferenceBridge />
-        <TournamentAudioController />
-        {children}
-      </LocaleProvider>
-    )
-  }
-
   const sidebar = (
     <SidebarNav
       sections={SIDEBAR_SECTION_CONFIGS}
@@ -443,6 +434,7 @@ export default function AppShell({ auth, children, locale }: AppShellProps) {
     if (item.key === 'competitions') return pathname === '/competiciones' || (pathname?.startsWith('/seccion') ?? false)
     if (item.key === 'teams') return pathname?.startsWith('/equipos') ?? false
     if (item.key === 'prode') return pathname?.startsWith('/prode') ?? false
+    if (item.key === 'mi-torneito') return pathname?.startsWith('/mi-torneito') ?? false
     if (item.key === 'stats') return pathname?.startsWith('/estadisticas') ?? false
     if (item.key === 'favorites') return false
 
@@ -494,41 +486,43 @@ export default function AppShell({ auth, children, locale }: AppShellProps) {
         </aside>
 
         <div className="hf-global-main">
-          <header className="hf-global-header">
-            <Link
-              href="/"
-              className="hf-global-mobile-brand lg:hidden"
-              aria-label={t(locale, 'shell.homeLabel')}
-            >
-              <BrandMark />
-            </Link>
-
-            <div className="hidden min-w-0 items-center gap-3 lg:flex">
-              {isHome ? null : <BackButton />}
-            </div>
-
-            <div className="hf-global-header-actions">
-              {HEADER_ACTIONS.map((action) => (
-                <Link
-                  key={action.key}
-                  href={action.href}
-                  className={getHeaderActionClassName(action.accent)}
-                >
-                  {action.label}
-                </Link>
-              ))}
-              <button
-                type="button"
-                className="hf-global-icon-button"
-                aria-label="Buscar"
-                onClick={() => setIsSearchOpen(true)}
+          {!isProdeRoute ? (
+            <header className="hf-global-header">
+              <Link
+                href="/"
+                className="hf-global-mobile-brand lg:hidden"
+                aria-label={t(locale, 'shell.homeLabel')}
               >
-                <ShellIcon name="search" />
-              </button>
-              <NotificationBell />
-              <div className="hidden lg:block">{auth}</div>
-            </div>
-          </header>
+                <BrandMark />
+              </Link>
+
+              <div className="hidden min-w-0 items-center gap-3 lg:flex">
+                {isHome ? null : <BackButton />}
+              </div>
+
+              <div className="hf-global-header-actions">
+                {HEADER_ACTIONS.map((action) => (
+                  <Link
+                    key={action.key}
+                    href={action.href}
+                    className={getHeaderActionClassName(action.accent)}
+                  >
+                    {action.label}
+                  </Link>
+                ))}
+                <button
+                  type="button"
+                  className="hf-global-icon-button"
+                  aria-label="Buscar"
+                  onClick={() => setIsSearchOpen(true)}
+                >
+                  <ShellIcon name="search" />
+                </button>
+                <NotificationBell />
+                <div className="hidden lg:block">{auth}</div>
+              </div>
+            </header>
+          ) : null}
 
           <div className="hf-global-content">
             {children}
@@ -639,67 +633,69 @@ export default function AppShell({ auth, children, locale }: AppShellProps) {
         </div>
       ) : null}
 
-      <nav className="hf-mobile-bottom-nav lg:hidden" aria-label="Navegacion principal mobile">
-        {MOBILE_BOTTOM_ITEMS.map((item) => {
-          const active =
-            item.key === 'home'
-              ? pathname === '/'
-              : item.key === 'competitions'
-                ? pathname === '/competiciones' || (pathname?.startsWith('/seccion') ?? false)
-                : item.key === 'prode'
-                  ? pathname?.startsWith('/prode')
-                : item.key === 'more'
-                  ? isMoreOpen
-                  : false
+      {!isProdeRoute ? (
+        <nav className="hf-mobile-bottom-nav lg:hidden" aria-label="Navegacion principal mobile">
+          {MOBILE_BOTTOM_ITEMS.map((item) => {
+            const active =
+              item.key === 'home'
+                ? pathname === '/'
+                : item.key === 'competitions'
+                  ? pathname === '/competiciones' || (pathname?.startsWith('/seccion') ?? false)
+                  : item.key === 'prode'
+                    ? pathname?.startsWith('/prode')
+                  : item.key === 'more'
+                    ? isMoreOpen
+                    : false
 
-          if (item.opensFavorites) {
-            return (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => {
-                  setIsMoreOpen(false)
-                  setIsFavoritesOpen(true)
-                }}
-                aria-label="Abrir favoritos"
-              >
-                <ShellIcon name={item.icon} />
-                <span>{item.label}</span>
-              </button>
-            )
-          }
+            if (item.opensFavorites) {
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => {
+                    setIsMoreOpen(false)
+                    setIsFavoritesOpen(true)
+                  }}
+                  aria-label="Abrir favoritos"
+                >
+                  <ShellIcon name={item.icon} />
+                  <span>{item.label}</span>
+                </button>
+              )
+            }
 
-          if (item.opensMore) {
+            if (item.opensMore) {
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => {
+                    setIsFavoritesOpen(false)
+                    setIsMoreOpen(true)
+                  }}
+                  aria-label="Abrir mas secciones"
+                  className={active ? 'is-active' : ''}
+                >
+                  <ShellIcon name={item.icon} />
+                  <span>{item.label}</span>
+                </button>
+              )
+            }
+
             return (
-              <button
+              <Link
                 key={item.key}
-                type="button"
-                onClick={() => {
-                  setIsFavoritesOpen(false)
-                  setIsMoreOpen(true)
-                }}
-                aria-label="Abrir mas secciones"
+                href={item.href || '/'}
                 className={active ? 'is-active' : ''}
+                aria-current={active ? 'page' : undefined}
               >
                 <ShellIcon name={item.icon} />
                 <span>{item.label}</span>
-              </button>
+              </Link>
             )
-          }
-
-          return (
-            <Link
-              key={item.key}
-              href={item.href || '/'}
-              className={active ? 'is-active' : ''}
-              aria-current={active ? 'page' : undefined}
-            >
-              <ShellIcon name={item.icon} />
-              <span>{item.label}</span>
-            </Link>
-          )
-        })}
-      </nav>
+          })}
+        </nav>
+      ) : null}
 
       <GlobalSearch open={isSearchOpen} onOpenChange={setIsSearchOpen} />
     </LocaleProvider>

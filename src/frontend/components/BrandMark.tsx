@@ -16,11 +16,11 @@ export default function BrandMark({
   const logoClassName = hero
     ? 'h-auto w-[132px] sm:w-[162px]'
     : compact
-      ? 'h-auto w-[78px]'
+      ? 'h-auto w-[92px]'
       : 'h-auto w-[118px]'
 
   return (
-    <span className={`inline-flex min-w-0 items-center ${className}`}>
+    <span className={`hf-brand-logo inline-flex min-w-0 items-center justify-center ${className}`}>
       <Image
         src={HF_LOGO_SRC}
         alt="Hay Fulbo"
