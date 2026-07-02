@@ -1,3 +1,4 @@
+import ProdePageShell from '@/frontend/components/prode/ProdePageShell'
 import PrivateTournamentDetailPage from '@/frontend/components/prode/private-tournaments/PrivateTournamentDetailPage'
 import { getRequestLocale } from '@/server/request-locale'
 import { t } from '@/shared/i18n/locales'
@@ -24,12 +25,20 @@ export default async function ProdeTournamentDetailPage({
   params,
 }: ProdeTournamentDetailPageProps) {
   const { id } = await params
+  const locale = await getRequestLocale()
 
   return (
-    <div className="min-h-screen overflow-x-hidden text-white">
-      <div className="w-full px-2 py-3 md:mx-auto md:max-w-6xl md:px-4 md:py-6">
-        <PrivateTournamentDetailPage tournamentId={id} />
-      </div>
-    </div>
+    <ProdePageShell
+      eyebrow="Torneo privado"
+      title={t(locale, 'privateTournaments.detailTitle')}
+      subtitle={t(locale, 'privateTournaments.tournamentTable')}
+      action={{
+        href: '/prode/torneos',
+        label: t(locale, 'privateTournaments.backToTournaments'),
+        variant: 'secondary',
+      }}
+    >
+      <PrivateTournamentDetailPage tournamentId={id} />
+    </ProdePageShell>
   )
 }

@@ -60,6 +60,14 @@ export type MatchHistoryViewModel = {
   currentMatchId: string
   homeTeam: MatchHistoryTeam
   awayTeam: MatchHistoryTeam
+  summary: {
+    total: number
+    homePerspectiveWins: number
+    awayPerspectiveWins: number
+    draws: number
+    homePerspectiveGoals: number
+    awayPerspectiveGoals: number
+  }
   items: MatchHistoryItem[]
   warnings: string[]
 }
@@ -105,6 +113,62 @@ function getScoreLabel(match: Pick<MatchRow, 'home_score' | 'away_score' | 'stat
   if (status === 'NS' || status === 'TBD') return 'vs'
 
   return 'Sin resultado'
+}
+
+function createEmptyHistorySummary(): MatchHistoryViewModel['summary'] {
+  return {
+    total: 0,
+    homePerspectiveWins: 0,
+    awayPerspectiveWins: 0,
+    draws: 0,
+    homePerspectiveGoals: 0,
+    awayPerspectiveGoals: 0,
+  }
+}
+
+function isSameHistoryTeam(a: MatchHistoryTeam, b: MatchHistoryTeam) {
+  if (a.externalId !== null && b.externalId !== null) return a.externalId === b.externalId
+  if (a.id && b.id) return a.id === b.id
+
+  return a.name.trim().toLowerCase() === b.name.trim().toLowerCase()
+}
+
+function parseScoreLabel(scoreLabel: string) {
+  const match = scoreLabel.match(/(\d+)\s*-\s*(\d+)/)
+  if (!match) return null
+
+  return {
+    home: Number(match[1]),
+    away: Number(match[2]),
+  }
+}
+
+function buildHistorySummary(
+  items: MatchHistoryItem[],
+  perspectiveHome: MatchHistoryTeam
+): MatchHistoryViewModel['summary'] {
+  return items.reduce((summary, item) => {
+    const score = parseScoreLabel(item.scoreLabel)
+    if (!score) return summary
+
+    const itemHomeIsPerspectiveHome = isSameHistoryTeam(item.homeTeam, perspectiveHome)
+    const homePerspectiveGoals = itemHomeIsPerspectiveHome ? score.home : score.away
+    const awayPerspectiveGoals = itemHomeIsPerspectiveHome ? score.away : score.home
+
+    summary.total += 1
+    summary.homePerspectiveGoals += homePerspectiveGoals
+    summary.awayPerspectiveGoals += awayPerspectiveGoals
+
+    if (homePerspectiveGoals > awayPerspectiveGoals) {
+      summary.homePerspectiveWins += 1
+    } else if (awayPerspectiveGoals > homePerspectiveGoals) {
+      summary.awayPerspectiveWins += 1
+    } else {
+      summary.draws += 1
+    }
+
+    return summary
+  }, createEmptyHistorySummary())
 }
 
 function getMatchTimestamp(date: string | null | undefined) {
@@ -182,6 +246,7 @@ export async function buildMatchHistoryViewModel(
       currentMatchId: String(fixture.fixture.id),
       homeTeam,
       awayTeam,
+      summary: detail.headToHead.summary,
       items: detail.headToHead.matches.map((match) => ({
         id: match.fixtureExternalId ?? `${match.date ?? 'sin-fecha'}-${match.homeTeam.name}-${match.awayTeam.name}`,
         externalId: match.fixtureExternalId,
@@ -263,6 +328,7 @@ export async function buildMatchHistoryViewModel(
       currentMatchId: currentExternalId,
       homeTeam: fallbackHomeTeam,
       awayTeam: fallbackAwayTeam,
+      summary: createEmptyHistorySummary(),
       items: [],
       warnings,
     }
@@ -363,6 +429,7 @@ export async function buildMatchHistoryViewModel(
     currentMatchId: currentExternalId,
     homeTeam: resolvedHomeTeam,
     awayTeam: resolvedAwayTeam,
+    summary: buildHistorySummary(items, resolvedHomeTeam),
     items,
     warnings,
   }

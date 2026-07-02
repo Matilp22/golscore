@@ -158,7 +158,7 @@ export default function LeaderboardTable({
   }
 
   return (
-    <aside className="hf-card h-fit w-full min-w-0 overflow-hidden rounded-2xl">
+    <aside id="ranking" className="hf-card h-fit w-full min-w-0 overflow-hidden rounded-2xl">
       <div className="hf-section-head px-3 py-3 sm:px-4">
         <div className="flex min-w-0 flex-col gap-3">
           <h2 className="text-lg font-black text-white">{t('prode.rankingTitle')}</h2>

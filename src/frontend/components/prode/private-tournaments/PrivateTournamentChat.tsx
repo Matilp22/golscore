@@ -258,7 +258,7 @@ export default function PrivateTournamentChat({
   }
 
   const chatSurface = (
-    <section className="hf-card flex h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl">
+    <section className="hf-card hf-prode-chat-card flex h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl">
       <div className="hf-section-head shrink-0 px-3 py-3 sm:px-4">
         <div className="flex min-w-0 items-start justify-between gap-3">
           <div className="min-w-0">
@@ -285,7 +285,7 @@ export default function PrivateTournamentChat({
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="min-h-0 flex-1 overflow-y-auto border-y border-white/6 bg-[#080f0d] px-3 py-3"
+        className="hf-prode-chat-scroll min-h-0 flex-1 overflow-y-auto border-y border-white/6 bg-[#080f0d] px-3 py-3"
       >
         {isLoading || isAuthLoading ? (
           <p className="text-sm text-[#8d98a7]">{t('privateChat.loading')}</p>
@@ -323,7 +323,7 @@ export default function PrivateTournamentChat({
                         {renderSticker(chatMessage.stickerUrl, chatMessage.stickerLabel, t('privateChat.stickerAlt'))}
                       </div>
                     ) : (
-                      <p className="mt-0.5 break-words leading-relaxed text-[#dce7f2]">
+                      <p className="hf-prode-chat-message mt-0.5 break-words leading-relaxed text-[#dce7f2]">
                         {chatMessage.message}
                       </p>
                     )}

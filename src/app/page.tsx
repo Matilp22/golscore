@@ -2,11 +2,9 @@ export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 
 import AutoRefresh from '@/frontend/components/AutoRefresh'
-import BrandMark from '@/frontend/components/BrandMark'
-import { LeagueLogo } from '@/frontend/components/AssetImage'
+import HfHomeRedesign from '@/frontend/components/home/HfHomeRedesign'
 import LiveEventToasts from '@/frontend/components/LiveEventToasts'
-import MatchRow from '@/frontend/components/MatchRow'
-import Link from 'next/link'
+import { getNewsArticles } from '@/content/editorial'
 import {
   getMatchesByDate,
   readCachedHomeMatchesByDate,
@@ -1372,169 +1370,61 @@ export default async function HomePage({
   const homeLiveSyncUrl = hasFastRefreshMatches
     ? `/api/home/live-sync?date=${encodeURIComponent(selectedDate)}&limit=20`
     : null
+  const homeCompetitions = visibleCompetitions.map((competition) => ({
+    key: competition.key,
+    title: getTournamentDisplayName(competition.key, competition.title, locale),
+    logo: competition.logo,
+    href: competition.href,
+    matches: competition.matches.map((match) => ({
+      ...match,
+      displayTime: formatMatchTimeArgentina(match.date),
+      displayScore: formatMatchScoreWithPenalties({
+        goalsHome: match.goalsHome,
+        goalsAway: match.goalsAway,
+        homePenaltyScore: match.homePenaltyScore,
+        awayPenaltyScore: match.awayPenaltyScore,
+      }),
+      displayStatus: formatHomeMatchStatus({
+        statusShort: match.statusShort,
+        minute: match.minute,
+        date: match.date,
+        locale,
+      }),
+      prediction:
+        homeProdePredictions.get(String(match.externalId ?? match.id)) ??
+        homeProdePredictions.get(String(match.id)) ??
+        null,
+    })),
+  }))
+  const homeArticles = getNewsArticles().map((article) => ({
+    slug: article.slug,
+    title: article.title,
+    summary: article.summary,
+    category: article.category,
+    updatedAt: article.updatedAt,
+    heroImage: article.heroImage,
+  }))
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-transparent text-white">
-      <div className="w-full px-0 py-1 lg:mx-auto lg:max-w-7xl lg:px-5 lg:py-4">
-        <header className="hf-hero relative mb-4 w-full overflow-hidden rounded-3xl px-3 py-4 sm:px-4 md:px-5 md:py-5">
-          <div className="relative z-10 mb-4 flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h1>
-                <BrandMark hero />
-              </h1>
-              <p className="mt-3 max-w-2xl text-xs font-semibold uppercase tracking-[0.22em] text-[#70ff9d] md:text-sm">
-                {t(locale, 'home.tagline')}
-              </p>
-            </div>
-
-            <AutoRefresh
-              intervalMs={refreshIntervalMs}
-              showButton
-              initialUpdatedAt={renderedAt}
-              initialSyncMinIntervalMs={20_000}
-              syncBeforeRefreshUrl={homeLiveSyncUrl}
-            />
-          </div>
-
-          <div className="relative z-10 grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:justify-center">
-            {dayOptions.map((day) => (
-              <a
-                key={day.value}
-                href={`/?date=${day.value}`}
-                className={`flex min-h-11 items-center justify-center rounded-xl border px-2 py-2 text-center text-sm font-black transition sm:px-4 ${
-                  selectedDate === day.value
-                    ? 'border-[#70ff9d]/35 bg-[rgba(112,255,157,0.16)] text-[#dfffe9] shadow-[0_0_26px_rgba(112,255,157,0.12)]'
-                    : 'border-white/10 bg-black/20 text-[#c7d0da] hover:border-[#70ff9d]/30 hover:bg-[#70ff9d]/10 hover:text-white'
-                }`}
-              >
-                {day.label}
-              </a>
-            ))}
-          </div>
-        </header>
-
-          <main className="min-w-0 space-y-2">
-            {dataError ? (
-              <div className="rounded-2xl border border-[#5a2a2a] bg-[#3b1919] p-6">
-                <p className="text-sm font-medium text-[#ffd5d5]">
-                  {dataError}
-                </p>
-              </div>
-            ) : null}
-
-            {visibleCompetitions.length ? (
-              <section className="w-full min-w-0 space-y-2">
-                <div className="space-y-2">
-                  {visibleCompetitions.map((competition) => {
-                    const competitionTitle = getTournamentDisplayName(
-                      competition.key,
-                      competition.title,
-                      locale
-                    )
-
-                    return (
-                    <div
-                      id={competition.key}
-                      key={competition.key}
-                      className="hf-card hf-card-hover scroll-mt-4 overflow-hidden rounded-2xl"
-                    >
-                      <div className="hf-section-head px-2.5 py-1.5 sm:px-3">
-                        <div className="flex min-w-0 items-center justify-between gap-2">
-                          {competition.href ? (
-                            <Link
-                              href={competition.href}
-                              prefetch={false}
-                              className="inline-flex min-w-0 items-center gap-2 text-sm font-black text-[#f3f6fa] no-underline transition hover:text-[#7ff0b2] hover:no-underline md:text-base"
-                            >
-                              {competition.logo ? (
-                                <span className="flex h-6 w-6 shrink-0 items-center justify-center">
-                                  <LeagueLogo
-                                  src={competition.logo}
-                                  alt={competitionTitle}
-                                  size={20}
-                                    className="h-5 w-5 object-contain"
-                                    fallbackClassName="h-4 w-3"
-                                  />
-                                </span>
-                              ) : null}
-                              <span className="break-words">{competitionTitle}</span>
-                            </Link>
-                          ) : (
-                            <h2 className="inline-flex min-w-0 items-center gap-2 text-sm font-black text-[#f3f6fa] md:text-base">
-                              {competition.logo ? (
-                                <span className="flex h-6 w-6 shrink-0 items-center justify-center">
-                                  <LeagueLogo
-                                  src={competition.logo}
-                                  alt={competitionTitle}
-                                  size={20}
-                                    className="h-5 w-5 object-contain"
-                                    fallbackClassName="h-4 w-3"
-                                  />
-                                </span>
-                              ) : null}
-                              <span className="break-words">{competitionTitle}</span>
-                            </h2>
-                          )}
-
-                          <div className="hf-badge shrink-0 rounded-lg px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.06em]">
-                            {competition.matches.length} {t(
-                              locale,
-                              competition.matches.length === 1
-                                ? 'home.matchSingular'
-                                : 'home.matchPlural'
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div>
-                        {competition.matches.map((match) => (
-                          <MatchRow
-                            key={match.id}
-                            id={match.id}
-                            league={match.league}
-                            country={match.country}
-                            homeLogo={match.homeLogo}
-                            awayLogo={match.awayLogo}
-                            time={formatMatchTimeArgentina(match.date)}
-                            home={match.home}
-                            away={match.away}
-                            score={formatMatchScoreWithPenalties({
-                              goalsHome: match.goalsHome,
-                              goalsAway: match.goalsAway,
-                              homePenaltyScore: match.homePenaltyScore,
-                              awayPenaltyScore: match.awayPenaltyScore,
-                            })}
-                            status={formatHomeMatchStatus({
-                              statusShort: match.statusShort,
-                              minute: match.minute,
-                              date: match.date,
-                              locale,
-                            })}
-                            goalScorers={match.goalScorers}
-                            broadcasters={match.broadcasters}
-                            broadcastChannel={match.broadcastChannel}
-                            broadcastLogoUrl={match.broadcastLogoUrl}
-                            prediction={
-                              homeProdePredictions.get(String(match.externalId ?? match.id)) ??
-                              homeProdePredictions.get(String(match.id))
-                            }
-                            locale={locale}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                    )
-                  })}
-                </div>
-              </section>
-            ) : dataError ? null : (
-              <div className="w-full rounded-2xl border border-white/8 bg-[#0f1317]/92 px-2 py-5 text-sm text-[#94a0ae] md:px-4 md:py-6">
-                {t(locale, 'home.noMatches')}
-              </div>
-            )}
-          </main>
-      </div>
+    <div className="min-h-screen overflow-x-hidden bg-transparent">
+      <HfHomeRedesign
+        locale={locale}
+        dayOptions={dayOptions}
+        selectedDate={selectedDate}
+        competitions={homeCompetitions}
+        articles={homeArticles}
+        dataError={dataError}
+        noMatchesLabel={t(locale, 'home.noMatches')}
+        autoRefresh={(
+          <AutoRefresh
+            intervalMs={refreshIntervalMs}
+            showButton
+            initialUpdatedAt={renderedAt}
+            initialSyncMinIntervalMs={20_000}
+            syncBeforeRefreshUrl={homeLiveSyncUrl}
+          />
+        )}
+      />
       <LiveEventToasts
         date={selectedDate}
         enabled={hasLiveMatches}

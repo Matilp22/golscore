@@ -4,6 +4,7 @@ const adminLinks = [
   { href: '/admin', label: 'Dashboard' },
   { href: '/admin/sync', label: 'Sync' },
   { href: '/admin/matches', label: 'Partidos' },
+  { href: '/admin/mi-torneito', label: 'Mi Torneito' },
   { href: '/admin/featured-matches', label: 'Destacados' },
   { href: '/admin/broadcasts', label: 'TV' },
   { href: '/admin/ads', label: 'Publicidad' },

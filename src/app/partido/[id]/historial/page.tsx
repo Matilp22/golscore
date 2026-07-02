@@ -40,7 +40,7 @@ export default async function MatchHistoryPage({ params }: PageProps) {
 
   if (loadError || !history) {
     return (
-      <div className="min-h-screen text-white">
+      <div className="min-h-screen text-white" data-match-history-page="true">
         <div className="mx-0 w-full max-w-none px-0 py-3 md:mx-auto md:max-w-6xl md:px-4 md:py-10">
           <div className="w-full rounded-2xl border border-[#5a2a2a] bg-[#3b1919] p-4 md:p-6">
             <h1 className="text-2xl font-black">Historial no disponible</h1>
@@ -66,7 +66,7 @@ export default async function MatchHistoryPage({ params }: PageProps) {
   const historyShareText = `Historial: ${history.homeTeam.name} vs ${history.awayTeam.name}`
 
   return (
-    <div className="min-h-screen text-white">
+    <div className="min-h-screen text-white" data-match-history-page="true">
       <div className="w-full max-w-none px-0 py-3 lg:mx-auto lg:max-w-6xl lg:px-5 lg:py-6">
         <header className="hf-hero relative overflow-hidden rounded-3xl">
           <div className="relative z-10 flex flex-col gap-4 px-3 py-4 md:flex-row md:items-center md:justify-between md:px-5 md:py-5">
@@ -77,7 +77,7 @@ export default async function MatchHistoryPage({ params }: PageProps) {
               <h1 className="mt-1 text-2xl font-black text-white md:text-3xl">
                 {history.homeTeam.name} vs {history.awayTeam.name}
               </h1>
-              <p className="mt-2 text-sm font-semibold text-[#c8d0da]">
+              <p className="mt-2 text-sm font-semibold text-white/85">
                 Copas, eliminatorias y amistosos registrados entre estos equipos.
               </p>
             </div>
@@ -130,10 +130,39 @@ export default async function MatchHistoryPage({ params }: PageProps) {
             </section>
           ) : null}
 
+          <section className="grid gap-3 md:grid-cols-4">
+            <div className="hf-card rounded-2xl p-4 text-center">
+              <p className="text-2xl font-black text-white">{history.summary.homePerspectiveWins}</p>
+              <p className="mt-1 truncate text-xs font-bold uppercase tracking-[0.08em] text-[#8d98a7]">
+                Gano {history.homeTeam.name}
+              </p>
+            </div>
+            <div className="hf-card rounded-2xl p-4 text-center">
+              <p className="text-2xl font-black text-white">{history.summary.draws}</p>
+              <p className="mt-1 text-xs font-bold uppercase tracking-[0.08em] text-[#8d98a7]">
+                Empates
+              </p>
+            </div>
+            <div className="hf-card rounded-2xl p-4 text-center">
+              <p className="text-2xl font-black text-white">{history.summary.awayPerspectiveWins}</p>
+              <p className="mt-1 truncate text-xs font-bold uppercase tracking-[0.08em] text-[#8d98a7]">
+                Gano {history.awayTeam.name}
+              </p>
+            </div>
+            <div className="hf-card rounded-2xl p-4 text-center">
+              <p className="text-2xl font-black text-white">
+                {history.summary.homePerspectiveGoals} - {history.summary.awayPerspectiveGoals}
+              </p>
+              <p className="mt-1 text-xs font-bold uppercase tracking-[0.08em] text-[#8d98a7]">
+                Goles
+              </p>
+            </div>
+          </section>
+
           <section id={historyShareId} className="hf-card overflow-hidden rounded-2xl">
             <div className="hf-section-head flex items-center justify-between gap-3 px-3 py-3 md:px-4">
               <span aria-hidden="true" className="h-10 w-10" />
-              <h2 className="text-lg font-black text-white">Enfrentamientos</h2>
+              <h2 className="text-lg font-black text-[#071b2f]">Enfrentamientos</h2>
               <ShareCardButton
                 targetId={historyShareId}
                 fileName={`hay-fulbo-historial-${id}.png`}
@@ -151,17 +180,17 @@ export default async function MatchHistoryPage({ params }: PageProps) {
                     className="grid gap-3 px-3 py-3 md:grid-cols-[170px_minmax(0,1fr)_220px] md:items-center md:px-4"
                   >
                     <div>
-                      <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#9adfb8]">
+                      <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#1f7a3f]">
                         {formatHistoryDate(item.date)}
                       </p>
-                      <p className="mt-1 text-xs font-semibold text-[#8d98a7]">
+                      <p className="mt-1 text-xs font-semibold text-[#68717a]">
                         {item.status ?? 'Sin estado'}
                       </p>
                     </div>
 
                     <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
                       <div className="flex min-w-0 items-center justify-end gap-2 text-right">
-                        <span className="truncate text-sm font-black text-white">
+                        <span className="truncate text-sm font-black text-[#071b2f]">
                           {item.homeTeam.name}
                         </span>
                         <TeamLogo
@@ -185,15 +214,15 @@ export default async function MatchHistoryPage({ params }: PageProps) {
                           fallbackClassName="h-5 w-4"
                           unoptimized
                         />
-                        <span className="truncate text-sm font-black text-white">
+                        <span className="truncate text-sm font-black text-[#071b2f]">
                           {item.awayTeam.name}
                         </span>
                       </div>
                     </div>
 
-                    <div className="rounded-xl border border-white/8 bg-[#10151a] px-3 py-2">
+                    <div data-match-history-dark="true" className="rounded-xl border border-white/8 bg-[#10151a] px-3 py-2">
                       <p className="text-xs font-black text-white">{item.competition}</p>
-                      <p className="mt-1 text-xs font-semibold text-[#9aa6b2]">
+                      <p className="mt-1 text-xs font-semibold text-white/75">
                         {item.stage}
                       </p>
                     </div>

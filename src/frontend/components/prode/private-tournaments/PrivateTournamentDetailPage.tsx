@@ -177,16 +177,16 @@ function HonorBadge({
   partialsLabel: string
 }) {
   const styles = {
-    gold: 'border-amber-300/30 bg-amber-300/10 text-amber-200',
-    silver: 'border-sky-200/25 bg-sky-300/10 text-sky-100',
-    fun: 'border-fuchsia-300/25 bg-fuchsia-300/10 text-fuchsia-100',
+    gold: 'border-amber-300/55 bg-amber-50 text-[#071b2f]',
+    silver: 'border-sky-200/60 bg-sky-50 text-[#071b2f]',
+    fun: 'border-fuchsia-200/70 bg-fuchsia-50 text-[#071b2f]',
   }
 
   return (
     <div className={`rounded-2xl border p-3 shadow-[0_10px_26px_rgba(0,0,0,0.14)] ${styles[variant]}`}>
       <p className="text-[11px] font-black uppercase tracking-[0.04em]">{label}</p>
-      <p className="mt-1 break-words text-sm font-black text-white">{row.username}</p>
-      <p className="mt-0.5 text-xs opacity-85">
+      <p className="mt-1 break-words text-sm font-black text-[#071b2f]">{row.username}</p>
+      <p className="mt-0.5 text-xs text-[#68717a]">
         {row.points} {pointsLabel} {'\u00b7'} {row.exactHits} {exactsLabel} {'\u00b7'}{' '}
         {row.partialHits} {partialsLabel}
       </p>
@@ -511,7 +511,7 @@ export default function PrivateTournamentDetailPage({
 
   return (
     <div className="space-y-3 md:space-y-4">
-      <section className="hf-hero overflow-hidden rounded-3xl p-3 sm:p-4">
+      <section className="hf-hero hf-prode-private-hero overflow-hidden rounded-3xl p-3 sm:p-4">
         <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <h1 className="break-words text-2xl font-black text-white sm:text-3xl">

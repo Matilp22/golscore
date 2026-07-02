@@ -9,6 +9,7 @@ import GroupStageGrid from '@/frontend/components/GroupStage'
 import LeaderListInteractive from '@/frontend/components/LeaderListInteractive'
 import TournamentChampionsButton from '@/frontend/components/TournamentChampionsButton'
 import WorldCupKnockoutSection from '@/frontend/components/WorldCupKnockoutSection'
+import WorldCupRedesign from '@/frontend/components/world-cup/WorldCupRedesign'
 import WorldCupScrollReset from '@/frontend/components/WorldCupScrollReset'
 import {
   ConmebolFixtureAgenda,
@@ -2971,7 +2972,7 @@ export default async function LigaPage({ params }: PageProps) {
     : undefined
   const groupStageCardsSection = showGroupStageCards && displayPrimaryGroups.length ? (
     <GroupStageGrid
-      groups={displayPrimaryGroups.map((group, index) => {
+      groups={displayPrimaryGroups.map((group) => {
         const groupId = getGroupId(group)
         const thirdPlaceTable = isThirdPlaceTableGroup(group, isWorldCupTournament)
         const tableLegendItems = getTableLegendItems(
@@ -2982,7 +2983,7 @@ export default async function LigaPage({ params }: PageProps) {
         )
 
         return {
-          id: `${groupId}-${index}`,
+          id: groupId,
           title: getDisplayGroupName(group.name, { thirdPlaceTable }),
           table: (
             <>
@@ -3072,6 +3073,26 @@ export default async function LigaPage({ params }: PageProps) {
       />
     </div>
   )
+
+  if (isWorldCupTournament) {
+    return (
+      <>
+        <WorldCupScrollReset />
+        <WorldCupRedesign
+          title={visibleTournamentTitle}
+          subtitle="Estados Unidos, Mexico, Canada"
+          fixtures={fixtures}
+          standings={displayPrimaryGroups}
+          locale={locale}
+          errorMessage={errorMessage}
+          hasTournamentData={hasTournamentData}
+          bracketSection={worldCupBracketSection}
+          groupStageSection={groupStageCardsSection}
+          leaderStatsSection={leaderStatsSection}
+        />
+      </>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-transparent text-white">

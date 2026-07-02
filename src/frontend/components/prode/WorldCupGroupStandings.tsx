@@ -75,7 +75,7 @@ export default function WorldCupGroupStandings({
 
   if (isLoading) {
     return (
-      <section className="hf-card w-full rounded-2xl p-4">
+      <section className="hf-card hf-prode-world-group-table w-full rounded-2xl p-4">
         <h2 className="text-lg font-black text-white">{t('prode.groupStandingsTitle')}</h2>
         <p className="mt-2 text-sm text-[#8d98a7]">{t('prode.loadingGroupStandings')}</p>
       </section>
@@ -83,7 +83,7 @@ export default function WorldCupGroupStandings({
   }
 
   return (
-    <section className="hf-card w-full min-w-0 overflow-hidden rounded-2xl">
+    <section className="hf-card hf-prode-world-group-table w-full min-w-0 overflow-hidden rounded-2xl">
       <div className="hf-section-head px-3 py-3 sm:px-4">
         <h2 className="text-lg font-black text-white">
           {t('prode.groupStandingsTitle')}{group ? ` - ${group.label}` : ''}
