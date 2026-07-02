@@ -3707,8 +3707,8 @@ select {
   }
 
   .hf-world-main {
-    max-width: 480px;
-    padding: 22px 14px 104px;
+    max-width: none;
+    padding: 22px clamp(8px, 2.8vw, 14px) 104px;
   }
 
   .hf-world-header {
@@ -3845,8 +3845,8 @@ select {
   }
 
   .hf-prode-main {
-    max-width: 480px;
-    padding: 22px 10px 104px;
+    max-width: none;
+    padding: 22px clamp(8px, 2.8vw, 14px) 104px;
   }
 
   .hf-prode-header {
@@ -4100,9 +4100,9 @@ select {
 
   .hf-global-content {
     width: 100%;
-    max-width: 390px;
-    padding-left: 12px;
-    padding-right: 12px;
+    max-width: none;
+    padding-left: clamp(8px, 2.8vw, 12px);
+    padding-right: clamp(8px, 2.8vw, 12px);
   }
 
   .hf-home-page,
@@ -5178,6 +5178,7 @@ select {
 
 @media (max-width: 640px) {
   .hf-mi-page {
+    width: 100%;
     padding: 8px 0 88px;
   }
 
