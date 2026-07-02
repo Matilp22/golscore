@@ -3210,6 +3210,7 @@ export default async function LigaPage({ params }: PageProps) {
             <CompetitionSectionNav
               label="Secciones del torneo"
               items={leagueSectionNavItems}
+              variant="quick"
               className="hf-league-section-nav"
             />
           ) : null}

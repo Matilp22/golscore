@@ -841,7 +841,7 @@ export function UefaKnockoutBracket({
 
   if (!columns.length) {
     return (
-      <section className="w-full overflow-hidden rounded-3xl border border-white/8 bg-[#0f1317]/92">
+      <section className="hf-tournament-dark-panel w-full overflow-hidden rounded-3xl border border-white/8 bg-[#0f1317]/92">
         <div className="border-b border-white/6 bg-[#13181d] px-2 py-2 md:px-3">
           <h2 className="text-base font-bold text-white md:text-lg">Cuadro de llaves</h2>
           <p className="mt-0.5 text-xs text-[#8d98a7]">
@@ -856,7 +856,7 @@ export function UefaKnockoutBracket({
   }
 
   return (
-    <section className="w-full overflow-hidden rounded-3xl border border-white/8 bg-[#0f1317]/92">
+    <section className="hf-tournament-dark-panel w-full overflow-hidden rounded-3xl border border-white/8 bg-[#0f1317]/92">
       <div className="border-b border-white/6 bg-[#13181d] px-2 py-2 md:px-3">
         <h2 className="text-base font-bold text-white md:text-lg">Cuadro de llaves</h2>
         <p className="mt-0.5 text-xs text-[#8d98a7]">
@@ -997,7 +997,7 @@ export function UefaMatchPhaseNavigator({
 
   if (!options.length || !selectedOption) {
     return (
-      <section className="w-full overflow-hidden rounded-3xl border border-white/8 bg-[#0f1317]/92">
+      <section className="hf-tournament-dark-panel w-full overflow-hidden rounded-3xl border border-white/8 bg-[#0f1317]/92">
         <div className="border-b border-white/6 bg-[#13181d] px-2 py-2 md:px-3">
           <h2 className="text-base font-bold text-white md:text-lg">Partidos</h2>
         </div>
@@ -1007,7 +1007,7 @@ export function UefaMatchPhaseNavigator({
   }
 
   return (
-    <section className="w-full overflow-hidden rounded-3xl border border-white/8 bg-[#0f1317]/92">
+    <section className="hf-tournament-dark-panel w-full overflow-hidden rounded-3xl border border-white/8 bg-[#0f1317]/92">
       <div className="border-b border-white/6 bg-[#13181d] px-2 py-2 md:px-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>

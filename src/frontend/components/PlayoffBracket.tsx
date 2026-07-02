@@ -174,7 +174,7 @@ export function generatePlayoffBracket(
 
 function SkeletonBracket() {
   return (
-    <section className="w-full overflow-hidden rounded-3xl border border-white/8 bg-[#0f1317]/92">
+    <section className="hf-tournament-dark-panel w-full overflow-hidden rounded-3xl border border-white/8 bg-[#0f1317]/92">
       <div className="border-b border-white/6 bg-[#13181d] px-3 py-4 md:px-5">
         <div className="h-5 w-56 animate-pulse rounded bg-white/10" />
         <div className="mt-2 h-3 w-80 max-w-full animate-pulse rounded bg-white/8" />
@@ -302,7 +302,7 @@ export default function PlayoffBracket({
   const bracket = generatePlayoffBracket(zoneAStandings, zoneBStandings)
 
   return (
-    <section className="w-full overflow-hidden rounded-3xl border border-white/8 bg-[#0f1317]/92">
+    <section className="hf-tournament-dark-panel w-full overflow-hidden rounded-3xl border border-white/8 bg-[#0f1317]/92">
       <div className="border-b border-white/6 bg-[#13181d] px-3 py-4 md:px-5">
         <h2 className="text-base font-bold text-white md:text-lg">
           {t('bracket.clausuraTitle')}
