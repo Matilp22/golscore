@@ -125,41 +125,48 @@ export default function WorldCupGroupStandings({
                 </tr>
               </thead>
               <tbody>
-                {group.rows.map((row, index) => (
-                  <tr
-                    key={`${row.teamId || row.teamName}-${index}`}
-                    className={`border-b border-l-2 border-white/6 text-[#dce5ef] last:border-b-0 ${getRowAccent(row.rank || index + 1)}`}
-                  >
-                    <td className="px-0.5 py-1.5 font-semibold sm:px-1">
-                      {row.rank || index + 1}
-                    </td>
-                    <td className="px-0.5 py-1.5 sm:px-1">
-                      <div className="flex min-w-0 items-center gap-1">
-                        <TeamLogo
-                          src={row.teamLogo}
-                          alt={translateCountryName(row.teamName, locale)}
-                          size={16}
-                          className="h-4 w-4 object-contain"
-                          fallbackClassName="h-3.5 w-3"
-                          unoptimized
-                        />
-                        <span className="min-w-0 truncate font-medium text-[10.5px] sm:text-[12px]">
-                          {translateCountryName(row.teamName, locale)}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-0.5 py-1.5 text-center font-black text-white sm:px-1">
-                      {row.points}
-                    </td>
-                    <td className="px-0.5 py-1.5 text-center sm:px-1">{row.played}</td>
-                    <td className="px-0.5 py-1.5 text-center sm:px-1">{row.won}</td>
-                    <td className="px-0.5 py-1.5 text-center sm:px-1">{row.drawn}</td>
-                    <td className="px-0.5 py-1.5 text-center sm:px-1">{row.lost}</td>
-                    <td className="px-0.5 py-1.5 text-center sm:px-1">{row.goalsFor}</td>
-                    <td className="px-0.5 py-1.5 text-center sm:px-1">{row.goalsAgainst}</td>
-                    <td className="px-0.5 py-1.5 text-center sm:px-1">{row.goalDifference}</td>
-                  </tr>
-                ))}
+                {group.rows.map((row, index) => {
+                  const rowAccent = getRowAccent(row.rank || index + 1)
+                  const rowToneClass = rowAccent.includes('border-l-transparent')
+                    ? 'is-neutral'
+                    : 'is-highlight'
+
+                  return (
+                    <tr
+                      key={`${row.teamId || row.teamName}-${index}`}
+                      className={`hf-standings-row ${rowToneClass} border-b border-l-2 border-white/6 text-[#dce5ef] last:border-b-0 ${rowAccent}`}
+                    >
+                      <td className="px-0.5 py-1.5 font-semibold sm:px-1">
+                        {row.rank || index + 1}
+                      </td>
+                      <td className="px-0.5 py-1.5 sm:px-1">
+                        <div className="flex min-w-0 items-center gap-1">
+                          <TeamLogo
+                            src={row.teamLogo}
+                            alt={translateCountryName(row.teamName, locale)}
+                            size={16}
+                            className="h-4 w-4 object-contain"
+                            fallbackClassName="h-3.5 w-3"
+                            unoptimized
+                          />
+                          <span className="min-w-0 truncate font-medium text-[10.5px] sm:text-[12px]">
+                            {translateCountryName(row.teamName, locale)}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-0.5 py-1.5 text-center font-black text-white sm:px-1">
+                        {row.points}
+                      </td>
+                      <td className="px-0.5 py-1.5 text-center sm:px-1">{row.played}</td>
+                      <td className="px-0.5 py-1.5 text-center sm:px-1">{row.won}</td>
+                      <td className="px-0.5 py-1.5 text-center sm:px-1">{row.drawn}</td>
+                      <td className="px-0.5 py-1.5 text-center sm:px-1">{row.lost}</td>
+                      <td className="px-0.5 py-1.5 text-center sm:px-1">{row.goalsFor}</td>
+                      <td className="px-0.5 py-1.5 text-center sm:px-1">{row.goalsAgainst}</td>
+                      <td className="px-0.5 py-1.5 text-center sm:px-1">{row.goalDifference}</td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

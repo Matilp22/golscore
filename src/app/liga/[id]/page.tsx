@@ -1799,30 +1799,34 @@ function PromediosTable({
         <tbody>
           {rows.map((row, index) => {
             const visibleRank = index + 1
+            const rowAccent = getRowAccent(
+              {
+                rank: visibleRank,
+                teamId: row.teamId,
+                teamName: row.teamName,
+                teamLogo: row.teamLogo,
+                points: row.totalPoints,
+                played: row.totalPlayed,
+                won: 0,
+                drawn: 0,
+                lost: 0,
+                goalsFor: 0,
+                goalsAgainst: 0,
+                goalDifference: 0,
+              },
+              index,
+              rows.length,
+              'promedios',
+              relegatedTeamIds
+            )
+            const rowToneClass = rowAccent.includes('border-l-transparent')
+              ? 'is-neutral'
+              : 'is-highlight'
 
             return (
               <tr
                 key={`${row.teamId || row.teamName}-${index}`}
-                className={`border-b border-l-2 border-white/6 text-[#dce5ef] last:border-b-0 ${getRowAccent(
-                  {
-                    rank: visibleRank,
-                    teamId: row.teamId,
-                    teamName: row.teamName,
-                    teamLogo: row.teamLogo,
-                    points: row.totalPoints,
-                    played: row.totalPlayed,
-                    won: 0,
-                    drawn: 0,
-                    lost: 0,
-                    goalsFor: 0,
-                    goalsAgainst: 0,
-                    goalDifference: 0,
-                  },
-                  index,
-                  rows.length,
-                  'promedios',
-                  relegatedTeamIds
-                )}`}
+                className={`hf-standings-row ${rowToneClass} border-b border-l-2 border-white/6 text-[#dce5ef] last:border-b-0 ${rowAccent}`}
               >
                 <td className={`${cellPadding} font-semibold`}>{visibleRank}</td>
                 <td className={cellPadding}>
@@ -2452,15 +2456,26 @@ function StandingsTable({
             const displayTeamName = translateTeamNames
               ? translateCountryName(row.teamName, locale) || row.teamName
               : row.teamName
+            const rowAccent = thirdPlaceTable
+              ? getThirdPlaceTableRowAccent(index)
+              : getRowAccent(
+                  row,
+                  index,
+                  rows.length,
+                  variant,
+                  relegatedTeamIds,
+                  rule,
+                  allowLegacyFallback,
+                  preferConfiguredRules
+                )
+            const rowToneClass = rowAccent.includes('border-l-transparent')
+              ? 'is-neutral'
+              : 'is-highlight'
 
             return (
               <tr
                 key={`${row.teamId || row.teamName}-${index}`}
-                className={`border-b border-l-2 border-white/6 text-[#dce5ef] last:border-b-0 ${
-                  thirdPlaceTable
-                    ? getThirdPlaceTableRowAccent(index)
-                    : getRowAccent(row, index, rows.length, variant, relegatedTeamIds, rule, allowLegacyFallback, preferConfiguredRules)
-                }`}
+                className={`hf-standings-row ${rowToneClass} border-b border-l-2 border-white/6 text-[#dce5ef] last:border-b-0 ${rowAccent}`}
               >
                 <td className={`${cellPadding} font-semibold`}>{row.rank || index + 1}</td>
                 <td className={cellPadding}>
@@ -3130,7 +3145,7 @@ export default async function LigaPage({ params }: PageProps) {
       <div className="w-full max-w-none px-0 py-3 lg:mx-auto lg:max-w-7xl lg:px-5 lg:py-6">
         <main className="w-full min-w-0 space-y-4">
           <header
-            className="relative w-full overflow-hidden rounded-3xl border border-white/8"
+            className="hf-league-hero relative w-full overflow-hidden rounded-3xl border border-white/8"
             style={tournamentThemeStyle}
           >
             <div className="pointer-events-none absolute inset-0 bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.035)_0_1px,transparent_1px_54px)] opacity-45" />

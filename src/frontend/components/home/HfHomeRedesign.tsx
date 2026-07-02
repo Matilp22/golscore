@@ -393,9 +393,9 @@ function AllCompetitionMatches({
     <section id="partidos" className="hf-home-all-matches">
       <SectionHeader title="Todos los partidos" />
       <div className="space-y-3">
-        {competitions.map((competition) => (
-          <div key={competition.key} id={competition.key} className="hf-home-competition-list">
-            <div className="hf-home-competition-list-head">
+        {competitions.map((competition) => {
+          const headerContent = (
+            <>
               <div className="flex min-w-0 items-center gap-2">
                 <LeagueLogo
                   src={competition.logo}
@@ -409,14 +409,32 @@ function AllCompetitionMatches({
                 {competition.matches.length}{' '}
                 {t(locale, competition.matches.length === 1 ? 'home.matchSingular' : 'home.matchPlural')}
               </span>
+            </>
+          )
+
+          return (
+            <div key={competition.key} id={competition.key} className="hf-home-competition-list">
+              {competition.href ? (
+                <Link
+                  href={competition.href}
+                  className="hf-home-competition-list-head is-clickable"
+                  aria-label={`Ver ${competition.title}`}
+                >
+                  {headerContent}
+                </Link>
+              ) : (
+                <div className="hf-home-competition-list-head">
+                  {headerContent}
+                </div>
+              )}
+              <div>
+                {competition.matches.map((match) => (
+                  <UpcomingMatchRow key={match.id} match={match} locale={locale} />
+                ))}
+              </div>
             </div>
-            <div>
-              {competition.matches.map((match) => (
-                <UpcomingMatchRow key={match.id} match={match} locale={locale} />
-              ))}
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </section>
   )

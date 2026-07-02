@@ -127,7 +127,7 @@ export default function CurrentRoundNavigator({
   if (!selectedRound) return null
 
   return (
-    <section className="hf-card w-full overflow-hidden rounded-2xl">
+    <section className="hf-card hf-current-round-card w-full overflow-hidden rounded-2xl">
       <div className="hf-section-head px-2.5 py-2 md:px-3">
         <div className="flex items-center justify-between gap-2">
           <button
@@ -203,10 +203,10 @@ export default function CurrentRoundNavigator({
       </div>
 
       <div className="p-2 md:p-3">
-        <div className="w-full overflow-hidden rounded-xl border border-white/8 bg-[#11161b]">
+        <div className="hf-current-round-list w-full overflow-hidden rounded-xl border border-white/8 bg-[#11161b]">
           {selectedRound.days.map(([day, matches]) => (
             <div key={day} className="border-b border-white/10 last:border-b-0">
-              <div className="border-b border-white/8 bg-[#141a20] px-3 py-1.5 text-center text-xs font-bold text-white last:border-b-0">
+              <div className="hf-current-round-day border-b border-white/8 bg-[#141a20] px-3 py-1.5 text-center text-xs font-bold text-white last:border-b-0">
                 {day}
               </div>
 
@@ -221,14 +221,14 @@ export default function CurrentRoundNavigator({
                   'grid grid-cols-[58px_minmax(0,1fr)] items-center border-b border-white/8 text-xs transition last:border-b-0 md:grid-cols-[64px_minmax(0,1fr)]'
                 const rowContent = (
                   <>
-                    <div className="border-r border-white/8 px-2 py-1.5 text-center font-bold text-[#7ff0b2]">
+                    <div className="hf-current-round-status border-r border-white/8 px-2 py-1.5 text-center font-bold text-[#7ff0b2]">
                       {getMatchStatusLabel(match)}
                     </div>
 
                     <div className="px-2 py-1.5">
                       <div className="grid grid-cols-[minmax(0,1fr)_minmax(86px,max-content)_minmax(0,1fr)] items-center gap-1.5">
                         <div className="flex items-center justify-end gap-1.5 text-right">
-                          <span className="truncate font-semibold text-[#dce5ef]">{homeDisplayName}</span>
+                          <span className="hf-current-round-team truncate font-semibold text-[#dce5ef]">{homeDisplayName}</span>
                           <TeamLogo
                             src={match.homeLogo}
                             alt={homeDisplayName}
@@ -238,7 +238,7 @@ export default function CurrentRoundNavigator({
                           />
                         </div>
 
-                        <div className="whitespace-nowrap text-center text-sm font-black text-white">
+                        <div className="hf-current-round-score whitespace-nowrap text-center text-sm font-black text-white">
                           {getMatchScoreLabel(match)}
                         </div>
 
@@ -250,7 +250,7 @@ export default function CurrentRoundNavigator({
                             className="h-4 w-4 object-contain"
                             fallbackClassName="h-3.5 w-3"
                           />
-                          <span className="truncate font-semibold text-[#dce5ef]">{awayDisplayName}</span>
+                          <span className="hf-current-round-team truncate font-semibold text-[#dce5ef]">{awayDisplayName}</span>
                         </div>
                       </div>
                     </div>

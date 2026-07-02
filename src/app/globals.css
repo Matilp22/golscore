@@ -1045,6 +1045,43 @@ select {
   background: rgba(0, 0, 0, 0.24) !important;
 }
 
+.hf-global-main .hf-league-hero,
+.hf-global-main .hf-league-hero h1,
+.hf-global-main .hf-league-hero .text-white,
+.hf-global-main .hf-league-hero [class*="text-white"] {
+  color: #fff !important;
+}
+
+.hf-global-main .hf-league-hero p:not([class*="text-[var(--tournament-accent)]"]),
+.hf-global-main .hf-league-hero [class*="text-[#8d98a7]"] {
+  color: rgba(255, 255, 255, 0.74) !important;
+}
+
+.hf-global-main .hf-league-hero [class*="text-[var(--tournament-accent)]"] {
+  color: var(--tournament-accent) !important;
+}
+
+.hf-global-main .hf-league-hero [class*="bg-black"] {
+  background: rgba(0, 0, 0, 0.22) !important;
+}
+
+.hf-current-round-card .hf-current-round-list,
+.hf-current-round-card .hf-current-round-list a,
+.hf-current-round-card .hf-current-round-list div,
+.hf-current-round-card .hf-current-round-list span {
+  color: #fff !important;
+}
+
+.hf-current-round-card .hf-current-round-status {
+  color: #7ff0b2 !important;
+}
+
+.hf-current-round-card .hf-current-round-day,
+.hf-current-round-card .hf-current-round-score,
+.hf-current-round-card .hf-current-round-team {
+  color: #fff !important;
+}
+
 .hf-mobile-drawer {
   position: absolute;
   bottom: 0;
@@ -1747,6 +1784,24 @@ select {
   padding: 12px 16px;
 }
 
+.hf-home-competition-list-head.is-clickable {
+  color: inherit;
+  text-decoration: none;
+  transition:
+    background-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.hf-home-competition-list-head.is-clickable:hover {
+  background: rgba(234, 246, 227, 0.92);
+}
+
+.hf-home-competition-list-head.is-clickable:focus-visible {
+  outline: 2px solid var(--hf-green);
+  outline-offset: -2px;
+}
+
 .hf-home-competition-list-head h3 {
   min-width: 0;
   overflow: hidden;
@@ -2285,12 +2340,13 @@ select {
 
 .hf-league-section-nav {
   display: flex;
-  gap: 10px;
+  justify-content: center;
+  gap: 8px;
   overflow-x: auto;
   border: 1px solid var(--hf-border);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.72);
-  padding: 8px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.86);
+  padding: 10px;
   box-shadow: var(--hf-shadow-soft);
   scrollbar-width: none;
 }
@@ -2301,21 +2357,27 @@ select {
 
 .hf-league-section-nav a {
   display: inline-flex;
-  min-height: 38px;
+  min-height: 48px;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  padding: 0 14px;
+  padding: 0 clamp(14px, 3vw, 28px);
   color: var(--hf-text);
-  font-size: 12px;
+  font-size: clamp(12px, 3.2vw, 14px);
   font-weight: 950;
+  line-height: 1;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .hf-league-section-nav a.is-active,
 .hf-league-section-nav a:hover {
   background: var(--hf-green-soft);
   color: var(--hf-navy);
+  box-shadow: inset 0 0 0 1px rgba(98, 211, 35, 0.18);
 }
 
 .hf-world-tabs {
@@ -3226,6 +3288,32 @@ select {
 .hf-world-legacy-section.is-group-stage .bg-\[\#7ff0b2\],
 .hf-world-legacy-section.is-group-stage [class*="bg-[#7ff0b2]"] {
   color: #071b2f !important;
+}
+
+.hf-standings-row.is-neutral {
+  background: rgba(255, 255, 255, 0.94) !important;
+  color: var(--hf-text) !important;
+}
+
+.hf-standings-row.is-neutral td,
+.hf-standings-row.is-neutral span,
+.hf-standings-row.is-neutral a,
+.hf-standings-row.is-neutral [class*="text-white"],
+.hf-standings-row.is-neutral [class*="text-[#dce5ef]"],
+.hf-standings-row.is-neutral [class*="text-[#dce7f2]"],
+.hf-standings-row.is-neutral [class*="text-[#e4ebf3]"] {
+  color: var(--hf-text) !important;
+}
+
+.hf-standings-row.is-highlight,
+.hf-standings-row.is-highlight td,
+.hf-standings-row.is-highlight span,
+.hf-standings-row.is-highlight a,
+.hf-standings-row.is-highlight [class*="text-white"],
+.hf-standings-row.is-highlight [class*="text-[#dce5ef]"],
+.hf-standings-row.is-highlight [class*="text-[#dce7f2]"],
+.hf-standings-row.is-highlight [class*="text-[#e4ebf3]"] {
+  color: #fff !important;
 }
 
 .hf-prode-shell {
@@ -4193,9 +4281,10 @@ select {
   }
 
   .hf-global-content {
-    width: min(100%, 720px);
+    width: 100%;
+    max-width: none;
     margin: 0 auto;
-    padding: 0 16px 104px;
+    padding: 0 8px 104px;
   }
 
   .hf-global-main footer {
@@ -4305,9 +4394,21 @@ select {
 
   .hf-global-content {
     width: 100%;
-    max-width: 390px;
-    padding-left: 12px;
-    padding-right: 12px;
+    max-width: none;
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .hf-league-section-nav {
+    justify-content: flex-start;
+    gap: 4px;
+    border-radius: 22px;
+    padding: 8px;
+  }
+
+  .hf-league-section-nav a {
+    min-height: 44px;
+    padding: 0 10px;
   }
 
   .hf-home-page,

@@ -7,7 +7,7 @@ export const YOUTUBE_IMAGE_ALT_HOST = 'i.ytimg.com'
 export const LIGA_PROFESIONAL_ARGENTINA_LOGO_URL =
   '/brand/competitions/leagues/128-liga-profesional-argentina.svg'
 export const WORLD_CUP_2026_LOGO_URL =
-  '/brand/competitions/leagues/1-world-cup-2026.svg'
+  '/brand/competitions/world-cup-2026.png'
 export const TOURNAMENT_LOGO_URLS: Record<string, string> = {
   'argentina-copa-argentina': '/brand/competitions/tournaments/copa-argentina.svg',
   'conmebol-libertadores': '/brand/competitions/tournaments/copa-libertadores.svg',
