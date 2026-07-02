@@ -1,3 +1,13 @@
+create or replace function public.touch_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
 create table if not exists public.mi_torneito_organizations (
   id uuid primary key default gen_random_uuid(),
   name text not null,
