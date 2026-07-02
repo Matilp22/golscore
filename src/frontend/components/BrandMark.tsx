@@ -6,7 +6,7 @@ type BrandMarkProps = {
   className?: string
 }
 
-const HF_LOGO_SRC = '/brand/hf-logo.png'
+const HF_LOGO_SRC = '/brand/logo/hay-fulbo-logo.png'
 
 export default function BrandMark({
   compact = false,

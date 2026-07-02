@@ -2,6 +2,8 @@ import Image from 'next/image'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 
+import CompetitionSectionNav from '@/frontend/components/competition/CompetitionSectionNav'
+import MatchReminderButton from '@/frontend/components/matches/MatchReminderButton'
 import { TeamLogo } from '@/frontend/components/AssetImage'
 import type {
   LeagueFixtureSummary,
@@ -27,6 +29,7 @@ import {
 } from '@/shared/utils/match-status'
 import { getWorldCupGroupKey, WORLD_CUP_GROUP_KEYS } from '@/shared/utils/world-cup-groups'
 import type { AppLocale } from '@/shared/i18n/locales'
+import WorldCupImageCarousel from './WorldCupImageCarousel'
 import WorldCupTabbedSections from './WorldCupTabbedSections'
 
 type WorldCupRedesignProps = {
@@ -64,18 +67,21 @@ const WORLD_CUP_TROPHY_SRC = '/brand/competitions/world-cup-trophy-transparent.p
 const TODAY_FIXTURE_LIMIT = 4
 
 const mobileQuickItems: Array<{ label: string; href: string; icon: IconName; active?: boolean }> = [
-  { label: 'En vivo', href: '#partidos', icon: 'live', active: true },
-  { label: 'Llaves', href: '#fase-eliminatoria', icon: 'bracket' },
-  { label: 'Prode', href: '/prode', icon: 'trophy' },
+  { label: 'Llaves', href: '#fase-eliminatoria', icon: 'bracket', active: true },
+  { label: 'Clasificacion', href: '#fase-de-grupos', icon: 'calendar' },
+  { label: 'Estadisticas', href: '#estadisticas', icon: 'chart' },
   { label: 'Selecciones', href: '#selecciones', icon: 'shield' },
   { label: 'Mas', href: '#sedes', icon: 'more' },
 ]
 
 const worldCupTabs: Array<{ label: string; href: string; active?: boolean }> = [
-  { label: 'Fase eliminatoria', href: '#fase-eliminatoria', active: true },
-  { label: 'Fase de grupos', href: '#fase-de-grupos' },
+  { label: 'Llaves', href: '#fase-eliminatoria', active: true },
+  { label: 'Clasificacion', href: '#fase-de-grupos' },
   { label: 'Estadisticas', href: '#estadisticas' },
   { label: 'Selecciones', href: '#selecciones' },
+]
+
+const worldCupMoreTabs: Array<{ label: string; href: string; active?: boolean }> = [
   { label: 'Sedes', href: '#sedes' },
   { label: 'Historia', href: '#historia' },
 ]
@@ -511,13 +517,21 @@ function WorldCupHero({ title, subtitle }: { title: string; subtitle: string }) 
 
 function WorldCupTabs() {
   return (
-    <nav className="hf-world-tabs" aria-label="Secciones del Mundial">
-      {worldCupTabs.map((tab) => (
-        <a key={tab.href} href={tab.href} className={tab.active ? 'is-active' : ''}>
-          {tab.label}
-        </a>
-      ))}
-    </nav>
+    <CompetitionSectionNav
+      label="Secciones del Mundial"
+      items={worldCupTabs.map((tab) => ({
+        key: tab.href,
+        label: tab.label,
+        href: tab.href,
+        active: tab.active,
+      }))}
+      moreItems={worldCupMoreTabs.map((tab) => ({
+        key: tab.href,
+        label: tab.label,
+        href: tab.href,
+      }))}
+      className="hf-world-tabs"
+    />
   )
 }
 
@@ -589,6 +603,18 @@ function LiveMatchCard({ fixture, locale }: { fixture: LeagueFixtureSummary; loc
 }
 
 function MatchRow({ fixture, locale }: { fixture: LeagueFixtureSummary; locale: AppLocale }) {
+  const reminder = {
+    matchId: String(fixture.id),
+    href: `/partido/${fixture.id}`,
+    home: getTeamName(fixture.home, locale),
+    away: getTeamName(fixture.away, locale),
+    homeLogo: fixture.homeLogo ?? null,
+    awayLogo: fixture.awayLogo ?? null,
+    date: fixture.date,
+    displayTime: getMatchCenterLabel(fixture),
+    status: getMatchSubLabel(fixture),
+  }
+
   return (
     <div className="hf-world-match-row">
       <Link href={`/partido/${fixture.id}`} className="contents">
@@ -619,9 +645,7 @@ function MatchRow({ fixture, locale }: { fixture: LeagueFixtureSummary; locale: 
         </div>
       </Link>
 
-      <button type="button" className="hf-world-row-action" aria-label="Crear recordatorio">
-        <Icon name="bell" className="h-4 w-4" />
-      </button>
+      <MatchReminderButton reminder={reminder} compact />
     </div>
   )
 }
@@ -688,14 +712,18 @@ function NewsCard() {
 
 function QuickAccessMobile() {
   return (
-    <nav className="hf-world-mobile-quick lg:hidden" aria-label="Accesos rapidos">
-      {mobileQuickItems.map((item) => (
-        <a key={item.label} href={item.href} className={item.active ? 'is-active' : ''}>
-          <Icon name={item.icon} className="h-6 w-6" />
-          <span>{item.label}</span>
-        </a>
-      ))}
-    </nav>
+    <CompetitionSectionNav
+      label="Accesos rapidos del Mundial"
+      variant="quick"
+      className="hf-world-mobile-quick lg:hidden"
+      items={mobileQuickItems.map((item) => ({
+        key: item.label,
+        label: item.label,
+        href: item.href,
+        active: item.active,
+        icon: <Icon name={item.icon} className="h-6 w-6" />,
+      }))}
+    />
   )
 }
 
@@ -909,6 +937,7 @@ export default function WorldCupRedesign({
     <div className="hf-world-shell hf-world-shell-embedded">
       <div className="hf-world-main">
         <WorldCupHero title={title} subtitle={subtitle} />
+        <WorldCupImageCarousel />
         <div className="hf-world-mobile-dots lg:hidden" aria-hidden="true">
           <span className="is-active" />
           <span />

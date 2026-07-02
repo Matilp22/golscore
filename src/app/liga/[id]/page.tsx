@@ -1,8 +1,11 @@
 import Link from 'next/link'
+import { existsSync } from 'fs'
+import path from 'path'
 import type { Metadata } from 'next'
 import type { CSSProperties, ReactNode } from 'react'
 
 import CurrentRoundNavigator from '@/frontend/components/CurrentRoundNavigator'
+import CompetitionSectionNav from '@/frontend/components/competition/CompetitionSectionNav'
 import CopaArgentinaChampions from '@/frontend/components/CopaArgentinaChampions'
 import CopaArgentinaMatchList from '@/frontend/components/CopaArgentinaMatchList'
 import GroupStageGrid from '@/frontend/components/GroupStage'
@@ -65,6 +68,9 @@ import {
   toArgentinaDate,
 } from '@/shared/utils/argentina-time'
 import {
+  getTournamentLogoOverrideUrl,
+} from '@/shared/utils/asset-urls'
+import {
   COPA_ARGENTINA_STAGE_ORDER,
   getCopaArgentinaParticipantKey,
   getCopaArgentinaStageKey,
@@ -98,6 +104,14 @@ import { translateCountryName } from '@/shared/utils/country-names'
 
 type PageProps = {
   params: Promise<{ id: string }>
+}
+
+function getExistingPublicAssetUrl(assetUrl: string | null) {
+  if (!assetUrl) return null
+  if (!assetUrl.startsWith('/')) return assetUrl
+
+  const assetPath = path.join(process.cwd(), 'public', assetUrl.slice(1))
+  return existsSync(assetPath) ? assetUrl : null
 }
 
 type LeagueSeoOverride = {
@@ -2960,7 +2974,9 @@ export default async function LigaPage({ params }: PageProps) {
   const headerLeagueLogo =
     isWorldCupTournament
       ? WORLD_CUP_2026_LOGO_URL
-      : resolvedTournament?.logo ?? null
+      : getExistingPublicAssetUrl(getTournamentLogoOverrideUrl(tournament.key)) ??
+        resolvedTournament?.logo ??
+        null
   const tournamentSubtitle = isWorldCupTournament
     ? 'Canadá - México - Estados Unidos'
     : resolvedTournament
@@ -3003,7 +3019,7 @@ export default async function LigaPage({ params }: PageProps) {
               ) : null}
             </>
           ),
-          fixtures: thirdPlaceTable ? null : (
+          fixtures: thirdPlaceTable || isWorldCupTournament ? null : (
             <GroupFixtures
               fixtures={fixturesByGroup.get(groupId) || []}
               locale={locale}
@@ -3073,6 +3089,20 @@ export default async function LigaPage({ params }: PageProps) {
       />
     </div>
   )
+  const leagueSectionNavItems = isWorldCupTournament
+    ? []
+    : [
+        ...(currentRoundBlocks.length
+          ? [{ key: 'partidos', label: 'Partidos', href: '#partidos', active: true }]
+          : []),
+        ...(shouldRenderStandings && (displayPrimaryGroups.length || uefaLeaguePhaseRows.length)
+          ? [{ key: 'tabla', label: 'Clasificacion', href: '#tabla' }]
+          : []),
+        ...(shouldRenderKnockoutBracket || isUefaLeaguePhaseTournament || showConmebolGroupStage
+          ? [{ key: 'llaves', label: 'Llaves', href: '#llaves' }]
+          : []),
+        { key: 'estadisticas', label: 'Estadisticas', href: '#estadisticas' },
+      ]
 
   if (isWorldCupTournament) {
     return (
@@ -3161,6 +3191,14 @@ export default async function LigaPage({ params }: PageProps) {
             </div>
           </header>
 
+          {leagueSectionNavItems.length ? (
+            <CompetitionSectionNav
+              label="Secciones del torneo"
+              items={leagueSectionNavItems}
+              className="hf-league-section-nav"
+            />
+          ) : null}
+
           {errorMessage ? (
             <div className="w-full rounded-3xl border border-[#5a2a2a] bg-[#3b1919] p-4 md:p-6">
               <p className="text-sm font-medium text-[#ffd5d5]">{errorMessage}</p>
@@ -3181,35 +3219,39 @@ export default async function LigaPage({ params }: PageProps) {
 
           {isUefaLeaguePhaseTournament ? (
             <>
-              <UefaKnockoutBracket fixtures={fixtures} standingsRows={uefaLeaguePhaseRows} />
+              <section id="llaves" className="scroll-mt-28">
+                <UefaKnockoutBracket fixtures={fixtures} standingsRows={uefaLeaguePhaseRows} />
+              </section>
 
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1.08fr)_minmax(320px,0.92fr)]">
-                <SectionCard
-                  title="Tabla de posiciones"
-                  subtitle="1 a 8 a octavos de final; 9 a 24 a playoffs; 25 en adelante eliminados."
-                >
-                  {uefaLeaguePhaseRows.length ? (
-                    <>
-                      <StandingsTable
-                        rows={uefaLeaguePhaseRows}
-                        compact
-                        rule={displayOptions.rule}
-                        allowLegacyFallback={false}
-                        preferConfiguredRules
-                      />
-                      {uefaTableLegendItems.length ? (
-                        <TableLegend items={uefaTableLegendItems} />
-                      ) : null}
-                      <p className="mt-3 border-t border-white/6 pt-3 text-xs font-semibold text-[#8d98a7]">
-                        25 en adelante: eliminados.
+                <section id="tabla" className="scroll-mt-28">
+                  <SectionCard
+                    title="Tabla de posiciones"
+                    subtitle="1 a 8 a octavos de final; 9 a 24 a playoffs; 25 en adelante eliminados."
+                  >
+                    {uefaLeaguePhaseRows.length ? (
+                      <>
+                        <StandingsTable
+                          rows={uefaLeaguePhaseRows}
+                          compact
+                          rule={displayOptions.rule}
+                          allowLegacyFallback={false}
+                          preferConfiguredRules
+                        />
+                        {uefaTableLegendItems.length ? (
+                          <TableLegend items={uefaTableLegendItems} />
+                        ) : null}
+                        <p className="mt-3 border-t border-white/6 pt-3 text-xs font-semibold text-[#8d98a7]">
+                          25 en adelante: eliminados.
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-sm text-[#8d98a7]">
+                        No hay tabla de fase liga disponible para este torneo.
                       </p>
-                    </>
-                  ) : (
-                    <p className="text-sm text-[#8d98a7]">
-                      No hay tabla de fase liga disponible para este torneo.
-                    </p>
-                  )}
-                </SectionCard>
+                    )}
+                  </SectionCard>
+                </section>
 
                 <UefaMatchPhaseNavigator
                   fixtures={fixtures}
@@ -3221,14 +3263,16 @@ export default async function LigaPage({ params }: PageProps) {
 
           {showConmebolGroupStage && conmebolCompetitionType ? (
             <>
-              <ConmebolKnockoutBracket
-                competitionType={conmebolCompetitionType}
-                season={resolvedTournament?.season ?? 2026}
-                phases={conmebolViewModel?.bracket.phases}
-                matches={fixtures}
-                series={conmebolViewModel?.bracket.series ?? []}
-                placeholders={conmebolViewModel?.bracket.placeholders}
-              />
+              <section id="llaves" className="scroll-mt-28">
+                <ConmebolKnockoutBracket
+                  competitionType={conmebolCompetitionType}
+                  season={resolvedTournament?.season ?? 2026}
+                  phases={conmebolViewModel?.bracket.phases}
+                  matches={fixtures}
+                  series={conmebolViewModel?.bracket.series ?? []}
+                  placeholders={conmebolViewModel?.bracket.placeholders}
+                />
+              </section>
 
               <ConmebolFixtureAgenda
                 competitionType={conmebolCompetitionType}
@@ -3238,48 +3282,50 @@ export default async function LigaPage({ params }: PageProps) {
               />
 
               {shouldRenderStandings && displayPrimaryGroups.length ? (
-                <GroupStageGrid
-                  groups={displayPrimaryGroups.map((group, index) => {
-                    const groupId = getGroupId(group)
-                    const thirdPlaceTable = isThirdPlaceTableGroup(group, isWorldCupTournament)
-                    const tableLegendItems = getTableLegendItems(
-                      group.rows,
-                      displayOptions.rule,
-                      displayOptions.protected,
-                      thirdPlaceTable
-                    )
+                <section id="tabla" className="scroll-mt-28">
+                  <GroupStageGrid
+                    groups={displayPrimaryGroups.map((group, index) => {
+                      const groupId = getGroupId(group)
+                      const thirdPlaceTable = isThirdPlaceTableGroup(group, isWorldCupTournament)
+                      const tableLegendItems = getTableLegendItems(
+                        group.rows,
+                        displayOptions.rule,
+                        displayOptions.protected,
+                        thirdPlaceTable
+                      )
 
-                    return {
-                      id: `${groupId}-${index}`,
-                      title: getDisplayGroupName(group.name, { thirdPlaceTable }),
-                      table: (
-                        <>
-                          <StandingsTable
-                            rows={group.rows}
-                            compact
-                            fitNarrow
-                            rule={displayOptions.rule}
-                            allowLegacyFallback={false}
-                            preferConfiguredRules
-                            thirdPlaceTable={thirdPlaceTable}
-                            translateTeamNames={isWorldCupTournament}
+                      return {
+                        id: `${groupId}-${index}`,
+                        title: getDisplayGroupName(group.name, { thirdPlaceTable }),
+                        table: (
+                          <>
+                            <StandingsTable
+                              rows={group.rows}
+                              compact
+                              fitNarrow
+                              rule={displayOptions.rule}
+                              allowLegacyFallback={false}
+                              preferConfiguredRules
+                              thirdPlaceTable={thirdPlaceTable}
+                              translateTeamNames={isWorldCupTournament}
+                              locale={locale}
+                            />
+                            {tableLegendItems.length ? (
+                              <TableLegend items={tableLegendItems} />
+                            ) : null}
+                          </>
+                        ),
+                        fixtures: thirdPlaceTable ? null : (
+                          <GroupFixtures
+                            fixtures={fixturesByGroup.get(groupId) || []}
                             locale={locale}
+                            translateTeamNames={isWorldCupTournament}
                           />
-                          {tableLegendItems.length ? (
-                            <TableLegend items={tableLegendItems} />
-                          ) : null}
-                        </>
-                      ),
-                      fixtures: thirdPlaceTable ? null : (
-                        <GroupFixtures
-                          fixtures={fixturesByGroup.get(groupId) || []}
-                          locale={locale}
-                          translateTeamNames={isWorldCupTournament}
-                        />
-                      ),
-                    }
-                  })}
-                />
+                        ),
+                      }
+                    })}
+                  />
+                </section>
               ) : shouldRenderStandings && !displayOptions.hideEmptyStandings ? (
                 <SectionCard
                   title="Grupos"
@@ -3294,14 +3340,16 @@ export default async function LigaPage({ params }: PageProps) {
           ) : null}
 
           {shouldRenderKnockoutBracket ? (
-            <BracketView
-              rounds={knockoutRounds}
-              useCopaArgentinaTree={tournament.key === 'argentina-copa-argentina'}
-              advanceGenericWinners={tournament.key === 'argentina-liga-profesional' || isWorldCupTournament}
-              emptyBracket={emptyBracket}
-              locale={locale}
-              translateTeamNames={isWorldCupTournament}
-            />
+            <section id="llaves" className="scroll-mt-28">
+              <BracketView
+                rounds={knockoutRounds}
+                useCopaArgentinaTree={tournament.key === 'argentina-copa-argentina'}
+                advanceGenericWinners={tournament.key === 'argentina-liga-profesional' || isWorldCupTournament}
+                emptyBracket={emptyBracket}
+                locale={locale}
+                translateTeamNames={isWorldCupTournament}
+              />
+            </section>
           ) : null}
 
           {tournament.key === 'argentina-copa-argentina' && knockoutRounds.length ? (
@@ -3320,12 +3368,14 @@ export default async function LigaPage({ params }: PageProps) {
           ) : null}
 
           {!isUefaLeaguePhaseTournament && !showGroupStageCards && currentRoundBlocks.length ? (
-            <CurrentRoundNavigator
-              rounds={currentRoundBlocks}
-              initialIndex={currentRoundInitialIndex}
-              locale={locale}
-              translateTeamNames={isWorldCupTournament}
-            />
+            <section id="partidos" className="scroll-mt-28">
+              <CurrentRoundNavigator
+                rounds={currentRoundBlocks}
+                initialIndex={currentRoundInitialIndex}
+                locale={locale}
+                translateTeamNames={isWorldCupTournament}
+              />
+            </section>
           ) : null}
 
           {!isUefaLeaguePhaseTournament && !showConmebolGroupStage && shouldRenderStandings && displayPrimaryGroups.length ? (
@@ -3344,7 +3394,7 @@ export default async function LigaPage({ params }: PageProps) {
                 </>
               )
             ) : (
-              <div className={compactGroups ? 'grid gap-4 md:grid-cols-2' : 'space-y-4'}>
+              <section id="tabla" className={`scroll-mt-28 ${compactGroups ? 'grid gap-4 md:grid-cols-2' : 'space-y-4'}`}>
                 {displayPrimaryGroups.map((group) => {
                   const thirdPlaceTable = isThirdPlaceTableGroup(group, isWorldCupTournament)
                   const tableLegendItems = getTableLegendItems(
@@ -3379,7 +3429,7 @@ export default async function LigaPage({ params }: PageProps) {
                     </SectionCard>
                   )
                 })}
-              </div>
+              </section>
             )
           ) : !isUefaLeaguePhaseTournament && !showConmebolGroupStage && shouldRenderStandings && !displayOptions.hideEmptyStandings ? (
             <SectionCard
@@ -3468,7 +3518,11 @@ export default async function LigaPage({ params }: PageProps) {
             </div>
           ) : null}
 
-          {!isWorldCupTournament ? leaderStatsSection : null}
+          {!isWorldCupTournament ? (
+            <section id="estadisticas" className="scroll-mt-28">
+              {leaderStatsSection}
+            </section>
+          ) : null}
 
           {isWorldCupTournament ? groupStageCardsSection : null}
         </main>

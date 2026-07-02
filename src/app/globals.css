@@ -1061,6 +1061,70 @@ select {
   box-shadow: 18px 0 42px rgba(0, 0, 0, 0.42);
 }
 
+.hf-pwa-notification-optin {
+  position: fixed;
+  right: 14px;
+  bottom: calc(96px + env(safe-area-inset-bottom));
+  z-index: 52;
+  width: min(360px, calc(100vw - 28px));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 92% 12%, rgba(94, 208, 32, 0.16), transparent 9rem),
+    var(--hf-navy);
+  padding: 14px;
+  color: #fff;
+  box-shadow: 0 18px 50px rgba(7, 27, 47, 0.28);
+}
+
+.hf-pwa-notification-optin strong {
+  display: block;
+  padding-right: 34px;
+  font-size: 14px;
+  font-weight: 1000;
+}
+
+.hf-pwa-notification-optin p {
+  margin-top: 6px;
+  color: rgba(255, 255, 255, 0.74);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.hf-pwa-notification-optin > button:last-child {
+  margin-top: 10px;
+  min-height: 38px;
+  width: 100%;
+  border: 0;
+  border-radius: 999px;
+  background: var(--hf-green);
+  color: var(--hf-navy);
+  font-size: 12px;
+  font-weight: 1000;
+}
+
+.hf-pwa-notification-optin > button:last-child:disabled {
+  opacity: 0.72;
+}
+
+.hf-pwa-notification-close {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  display: inline-flex;
+  height: 30px;
+  width: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font: inherit;
+  font-weight: 1000;
+}
+
 .hf-mobile-bottom-nav {
   position: fixed;
   bottom: 0;
@@ -2172,6 +2236,88 @@ select {
   background: linear-gradient(90deg, #6a410d, #ffe68e 48%, #7c4a0f);
 }
 
+.hf-world-carousel {
+  margin-top: 16px;
+}
+
+.hf-world-carousel-frame {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(7, 27, 47, 0.1);
+  border-radius: 20px;
+  background: rgba(7, 27, 47, 0.08);
+  box-shadow: var(--hf-world-shadow);
+}
+
+.hf-world-carousel-frame::before {
+  content: "";
+  display: block;
+  aspect-ratio: 16 / 7;
+}
+
+.hf-world-carousel-image {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+}
+
+.hf-world-carousel-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding-top: 10px;
+}
+
+.hf-world-carousel-dots button {
+  height: 8px;
+  width: 8px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(7, 27, 47, 0.24);
+}
+
+.hf-world-carousel-dots button.is-active {
+  width: 20px;
+  background: var(--hf-world-green);
+}
+
+.hf-league-section-nav {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  border: 1px solid var(--hf-border);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 8px;
+  box-shadow: var(--hf-shadow-soft);
+  scrollbar-width: none;
+}
+
+.hf-league-section-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.hf-league-section-nav a {
+  display: inline-flex;
+  min-height: 38px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0 14px;
+  color: var(--hf-text);
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.hf-league-section-nav a.is-active,
+.hf-league-section-nav a:hover {
+  background: var(--hf-green-soft);
+  color: var(--hf-navy);
+}
+
 .hf-world-tabs {
   display: flex;
   gap: 34px;
@@ -2193,6 +2339,52 @@ select {
   font-size: 13px;
   font-weight: 1000;
   text-transform: uppercase;
+}
+
+.hf-world-tabs .hf-competition-section-more {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.hf-world-tabs .hf-competition-section-more summary {
+  display: inline-flex;
+  min-height: 32px;
+  cursor: pointer;
+  list-style: none;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--hf-world-muted);
+  font-size: 13px;
+  font-weight: 1000;
+  text-transform: uppercase;
+}
+
+.hf-world-tabs .hf-competition-section-more summary::-webkit-details-marker {
+  display: none;
+}
+
+.hf-world-tabs .hf-competition-section-more div {
+  position: absolute;
+  right: 0;
+  z-index: 12;
+  display: grid;
+  min-width: 150px;
+  gap: 4px;
+  border: 1px solid rgba(7, 27, 47, 0.1);
+  border-radius: 14px;
+  background: #fff;
+  padding: 8px;
+  box-shadow: var(--hf-world-shadow);
+}
+
+.hf-world-tabs .hf-competition-section-more div a {
+  padding: 8px 10px;
+  border-radius: 10px;
+}
+
+.hf-world-tabs .hf-competition-section-more div a:hover {
+  background: var(--hf-world-green-soft);
+  color: var(--hf-world-navy);
 }
 
 .hf-world-tabs a.is-active {
@@ -2468,6 +2660,19 @@ select {
   justify-content: center;
   border: 1px solid rgba(7, 27, 47, 0.08);
   border-radius: 999px;
+  color: var(--hf-world-navy);
+}
+
+.hf-world-match-row .hf-match-reminder-button.is-compact {
+  min-height: 34px;
+  width: 34px;
+  border-color: rgba(7, 27, 47, 0.08);
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--hf-world-navy);
+}
+
+.hf-world-match-row .hf-match-reminder-button.is-compact.is-active {
+  background: var(--hf-world-green);
   color: var(--hf-world-navy);
 }
 

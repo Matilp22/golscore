@@ -3,6 +3,7 @@ import { Analytics } from '@vercel/analytics/next'
 import AppShell from '@/frontend/components/AppShell'
 import PageScrollRestoration from '@/frontend/components/PageScrollRestoration'
 import PwaInstallPrompt from '@/frontend/components/PwaInstallPrompt'
+import PwaNotificationOptIn from '@/frontend/components/PwaNotificationOptIn'
 import AuthStatus from '@/frontend/components/auth/AuthStatus'
 import GoogleAdSense from '@/frontend/components/ads/GoogleAdSense'
 import GoogleAnalytics from '@/frontend/components/analytics/GoogleAnalytics'
@@ -83,6 +84,7 @@ export default async function RootLayout({
           {children}
         </AppShell>
         <PwaInstallPrompt />
+        <PwaNotificationOptIn />
         <GoogleAdSense />
         <GoogleAnalytics />
         <Analytics />

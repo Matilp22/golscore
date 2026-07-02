@@ -34,6 +34,7 @@ function getPanelFromHash(hash: string, fallback: WorldCupPanelId): WorldCupPane
   const target = hash.replace(/^#/, '')
 
   if (target === 'partidos') return 'fase-eliminatoria'
+  if (target === 'clasificacion') return 'fase-de-grupos'
   if (target.startsWith('group-')) return 'fase-de-grupos'
   if (panelIds.includes(target as WorldCupPanelId)) return target as WorldCupPanelId
 

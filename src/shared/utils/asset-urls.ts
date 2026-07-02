@@ -5,8 +5,14 @@ export const YOUTUBE_IMAGE_HOST = 'img.youtube.com'
 export const YOUTUBE_IMAGE_ALT_HOST = 'i.ytimg.com'
 
 export const LIGA_PROFESIONAL_ARGENTINA_LOGO_URL =
-  `https://${API_SPORTS_MEDIA_HOST}/football/leagues/128.png`
-export const WORLD_CUP_2026_LOGO_URL = '/brand/competitions/world-cup-2026.png'
+  '/brand/competitions/leagues/128-liga-profesional-argentina.svg'
+export const WORLD_CUP_2026_LOGO_URL =
+  '/brand/competitions/leagues/1-world-cup-2026.svg'
+export const TOURNAMENT_LOGO_URLS: Record<string, string> = {
+  'argentina-copa-argentina': '/brand/competitions/tournaments/copa-argentina.svg',
+  'conmebol-libertadores': '/brand/competitions/tournaments/copa-libertadores.svg',
+  'conmebol-sudamericana': '/brand/competitions/tournaments/copa-sudamericana.svg',
+}
 
 const LEAGUE_LOGO_OVERRIDES: Record<string, string> = {
   '1': WORLD_CUP_2026_LOGO_URL,
@@ -90,6 +96,12 @@ export function getLeagueLogoOverrideUrl(externalId: string | number | null | un
   if (!id) return null
 
   return normalizeAssetUrl(LEAGUE_LOGO_OVERRIDES[id])
+}
+
+export function getTournamentLogoOverrideUrl(key: string | null | undefined) {
+  if (!key) return null
+
+  return normalizeAssetUrl(TOURNAMENT_LOGO_URLS[key])
 }
 
 export function isLegacyApiFootballAssetUrl(value: string | null | undefined) {
