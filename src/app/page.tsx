@@ -26,6 +26,7 @@ import {
   isLiveStatus,
   isUpcomingStatus,
 } from '@/shared/utils/match-status'
+import { isFeaturedClubFriendlyMatch } from '@/shared/utils/home-match-visibility'
 import {
   ARGENTINA_TORNEO_PROYECCION_EXTERNAL_ID,
   ARGENTINA_TORNEO_PROYECCION_KEY,
@@ -176,6 +177,17 @@ function isInternationalSeniorFriendly(match: ApiMatch) {
     !isWomenLeague(match) &&
     !isYouthLeague(match)
   )
+}
+
+function isFeaturedClubFriendly(match: ApiMatch) {
+  return isFeaturedClubFriendlyMatch({
+    leagueId: match.leagueId ?? null,
+    league: match.league,
+    country: match.country ?? null,
+    home: match.home,
+    away: match.away,
+    round: undefined,
+  })
 }
 
 function isMainWorldCup2026Match(match: ApiMatch) {
@@ -420,6 +432,13 @@ const LEAGUE_RULES: LeagueRule[] = [
     sectionTitle: 'Selecciones',
     baseTitle: 'Amistosos internacionales',
     match: (match) => isInternationalSeniorFriendly(match),
+  },
+  {
+    key: 'internacional-amistosos-clubes',
+    sectionKey: 'internacional',
+    sectionTitle: 'Internacional',
+    baseTitle: 'Amistosos de clubes',
+    match: (match) => isFeaturedClubFriendly(match),
   },
   {
     key: 'argentina-copa-de-la-liga',

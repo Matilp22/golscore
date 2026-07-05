@@ -17,6 +17,7 @@ export type HomeMatchVisibilityResult = {
   reason:
     | 'allowedLeagueId'
     | 'internationalFriendly'
+    | 'featuredClubFriendly'
     | 'argentinaProfessional'
     | 'internationalCompetition'
     | 'englandCompetition'
@@ -67,6 +68,28 @@ function normalizeSearchValue(value: string) {
     .trim()
 }
 
+function hasTeamName(input: HomeMatchVisibilityInput, expected: string) {
+  const expectedValue = normalizeSearchValue(expected)
+  const home = normalizeSearchValue(input.home || '')
+  const away = normalizeSearchValue(input.away || '')
+
+  return home.includes(expectedValue) || away.includes(expectedValue)
+}
+
+export function isFeaturedClubFriendlyMatch(input: HomeMatchVisibilityInput) {
+  const league = normalizeSearchValue(input.league || '')
+  const round = normalizeSearchValue(input.round || '')
+  const isClubFriendly =
+    input.leagueId === 667 ||
+    league.includes('friendlies clubs') ||
+    league.includes('club friendlies') ||
+    round.includes('club friendlies')
+
+  if (!isClubFriendly) return false
+
+  return hasTeamName(input, 'zenit') && hasTeamName(input, 'gimnasia l.p.')
+}
+
 export function getHomeMatchVisibility(
   input: HomeMatchVisibilityInput
 ): HomeMatchVisibilityResult {
@@ -97,6 +120,14 @@ export function getHomeMatchVisibility(
     return {
       included: true,
       reason: 'allowedLeagueId',
+      excludedReason: false,
+    }
+  }
+
+  if (isFeaturedClubFriendlyMatch(input)) {
+    return {
+      included: true,
+      reason: 'featuredClubFriendly',
       excludedReason: false,
     }
   }
