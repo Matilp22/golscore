@@ -186,10 +186,10 @@ export default function LiveEventToasts({
           <div className="flex items-start gap-2">
             <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${getToastAccent(event.kind)}`} />
             <div className="min-w-0">
-              <p className="break-words text-sm font-black leading-snug text-white">
+              <p className="hf-live-event-toast-title break-words text-sm font-black leading-snug text-white">
                 {formatToastTitle(event)}
               </p>
-              <p className="mt-0.5 truncate text-xs font-semibold text-[#aab6c4]">
+              <p className="hf-live-event-toast-detail mt-0.5 truncate text-xs font-semibold text-[#dce7f2]">
                 {formatToastDetail(event)}
               </p>
             </div>

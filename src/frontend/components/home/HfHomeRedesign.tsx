@@ -169,6 +169,35 @@ function sortHomeLivePanelMatches(matches: HfHomeMatch[]) {
   })
 }
 
+function parsePenaltyScoreLabel(value: string) {
+  const match = value
+    .trim()
+    .match(/^\(([^)]+)\)\s+(.+?)\s+-\s+(.+?)\s+\(([^)]+)\)$/)
+
+  if (!match) return null
+
+  return {
+    homePenalty: match[1],
+    homeScore: match[2],
+    awayScore: match[3],
+    awayPenalty: match[4],
+  }
+}
+
+function ScoreValue({ value }: { value: string }) {
+  const penaltyScore = parsePenaltyScoreLabel(value)
+
+  if (!penaltyScore) return <strong>{value}</strong>
+
+  return (
+    <strong className="hf-home-score-with-pens">
+      <span className="hf-home-score-penalty">({penaltyScore.homePenalty})</span>
+      <span>{penaltyScore.homeScore} - {penaltyScore.awayScore}</span>
+      <span className="hf-home-score-penalty">({penaltyScore.awayPenalty})</span>
+    </strong>
+  )
+}
+
 function BroadcastPill({ match, compact = false }: { match: HfHomeMatch; compact?: boolean }) {
   const broadcast = getBroadcastInfo(match)
 
@@ -277,7 +306,7 @@ function LiveMatchCard({ match, locale }: { match: HfHomeMatch; locale: AppLocal
           scorers={match.goalScorers?.home}
         />
         <div className="hf-home-score-center">
-          <strong>{centerValue}</strong>
+          <ScoreValue value={centerValue} />
           <span className={isLive ? 'is-live' : ''}>
             {isLive && match.minute ? `${match.minute}'` : match.displayStatus}
           </span>
@@ -329,7 +358,7 @@ function UpcomingMatchRow({ match, locale }: { match: HfHomeMatch; locale: AppLo
           <TeamLogo src={match.homeLogo} alt={homeName} size={34} className="h-full w-full object-contain" />
         </div>
         <div className="hf-home-upcoming-center">
-          <strong>{match.displayScore === '- - -' ? 'vs' : match.displayScore}</strong>
+          <ScoreValue value={match.displayScore === '- - -' ? 'vs' : match.displayScore} />
           <span>{match.displayStatus}</span>
         </div>
         <div className="hf-home-upcoming-team is-away">
@@ -480,10 +509,10 @@ export default function HfHomeRedesign({
 }: HfHomeRedesignProps) {
   const allMatches = competitions.flatMap((competition) => competition.matches)
   const livePanelMatches = sortHomeLivePanelMatches(
-    allMatches.filter((match) => isLiveStatus(match.statusShort) || isFeaturedHomeFriendly(match))
+    allMatches.filter((match) => isLiveStatus(match.statusShort))
   )
   const upcomingMatches = allMatches
-    .filter((match) => isUpcomingStatus(match.statusShort) && !isFeaturedHomeFriendly(match))
+    .filter((match) => isUpcomingStatus(match.statusShort))
     .slice(0, 3)
   const featuredCompetitions = competitions.slice(0, 5)
   const featuredArticles = articles.slice(0, 3)
@@ -530,7 +559,7 @@ export default function HfHomeRedesign({
             {livePanelMatches.length ? (
               <>
                 <div className="hf-home-live-grid">
-                  {livePanelMatches.slice(0, 3).map((match) => (
+                  {livePanelMatches.map((match) => (
                     <LiveMatchCard key={match.id} match={match} locale={locale} />
                   ))}
                 </div>

@@ -711,6 +711,14 @@ select {
   padding: 18px 14px;
 }
 
+.hf-live-event-toast-title {
+  color: #fff !important;
+}
+
+.hf-live-event-toast-detail {
+  color: #dce7f2 !important;
+}
+
 .hf-search-modal {
   position: fixed;
   inset: 0;
@@ -1457,6 +1465,20 @@ select {
   color: var(--hf-text);
   font-size: 38px;
   font-weight: 1000;
+  line-height: 1;
+}
+
+.hf-home-score-with-pens {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.hf-home-score-penalty {
+  font-size: 0.52em;
   line-height: 1;
 }
 
@@ -4500,6 +4522,15 @@ select {
 
   .hf-home-score-center strong {
     font-size: 40px;
+  }
+
+  .hf-home-score-with-pens {
+    gap: 3px;
+    font-size: clamp(24px, 7.4vw, 34px) !important;
+  }
+
+  .hf-home-score-penalty {
+    font-size: 0.48em;
   }
 
   .hf-home-upcoming-time {
