@@ -2643,24 +2643,24 @@ export default async function PartidoDetallePage({ params }: PageProps) {
               )}
             </div>
 
-            <div id={formationShareId} className="hf-card w-full overflow-hidden rounded-2xl">
-              <div className="hf-section-head flex items-center justify-between gap-3 px-2 py-3 md:px-4">
-                <h2 className="text-base font-bold text-white">Alineaciones</h2>
-                <div className="flex shrink-0 items-center gap-2">
-                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-black uppercase tracking-[0.03em] text-[#b8f7d2]">
-                    {lineupStatusLabel}
-                  </span>
-                  <ShareCardButton
-                    targetId={formationShareId}
-                    fileName={`hay-fulbo-formacion-${fixture.fixture.id}.png`}
-                    title={`${shareTitle} - Alineaciones`}
-                    text={`${shareText} | Alineaciones`}
-                    url={matchDetailHref}
-                  />
+            {confirmedLineupPlayers > 0 ? (
+              <div id={formationShareId} className="hf-card w-full overflow-hidden rounded-2xl">
+                <div className="hf-section-head flex items-center justify-between gap-3 px-2 py-3 md:px-4">
+                  <h2 className="text-base font-bold text-white">Alineaciones</h2>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-black uppercase tracking-[0.03em] text-[#b8f7d2]">
+                      {lineupStatusLabel}
+                    </span>
+                    <ShareCardButton
+                      targetId={formationShareId}
+                      fileName={`hay-fulbo-formacion-${fixture.fixture.id}.png`}
+                      title={`${shareTitle} - Alineaciones`}
+                      text={`${shareText} | Alineaciones`}
+                      url={matchDetailHref}
+                    />
+                  </div>
                 </div>
-              </div>
 
-              {confirmedLineupPlayers > 0 ? (
                 <div className="w-full px-0 py-2 md:p-4">
                   {hasAnyVisualFormation ? (
                     <div className="space-y-3">
@@ -2721,12 +2721,8 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                     ]}
                   />
                 </div>
-              ) : (
-                <div className="px-2 py-5 text-sm text-[#8d98a7] md:px-4">
-                  {lineupStatusLabel}.
-                </div>
-              )}
-            </div>
+              </div>
+            ) : null}
           </section>
 
           <aside className="space-y-4">

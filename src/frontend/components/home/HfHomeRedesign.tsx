@@ -7,6 +7,7 @@ import SafeImage from '@/frontend/components/SafeImage'
 import type { MatchGoalScorer, MatchListItemWithGoalScorers } from '@/lib/api-football'
 import { formatEditorialCategory } from '@/shared/editorial-format'
 import { t, type AppLocale } from '@/shared/i18n/locales'
+import { isFeaturedClubFriendlyMatch } from '@/shared/utils/home-match-visibility'
 import { getTeamDisplayName } from '@/shared/utils/team-display'
 import { formatEventMinute } from '@/shared/utils/event-minute'
 import {
@@ -139,6 +140,33 @@ function getBroadcastInfo(match: HfHomeMatch) {
     logoUrl: firstWithLogo?.logoUrl ?? match.broadcastLogoUrl ?? null,
     confirmed: Boolean(label),
   }
+}
+
+function isFeaturedHomeFriendly(match: HfHomeMatch) {
+  return isFeaturedClubFriendlyMatch({
+    leagueId: match.leagueId ?? null,
+    league: match.league,
+    country: match.country ?? null,
+    home: match.home,
+    away: match.away,
+    round: null,
+  })
+}
+
+function sortHomeLivePanelMatches(matches: HfHomeMatch[]) {
+  return [...matches].sort((a, b) => {
+    const aFeatured = isFeaturedHomeFriendly(a) ? 0 : 1
+    const bFeatured = isFeaturedHomeFriendly(b) ? 0 : 1
+
+    if (aFeatured !== bFeatured) return aFeatured - bFeatured
+
+    const aLive = isLiveStatus(a.statusShort) ? 0 : 1
+    const bLive = isLiveStatus(b.statusShort) ? 0 : 1
+
+    if (aLive !== bLive) return aLive - bLive
+
+    return new Date(a.date).getTime() - new Date(b.date).getTime()
+  })
 }
 
 function BroadcastPill({ match, compact = false }: { match: HfHomeMatch; compact?: boolean }) {
@@ -451,8 +479,12 @@ export default function HfHomeRedesign({
   noMatchesLabel,
 }: HfHomeRedesignProps) {
   const allMatches = competitions.flatMap((competition) => competition.matches)
-  const liveMatches = allMatches.filter((match) => isLiveStatus(match.statusShort))
-  const upcomingMatches = allMatches.filter((match) => isUpcomingStatus(match.statusShort)).slice(0, 3)
+  const livePanelMatches = sortHomeLivePanelMatches(
+    allMatches.filter((match) => isLiveStatus(match.statusShort) || isFeaturedHomeFriendly(match))
+  )
+  const upcomingMatches = allMatches
+    .filter((match) => isUpcomingStatus(match.statusShort) && !isFeaturedHomeFriendly(match))
+    .slice(0, 3)
   const featuredCompetitions = competitions.slice(0, 5)
   const featuredArticles = articles.slice(0, 3)
   const todayValue = dayOptions.find((day) => day.label.toLowerCase() === 'hoy')?.value
@@ -494,11 +526,11 @@ export default function HfHomeRedesign({
       ) : (
         <>
           <section>
-            <SectionHeader title="En vivo" href="/#partidos" count={liveMatches.length} live />
-            {liveMatches.length ? (
+            <SectionHeader title="En vivo" href="/#partidos" count={livePanelMatches.length} live />
+            {livePanelMatches.length ? (
               <>
                 <div className="hf-home-live-grid">
-                  {liveMatches.slice(0, 3).map((match) => (
+                  {livePanelMatches.slice(0, 3).map((match) => (
                     <LiveMatchCard key={match.id} match={match} locale={locale} />
                   ))}
                 </div>
