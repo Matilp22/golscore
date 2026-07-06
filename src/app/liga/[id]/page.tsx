@@ -681,6 +681,84 @@ function matchBelongsInParentSlot(
   return participantKeys.length === 2 && participantKeys.every((key) => childKeys.has(key))
 }
 
+function matchBelongsInPreviousMatchPair(
+  match: BracketMatchCard,
+  previousStageMatches: BracketMatchCard[],
+  parentPosition: number
+) {
+  const firstChild = previousStageMatches[parentPosition * 2]
+  const secondChild = previousStageMatches[parentPosition * 2 + 1]
+  if (!firstChild || !secondChild) return false
+
+  const childKeys = new Set([
+    ...getMatchCandidateAdvancerKeys(firstChild),
+    ...getMatchCandidateAdvancerKeys(secondChild),
+  ])
+  const participantKeys = match.participants
+    .filter((participant) => !participant.isPlaceholder)
+    .map((participant) => getParticipantKey(participant))
+
+  return participantKeys.length === 2 && participantKeys.every((key) => childKeys.has(key))
+}
+
+function placeGenericStageMatches(
+  stageKey: BracketStageKey,
+  matches: BracketMatchCard[],
+  expectedMatchesCount: number,
+  previousStageMatches?: BracketMatchCard[]
+) {
+  const matchSlots = Array<BracketMatchCard | null>(
+    Math.max(expectedMatchesCount, matches.length)
+  ).fill(null)
+  const pendingMatches: BracketMatchCard[] = []
+
+  for (const match of matches) {
+    let bracketPosition: number | null = null
+
+    if (previousStageMatches?.length) {
+      bracketPosition = matchSlots.findIndex(
+        (slot, position) =>
+          slot === null &&
+          matchBelongsInPreviousMatchPair(match, previousStageMatches, position)
+      )
+      if (bracketPosition < 0) bracketPosition = null
+    }
+
+    if (bracketPosition === null) {
+      pendingMatches.push(match)
+      continue
+    }
+
+    matchSlots[bracketPosition] = {
+      ...applyWinnerToMatch(match),
+      bracketPosition,
+    }
+  }
+
+  for (const match of pendingMatches) {
+    const bracketPosition = matchSlots.findIndex((slot) => slot === null)
+    if (bracketPosition < 0) continue
+
+    matchSlots[bracketPosition] = {
+      ...applyWinnerToMatch(match),
+      bracketPosition,
+    }
+  }
+
+  return matchSlots.map((match, matchIndex) => ({
+    ...(match || createPlaceholderMatch(
+      `${stageKey}-${matchIndex}`,
+      previousStageMatches
+        ? [
+            getDerivedWinnerParticipantFromMatch(previousStageMatches[matchIndex * 2]),
+            getDerivedWinnerParticipantFromMatch(previousStageMatches[matchIndex * 2 + 1]),
+          ]
+        : undefined
+    )),
+    bracketPosition: matchIndex,
+  }))
+}
+
 function placeStageMatches(
   stageKey: BracketStageKey,
   matches: BracketMatchCard[],
@@ -901,31 +979,26 @@ function buildGenericBracketColumns(
       options.visualOrderByStage
     )
     const expectedMatchesCount = Math.max(1, Math.ceil(firstStageMatchesCount / 2 ** stageIndex))
-    const columnMatches = [
-      ...actualMatches.map((match, matchIndex) => ({
-        ...applyWinnerToMatch(match),
-        bracketPosition: matchIndex,
-      })),
-      ...Array.from(
-        { length: Math.max(0, expectedMatchesCount - actualMatches.length) },
-        (_, placeholderIndex) => ({
-          ...createPlaceholderMatch(
-            `${stageKey}-${placeholderIndex}`,
-            options.advanceWinners && previousStageMatches
-              ? [
-                  getDerivedWinnerParticipantFromMatch(
-                    previousStageMatches[(actualMatches.length + placeholderIndex) * 2]
-                  ),
-                  getDerivedWinnerParticipantFromMatch(
-                    previousStageMatches[(actualMatches.length + placeholderIndex) * 2 + 1]
-                  ),
-                ]
-              : undefined
+    const columnMatches = options.advanceWinners
+      ? placeGenericStageMatches(
+          stageKey,
+          actualMatches,
+          expectedMatchesCount,
+          previousStageMatches
+        )
+      : [
+          ...actualMatches.map((match, matchIndex) => ({
+            ...applyWinnerToMatch(match),
+            bracketPosition: matchIndex,
+          })),
+          ...Array.from(
+            { length: Math.max(0, expectedMatchesCount - actualMatches.length) },
+            (_, placeholderIndex) => ({
+              ...createPlaceholderMatch(`${stageKey}-${placeholderIndex}`),
+              bracketPosition: actualMatches.length + placeholderIndex,
+            })
           ),
-          bracketPosition: actualMatches.length + placeholderIndex,
-        })
-      ),
-    ]
+        ]
 
     const column = {
       key: stageKey,
