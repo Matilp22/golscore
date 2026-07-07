@@ -11,9 +11,50 @@ import {
   getTournamentDisplayName,
 } from '@/shared/i18n/locales'
 import { buildSeoMetadata } from '@/shared/seo'
+import {
+  getTournamentLogoOverrideUrl,
+  pickLeagueLogoUrl,
+} from '@/shared/utils/asset-urls'
 
-const TOURNAMENT_LOGOS: Record<string, string> = {
-  'selecciones-mundial': '/brand/competitions/world-cup.svg',
+const TOURNAMENT_LEAGUE_EXTERNAL_IDS: Record<string, number> = {
+  'argentina-liga-profesional': 128,
+  'argentina-copa-argentina': 130,
+  'internacional-libertadores': 13,
+  'internacional-sudamericana': 11,
+  'internacional-champions': 2,
+  'internacional-europa-league': 3,
+  'internacional-conference-league': 848,
+  'internacional-concacaf-champions': 16,
+  'inglaterra-premier-league': 39,
+  'inglaterra-fa-cup': 45,
+  'espana-la-liga': 140,
+  'espana-copa-del-rey': 143,
+  'italia-serie-a': 135,
+  'italia-coppa-italia': 137,
+  'alemania-bundesliga': 78,
+  'alemania-dfb-pokal': 81,
+  'portugal-primeira-liga': 94,
+  'portugal-taca-de-portugal': 96,
+  'francia-ligue-1': 61,
+  'francia-copa-francia': 66,
+  'brasil-brasileirao': 71,
+  'brasil-copa-do-brasil': 73,
+  'mexico-liga-mx': 262,
+  'eeuu-mls': 253,
+  'selecciones-mundial': 1,
+  'selecciones-copa-america': 9,
+  'selecciones-eurocopa': 4,
+  'selecciones-uefa-nations-league': 5,
+  'selecciones-eliminatorias-conmebol': 34,
+  'selecciones-eliminatorias-uefa': 32,
+  'selecciones-eliminatorias-concacaf': 31,
+}
+
+function resolveTournamentLogo(tournament: TournamentPageConfig) {
+  return (
+    getTournamentLogoOverrideUrl(tournament.key) ??
+    pickLeagueLogoUrl(null, TOURNAMENT_LEAGUE_EXTERNAL_IDS[tournament.key])
+  )
 }
 
 export async function generateMetadata() {
@@ -34,7 +75,7 @@ function getTournamentInitials(name: string) {
 }
 
 function CompetitionLogo({ tournament, name }: { tournament: TournamentPageConfig; name: string }) {
-  const logo = TOURNAMENT_LOGOS[tournament.key]
+  const logo = resolveTournamentLogo(tournament)
 
   if (logo) {
     return (

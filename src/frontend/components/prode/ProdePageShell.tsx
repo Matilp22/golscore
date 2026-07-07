@@ -46,14 +46,6 @@ const prodeNavItems: ProdeNavItem[] = [
   { label: 'Prode', href: '/prode', icon: 'trophy', active: true },
 ]
 
-const bottomNavItems: ProdeNavItem[] = [
-  { label: 'Inicio', href: '/', icon: 'home' },
-  { label: 'Competiciones', href: '/competiciones', icon: 'trophy' },
-  { label: 'Ranking', href: '#ranking', icon: 'chart' },
-  { label: 'Prode', href: '/prode', icon: 'trophy', active: true },
-  { label: 'Torneos', href: '/prode/torneos', icon: 'more' },
-]
-
 function Icon({ name, className = 'h-5 w-5' }: { name: IconName; className?: string }) {
   const common = {
     fill: 'none',
@@ -210,15 +202,6 @@ export default function ProdePageShell({
           {children}
         </div>
       </main>
-
-      <nav className="hf-prode-bottom-nav lg:hidden" aria-label="Navegacion Prode">
-        {bottomNavItems.map((item) => (
-          <Link key={item.label} href={item.href} className={item.active ? 'is-active' : ''}>
-            <Icon name={item.icon} className="h-5 w-5" />
-            <span>{item.label}</span>
-          </Link>
-        ))}
-      </nav>
 
       {isMenuOpen ? (
         <div className="hf-prode-mobile-menu lg:hidden">

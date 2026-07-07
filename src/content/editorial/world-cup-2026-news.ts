@@ -4,8 +4,53 @@ const WORLD_CUP_2026_EDITORIAL_IMAGE = '/brand/competitions/world-cup-2026.png'
 const WORLD_CUP_TROPHY_EDITORIAL_IMAGE = '/brand/competitions/world-cup-trophy-transparent.png'
 const WORLD_CUP_TROPHY_CUTOUT_IMAGE = '/brand/competitions/world-cup-trophy-cutout.png'
 
-// Articulos 1 y 2 estan escritos antes de Argentina vs. Egipto; revisar si se actualiza el resultado.
+// Algunas notas conservan contexto previo a Argentina vs. Egipto; revisar si cambia el hilo editorial.
 export const WORLD_CUP_2026_NEWS_ARTICLES: EditorialArticle[] = [
+  {
+    slug: 'nunca-dejo-de-creer-argentina-egipto-mundial-2026',
+    title: 'Nunca dejo de creer',
+    summary:
+      'Argentina estuvo 2-0 abajo ante Egipto, jugó incómoda durante casi todo el partido y quedó muy cerca de una eliminación histórica. Lo dio vuelta en el final por jerarquía, empuje y nombres propios, pero el pase a cuartos también dejó varias alarmas encendidas.',
+    category: 'mundial-2026',
+    tags: [
+      'noticias',
+      'mundial-2026',
+      'argentina',
+      'egipto',
+      'messi',
+      'scaloneta',
+      'remontada',
+      'cuartos-de-final',
+    ],
+    author: 'Redacción Hay Fulbo',
+    publishedAt: '2026-07-07',
+    updatedAt: '2026-07-07T18:30:00-03:00',
+    sources: [],
+    relatedSlugs: [
+      'mundial-2026-la-copa-se-quedo-sin-duenos',
+      'goleadores-historicos-del-mundial-messi-mbappe-haaland',
+      'momento-bajonero-mundial-2026-historias-dolor',
+    ],
+    body: [
+      {
+        paragraphs: [
+          'Argentina está en cuartos de final del Mundial 2026, pero llegó bastante más golpeada de lo que indica el resultado. El 3-2 contra Egipto fue una remontada enorme, de esas que quedan en la memoria por el contexto y por el momento, aunque también fue una advertencia fuerte: la Selección volvió a sufrir demasiado y estuvo a minutos de quedar afuera.',
+          'El partido en Atlanta tuvo de todo. Egipto se puso 2-0 arriba, Argentina no encontraba claridad y el equipo de Scaloni parecía atrapado entre la urgencia y la falta de precisión. No fue una noche cómoda ni una actuación para inflar demasiado. Durante buena parte del encuentro, el campeón del mundo jugó mal, se repitió en ataques previsibles y quedó expuesto atrás cada vez que Egipto pudo salir rápido.',
+          'El primer golpe llegó con Yasser Ibrahim. Egipto, que ya había mostrado orden y personalidad, aprovechó una de sus chances y empezó a jugar con el resultado a favor. Argentina tuvo la pelota, pero no siempre supo qué hacer con ella. Circuló mucho, aceleró poco y chocó varias veces contra un rival que defendió con convicción.',
+          'El panorama se complicó todavía más porque Mostafa Shobeir tuvo una noche enorme. El arquero egipcio le atajó un penal a Messi en el primer tiempo y después respondió en varias situaciones importantes. También hubo un tiro libre del 10 que pegó en el palo y algunas aproximaciones de Julián Álvarez y Alexis Mac Allister, pero la sensación era la misma: Argentina buscaba, sí, pero sin terminar de romper el partido.',
+          'El 2-0 de Mostafa Zico fue el momento más delicado. Quedaban 11 minutos y la Selección estaba contra la pared. No era una desventaja temprana, con tiempo para acomodarse. Era el tramo final de un partido eliminatorio. Egipto estaba cerca de firmar uno de los golpes más grandes del Mundial y Argentina parecía quedarse sin respuestas.',
+          'Ahí cambió el partido. No por una mejora colectiva sostenida ni por una superioridad clara, sino por empuje, jerarquía y aparición de jugadores decisivos. A los 79 minutos, Messi metió una pelota precisa y Cuti Romero ganó de arriba para marcar el descuento. Ese gol no solucionó todos los problemas, pero cambió el clima. Argentina pasó de la confusión a la presión real. Egipto empezó a retroceder demasiado y el partido se jugó definitivamente en campo africano.',
+          'Cuatro minutos después apareció Messi para el 2-2. Había errado un penal, había quedado varias veces rodeado y no venía teniendo una noche limpia, pero volvió a aparecer en el momento más pesado. Ese es el valor que todavía tiene: incluso cuando no domina todo el partido, puede resolver una jugada que cambia una eliminación por una vida más. Con ese gol, además, llegó a 21 tantos en Copas del Mundo.',
+          'El golpe final llegó cuando el partido ya parecía encaminado al suplementario. Lautaro Martínez atacó por derecha, tiró el centro y Enzo Fernández apareció por atrás para meter el cabezazo del 3-2. Fue una jugada simple, directa y efectiva. Justo lo que Argentina había necesitado durante buena parte de la noche.',
+          'La clasificación se festejó fuerte, lógico. Dar vuelta un 0-2 en un Mundial, en una instancia eliminatoria, no pasa todos los días. Pero el análisis no puede quedarse solamente en el desahogo. Argentina dejó señales que Scaloni tendrá que revisar rápido. El equipo volvió a partirse en algunos tramos, sufrió demasiado en las transiciones defensivas y dependió mucho de apariciones individuales para salir de un partido que se había puesto peligrosísimo.',
+          'También hay mérito de Egipto. No fue un rival decorativo ni un equipo que se metió atrás desde el primer minuto. Compitió con orden, golpeó en los momentos justos y estuvo muy cerca de eliminar al campeón del mundo. Salah no necesitó hacer un partido brillante para que Egipto fuera peligroso. El equipo entendió su plan y lo sostuvo casi hasta el final.',
+          'Para Argentina, el lado positivo es claro: el equipo volvió a demostrar carácter. No se cayó después del 2-0, no entró en desesperación total y encontró respuestas cuando quedaba muy poco. Eso, en un Mundial, vale muchísimo. Pero también es cierto que no puede acostumbrarse a vivir al límite. Contra rivales de mayor jerarquía, un partido así puede no tener vuelta.',
+          'Ahora se viene cuartos de final en Kansas City, contra Colombia o Suiza. Será otro tipo de prueba, probablemente con menos margen para errores. Argentina sigue viva, Messi sigue siendo determinante y el grupo volvió a sacar adelante una situación límite. Pero el mensaje de la noche fue doble: la Selección tiene carácter de sobra, aunque necesita jugar mejor.',
+          '“Nunca dejo de creer” aplica, claro. Pero creer no alcanza siempre. Para seguir en carrera, Argentina va a tener que recuperar control, equilibrio y precisión. La remontada ante Egipto fue un alivio enorme. También fue un aviso.',
+        ],
+      },
+    ],
+  },
   {
     slug: 'mundial-2026-la-copa-se-quedo-sin-duenos',
     title: 'Mundial 2026: la Copa se quedó sin dueños',

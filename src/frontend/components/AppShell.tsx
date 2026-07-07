@@ -633,69 +633,67 @@ export default function AppShell({ auth, children, locale }: AppShellProps) {
         </div>
       ) : null}
 
-      {!isProdeRoute ? (
-        <nav className="hf-mobile-bottom-nav lg:hidden" aria-label="Navegacion principal mobile">
-          {MOBILE_BOTTOM_ITEMS.map((item) => {
-            const active =
-              item.key === 'home'
-                ? pathname === '/'
-                : item.key === 'competitions'
-                  ? pathname === '/competiciones' || (pathname?.startsWith('/seccion') ?? false)
-                  : item.key === 'prode'
-                    ? pathname?.startsWith('/prode')
-                  : item.key === 'more'
-                    ? isMoreOpen
-                    : false
+      <nav className="hf-mobile-bottom-nav lg:hidden" aria-label="Navegacion principal mobile">
+        {MOBILE_BOTTOM_ITEMS.map((item) => {
+          const active =
+            item.key === 'home'
+              ? pathname === '/'
+              : item.key === 'competitions'
+                ? pathname === '/competiciones' || (pathname?.startsWith('/seccion') ?? false)
+                : item.key === 'prode'
+                  ? pathname?.startsWith('/prode')
+                : item.key === 'more'
+                  ? isMoreOpen
+                  : false
 
-            if (item.opensFavorites) {
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => {
-                    setIsMoreOpen(false)
-                    setIsFavoritesOpen(true)
-                  }}
-                  aria-label="Abrir favoritos"
-                >
-                  <ShellIcon name={item.icon} />
-                  <span>{item.label}</span>
-                </button>
-              )
-            }
-
-            if (item.opensMore) {
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => {
-                    setIsFavoritesOpen(false)
-                    setIsMoreOpen(true)
-                  }}
-                  aria-label="Abrir mas secciones"
-                  className={active ? 'is-active' : ''}
-                >
-                  <ShellIcon name={item.icon} />
-                  <span>{item.label}</span>
-                </button>
-              )
-            }
-
+          if (item.opensFavorites) {
             return (
-              <Link
+              <button
                 key={item.key}
-                href={item.href || '/'}
-                className={active ? 'is-active' : ''}
-                aria-current={active ? 'page' : undefined}
+                type="button"
+                onClick={() => {
+                  setIsMoreOpen(false)
+                  setIsFavoritesOpen(true)
+                }}
+                aria-label="Abrir favoritos"
               >
                 <ShellIcon name={item.icon} />
                 <span>{item.label}</span>
-              </Link>
+              </button>
             )
-          })}
-        </nav>
-      ) : null}
+          }
+
+          if (item.opensMore) {
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => {
+                  setIsFavoritesOpen(false)
+                  setIsMoreOpen(true)
+                }}
+                aria-label="Abrir mas secciones"
+                className={active ? 'is-active' : ''}
+              >
+                <ShellIcon name={item.icon} />
+                <span>{item.label}</span>
+              </button>
+            )
+          }
+
+          return (
+            <Link
+              key={item.key}
+              href={item.href || '/'}
+              className={active ? 'is-active' : ''}
+              aria-current={active ? 'page' : undefined}
+            >
+              <ShellIcon name={item.icon} />
+              <span>{item.label}</span>
+            </Link>
+          )
+        })}
+      </nav>
 
       <GlobalSearch open={isSearchOpen} onOpenChange={setIsSearchOpen} />
     </LocaleProvider>
