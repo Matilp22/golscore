@@ -216,6 +216,13 @@ function isExactLeagueName(match: ApiMatch, expectedName: string) {
   return leagueText(match).trim() === expectedName
 }
 
+function isOfficialLeague(match: ApiMatch, leagueId: number, fallbackNames: string[]) {
+  if (isExactLeagueId(match, leagueId)) return true
+  if (match.leagueId) return false
+
+  return fallbackNames.some((name) => isExactLeagueName(match, name))
+}
+
 function getHomeExclusionReason(match: ApiMatch) {
   return getExcludedCompetitionReason({
     leagueId: match.leagueId,
@@ -550,15 +557,8 @@ const LEAGUE_RULES: LeagueRule[] = [
     sectionKey: 'internacional',
     sectionTitle: 'Internacional',
     baseTitle: 'Champions League',
-    match: (match) => {
-      const league = leagueText(match)
-      return (
-        league.includes('champions league') &&
-        !league.includes('caf') &&
-        !league.includes('concacaf') &&
-        !league.includes('afc')
-      )
-    },
+    match: (match) =>
+      isOfficialLeague(match, 2, ['uefa champions league']),
   },
   {
     key: 'internacional-copa-intercontinental',
@@ -572,17 +572,19 @@ const LEAGUE_RULES: LeagueRule[] = [
     sectionKey: 'internacional',
     sectionTitle: 'Internacional',
     baseTitle: 'Europa League',
-    match: (match) => {
-      const league = leagueText(match)
-      return league.includes('europa league') && !league.includes('conference')
-    },
+    match: (match) =>
+      isOfficialLeague(match, 3, ['uefa europa league']),
   },
   {
     key: 'internacional-conference-league',
     sectionKey: 'internacional',
     sectionTitle: 'Internacional',
     baseTitle: 'Conference League',
-    match: (match) => leagueText(match).includes('conference league'),
+    match: (match) =>
+      isOfficialLeague(match, 848, [
+        'uefa europa conference league',
+        'uefa conference league',
+      ]),
   },
   {
     key: 'internacional-mundial-de-clubes',

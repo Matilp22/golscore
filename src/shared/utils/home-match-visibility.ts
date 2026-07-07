@@ -153,9 +153,6 @@ export function getHomeMatchVisibility(
   if (
     league.includes('libertadores') ||
     league.includes('sudamericana') ||
-    league.includes('champions league') ||
-    league.includes('europa league') ||
-    league.includes('conference league') ||
     league.includes('intercontinental') ||
     league.includes('concacaf champions')
   ) {
