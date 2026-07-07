@@ -5,12 +5,21 @@ export type EditorialCategory =
   | 'champions'
   | 'guias'
   | 'estadisticas'
+  | 'historias-mundialistas'
+  | 'momento-bajonero'
   | 'prode'
 
 export type EditorialBodyBlock = {
   heading?: string
   paragraphs: string[]
   bullets?: string[]
+  image?: EditorialImage
+}
+
+export type EditorialImage = {
+  src: string
+  alt: string
+  caption?: string
 }
 
 export type EditorialSource = {

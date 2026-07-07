@@ -5,6 +5,8 @@ const CATEGORY_LABELS: Record<string, string> = {
   champions: 'Champions',
   guias: 'Guías',
   estadisticas: 'Estadísticas',
+  'historias-mundialistas': 'Historias mundialistas',
+  'momento-bajonero': 'Momento bajonero',
   prode: 'Prode',
 }
 

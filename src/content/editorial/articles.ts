@@ -1,6 +1,8 @@
 import type { EditorialArticle } from './types'
+import { WORLD_CUP_2026_NEWS_ARTICLES } from './world-cup-2026-news'
 
 export const EDITORIAL_ARTICLES: EditorialArticle[] = [
+  ...WORLD_CUP_2026_NEWS_ARTICLES,
   {
     slug: 'como-funciona-el-mundial-2026',
     title: 'Como funciona el Mundial 2026',

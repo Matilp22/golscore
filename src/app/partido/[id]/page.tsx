@@ -2373,51 +2373,40 @@ export default async function PartidoDetallePage({ params }: PageProps) {
             <AutoRefresh
               intervalMs={matchDetailRefreshIntervalMs}
               showButton
-              className="absolute right-4 top-16 z-10 md:top-4"
+              className="absolute right-4 top-16 z-10 md:top-16"
               initialUpdatedAt={renderedAt}
               initialSyncMinIntervalMs={matchDetailInitialSyncMinIntervalMs}
               syncBeforeRefreshUrl={matchDetailLiveSyncUrl}
             />
           </div>
 
-          <div className="relative z-10 border-b border-white/6 px-2 py-3 md:px-4">
-            <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#7ff0b2]">
-                  HF · Hay Fulbo
-                </p>
+          <div className="relative z-10 border-b border-white/6 px-3 py-4 pr-16 md:px-5 md:py-5 md:pr-20">
+            <div className="absolute right-3 top-3 z-20 md:right-5 md:top-5" data-share-exclude="true">
+              <ShareCardButton
+                targetId={shareCardId}
+                fileName={`hay-fulbo-${fixture.fixture.id}.png`}
+                title={shareTitle}
+                text={shareText}
+                url={matchDetailHref}
+              />
+            </div>
+
+            <div className="min-w-0">
                 {tournamentHref ? (
                   <Link
                     href={tournamentHref}
-                    className="mt-1 inline-flex max-w-full text-base font-bold text-white underline-offset-4 transition hover:text-[#7ff0b2] hover:underline md:text-xl"
+                    className="inline-flex max-w-full text-xl font-black leading-tight text-white underline-offset-4 drop-shadow-[0_2px_12px_rgba(0,0,0,0.45)] transition hover:text-[#7ff0b2] hover:underline md:text-3xl"
                   >
                     <span className="truncate">{tournamentName}</span>
                   </Link>
                 ) : (
-                  <h1 className="mt-1 text-base font-bold text-white md:text-xl">
+                  <h1 className="text-xl font-black leading-tight text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.45)] md:text-3xl">
                     {tournamentName}
                   </h1>
                 )}
-                <p className="mt-2 inline-flex rounded-xl border border-[#25553d] bg-[#163828] px-3 py-1.5 text-xs font-black text-[#b8f7d2] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+                <p className="mt-1.5 text-sm font-bold leading-tight text-white/90 md:text-base">
                   {formatHeaderDateTime(fixture.fixture.date, locale)}
                 </p>
-              </div>
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <ShareCardButton
-                  targetId={shareCardId}
-                  fileName={`hay-fulbo-${fixture.fixture.id}.png`}
-                  title={shareTitle}
-                  text={shareText}
-                  url={matchDetailHref}
-                />
-                <Link
-                  href={matchHistoryHref}
-                  className="hf-button inline-flex min-h-10 items-center justify-center rounded-xl px-3 py-2 text-sm font-black sm:px-4"
-                  data-share-exclude="true"
-                >
-                  Historial
-                </Link>
-              </div>
             </div>
           </div>
 
