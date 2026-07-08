@@ -46,6 +46,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
         (sum, article) => sum + getEditorialWordCount(article),
         0
       ),
+      sportsDataItems: 0,
+      placeholderOnly: newsArticles.length === 0,
       updatedAtValues: newsArticles.map((article) => article.updatedAt),
       priority: 0.75,
     },
@@ -54,6 +56,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
       kind: 'transfers' as const,
       wordCount:
         getTransferMarketEditorialWordCount() + getTransferMarketItemsWordCount(),
+      sportsDataItems: transferItems.length,
+      placeholderOnly: transferItems.length === 0,
       updatedAtValues: [
         ...transferEditorialArticles.map((article) => article.updatedAt),
         ...transferItems.map((item) => item.updatedAt),
@@ -66,7 +70,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
       kind: route.kind,
       content: {
         editorialWordCount: route.wordCount,
+        sportsDataItems: route.sportsDataItems ?? 0,
         hasMetadata: true,
+        placeholderOnly: route.placeholderOnly ?? false,
       },
     })
 

@@ -31,8 +31,8 @@ const ES_MESSAGES = {
   'footer.description':
     'Resultados, fixtures, estadísticas y prode de fútbol. Información deportiva independiente con foco en Argentina.',
   'footer.legalLabel': 'Enlaces legales',
-  'footer.privacy': 'Política de Privacidad',
-  'footer.terms': 'Términos y Condiciones',
+  'footer.privacy': 'Política de privacidad',
+  'footer.terms': 'Términos y condiciones',
   'footer.contact': 'Contacto',
   'footer.rights': 'Todos los derechos reservados.',
   'home.tagline': 'Partidos del día, marcadores en vivo y agenda fulbo total',

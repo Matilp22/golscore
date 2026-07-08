@@ -1,4 +1,4 @@
-import { cookies, headers } from 'next/headers'
+import { cookies } from 'next/headers'
 
 import {
   LOCALE_COOKIE_NAME,
@@ -6,14 +6,9 @@ import {
 } from '@/shared/i18n/locales'
 
 export async function getRequestLocale() {
-  const [cookieStore, headerStore] = await Promise.all([cookies(), headers()])
+  const cookieStore = await cookies()
 
   return resolveAppLocale({
     cookieLocale: cookieStore.get(LOCALE_COOKIE_NAME)?.value ?? null,
-    country:
-      headerStore.get('x-vercel-ip-country') ??
-      headerStore.get('cf-ipcountry') ??
-      null,
-    acceptLanguage: headerStore.get('accept-language'),
   })
 }

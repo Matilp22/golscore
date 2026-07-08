@@ -69,6 +69,15 @@ const HARD_NOINDEX_PREFIXES = [
   '/sentry-test',
 ] as const
 
+const MANUAL_AD_BLOCKED_PREFIXES = [
+  '/admin',
+  '/login',
+  '/register',
+  '/perfil',
+  '/restablecer-contrasena',
+  '/mercado-de-pases',
+] as const
+
 const DEFAULT_AD_ALLOWED_COMPETITION_PATHS = new Set([
   '/liga/selecciones-mundial',
   '/liga/internacional-libertadores',
@@ -200,6 +209,20 @@ export function getPublicPageIndexability({
   }
 
   if (kind === 'news' || kind === 'transfers') {
+    if (kind === 'transfers' && route === '/mercado-de-pases') {
+      const hasTransferMovements = (content.sportsDataItems ?? 0) > 0
+      const hasEditorialDepth = (content.editorialWordCount ?? 0) >= EDITORIAL_INDEX_MIN_WORDS
+      const index = hasTransferMovements && hasEditorialDepth && content.hasMetadata !== false
+
+      return {
+        index,
+        follow: true,
+        reason: index ? 'transfer-market-has-real-movements' : 'transfer-market-without-real-movements',
+        contentScore,
+        isThin: !index,
+      }
+    }
+
     const index =
       (content.editorialWordCount ?? 0) >= EDITORIAL_INDEX_MIN_WORDS &&
       content.hasMetadata !== false
@@ -281,6 +304,10 @@ export function shouldAllowAdsOnRoute(
 ) {
   const route = normalizePublicPath(path)
   const kind = getRouteKind(route)
+
+  if (startsWithRoute(route, MANUAL_AD_BLOCKED_PREFIXES)) {
+    return false
+  }
 
   if (
     kind === 'admin' ||

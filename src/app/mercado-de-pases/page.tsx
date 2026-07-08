@@ -45,6 +45,7 @@ function isTransferMarketType(value: string): value is TransferMarketType {
 }
 
 export function generateMetadata() {
+  const transferItems = getTransferMarketItems()
   const editorialWordCount =
     getTransferMarketEditorialWordCount() + getTransferMarketItemsWordCount()
   const indexability = getPublicPageIndexability({
@@ -52,8 +53,9 @@ export function generateMetadata() {
     kind: 'transfers',
     content: {
       editorialWordCount,
+      sportsDataItems: transferItems.length,
       hasMetadata: true,
-      placeholderOnly: editorialWordCount === 0,
+      placeholderOnly: transferItems.length === 0,
     },
   })
 
