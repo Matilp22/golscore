@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title id="title">Copa Argentina</title>
+  <rect width="128" height="128" rx="28" fill="#071B2F"/>
+  <circle cx="64" cy="64" r="48" fill="#F6F3EC"/>
+  <path d="M41 30h46v13c0 14-7 25-17 30v18h15v12H43V91h15V73C48 68 41 57 41 43V30Z" fill="#58C91F"/>
+  <path d="M30 38h16v11c0 12-8 20-18 22l-4-11c6-1 10-5 10-12V38Zm68 0h-16v11c0 12 8 20 18 22l4-11c-6-1-10-5-10-12V38Z" fill="#58C91F"/>
+  <path d="M50 42h28v10H50V42Zm6 18h16v10H56V60Z" fill="#071B2F"/>
+</svg>

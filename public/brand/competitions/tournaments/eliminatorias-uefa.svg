@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title id="title">Eliminatorias UEFA</title>
+  <rect width="128" height="128" rx="28" fill="#071B2F"/>
+  <circle cx="64" cy="58" r="39" fill="#F6F3EC"/>
+  <path d="M64 22 74 46h26L79 62l8 25-23-15-23 15 8-25-21-16h26L64 22Z" fill="#1F70FF"/>
+  <path d="M24 100h80" stroke="#58C91F" stroke-width="8" stroke-linecap="round"/>
+  <text x="64" y="117" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" font-weight="900" fill="#F6F3EC">UEFA</text>
+</svg>

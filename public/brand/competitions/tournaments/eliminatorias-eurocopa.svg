@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title id="title">Eliminatorias Eurocopa</title>
+  <rect width="128" height="128" rx="28" fill="#071B2F"/>
+  <path d="M64 18c22 13 35 30 35 48 0 24-17 42-35 42S29 90 29 66c0-18 13-35 35-48Z" fill="#1F70FF"/>
+  <circle cx="64" cy="64" r="22" fill="#F6F3EC"/>
+  <path d="M64 43 70 58h16L73 67l5 16-14-10-14 10 5-16-13-9h16l6-15Z" fill="#58C91F"/>
+  <text x="64" y="118" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="900" fill="#F6F3EC">EURO</text>
+</svg>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title id="title">Eliminatorias Conmebol</title>
+  <rect width="128" height="128" rx="28" fill="#071B2F"/>
+  <path d="M20 80 86 22h22L42 106H20V80Z" fill="#58C91F"/>
+  <circle cx="42" cy="42" r="14" fill="#F4C95D"/>
+  <path d="M32 95h70v13H32V95Z" fill="#F6F3EC"/>
+  <path d="M37 96c7-28 13-44 27-68 14 24 20 40 27 68H37Z" fill="#F6F3EC"/>
+  <text x="64" y="119" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="800" fill="#58C91F">CONMEBOL</text>
+</svg>

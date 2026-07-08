@@ -48,7 +48,11 @@ import {
   getTournamentDisplayName,
   t,
 } from '@/shared/i18n/locales'
-import { WORLD_CUP_2026_LOGO_URL } from '@/shared/utils/asset-urls'
+import {
+  WORLD_CUP_2026_LOGO_URL,
+  getTournamentKeyByLeagueExternalId,
+  getTournamentLogoOverrideUrl,
+} from '@/shared/utils/asset-urls'
 import { getHomeProdePredictions } from '@/server/prode/home-predictions'
 
 export async function generateMetadata() {
@@ -390,9 +394,12 @@ const HOME_LEAGUE_ID_TO_TOURNAMENT_KEY = new Map<number, string>([
   [1, 'selecciones-mundial'],
   [9, 'selecciones-copa-america'],
   [4, 'selecciones-eurocopa'],
+  [5, 'selecciones-uefa-nations-league'],
   [34, 'selecciones-eliminatorias-conmebol'],
   [32, 'selecciones-eliminatorias-uefa'],
   [31, 'selecciones-eliminatorias-concacaf'],
+  [960, 'selecciones-eliminatorias-eurocopa'],
+  [15, 'selecciones-repechaje-mundialista'],
 ])
 
 const LEAGUE_RULES: LeagueRule[] = [
@@ -1187,7 +1194,20 @@ function resolveFallbackHomeCompetitionHref(sampleMatch?: ApiMatch) {
 }
 
 function resolveHomeCompetitionLogo(ruleKey: string, sampleMatch?: ApiMatch) {
-  if (ruleKey === 'selecciones-mundial') return WORLD_CUP_2026_LOGO_URL
+  const mappedTournamentKey =
+    sampleMatch?.leagueId && Number.isFinite(sampleMatch.leagueId)
+      ? HOME_LEAGUE_ID_TO_TOURNAMENT_KEY.get(sampleMatch.leagueId) ??
+        getTournamentKeyByLeagueExternalId(sampleMatch.leagueId)
+      : null
+  const tournamentOverride =
+    getTournamentLogoOverrideUrl(ruleKey) ??
+    getTournamentLogoOverrideUrl(mappedTournamentKey)
+
+  if (tournamentOverride) return tournamentOverride
+
+  if (ruleKey === 'selecciones-mundial' || mappedTournamentKey === 'selecciones-mundial') {
+    return WORLD_CUP_2026_LOGO_URL
+  }
 
   if (sampleMatch?.leagueLogo) return sampleMatch.leagueLogo
 

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title id="title">Copa Libertadores</title>
+  <rect width="128" height="128" rx="28" fill="#071B2F"/>
+  <path d="M33 100h62v12H33v-12Z" fill="#D9A441"/>
+  <path d="M45 26h38v12h-5v30c0 15-10 27-14 31-4-4-14-16-14-31V38h-5V26Z" fill="#F4C95D"/>
+  <path d="M37 38h12v20c0 11-7 21-18 23l-4-12c6-2 10-6 10-14V38Zm54 0H79v20c0 11 7 21 18 23l4-12c-6-2-10-6-10-14V38Z" fill="#B88220"/>
+  <path d="M60 34h8v54h-8V34Z" fill="#071B2F" opacity=".35"/>
+  <path d="M42 108h44" stroke="#58C91F" stroke-width="4" stroke-linecap="round"/>
+</svg>

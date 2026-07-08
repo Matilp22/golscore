@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title id="title">Liga Profesional Argentina</title>
+  <rect width="128" height="128" rx="28" fill="#071B2F"/>
+  <path d="M24 20h80l-9 76-31 16-31-16-9-76Z" fill="#F6F3EC"/>
+  <path d="M32 28h64l-7 62-25 13-25-13-7-62Z" fill="#6ED2FF"/>
+  <path d="M42 38h44v10H42V38Zm0 42h44v10H42V80Z" fill="#F6F3EC"/>
+  <path d="M48 54h10v28H48V54Zm22 0h10v28H70V54Z" fill="#071B2F"/>
+  <path d="M60 51h10v35H60V51Z" fill="#071B2F"/>
+  <path d="M38 30h52l-4-8H42l-4 8Z" fill="#58C91F"/>
+</svg>

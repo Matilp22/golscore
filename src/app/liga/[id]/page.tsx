@@ -2281,6 +2281,30 @@ function getBracketParticipantScoreLabel(match: BracketMatchCard, participantInd
   return participant.goals ?? '-'
 }
 
+function isMatchDetailRouteId(id: BracketMatchCard['id']) {
+  return typeof id === 'number' || /^\d+$/.test(String(id))
+}
+
+function getBracketMatchParticipantPairKey(match: BracketMatchCard) {
+  const participantKeys = match.participants
+    .filter((participant) => !participant.isPlaceholder)
+    .map((participant) => getParticipantKey(participant))
+    .filter(Boolean)
+
+  return participantKeys.length === 2 ? participantKeys.sort().join('|') : null
+}
+
+function getBracketMatchDetailHref(
+  match: BracketMatchCard,
+  hrefByParticipantPair: Map<string, string>
+) {
+  if (isMatchDetailRouteId(match.id)) return `/partido/${match.id}`
+
+  const participantPairKey = getBracketMatchParticipantPairKey(match)
+
+  return participantPairKey ? hrefByParticipantPair.get(participantPairKey) ?? null : null
+}
+
 const TEAM_SHORT_CODE_OVERRIDES: Record<string, string> = {
   'atletico mineiro': 'CAM',
   'boca juniors': 'BOC',
@@ -2630,6 +2654,16 @@ function BracketView({
     2,
     ...columns.flatMap((column) => column.matches.map((match) => match.rowStart + 1))
   )
+  const matchHrefByParticipantPair = new Map<string, string>()
+
+  for (const match of columns.flatMap((column) => column.matches)) {
+    if (!isMatchDetailRouteId(match.id)) continue
+
+    const participantPairKey = getBracketMatchParticipantPairKey(match)
+    if (!participantPairKey || matchHrefByParticipantPair.has(participantPairKey)) continue
+
+    matchHrefByParticipantPair.set(participantPairKey, `/partido/${match.id}`)
+  }
 
   return (
     <SectionCard
@@ -2661,78 +2695,88 @@ function BracketView({
                       gridTemplateRows: `repeat(${totalRows}, ${BRACKET_GRID_UNIT}px)`,
                     }}
                   >
-                    {column.matches.map((match) => (
-                      <div
-                        key={match.id}
-                        className="relative"
-                        style={{
-                          gridRow: `${match.rowStart} / span 2`,
-                        }}
-                      >
-                        {columnIndex > 0 ? (
-                          <span className="pointer-events-none absolute left-[-10px] top-1/2 h-px w-[10px] bg-[#2a5c46]" />
-                        ) : null}
-                        {columnIndex < columns.length - 1 ? (
-                          <span className="pointer-events-none absolute right-[-10px] top-1/2 h-px w-[10px] bg-[#2a5c46]" />
-                        ) : null}
+                    {column.matches.map((match) => {
+                      const matchHref = getBracketMatchDetailHref(match, matchHrefByParticipantPair)
+                      const matchCardClassName = `block h-[48px] overflow-hidden rounded-xl border border-[#2a5c46] bg-[linear-gradient(180deg,#161d24_0%,#11181d_100%)] p-1 shadow-[inset_0_0_0_1px_rgba(127,240,178,0.06)] transition ${
+                        matchHref
+                          ? 'cursor-pointer hover:border-[#3a7c5f] hover:bg-[linear-gradient(180deg,#182128_0%,#121a20_100%)]'
+                          : 'cursor-default'
+                      }`
+                      const matchCardContent = (
+                        <div className="flex h-full flex-col justify-center gap-[2px]">
+                          {match.participants.map((team, participantIndex) => {
+                            const displayTeamName = translateTeamNames
+                              ? translateCountryName(team.team, locale) || team.team
+                              : team.team
 
-                        {badge ? (
-                          <div className="pointer-events-none absolute -top-2 left-1/2 z-10 -translate-x-1/2">
-                            <span
-                              className={`inline-flex rounded-full border px-2 py-0.5 text-[8px] font-black uppercase tracking-[0.08em] shadow-[0_4px_14px_rgba(0,0,0,0.25)] ${badge.className}`}
-                            >
-                              {badge.label}
-                            </span>
-                          </div>
-                        ) : null}
-
-                        <Link
-                          href={typeof match.id === 'number' ? `/partido/${match.id}` : '#'}
-                          aria-disabled={typeof match.id !== 'number'}
-                          className={`block h-[48px] overflow-hidden rounded-xl border border-[#2a5c46] bg-[linear-gradient(180deg,#161d24_0%,#11181d_100%)] p-1 shadow-[inset_0_0_0_1px_rgba(127,240,178,0.06)] transition ${
-                            typeof match.id === 'number'
-                              ? 'cursor-pointer hover:border-[#3a7c5f] hover:bg-[linear-gradient(180deg,#182128_0%,#121a20_100%)]'
-                              : 'cursor-default'
-                          }`}
-                        >
-                          <div className="flex h-full flex-col justify-center gap-[2px]">
-                            {match.participants.map((team, participantIndex) => {
-                              const displayTeamName = translateTeamNames
-                                ? translateCountryName(team.team, locale) || team.team
-                                : team.team
-
-                              return (
-                                <div
-                                  key={`${match.id}-${participantIndex}`}
-                                  className={`flex h-[17px] items-center justify-between gap-2 rounded-md px-1.5 py-0.5 ${
-                                    team.isWinner
-                                      ? 'bg-[#143624] text-[#7ff0b2] shadow-[inset_0_0_0_1px_rgba(127,240,178,0.2)]'
-                                      : 'bg-[#121a20]'
-                                  }`}
-                                >
-                                  <div className="flex min-w-0 items-center gap-2">
-                                    <TeamLogo
-                                      src={team.logo}
-                                      alt={displayTeamName}
-                                      size={12}
-                                      className="h-[12px] w-[12px] object-contain"
-                                      fallbackClassName="h-[12px] w-[10px]"
-                                      unoptimized
-                                    />
-                                    <span className={`truncate text-[10.5px] font-semibold ${team.isPlaceholder ? 'text-[#98a5b3]' : team.isWinner ? 'text-[#7ff0b2]' : 'text-[#edf2f7]'}`}>
-                                      {displayTeamName}
-                                    </span>
-                                  </div>
-                                  <span className={`text-[10.5px] font-black ${team.isPlaceholder ? 'text-[#6f7d8b]' : team.isWinner ? 'text-[#7ff0b2]' : 'text-[#dce5ef]'}`}>
-                                    {getBracketParticipantScoreLabel(match, participantIndex)}
+                            return (
+                              <div
+                                key={`${match.id}-${participantIndex}`}
+                                className={`flex h-[17px] items-center justify-between gap-2 rounded-md px-1.5 py-0.5 ${
+                                  team.isWinner
+                                    ? 'bg-[#143624] text-[#7ff0b2] shadow-[inset_0_0_0_1px_rgba(127,240,178,0.2)]'
+                                    : 'bg-[#121a20]'
+                                }`}
+                              >
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <TeamLogo
+                                    src={team.logo}
+                                    alt={displayTeamName}
+                                    size={12}
+                                    className="h-[12px] w-[12px] object-contain"
+                                    fallbackClassName="h-[12px] w-[10px]"
+                                    unoptimized
+                                  />
+                                  <span className={`truncate text-[10.5px] font-semibold ${team.isPlaceholder ? 'text-[#98a5b3]' : team.isWinner ? 'text-[#7ff0b2]' : 'text-[#edf2f7]'}`}>
+                                    {displayTeamName}
                                   </span>
                                 </div>
-                              )
-                            })}
-                          </div>
-                        </Link>
-                      </div>
-                    ))}
+                                <span className={`text-[10.5px] font-black ${team.isPlaceholder ? 'text-[#6f7d8b]' : team.isWinner ? 'text-[#7ff0b2]' : 'text-[#dce5ef]'}`}>
+                                  {getBracketParticipantScoreLabel(match, participantIndex)}
+                                </span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+
+                      return (
+                        <div
+                          key={match.id}
+                          className="relative"
+                          style={{
+                            gridRow: `${match.rowStart} / span 2`,
+                          }}
+                        >
+                          {columnIndex > 0 ? (
+                            <span className="pointer-events-none absolute left-[-10px] top-1/2 h-px w-[10px] bg-[#2a5c46]" />
+                          ) : null}
+                          {columnIndex < columns.length - 1 ? (
+                            <span className="pointer-events-none absolute right-[-10px] top-1/2 h-px w-[10px] bg-[#2a5c46]" />
+                          ) : null}
+
+                          {badge ? (
+                            <div className="pointer-events-none absolute -top-2 left-1/2 z-10 -translate-x-1/2">
+                              <span
+                                className={`inline-flex rounded-full border px-2 py-0.5 text-[8px] font-black uppercase tracking-[0.08em] shadow-[0_4px_14px_rgba(0,0,0,0.25)] ${badge.className}`}
+                              >
+                                {badge.label}
+                              </span>
+                            </div>
+                          ) : null}
+
+                          {matchHref ? (
+                            <Link href={matchHref} className={matchCardClassName}>
+                              {matchCardContent}
+                            </Link>
+                          ) : (
+                            <div aria-disabled className={matchCardClassName}>
+                              {matchCardContent}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               )

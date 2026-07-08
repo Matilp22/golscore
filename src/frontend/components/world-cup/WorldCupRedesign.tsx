@@ -20,6 +20,7 @@ import { translateCountryName } from '@/shared/utils/country-names'
 import {
   formatMatchScoreWithPenalties,
   formatMatchStatusUnderScore,
+  hasPenaltyShootoutScore,
 } from '@/shared/utils/match-display'
 import {
   isFinishedStatus,
@@ -329,6 +330,41 @@ function getFixtureScore(fixture: LeagueFixtureSummary) {
   })
 }
 
+function MatchScoreLabel({
+  fixture,
+  fallback,
+  variant,
+}: {
+  fixture: LeagueFixtureSummary
+  fallback: string
+  variant: 'live' | 'row'
+}) {
+  if (!hasScore(fixture)) {
+    return <span className={`hf-world-score-label hf-world-score-label--${variant}`}>{fallback}</span>
+  }
+
+  if (!hasPenaltyShootoutScore(fixture.homePenaltyScore, fixture.awayPenaltyScore)) {
+    return (
+      <span className={`hf-world-score-label hf-world-score-label--${variant}`}>
+        {getFixtureScore(fixture)}
+      </span>
+    )
+  }
+
+  return (
+    <span
+      className={`hf-world-score-label hf-world-score-label--${variant} is-penalties`}
+      aria-label={`Resultado ${fixture.goalsHome} a ${fixture.goalsAway}, penales ${fixture.homePenaltyScore} a ${fixture.awayPenaltyScore}`}
+    >
+      <span className="hf-world-score-penalty">({fixture.homePenaltyScore})</span>
+      <span className="hf-world-score-main">
+        {fixture.goalsHome} - {fixture.goalsAway}
+      </span>
+      <span className="hf-world-score-penalty">({fixture.awayPenaltyScore})</span>
+    </span>
+  )
+}
+
 function getTeamName(name: string, locale: AppLocale) {
   return translateCountryName(name, locale) || name
 }
@@ -579,7 +615,9 @@ function LiveMatchCard({ fixture, locale }: { fixture: LeagueFixtureSummary; loc
           locale={locale}
         />
         <div className="min-w-[96px] text-center">
-          <div className="text-5xl font-black leading-none text-white">{hasScore(fixture) ? getFixtureScore(fixture) : 'vs'}</div>
+          <div className="text-5xl font-black leading-none text-white">
+            <MatchScoreLabel fixture={fixture} fallback="vs" variant="live" />
+          </div>
           {centerSubLabel ? (
             <div className={`mt-2 text-base font-black ${live ? 'text-[var(--hf-world-coral)]' : 'text-white/72'}`}>
               {centerSubLabel}
@@ -630,7 +668,13 @@ function MatchRow({ fixture, locale }: { fixture: LeagueFixtureSummary; locale: 
         </div>
 
         <div className="text-center">
-          <div className="text-2xl font-black leading-none text-[var(--hf-world-navy)]">{getMatchCenterLabel(fixture)}</div>
+          <div className="text-2xl font-black leading-none text-[var(--hf-world-navy)]">
+            <MatchScoreLabel
+              fixture={fixture}
+              fallback={getMatchCenterLabel(fixture)}
+              variant="row"
+            />
+          </div>
           <div className="mt-1 text-xs font-bold text-[var(--hf-world-muted)]">{getMatchSubLabel(fixture)}</div>
         </div>
 

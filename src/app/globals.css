@@ -2807,6 +2807,37 @@ select {
   color: var(--hf-world-navy);
 }
 
+.hf-world-score-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.22em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.hf-world-score-label.is-penalties {
+  gap: 0.18em;
+}
+
+.hf-world-score-label--row.is-penalties {
+  font-size: 1.05rem;
+}
+
+.hf-world-score-label--live.is-penalties {
+  font-size: 2.5rem;
+}
+
+.hf-world-score-main,
+.hf-world-score-penalty {
+  line-height: 1;
+}
+
+.hf-world-score-label.is-penalties .hf-world-score-penalty {
+  font-size: 0.62em;
+}
+
 .hf-world-all-matches {
   margin: 18px auto 0;
   display: flex;
@@ -4259,13 +4290,21 @@ select {
 
   .hf-world-match-row {
     min-height: 82px;
-    grid-template-columns: minmax(0, 1fr) 78px minmax(0, 1fr) 28px;
+    grid-template-columns: minmax(0, 1fr) 100px minmax(0, 1fr) 28px;
     gap: 7px;
     padding: 12px 10px;
   }
 
   .hf-world-match-row .text-2xl {
     font-size: 1.1rem;
+  }
+
+  .hf-world-score-label--row.is-penalties {
+    font-size: 0.92rem;
+  }
+
+  .hf-world-score-label--live.is-penalties {
+    font-size: 2rem;
   }
 
   .hf-world-row-action {

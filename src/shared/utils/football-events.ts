@@ -332,14 +332,19 @@ export function isPenaltyShootoutEvent(event: FootballEventLike) {
     getEventDetail(event),
     getEventComments(event)
   )
-  const elapsed = getEventMinute(event) ?? 0
-  const extra = getEventExtraMinute(event) ?? 0
 
   return (
     combined.includes('penalty shootout') ||
+    combined.includes('penalty shoot out') ||
+    combined.includes('penalty shoot') ||
+    combined.includes('shoot out') ||
     combined.includes('shootout') ||
-    combined.includes('penales') ||
-    (elapsed >= 120 && extra > 0 && combined.includes('penalty'))
+    combined.includes('penalty series') ||
+    combined.includes('penalty kicks') ||
+    combined.includes('tanda') ||
+    combined.includes('definicion por penales') ||
+    combined.includes('serie de penales') ||
+    combined.includes('penales')
   )
 }
 

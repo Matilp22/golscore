@@ -675,6 +675,7 @@ function groupEventsByMatchId(events: MatchEventStatsRow[]) {
 function getExpectedGoals(match: MatchRow) {
   if (match.home_score === null || match.away_score === null) return null
 
+  // El marcador del partido cuenta goles de los 90' mas tiempo extra; la tanda va en columnas separadas.
   return match.home_score + match.away_score
 }
 

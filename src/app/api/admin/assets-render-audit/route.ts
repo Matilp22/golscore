@@ -8,6 +8,7 @@ import {
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import { getArgentinaTodayISO } from '@/shared/utils/argentina-time'
 import {
+  TOURNAMENT_LEAGUE_EXTERNAL_IDS,
   pickLeagueLogoUrl,
   pickStableAssetUrl,
   pickTeamLogoUrl,
@@ -260,7 +261,10 @@ export async function GET(request: Request) {
       }
     }
 
-    const mainLeagueExternalIds = uniqueValues([128, 13, 11, 2, 3, 848, 1, 130, ...homeLeagueExternalIds])
+    const mainLeagueExternalIds = uniqueValues([
+      ...Object.values(TOURNAMENT_LEAGUE_EXTERNAL_IDS),
+      ...homeLeagueExternalIds,
+    ])
     const leagueRows = await fetchLeaguesByExternalIds(mainLeagueExternalIds)
     const leagueSamples = mainLeagueExternalIds.map((externalId) => {
       const league = leagueRows.get(externalId) ?? null

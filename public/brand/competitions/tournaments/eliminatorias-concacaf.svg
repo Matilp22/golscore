@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title id="title">Eliminatorias Concacaf</title>
+  <rect width="128" height="128" rx="28" fill="#071B2F"/>
+  <path d="M28 33h72v62H28V33Z" fill="#F6F3EC"/>
+  <path d="M28 33h72v18H28V33Zm0 44h72v18H28V77Z" fill="#58C91F"/>
+  <path d="M44 58h40v12H44V58Z" fill="#071B2F"/>
+  <circle cx="64" cy="64" r="34" fill="none" stroke="#58C91F" stroke-width="6"/>
+  <text x="64" y="116" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="900" fill="#F6F3EC">CONCACAF</text>
+</svg>

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title id="title">Copa Sudamericana</title>
+  <rect width="128" height="128" rx="28" fill="#071B2F"/>
+  <path d="M64 18 99 38v52L64 110 29 90V38l35-20Z" fill="#F6F3EC"/>
+  <path d="M64 31 87 44v33L64 90 41 77V44l23-13Z" fill="#58C91F"/>
+  <path d="M64 42 77 50v19l-13 8-13-8V50l13-8Z" fill="#071B2F"/>
+  <path d="M28 96h72" stroke="#58C91F" stroke-width="6" stroke-linecap="round"/>
+</svg>
