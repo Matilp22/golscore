@@ -58,6 +58,7 @@ import {
   getLeagueFinalPhaseKey,
   getLeagueRoundLabel,
   getLeagueRoundSortValue,
+  isThirdPlaceRound,
   isLeagueFinalPhaseRound,
   normalizeLeagueRound,
   normalizeRoundText,
@@ -216,7 +217,7 @@ function getRoundPriority(round: string, leagueExternalId?: number | null) {
     ? getLeagueRoundSortValue(round, leagueExternalId)
     : null
 
-  if (normalized.includes('third place') || normalized.includes('3rd place') || normalized.includes('tercer puesto')) return 1040
+  if (isThirdPlaceRound(round)) return 1025
   if (finalPhaseSortValue !== null) return finalPhaseSortValue
   if (normalized.includes('final') && !normalized.includes('semi')) return 90
   if (normalized.includes('semi')) return 80
@@ -237,7 +238,7 @@ function getRoundDisplayName(round: string, leagueExternalId?: number | null) {
     return leagueRoundLabel.toUpperCase()
   }
 
-  if (normalized.includes('third place') || normalized.includes('3rd place') || normalized.includes('tercer puesto')) {
+  if (isThirdPlaceRound(round)) {
     return '3ER PUESTO'
   }
   if (normalized.includes('final') && !normalized.includes('semi')) return 'FINAL'
@@ -257,7 +258,7 @@ function getRoundDisplayName(round: string, leagueExternalId?: number | null) {
 function getRoundBadge(round: string) {
   const normalized = normalizeRoundName(round)
 
-  if (normalized.includes('third place') || normalized.includes('3rd place') || normalized.includes('tercer puesto')) {
+  if (isThirdPlaceRound(round)) {
     return {
       label: '3er puesto',
       className: 'border-[#7fb36b] bg-[#6d8f57] text-white',

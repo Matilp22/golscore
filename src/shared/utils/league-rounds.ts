@@ -28,6 +28,17 @@ export function normalizeRoundText(value: string | null | undefined) {
     .trim()
 }
 
+export function isThirdPlaceRound(round: string | null | undefined) {
+  const normalizedRound = normalizeRoundText(round).replace(/[-/]+/g, ' ')
+
+  return (
+    /\b(?:third|3rd)\s+place\b/.test(normalizedRound) ||
+    /\btercer\s+(?:puesto|lugar)\b/.test(normalizedRound) ||
+    /\bpartido\s+por\s+el\s+tercer\s+puesto\b/.test(normalizedRound) ||
+    /\bbronze\s+(?:match|final)\b/.test(normalizedRound)
+  )
+}
+
 function getLeagueExternalIdValue(value?: number | string | null) {
   if (value === null || value === undefined || value === '') return null
 
@@ -55,6 +66,7 @@ export function getLeagueFinalPhaseKey(
   const normalizedRound = normalizeRoundText(round)
 
   if (!normalizedRound) return null
+  if (isThirdPlaceRound(round)) return null
 
   if (
     /\b(round of 16|8th finals?|octavos?)\b/.test(normalizedRound)
@@ -164,6 +176,10 @@ export function getLeagueRoundLabel(
 
   if (!normalizedRound) return null
 
+  if (isThirdPlaceRound(String(round ?? normalizedRound))) {
+    return '3er puesto'
+  }
+
   const finalPhaseKey = getLeagueFinalPhaseKey(normalizedRound)
 
   if (finalPhaseKey) {
@@ -210,6 +226,7 @@ export function getLeagueRoundSortValue(
   const normalizedRound = normalizeLeagueRound(round, leagueExternalId)
 
   if (!normalizedRound) return Number.MAX_SAFE_INTEGER
+  if (isThirdPlaceRound(String(round ?? normalizedRound))) return 1025
 
   const finalPhaseKey = getLeagueFinalPhaseKey(normalizedRound)
 

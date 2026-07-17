@@ -1,5 +1,6 @@
 import {
   getLeagueFinalPhaseKey,
+  isThirdPlaceRound,
   normalizeRoundText,
 } from '@/shared/utils/league-rounds'
 
@@ -31,6 +32,8 @@ export type CopaArgentinaRoundMatch = {
 export function getCopaArgentinaStageKey(round: string): CopaArgentinaStageKey | null {
   const normalized = normalizeRoundText(round)
   const finalPhaseKey = getLeagueFinalPhaseKey(round)
+
+  if (isThirdPlaceRound(round)) return null
 
   if (finalPhaseKey === 'final') return 'final'
   if (finalPhaseKey === 'semifinal') return 'sf'
