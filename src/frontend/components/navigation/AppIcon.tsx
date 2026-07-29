@@ -14,6 +14,9 @@ export type AppIconName =
   | 'transfers'
   | 'profile'
   | 'logout'
+  | 'chevronRight'
+  | 'close'
+  | 'info'
 
 type AppIconProps = {
   name: AppIconName
@@ -140,6 +143,31 @@ export default function AppIcon({
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true" className={className}>
         <path {...common} d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14 5-5-5-5m5 5H9" />
+      </svg>
+    )
+  }
+
+  if (name === 'chevronRight') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" className={className}>
+        <path {...common} d="m9 5 7 7-7 7" />
+      </svg>
+    )
+  }
+
+  if (name === 'close') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" className={className}>
+        <path {...common} d="m6 6 12 12M18 6 6 18" />
+      </svg>
+    )
+  }
+
+  if (name === 'info') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" className={className}>
+        <circle {...common} cx="12" cy="12" r="9" />
+        <path {...common} d="M12 11v6m0-10v.2" />
       </svg>
     )
   }

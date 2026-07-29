@@ -50,30 +50,30 @@ honestidad, no en inventar datos.
 
 | Módulo | Funcionalidad actual | Ruta | Fuente de datos | Estado nuevo | Validación |
 | --- | --- | --- | --- | --- | --- |
-| Shell | layout global, marca y contenido | todas | Server Components + configuración local | pendiente | N,M,T,X,A,P,Q,R |
-| Shell | sidebar desktop | todas | navegación local | pendiente | I,N,X,A,Q,R |
-| Shell | navegación mobile inferior | todas | navegación local | pendiente | I,N,M,T,A,Q,R |
-| Shell | menú mobile “Más” | todas | navegación local + sesión | pendiente | I,N,M,A,Q,R |
+| Shell | layout global, marca y contenido | todas | Server Components + configuración local | validado | N,M,T,X,A,P,Q,R |
+| Shell | sidebar desktop | todas | navegación local | no aplica | reemplazada por navegación horizontal según la nueva IA |
+| Shell | navegación mobile inferior | todas | navegación local | validado | I,N,M,T,A,Q,R |
+| Shell | menú mobile “Más” | todas | navegación local + sesión | validado | I,N,M,A,Q,R |
 | Shell | navegación contextual por torneo | `/liga/[id]` | configuración de competencia | pendiente | D,I,N,M,T,X,A,Q,R |
-| Shell | footer y enlaces legales | todas | local | pendiente | I,N,M,T,X,A,Q,R |
-| Shell | botón volver | rutas de detalle | historial del router | pendiente | I,N,M,T,X,A,Q |
+| Shell | footer y enlaces legales | todas | local | implementado | I,N,M,T,X,A,Q,R |
+| Shell | botón volver | rutas de detalle | historial del router | implementado | I,N,M,T,X,A,Q |
 | Shell | selector de idioma | todas | cookie/locales | pendiente | I,N,M,T,X,A,Q,R |
 | Shell | preferencias de audio de torneo | competencias compatibles | localStorage | pendiente | I,M,X,A,Q,R |
-| Búsqueda | abrir, cerrar, Escape y autofoco | todas | estado cliente | pendiente | I,M,T,X,A,Q |
-| Búsqueda | foco confinado y restaurado | todas | estado cliente | pendiente | I,M,T,X,A,Q |
-| Búsqueda | equipos y selecciones | todas | caché de partidos/equipos | pendiente | D,I,N,M,X,L,E,Ø,A,Q,R |
-| Búsqueda | competiciones | todas | configuración de torneos | pendiente | D,I,N,M,X,L,E,Ø,A,Q,R |
-| Búsqueda | partidos | todas | caché ayer/hoy/mañana | pendiente | D,C,I,N,M,X,L,E,Ø,A,P,Q,R |
-| Búsqueda | jugadores | todas | Supabase/API-Football disponible | pendiente | D,I,N,M,X,L,E,Ø,A,P,Q |
-| Búsqueda | noticias y mercado | todas | contenido local | pendiente | D,I,N,M,X,L,E,Ø,A,Q |
-| Búsqueda | torneos Mi Torneito | todas | Supabase | pendiente | D,I,N,M,X,L,E,Ø,A,S,Q |
-| Búsqueda | páginas y accesos del producto | todas | catálogo local | pendiente | D,I,N,M,X,Ø,A,Q,R |
-| Búsqueda | navegación por teclado entre resultados | todas | estado cliente | pendiente | I,M,X,A,Q |
-| Favoritos | agregar equipo/selección | equipo, home, búsqueda | localStorage actual | pendiente | D,I,N,M,X,Ø,A,Q,R |
-| Favoritos | quitar favorito | shell, equipo, búsqueda | localStorage actual | pendiente | I,M,X,Ø,A,Q,R |
-| Favoritos | persistencia después de recarga | todas | localStorage actual | pendiente | I,M,X,Q,R |
-| Favoritos | listado/acceso dedicado | shell/home | localStorage actual | pendiente | D,I,N,M,T,X,Ø,A,Q,R |
-| Favoritos | usuario no autenticado | todas | localStorage actual | pendiente | I,Ø,A,Q,R |
+| Búsqueda | abrir, cerrar, Escape y autofoco | todas | estado cliente | validado | I,M,T,X,A,Q |
+| Búsqueda | foco confinado y restaurado | todas | estado cliente | validado | I,M,T,X,A,Q |
+| Búsqueda | equipos y selecciones | todas | caché de partidos/equipos | validado | D,I,N,M,X,L,E,Ø,A,Q,R |
+| Búsqueda | competiciones | todas | configuración de torneos | implementado | D,I,N,M,X,L,E,Ø,A,Q,R |
+| Búsqueda | partidos | todas | caché ayer/hoy/mañana | implementado | D,C,I,N,M,X,L,E,Ø,A,P,Q,R |
+| Búsqueda | jugadores | todas | Supabase/API-Football disponible | validado | D,I,N,M,X,L,E,Ø,A,P,Q |
+| Búsqueda | noticias y mercado | todas | contenido local | implementado | D,I,N,M,X,L,E,Ø,A,Q |
+| Búsqueda | torneos Mi Torneito | todas | Supabase | implementado | fuente real conectada; sin torneos públicos coincidentes para validar |
+| Búsqueda | páginas y accesos del producto | todas | catálogo local | validado | D,I,N,M,X,Ø,A,Q,R |
+| Búsqueda | navegación por teclado entre resultados | todas | estado cliente | validado | I,M,X,A,Q |
+| Favoritos | agregar equipo/selección | equipo, home, búsqueda | localStorage actual | validado | D,I,N,M,X,Ø,A,Q,R |
+| Favoritos | quitar favorito | shell, equipo, búsqueda | localStorage actual | validado | I,M,X,Ø,A,Q,R |
+| Favoritos | persistencia después de recarga | todas | localStorage actual | validado | I,M,X,Q,R |
+| Favoritos | listado/acceso dedicado | shell/home | localStorage actual | implementado | D,I,N,M,T,X,Ø,A,Q,R |
+| Favoritos | usuario no autenticado | todas | localStorage actual | validado | I,Ø,A,Q,R |
 | Notificaciones | abrir/cerrar campana | todas | estado cliente | pendiente | I,M,T,X,A,Q |
 | Notificaciones | recordatorios | todas | localStorage | pendiente | D,I,N,M,X,Ø,A,Q,R |
 | Notificaciones | equipos favoritos | todas | favoritos + partidos | pendiente | D,C,I,N,M,X,Ø,A,Q,R |

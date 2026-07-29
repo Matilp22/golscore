@@ -177,6 +177,10 @@ export default function AppShell({
   const isHome = pathname === '/'
   const allowAds = shouldAllowAdsOnRoute(pathname || '/')
   const closeOverlay = useCallback(() => setOverlay(null), [setOverlay])
+  const handleSearchOpenChange = useCallback(
+    (open: boolean) => setOverlay(open ? 'search' : null),
+    [setOverlay]
+  )
 
   useEffect(() => {
     function handleSearchShortcut(event: KeyboardEvent) {
@@ -385,7 +389,7 @@ export default function AppShell({
 
       <GlobalSearch
         open={overlay === 'search'}
-        onOpenChange={(open) => setOverlay(open ? 'search' : null)}
+        onOpenChange={handleSearchOpenChange}
       />
     </LocaleProvider>
   )
