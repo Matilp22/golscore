@@ -1,8 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useSyncExternalStore } from 'react'
 import {
-  isMatchReminderEnabled,
   readMatchReminders,
   removeMatchReminder,
   subscribeToMatchReminders,
@@ -11,19 +10,28 @@ import {
   type MatchReminderInput,
 } from '@/frontend/services/matchRemindersService'
 
-export function useMatchReminders() {
-  const [reminders, setReminders] = useState<MatchReminder[]>(() => readMatchReminders())
+const EMPTY_REMINDERS: MatchReminder[] = []
 
-  useEffect(() => {
-    return subscribeToMatchReminders(setReminders)
-  }, [])
+function subscribe(onStoreChange: () => void) {
+  return subscribeToMatchReminders(() => onStoreChange())
+}
+
+function getServerSnapshot() {
+  return EMPTY_REMINDERS
+}
+
+export function useMatchReminders() {
+  const reminders = useSyncExternalStore(
+    subscribe,
+    readMatchReminders,
+    getServerSnapshot
+  )
 
   return useMemo(
     () => ({
       reminders,
       isEnabled: (matchId: string | number) =>
-        reminders.some((reminder) => reminder.matchId === String(matchId)) ||
-        isMatchReminderEnabled(matchId),
+        reminders.some((reminder) => reminder.matchId === String(matchId)),
       removeReminder: (matchId: string | number) => removeMatchReminder(matchId),
       toggleReminder: (reminder: MatchReminderInput) => toggleMatchReminder(reminder),
     }),

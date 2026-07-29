@@ -16,6 +16,10 @@ export type FavoriteTeamInput = Omit<FavoriteTeam, 'createdAt'> & {
   createdAt?: string
 }
 
+const EMPTY_FAVORITES: FavoriteTeam[] = []
+let cachedFavoritesRaw: string | null | undefined
+let cachedFavorites: FavoriteTeam[] = EMPTY_FAVORITES
+
 function canUseStorage() {
   return typeof window !== 'undefined' && Boolean(window.localStorage)
 }
@@ -66,16 +70,25 @@ function notifyFavoriteTeamsChanged(favorites: FavoriteTeam[]) {
 }
 
 export function readFavoriteTeams() {
-  if (!canUseStorage()) return []
+  if (!canUseStorage()) return EMPTY_FAVORITES
 
-  return parseFavorites(window.localStorage.getItem(FAVORITE_TEAMS_STORAGE_KEY))
+  const raw = window.localStorage.getItem(FAVORITE_TEAMS_STORAGE_KEY)
+  if (raw === cachedFavoritesRaw) return cachedFavorites
+
+  cachedFavoritesRaw = raw
+  cachedFavorites = parseFavorites(raw)
+
+  return cachedFavorites
 }
 
 export function writeFavoriteTeams(favorites: FavoriteTeam[]) {
   if (!canUseStorage()) return favorites
 
   const normalizedFavorites = favorites.map(normalizeTeam)
-  window.localStorage.setItem(FAVORITE_TEAMS_STORAGE_KEY, JSON.stringify(normalizedFavorites))
+  const raw = JSON.stringify(normalizedFavorites)
+  window.localStorage.setItem(FAVORITE_TEAMS_STORAGE_KEY, raw)
+  cachedFavoritesRaw = raw
+  cachedFavorites = normalizedFavorites
   notifyFavoriteTeamsChanged(normalizedFavorites)
 
   return normalizedFavorites
@@ -126,7 +139,11 @@ export function subscribeToFavoriteTeams(callback: (favorites: FavoriteTeam[]) =
     callback(Array.isArray(customEvent.detail) ? customEvent.detail : readFavoriteTeams())
   }
   const handleStorageChange = (event: StorageEvent) => {
-    if (event.key === FAVORITE_TEAMS_STORAGE_KEY) callback(parseFavorites(event.newValue))
+    if (event.key !== FAVORITE_TEAMS_STORAGE_KEY) return
+
+    cachedFavoritesRaw = event.newValue
+    cachedFavorites = parseFavorites(event.newValue)
+    callback(cachedFavorites)
   }
 
   window.addEventListener(FAVORITE_TEAMS_CHANGED_EVENT, handleLocalChange)

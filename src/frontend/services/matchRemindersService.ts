@@ -22,6 +22,10 @@ export type MatchReminderInput = Omit<MatchReminder, 'createdAt'> & {
   createdAt?: string
 }
 
+const EMPTY_REMINDERS: MatchReminder[] = []
+let cachedRemindersRaw: string | null | undefined
+let cachedReminders: MatchReminder[] = EMPTY_REMINDERS
+
 function canUseStorage() {
   return typeof window !== 'undefined' && Boolean(window.localStorage)
 }
@@ -78,16 +82,25 @@ function notifyRemindersChanged(reminders: MatchReminder[]) {
 }
 
 export function readMatchReminders() {
-  if (!canUseStorage()) return []
+  if (!canUseStorage()) return EMPTY_REMINDERS
 
-  return parseReminders(window.localStorage.getItem(MATCH_REMINDERS_STORAGE_KEY))
+  const raw = window.localStorage.getItem(MATCH_REMINDERS_STORAGE_KEY)
+  if (raw === cachedRemindersRaw) return cachedReminders
+
+  cachedRemindersRaw = raw
+  cachedReminders = parseReminders(raw)
+
+  return cachedReminders
 }
 
 export function writeMatchReminders(reminders: MatchReminder[]) {
   if (!canUseStorage()) return reminders
 
   const normalizedReminders = reminders.map(normalizeReminder)
-  window.localStorage.setItem(MATCH_REMINDERS_STORAGE_KEY, JSON.stringify(normalizedReminders))
+  const raw = JSON.stringify(normalizedReminders)
+  window.localStorage.setItem(MATCH_REMINDERS_STORAGE_KEY, raw)
+  cachedRemindersRaw = raw
+  cachedReminders = normalizedReminders
   notifyRemindersChanged(normalizedReminders)
 
   return normalizedReminders
@@ -138,7 +151,11 @@ export function subscribeToMatchReminders(callback: (reminders: MatchReminder[])
     callback(Array.isArray(customEvent.detail) ? customEvent.detail : readMatchReminders())
   }
   const handleStorageChange = (event: StorageEvent) => {
-    if (event.key === MATCH_REMINDERS_STORAGE_KEY) callback(parseReminders(event.newValue))
+    if (event.key !== MATCH_REMINDERS_STORAGE_KEY) return
+
+    cachedRemindersRaw = event.newValue
+    cachedReminders = parseReminders(event.newValue)
+    callback(cachedReminders)
   }
 
   window.addEventListener(MATCH_REMINDERS_CHANGED_EVENT, handleLocalChange)
