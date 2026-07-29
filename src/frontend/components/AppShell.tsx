@@ -412,7 +412,11 @@ export default function AppShell({ auth, children, locale }: AppShellProps) {
   if (isAdmin) {
     return (
       <LocaleProvider locale={locale}>
-        <main className="mx-auto w-full max-w-7xl px-2 py-4 sm:px-4 md:px-5 md:py-6">
+        <main
+          id="contenido-principal"
+          tabIndex={-1}
+          className="mx-auto w-full max-w-7xl px-2 py-4 sm:px-4 md:px-5 md:py-6"
+        >
           {children}
         </main>
         <SiteFooter locale={locale} />
@@ -524,7 +528,11 @@ export default function AppShell({ auth, children, locale }: AppShellProps) {
             </header>
           ) : null}
 
-          <div className="hf-global-content">
+          <div
+            id="contenido-principal"
+            tabIndex={-1}
+            className="hf-global-content"
+          >
             {children}
             {allowAds ? <GoogleAdSlot className="mt-4" /> : null}
           </div>

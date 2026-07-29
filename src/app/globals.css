@@ -1,54 +1,172 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f7f3ec;
-  --foreground: #071b2f;
-  --hf-navy: #071b2f;
-  --hf-navy-2: #082842;
-  --hf-navy-3: #0d3556;
-  --hf-green: #5ed020;
-  --hf-green-2: #7be33a;
-  --hf-green-soft: #eaf8de;
-  --hf-live: #f5222d;
-  --hf-live-soft: #ffe8e8;
-  --hf-bg: #f7f3ec;
-  --hf-bg-2: #efe9de;
-  --hf-card: #ffffff;
-  --hf-card-soft: #fbf8f2;
-  --hf-border: rgba(7, 27, 47, 0.12);
-  --hf-border-strong: rgba(7, 27, 47, 0.2);
-  --hf-text: #071b2f;
-  --hf-muted: #69737d;
-  --hf-muted-2: #8a949e;
-  --hf-shadow: 0 16px 40px rgba(7, 27, 47, 0.08);
-  --hf-shadow-soft: 0 8px 24px rgba(7, 27, 47, 0.06);
-  --hf-bg-deep: #efe9de;
-  --hf-surface: #ffffff;
-  --hf-surface-2: #fbf8f2;
-  --hf-surface-3: #f1eee6;
-  --hf-line: rgba(7, 27, 47, 0.12);
-  --hf-line-strong: rgba(7, 27, 47, 0.2);
-  --hf-green-deep: #225f13;
-  --hf-gold: #f6ca58;
-  --hf-red: #f5222d;
-  --hf-yellow: #ffd166;
-  --hf-blue: #63c7ff;
-  --hf-glow: 0 16px 40px rgba(7, 27, 47, 0.08);
+  color-scheme: light;
+
+  /* Matchday semantic color system. */
+  --hf-color-canvas: #f2efe7;
+  --hf-color-canvas-subtle: #eae6dc;
+  --hf-color-surface: #fffefa;
+  --hf-color-surface-raised: #ffffff;
+  --hf-color-surface-sunken: #edeae2;
+  --hf-color-surface-inverse: #10242f;
+  --hf-color-ink: #10242f;
+  --hf-color-ink-soft: #354951;
+  --hf-color-ink-muted: #5d6a70;
+  --hf-color-ink-inverse: #fffdf7;
+  --hf-color-line: #d5d4cc;
+  --hf-color-line-strong: #a9afac;
+  --hf-color-scrim: rgba(9, 26, 34, 0.58);
+  --hf-color-primary: #b83a2f;
+  --hf-color-primary-hover: #9f2d25;
+  --hf-color-primary-active: #85251f;
+  --hf-color-primary-soft: #f7ddd8;
+  --hf-color-secondary: #006b67;
+  --hf-color-secondary-hover: #005753;
+  --hf-color-secondary-soft: #d7efeb;
+  --hf-color-brand-green: #2f7d4a;
+  --hf-color-brand-green-soft: #ddebdc;
+  --hf-color-focus: #0068d6;
+  --hf-color-disabled-bg: #e4e2db;
+  --hf-color-disabled-ink: #7b8283;
+  --hf-color-live: #b42318;
+  --hf-color-live-soft: #f8deda;
+  --hf-color-finished: #46545a;
+  --hf-color-finished-soft: #e5e8e9;
+  --hf-color-scheduled: #2d607a;
+  --hf-color-scheduled-soft: #dcebf4;
+  --hf-color-suspended: #7c4a03;
+  --hf-color-suspended-soft: #f8e8c8;
+  --hf-color-postponed: #70436f;
+  --hf-color-postponed-soft: #eee1ee;
+  --hf-color-cancelled: #6f3940;
+  --hf-color-cancelled-soft: #f0e1e3;
+  --hf-color-win: #246b38;
+  --hf-color-draw: #5e6669;
+  --hf-color-loss: #a8322b;
+  --hf-color-success: #246b38;
+  --hf-color-success-soft: #e0efe3;
+  --hf-color-warning: #8a5200;
+  --hf-color-warning-soft: #f8e8c8;
+  --hf-color-danger: #b42318;
+  --hf-color-danger-soft: #f8deda;
+  --hf-color-info: #205f86;
+  --hf-color-info-soft: #dcebf4;
+
+  /* Typography. */
+  --hf-font-body: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --hf-font-editorial: Georgia, Cambria, "Times New Roman", serif;
+  --hf-font-data: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --hf-type-display: clamp(2rem, 5vw, 3rem);
+  --hf-type-page: clamp(1.75rem, 3.6vw, 2.25rem);
+  --hf-type-score: clamp(2.25rem, 6vw, 3.25rem);
+  --hf-type-section: clamp(1.3125rem, 2.4vw, 1.5rem);
+  --hf-type-subtitle: clamp(1.125rem, 2vw, 1.25rem);
+  --hf-type-body: 1rem;
+  --hf-type-body-small: 0.875rem;
+  --hf-type-label: 0.8125rem;
+  --hf-type-meta: 0.75rem;
+  --hf-type-overline: 0.6875rem;
+
+  /* Spacing, shape and elevation. */
+  --hf-space-0: 0;
+  --hf-space-1: 0.25rem;
+  --hf-space-2: 0.5rem;
+  --hf-space-3: 0.75rem;
+  --hf-space-4: 1rem;
+  --hf-space-5: 1.25rem;
+  --hf-space-6: 1.5rem;
+  --hf-space-8: 2rem;
+  --hf-space-10: 2.5rem;
+  --hf-space-12: 3rem;
+  --hf-space-16: 4rem;
+  --hf-space-20: 5rem;
+  --hf-radius-xs: 0.1875rem;
+  --hf-radius-sm: 0.4375rem;
+  --hf-radius-md: 0.75rem;
+  --hf-radius-lg: 1.125rem;
+  --hf-radius-pill: 999px;
+  --hf-shadow-1: 0 1px 2px rgba(16, 36, 47, 0.08);
+  --hf-shadow-2: 0 8px 24px rgba(16, 36, 47, 0.12);
+  --hf-shadow-3: 0 18px 52px rgba(16, 36, 47, 0.2);
+
+  /* Layout and layering. */
+  --hf-layout-max: 80rem;
+  --hf-layout-reading: 72ch;
+  --hf-layout-aside: 20rem;
+  --hf-layout-header-mobile: 3.5rem;
+  --hf-layout-header-desktop: 6.75rem;
+  --hf-layout-bottom-nav: 4rem;
+  --hf-z-base: 0;
+  --hf-z-sticky: 20;
+  --hf-z-header: 30;
+  --hf-z-bottom-nav: 40;
+  --hf-z-popover: 60;
+  --hf-z-scrim: 70;
+  --hf-z-sheet: 80;
+  --hf-z-dialog: 90;
+  --hf-z-toast: 100;
+
+  /* Motion. */
+  --hf-duration-fast: 120ms;
+  --hf-duration-base: 180ms;
+  --hf-duration-slow: 280ms;
+  --hf-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --hf-ease-emphasis: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* Legacy aliases kept while modules move to semantic tokens. */
+  --background: var(--hf-color-canvas);
+  --foreground: var(--hf-color-ink);
+  --hf-navy: var(--hf-color-surface-inverse);
+  --hf-navy-2: #173944;
+  --hf-navy-3: #20515a;
+  --hf-green: var(--hf-color-brand-green);
+  --hf-green-2: #4d965e;
+  --hf-green-soft: var(--hf-color-brand-green-soft);
+  --hf-live: var(--hf-color-live);
+  --hf-live-soft: var(--hf-color-live-soft);
+  --hf-bg: var(--hf-color-canvas);
+  --hf-bg-2: var(--hf-color-canvas-subtle);
+  --hf-card: var(--hf-color-surface-raised);
+  --hf-card-soft: var(--hf-color-surface);
+  --hf-border: var(--hf-color-line);
+  --hf-border-strong: var(--hf-color-line-strong);
+  --hf-text: var(--hf-color-ink);
+  --hf-muted: var(--hf-color-ink-muted);
+  --hf-muted-2: var(--hf-color-disabled-ink);
+  --hf-shadow: var(--hf-shadow-2);
+  --hf-shadow-soft: var(--hf-shadow-1);
+  --hf-bg-deep: var(--hf-color-canvas-subtle);
+  --hf-surface: var(--hf-color-surface-raised);
+  --hf-surface-2: var(--hf-color-surface);
+  --hf-surface-3: var(--hf-color-surface-sunken);
+  --hf-line: var(--hf-color-line);
+  --hf-line-strong: var(--hf-color-line-strong);
+  --hf-green-deep: var(--hf-color-brand-green);
+  --hf-gold: var(--hf-color-warning);
+  --hf-red: var(--hf-color-danger);
+  --hf-yellow: var(--hf-color-warning-soft);
+  --hf-blue: var(--hf-color-info);
+  --hf-glow: var(--hf-shadow-1);
   --ui-scale: 1;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-  --font-mono: "Consolas", "SFMono-Regular", monospace;
+  --font-sans: var(--hf-font-body);
+  --font-mono: var(--hf-font-data);
 }
 
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
 html {
+  background: var(--hf-color-canvas);
+  color: var(--hf-color-ink);
   scroll-behavior: smooth;
   max-width: 100%;
   overflow-x: hidden;
@@ -59,24 +177,16 @@ body {
   width: 100%;
   max-width: 100%;
   overflow-x: hidden;
-  background:
-    radial-gradient(circle at 18% 8%, rgba(94, 208, 32, 0.14), transparent 30rem),
-    radial-gradient(circle at 88% 0%, rgba(7, 27, 47, 0.08), transparent 32rem),
-    linear-gradient(135deg, #fffdf8 0%, #f7f3ec 46%, #efe9de 100%);
-  color: var(--foreground);
-  font-family: var(--font-sans);
+  background: var(--hf-color-canvas);
+  color: var(--hf-color-ink);
+  font-family: var(--hf-font-body);
+  font-size: var(--hf-type-body);
+  line-height: 1.55;
+  text-rendering: optimizeLegibility;
 }
 
 body::before {
-  content: "";
-  pointer-events: none;
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  background:
-    linear-gradient(115deg, transparent 0%, rgba(94, 208, 32, 0.035) 42%, transparent 58%),
-    repeating-linear-gradient(90deg, rgba(7, 27, 47, 0.018) 0 1px, transparent 1px 88px);
-  mask-image: linear-gradient(180deg, rgba(0,0,0,0.58), rgba(0,0,0,0.18));
+  content: none;
 }
 
 a {
@@ -87,13 +197,34 @@ a {
 button,
 a,
 input,
-select {
+select,
+textarea {
   -webkit-tap-highlight-color: transparent;
 }
 
 :focus-visible {
-  outline: 2px solid rgba(112, 255, 157, 0.85);
-  outline-offset: 3px;
+  outline: 3px solid var(--hf-color-focus);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--hf-color-secondary-soft);
+  color: var(--hf-color-ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+  }
 }
 
 .hf-brand-mark {

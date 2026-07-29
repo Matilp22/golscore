@@ -14,6 +14,7 @@ import {
   SITE_URL,
 } from '@/shared/seo'
 import './globals.css'
+import './design-system.css'
 
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getRequestLocale()
@@ -77,8 +78,15 @@ export default async function RootLayout({
   const locale = await getRequestLocale()
 
   return (
-    <html lang={locale} className="h-full antialiased">
-      <body className="flex min-h-full flex-col bg-[#06100d] text-white">
+    <html
+      lang={locale}
+      className="h-full antialiased"
+      data-scroll-behavior="smooth"
+    >
+      <body className="flex min-h-full flex-col">
+        <a className="hf-skip-link" href="#contenido-principal">
+          Ir al contenido principal
+        </a>
         <PageScrollRestoration />
         <AppShell auth={<AuthStatus />} locale={locale}>
           {children}
