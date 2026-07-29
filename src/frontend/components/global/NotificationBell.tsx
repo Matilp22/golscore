@@ -1,7 +1,14 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react'
+
 import { useFavoriteTeams } from '@/frontend/hooks/useFavoriteTeams'
 import { useGlobalActionsData } from '@/frontend/hooks/useGlobalActionsData'
 import { useMatchReminders } from '@/frontend/hooks/useMatchReminders'
@@ -9,6 +16,12 @@ import { isLiveStatus, isUpcomingStatus } from '@/shared/utils/match-status'
 
 const READ_KEY = 'hf:notifications:read:v1'
 const DISMISSED_KEY = 'hf:notifications:dismissed:v1'
+const CHANGED_EVENT = 'hf:notifications:changed'
+const EMPTY_IDS: string[] = []
+const listCache = new Map<
+  string,
+  { raw: string | null; values: string[] }
+>()
 
 type NotificationItem = {
   id: string
@@ -20,27 +33,88 @@ type NotificationItem = {
   priority: number
 }
 
-function readStringList(key: string) {
-  if (typeof window === 'undefined') return []
+function parseStringList(raw: string | null) {
+  if (!raw) return EMPTY_IDS
 
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(key) || '[]')
-    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === 'string')
+      : EMPTY_IDS
   } catch {
-    return []
+    return EMPTY_IDS
   }
+}
+
+function readStringList(key: string) {
+  if (typeof window === 'undefined') return EMPTY_IDS
+
+  const raw = window.localStorage.getItem(key)
+  const cached = listCache.get(key)
+  if (cached?.raw === raw) return cached.values
+
+  const values = parseStringList(raw)
+  listCache.set(key, { raw, values })
+  return values
 }
 
 function writeStringList(key: string, values: string[]) {
   if (typeof window === 'undefined') return
 
-  window.localStorage.setItem(key, JSON.stringify(Array.from(new Set(values))))
+  const uniqueValues = Array.from(new Set(values))
+  const raw = JSON.stringify(uniqueValues)
+  window.localStorage.setItem(key, raw)
+  listCache.set(key, { raw, values: uniqueValues })
+  window.dispatchEvent(new CustomEvent(CHANGED_EVENT, { detail: key }))
+}
+
+function subscribeToKey(key: string, onStoreChange: () => void) {
+  if (typeof window === 'undefined') return () => {}
+
+  function handleStorage(event: StorageEvent) {
+    if (event.key !== key) return
+    listCache.delete(key)
+    onStoreChange()
+  }
+
+  function handleLocal(event: Event) {
+    const changedKey = (event as CustomEvent<string>).detail
+    if (changedKey === key) onStoreChange()
+  }
+
+  window.addEventListener('storage', handleStorage)
+  window.addEventListener(CHANGED_EVENT, handleLocal)
+
+  return () => {
+    window.removeEventListener('storage', handleStorage)
+    window.removeEventListener(CHANGED_EVENT, handleLocal)
+  }
+}
+
+function subscribeRead(onStoreChange: () => void) {
+  return subscribeToKey(READ_KEY, onStoreChange)
+}
+
+function subscribeDismissed(onStoreChange: () => void) {
+  return subscribeToKey(DISMISSED_KEY, onStoreChange)
+}
+
+function getReadSnapshot() {
+  return readStringList(READ_KEY)
+}
+
+function getDismissedSnapshot() {
+  return readStringList(DISMISSED_KEY)
+}
+
+function getServerSnapshot() {
+  return EMPTY_IDS
 }
 
 function BellIcon() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
-      <path d="M15 17H9m9-1v-4.5a6 6 0 0 0-12 0V16l-1.5 2h15L18 16Zm-4.2 4a2 2 0 0 1-3.6 0" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M15 17H9m9-1v-4.5a6 6 0 0 0-12 0V16l-1.5 2h15L18 16Zm-4.2 4a2 2 0 0 1-3.6 0" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.9" />
     </svg>
   )
 }
@@ -52,11 +126,27 @@ function normalize(value: string) {
     .replace(/[\u0300-\u036f]/g, '')
 }
 
+function getKindLabel(kind: NotificationItem['kind']) {
+  if (kind === 'reminder') return 'Recordatorio'
+  if (kind === 'favorite') return 'Favorito'
+  if (kind === 'event') return 'Incidencia'
+  return 'En vivo'
+}
+
 export default function NotificationBell() {
   const [open, setOpen] = useState(false)
-  const [readIds, setReadIds] = useState<string[]>(() => readStringList(READ_KEY))
-  const [dismissedIds, setDismissedIds] = useState<string[]>(() => readStringList(DISMISSED_KEY))
+  const readIds = useSyncExternalStore(
+    subscribeRead,
+    getReadSnapshot,
+    getServerSnapshot
+  )
+  const dismissedIds = useSyncExternalStore(
+    subscribeDismissed,
+    getDismissedSnapshot,
+    getServerSnapshot
+  )
   const panelRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
   const { data } = useGlobalActionsData(true)
   const { favorites } = useFavoriteTeams()
   const { reminders } = useMatchReminders()
@@ -65,11 +155,17 @@ export default function NotificationBell() {
     if (!open) return
 
     function handleKeydown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setOpen(false)
+      if (event.key !== 'Escape') return
+
+      event.preventDefault()
+      setOpen(false)
+      triggerRef.current?.focus()
     }
 
     function handlePointerDown(event: PointerEvent) {
-      if (!panelRef.current?.contains(event.target as Node)) setOpen(false)
+      if (panelRef.current?.contains(event.target as Node)) return
+      if (triggerRef.current?.contains(event.target as Node)) return
+      setOpen(false)
     }
 
     document.addEventListener('keydown', handleKeydown)
@@ -83,15 +179,17 @@ export default function NotificationBell() {
 
   const notifications = useMemo(() => {
     const items: NotificationItem[] = []
-    const generatedAt = data?.generatedAt ?? new Date().toISOString()
+    const generatedAt = data?.generatedAt ?? ''
     const favoriteIds = new Set(favorites.map((favorite) => favorite.id))
-    const favoriteNames = new Set(favorites.map((favorite) => normalize(favorite.name)))
+    const favoriteNames = new Set(
+      favorites.map((favorite) => normalize(favorite.name))
+    )
 
     for (const reminder of reminders) {
       items.push({
         id: `reminder:${reminder.matchId}`,
         kind: 'reminder',
-        title: `Recordatorio: ${reminder.home} vs ${reminder.away}`,
+        title: `${reminder.home} vs ${reminder.away}`,
         description: `${reminder.displayTime || reminder.status || 'Horario a confirmar'}${reminder.tvLabel ? ` · ${reminder.tvLabel}` : ''}`,
         href: reminder.href,
         createdAt: reminder.createdAt,
@@ -100,15 +198,23 @@ export default function NotificationBell() {
     }
 
     for (const match of data?.matches || []) {
-      const homeFavorite = (match.homeId && favoriteIds.has(match.homeId)) || favoriteNames.has(normalize(match.home))
-      const awayFavorite = (match.awayId && favoriteIds.has(match.awayId)) || favoriteNames.has(normalize(match.away))
-      const favoriteTeamName = homeFavorite ? match.home : awayFavorite ? match.away : null
+      const homeFavorite =
+        (match.homeId && favoriteIds.has(match.homeId)) ||
+        favoriteNames.has(normalize(match.home))
+      const awayFavorite =
+        (match.awayId && favoriteIds.has(match.awayId)) ||
+        favoriteNames.has(normalize(match.away))
+      const favoriteTeamName = homeFavorite
+        ? match.home
+        : awayFavorite
+          ? match.away
+          : null
 
       if (isLiveStatus(match.statusShort)) {
         items.push({
           id: `live:${match.id}`,
           kind: 'live',
-          title: `En vivo: ${match.home} vs ${match.away}`,
+          title: `${match.home} vs ${match.away}`,
           description: `${match.displayScore} · ${match.displayStatus}${match.tvLabel ? ` · ${match.tvLabel}` : ''}`,
           href: match.href,
           createdAt: generatedAt,
@@ -116,7 +222,11 @@ export default function NotificationBell() {
         })
       }
 
-      if (favoriteTeamName && (isLiveStatus(match.statusShort) || isUpcomingStatus(match.statusShort))) {
+      if (
+        favoriteTeamName &&
+        (isLiveStatus(match.statusShort) ||
+          isUpcomingStatus(match.statusShort))
+      ) {
         items.push({
           id: `favorite:${favoriteTeamName}:${match.id}`,
           kind: 'favorite',
@@ -145,57 +255,83 @@ export default function NotificationBell() {
 
     return Array.from(byId.values())
       .filter((item) => !dismissedIds.includes(item.id))
-      .sort((a, b) => b.priority - a.priority || b.createdAt.localeCompare(a.createdAt))
+      .sort(
+        (a, b) =>
+          b.priority - a.priority || b.createdAt.localeCompare(a.createdAt)
+      )
       .slice(0, 12)
   }, [data, dismissedIds, favorites, reminders])
 
-  const unreadCount = notifications.filter((notification) => !readIds.includes(notification.id)).length
+  const unreadCount = notifications.filter(
+    (notification) => !readIds.includes(notification.id)
+  ).length
 
-  const markAllRead = () => {
-    const nextIds = Array.from(new Set([...readIds, ...notifications.map((notification) => notification.id)]))
-    setReadIds(nextIds)
-    writeStringList(READ_KEY, nextIds)
+  function markAllRead() {
+    writeStringList(READ_KEY, [
+      ...readIds,
+      ...notifications.map((notification) => notification.id),
+    ])
   }
 
-  const clearNotifications = () => {
-    const nextDismissedIds = Array.from(new Set([...dismissedIds, ...notifications.map((notification) => notification.id)]))
-    setDismissedIds(nextDismissedIds)
-    writeStringList(DISMISSED_KEY, nextDismissedIds)
+  function markRead(id: string) {
+    writeStringList(READ_KEY, [...readIds, id])
+    setOpen(false)
+  }
+
+  function clearNotifications() {
+    writeStringList(DISMISSED_KEY, [
+      ...dismissedIds,
+      ...notifications.map((notification) => notification.id),
+    ])
     markAllRead()
   }
 
   return (
     <div className="hf-notification-root" ref={panelRef}>
       <button
+        ref={triggerRef}
         type="button"
         className={`hf-global-icon-button hf-notification-bell ${unreadCount > 0 ? 'has-dot' : ''}`}
-        aria-label={unreadCount > 0 ? `Notificaciones, ${unreadCount} sin leer` : 'Notificaciones'}
+        aria-label={
+          unreadCount > 0
+            ? `Notificaciones, ${unreadCount} sin leer`
+            : 'Notificaciones'
+        }
         aria-expanded={open}
+        aria-haspopup="dialog"
         onClick={() => setOpen((current) => !current)}
       >
         <BellIcon />
-        {unreadCount > 0 ? <span className="hf-notification-count">{unreadCount}</span> : null}
+        {unreadCount > 0 ? (
+          <span className="hf-notification-count">{unreadCount}</span>
+        ) : null}
       </button>
 
       {open ? (
-        <div className="hf-notification-panel" role="dialog" aria-label="Notificaciones">
+        <div
+          className="hf-notification-panel"
+          role="dialog"
+          aria-label="Notificaciones"
+        >
           <div className="hf-notification-head">
             <div>
               <strong>Notificaciones</strong>
-              <span>{unreadCount > 0 ? `${unreadCount} sin leer` : 'Todo al dia'}</span>
+              <span>
+                {unreadCount > 0
+                  ? `${unreadCount} sin leer`
+                  : 'Todo al día'}
+              </span>
             </div>
             <div>
               <button
                 type="button"
-                className="hf-notification-mark-read"
                 onClick={markAllRead}
-                disabled={!notifications.length}
+                disabled={!notifications.length || unreadCount === 0}
               >
-                Marcar leidas
+                Marcar leídas
               </button>
               <button
                 type="button"
-                className="hf-notification-clear"
                 onClick={clearNotifications}
                 disabled={!notifications.length}
               >
@@ -214,9 +350,9 @@ export default function NotificationBell() {
                     key={notification.id}
                     href={notification.href}
                     className={unread ? 'is-unread' : ''}
-                    onClick={() => setOpen(false)}
+                    onClick={() => markRead(notification.id)}
                   >
-                    <span>{notification.kind === 'reminder' ? 'R' : notification.kind === 'favorite' ? 'F' : 'V'}</span>
+                    <span>{getKindLabel(notification.kind)}</span>
                     <span>
                       <strong>{notification.title}</strong>
                       <small>{notification.description}</small>
@@ -227,7 +363,10 @@ export default function NotificationBell() {
             </div>
           ) : (
             <div className="hf-notification-empty">
-              No hay notificaciones por ahora. Los recordatorios, favoritos y partidos en vivo van a aparecer aca.
+              <strong>Sin novedades por ahora</strong>
+              <p>
+                Acá aparecen recordatorios, favoritos e incidencias en vivo.
+              </p>
             </div>
           )}
         </div>

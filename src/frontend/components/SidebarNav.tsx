@@ -14,7 +14,10 @@ import {
   getUserFavoriteLeagues,
   toggleFavoriteLeague,
 } from '@/frontend/services/favoriteLeaguesService'
-import type { SidebarSectionConfig, TournamentPageConfig } from '@/lib/tournament-pages'
+import type {
+  SidebarSectionConfig,
+  TournamentPageConfig,
+} from '@/lib/tournament-pages'
 import {
   getSectionDisplayName,
   getTournamentDisplayName,
@@ -30,6 +33,7 @@ type SidebarNavProps = {
   compact?: boolean
   locale: AppLocale
   onNavigate?: () => void
+  showEditorial?: boolean
 }
 
 const FAVORITES_STORAGE_KEY = 'fulboapp:favorites:v1'
@@ -37,7 +41,11 @@ const LEGACY_FAVORITES_STORAGE_KEY = ['gol', 'score:favorites:v1'].join('')
 
 function Chevron({ open }: { open: boolean }) {
   return (
-    <svg viewBox="0 0 20 20" aria-hidden="true" className={`h-4 w-4 shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>
+    <svg
+      viewBox="0 0 20 20"
+      aria-hidden="true"
+      className={open ? 'is-open' : ''}
+    >
       <path d="M5.5 7.5 10 12l4.5-4.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
@@ -45,8 +53,15 @@ function Chevron({ open }: { open: boolean }) {
 
 function StarIcon({ filled }: { filled: boolean }) {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className={`h-4 w-4 ${filled ? 'text-[#f7c948]' : 'text-[#8d98a7]'}`} fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="m12 3.6 2.45 5.03 5.55.8-4.02 3.9.95 5.52L12 16.25l-4.93 2.6.95-5.52L4 9.43l5.55-.8L12 3.6Z" />
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="m12 3.6 2.45 5.03 5.55.8-4.02 3.9.95 5.52L12 16.25l-4.93 2.6.95-5.52L4 9.43l5.55-.8L12 3.6Z"
+        fill={filled ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   )
 }
@@ -71,80 +86,25 @@ function readFavorites() {
 
 function writeLocalFavorites(favorites: string[]) {
   if (typeof window === 'undefined') return
-
   window.localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favorites))
-}
-
-function getSectionContainerClassName({
-  compact,
-  accent,
-  isActive = false,
-}: {
-  compact: boolean
-  accent?: SidebarNavigationGroup['accent']
-  isActive?: boolean
-}) {
-  const radius = compact ? 'rounded-xl' : 'rounded-2xl'
-
-  if (accent === 'news') {
-    const colors = isActive
-      ? 'border-[#4f8d9a]/45 bg-[#10282b]'
-      : 'border-[#355b6a]/45 bg-[#0b171d]'
-
-    return `overflow-hidden border shadow-[0_8px_24px_rgba(0,0,0,0.14)] ${colors} ${radius}`
-  }
-
-  if (accent === 'transfers') {
-    const colors = isActive
-      ? 'border-[#8c7444]/50 bg-[#2c2314]'
-      : 'border-[#6f5526]/45 bg-[#1c160d]'
-
-    return `overflow-hidden border shadow-[0_8px_24px_rgba(0,0,0,0.14)] ${colors} ${radius}`
-  }
-
-  return `overflow-hidden border border-[#70ff9d]/10 bg-[#0b1412]/90 shadow-[0_8px_24px_rgba(0,0,0,0.14)] ${radius}`
-}
-
-function getSectionTriggerClassName({
-  compact,
-  accent,
-  isActive = false,
-}: {
-  compact: boolean
-  accent?: SidebarNavigationGroup['accent']
-  isActive?: boolean
-}) {
-  const base = `flex w-full min-w-0 items-center justify-between gap-2 text-left transition ${
-    compact ? 'px-3 py-2' : 'px-3.5 py-2.5'
-  }`
-
-  if (accent === 'news') {
-    return isActive
-      ? `${base} !text-white hover:bg-[#4f8d9a]/12`
-      : `${base} !text-white hover:bg-[#4f8d9a]/10`
-  }
-
-  if (accent === 'transfers') {
-    return isActive
-      ? `${base} !text-white hover:bg-[#8c7444]/12`
-      : `${base} !text-white hover:bg-[#8c7444]/10`
-  }
-
-  return `${base} hover:bg-[#70ff9d]/10`
 }
 
 export default function SidebarNav({
   sections,
+  activeSectionKey,
   highlightedTournamentKeys = [],
   compact = false,
   locale,
   onNavigate,
+  showEditorial = true,
 }: SidebarNavProps) {
   const { user } = useAuth()
   const pathname = usePathname()
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({})
   const [favoriteKeys, setFavoriteKeys] = useState<string[]>([])
-  const [remoteFavoriteUserId, setRemoteFavoriteUserId] = useState<string | null>(null)
+  const [remoteFavoriteUserId, setRemoteFavoriteUserId] = useState<
+    string | null
+  >(null)
   const highlighted = new Set(highlightedTournamentKeys)
   const visibleSections = useMemo(
     () =>
@@ -158,32 +118,38 @@ export default function SidebarNav({
         .filter((section) => section.tournaments.length > 0),
     [sections]
   )
-
-  const tournamentsByKey = useMemo(() => {
-    return new Map(
-      visibleSections.flatMap((section) =>
-        section.tournaments.map((tournament) => [tournament.key, tournament] as const)
-      )
-    )
-  }, [visibleSections])
-
+  const tournamentsByKey = useMemo(
+    () =>
+      new Map(
+        visibleSections.flatMap((section) =>
+          section.tournaments.map(
+            (tournament) => [tournament.key, tournament] as const
+          )
+        )
+      ),
+    [visibleSections]
+  )
   const favoriteTournaments = favoriteKeys
     .map((key) => tournamentsByKey.get(key))
-    .filter((tournament): tournament is TournamentPageConfig => Boolean(tournament))
+    .filter(
+      (tournament): tournament is TournamentPageConfig =>
+        Boolean(tournament)
+    )
 
   useEffect(() => {
     queueMicrotask(() => {
-      if (!user) {
-        setRemoteFavoriteUserId(null)
-        setFavoriteKeys(readFavorites())
-      }
+      if (user) return
+      setRemoteFavoriteUserId(null)
+      setFavoriteKeys(readFavorites())
     })
   }, [user])
 
   useEffect(() => {
     if (typeof window === 'undefined' || user) return
-
-    window.localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favoriteKeys))
+    window.localStorage.setItem(
+      FAVORITES_STORAGE_KEY,
+      JSON.stringify(favoriteKeys)
+    )
   }, [favoriteKeys, user])
 
   useEffect(() => {
@@ -194,7 +160,6 @@ export default function SidebarNav({
     getUserFavoriteLeagues(user.id)
       .then((favorites) => {
         if (!active) return
-
         setRemoteFavoriteUserId(user.id)
         setFavoriteKeys(favorites)
       })
@@ -204,7 +169,6 @@ export default function SidebarNav({
           getFavoriteLeagueErrorInfo(error)
         )
         if (!active) return
-
         setRemoteFavoriteUserId(null)
         setFavoriteKeys(readFavorites())
       })
@@ -223,63 +187,65 @@ export default function SidebarNav({
 
   function toggleFavorite(tournamentKey: string) {
     const wasFavorite = favoriteKeys.includes(tournamentKey)
+    const nextFavorites = wasFavorite
+      ? favoriteKeys.filter((key) => key !== tournamentKey)
+      : Array.from(new Set([...favoriteKeys, tournamentKey]))
 
-    setFavoriteKeys((current) =>
-      wasFavorite
-        ? current.filter((key) => key !== tournamentKey)
-        : [...current, tournamentKey]
-    )
+    setFavoriteKeys(nextFavorites)
 
     if (!user || remoteFavoriteUserId !== user.id) {
-      const nextFavorites = wasFavorite
-        ? favoriteKeys.filter((key) => key !== tournamentKey)
-        : Array.from(new Set([...favoriteKeys, tournamentKey]))
-
       writeLocalFavorites(nextFavorites)
       return
     }
 
-    void toggleFavoriteLeague(user.id, tournamentKey, wasFavorite).catch((error: unknown) => {
-      console.warn(
-        '[sidebar-favorites] No se pudo actualizar favorito en Supabase; usando favoritos locales.',
-        getFavoriteLeagueErrorInfo(error)
-      )
-      setRemoteFavoriteUserId(null)
-
-      const nextFavorites = wasFavorite
-        ? favoriteKeys.filter((key) => key !== tournamentKey)
-        : Array.from(new Set([...favoriteKeys, tournamentKey]))
-
-      setFavoriteKeys(nextFavorites)
-      writeLocalFavorites(nextFavorites)
-    })
+    void toggleFavoriteLeague(user.id, tournamentKey, wasFavorite).catch(
+      (error: unknown) => {
+        console.warn(
+          '[sidebar-favorites] No se pudo actualizar favorito en Supabase; usando favoritos locales.',
+          getFavoriteLeagueErrorInfo(error)
+        )
+        setRemoteFavoriteUserId(null)
+        setFavoriteKeys(nextFavorites)
+        writeLocalFavorites(nextFavorites)
+      }
+    )
   }
 
   function renderTournament(tournament: TournamentPageConfig) {
     const isFavorite = favoriteKeys.includes(tournament.key)
     const href = `/liga/${tournament.key}`
-    const isCurrentTournament = pathname === href || pathname?.startsWith(`${href}/`)
-    const isHighlighted = highlighted.has(tournament.key) || Boolean(isCurrentTournament)
-    const linkClassName = 'min-w-0 flex-1 truncate px-2.5 py-2 text-sm'
-    const tournamentTitle = getTournamentDisplayName(tournament.key, tournament.title, locale)
+    const isCurrent =
+      pathname === href || pathname?.startsWith(`${href}/`) || false
+    const isHighlighted = highlighted.has(tournament.key) || isCurrent
+    const title = getTournamentDisplayName(
+      tournament.key,
+      tournament.title,
+      locale
+    )
 
     return (
-      <div key={tournament.key} className={`group flex min-w-0 items-center gap-1 rounded-xl transition ${isHighlighted ? 'bg-[#70ff9d]/10 text-[#eaffef] shadow-[inset_0_0_0_1px_rgba(112,255,157,0.16)]' : 'text-[#bcc6d2] hover:bg-[#70ff9d]/10 hover:text-white'}`}>
-        <Link href={href} onClick={onNavigate} prefetch={false} className={linkClassName}>
-          {tournamentTitle}
+      <div
+        key={tournament.key}
+        className={`hf-competition-browser-item ${isHighlighted ? 'is-active' : ''}`}
+      >
+        <Link
+          href={href}
+          onClick={onNavigate}
+          prefetch={false}
+          aria-current={isCurrent ? 'page' : undefined}
+        >
+          {title}
         </Link>
         <button
           type="button"
-          onClick={(event) => {
-            event.preventDefault()
-            event.stopPropagation()
-            toggleFavorite(tournament.key)
-          }}
-          className="mr-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition hover:bg-white/8"
-          aria-label={t(locale, isFavorite ? 'nav.removeFavorite' : 'nav.addFavorite', {
-            name: tournamentTitle,
-          })}
+          onClick={() => toggleFavorite(tournament.key)}
+          aria-label={t(
+            locale,
+            isFavorite ? 'nav.removeFavorite' : 'nav.addFavorite',
+            { name: title }
+          )}
           aria-pressed={isFavorite}
+          className={isFavorite ? 'is-favorite' : ''}
         >
           <StarIcon filled={isFavorite} />
         </button>
@@ -291,83 +257,68 @@ export default function SidebarNav({
     sections: visibleSections,
     favoriteTournaments,
     favoritesLabel: t(locale, 'nav.favorites'),
-  })
-
-  function isItemActive(item: SidebarNavigationGroup) {
-    if (item.type !== 'editorial') return false
-
-    return pathname === item.href || pathname?.startsWith(`${item.href}/`)
-  }
+  }).filter((item) => showEditorial || item.type !== 'editorial')
 
   function renderEditorialItem(item: SidebarNavigationGroup) {
-    const isActive = isItemActive(item)
+    const active =
+      pathname === item.href || pathname?.startsWith(`${item.href}/`) || false
 
     return (
-      <div
+      <Link
         key={item.key}
-        className={getSectionContainerClassName({
-          compact,
-          accent: item.accent,
-          isActive,
-        })}
+        href={item.href}
+        onClick={onNavigate}
+        prefetch={false}
+        className={`hf-competition-editorial ${active ? 'is-active' : ''}`}
+        aria-current={active ? 'page' : undefined}
       >
-        <Link
-          href={item.href}
-          onClick={onNavigate}
-          prefetch={false}
-          className={getSectionTriggerClassName({
-            compact,
-            accent: item.accent,
-            isActive,
-          })}
-          aria-current={isActive ? 'page' : undefined}
-        >
-          <span className="flex min-w-0 items-center gap-2 truncate text-sm font-semibold !text-white">
-            <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center !text-white">
-              {item.icon}
-            </span>
-            <span className="min-w-0 truncate !text-white">{item.label}</span>
-          </span>
-        </Link>
-      </div>
+        {item.icon}
+        <span>{item.label}</span>
+      </Link>
     )
   }
 
   return (
-    <div className={compact ? 'space-y-1.5' : 'space-y-2'}>
+    <div
+      className={`hf-competition-browser ${compact ? 'is-compact' : ''}`}
+    >
       {navigationItems.map((item) => {
         if (item.type === 'editorial') return renderEditorialItem(item)
 
-        const isOpen = openSections[item.key] ?? false
+        const open =
+          openSections[item.key] ??
+          (item.key === activeSectionKey ||
+            item.tournaments.some((tournament) => {
+              const href = `/liga/${tournament.key}`
+              return pathname === href || pathname?.startsWith(`${href}/`)
+            }))
         const isFavorites = item.type === 'favorite'
+        const label = isFavorites
+          ? item.label
+          : getSectionDisplayName(item.key, item.label, locale)
 
         return (
-          <div key={item.key} className={getSectionContainerClassName({ compact })}>
-            <button type="button" onClick={() => toggleSection(item.key)} className={getSectionTriggerClassName({ compact })} aria-expanded={isOpen}>
-              <span className="min-w-0 truncate text-sm font-semibold text-[#e4ebf3]">
-                {isFavorites
-                  ? item.label
-                  : getSectionDisplayName(item.key, item.label, locale)}
-              </span>
-              <Chevron open={isOpen} />
+          <section key={item.key} className="hf-competition-browser-group">
+            <button
+              type="button"
+              className="hf-competition-browser-trigger"
+              onClick={() => toggleSection(item.key)}
+              aria-expanded={open}
+            >
+              <span>{label}</span>
+              <Chevron open={open} />
             </button>
 
-            <div className="grid transition-[grid-template-rows,opacity] duration-200" style={{ gridTemplateRows: isOpen ? '1fr' : '0fr', opacity: isOpen ? 1 : 0 }}>
-              <div className="overflow-hidden">
-                <div className="border-t border-white/6 px-2 pb-2 pt-1">
-                  {item.tournaments.length ? (
-                    <div className={compact ? 'space-y-1' : 'space-y-1.5'}>
-                      {item.tournaments.map(renderTournament)}
-                    </div>
-                  ) : isFavorites ? (
-                    <p className="px-2 py-2 text-xs leading-5 text-[#8d98a7]">
-                      {t(locale, 'nav.noFavorites')}
-                    </p>
-                  ) : null}
-                </div>
+            {open ? (
+              <div className="hf-competition-browser-list">
+                {item.tournaments.length ? (
+                  item.tournaments.map(renderTournament)
+                ) : isFavorites ? (
+                  <p>{t(locale, 'nav.noFavorites')}</p>
+                ) : null}
               </div>
-            </div>
-          </div>
+            ) : null}
+          </section>
         )
       })}
     </div>

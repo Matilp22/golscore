@@ -2,7 +2,11 @@
 
 import { useRouter } from 'next/navigation'
 
-export default function BackButton({ label = 'Volver atrás' }: { label?: string }) {
+export default function BackButton({
+  label = 'Volver atrás',
+}: {
+  label?: string
+}) {
   const router = useRouter()
 
   return (
@@ -16,9 +20,20 @@ export default function BackButton({ label = 'Volver atrás' }: { label?: string
 
         router.push('/')
       }}
-      className="hf-button-secondary inline-flex min-h-10 items-center rounded-lg px-3 py-2 text-sm font-semibold"
+      className="hf-back-button"
+      aria-label={label}
     >
-      {label}
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          d="m14.5 5-7 7 7 7"
+          fill="none"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="2"
+        />
+      </svg>
+      <span>{label}</span>
     </button>
   )
 }

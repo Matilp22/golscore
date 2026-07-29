@@ -26,7 +26,7 @@ export default function BrandMark({
         alt="Hay Fulbo"
         width={134}
         height={91}
-        priority={hero}
+        priority
         className={logoClassName}
       />
     </span>
