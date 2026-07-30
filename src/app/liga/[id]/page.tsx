@@ -141,6 +141,11 @@ const LEAGUE_SEO_OVERRIDES: Record<string, LeagueSeoOverride> = {
     description:
       'Consultá partidos, llaves, resultados, campeones y estadísticas de la Copa Argentina en Hay Fulbo.',
   },
+  'selecciones-mundial': {
+    title: 'Mundial 2026 | Partidos, Grupos, Llaves y Selecciones | Hay Fulbo',
+    description:
+      'Segui el Mundial 2026 con partidos, resultados, grupos, mejores terceros, llaves, estadisticas, selecciones y noticias en Hay Fulbo.',
+  },
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -157,14 +162,21 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
 
   const override = LEAGUE_SEO_OVERRIDES[id]
+  if (override) {
+    return buildSeoMetadata({
+      title: override.title,
+      description: override.description,
+      path: `/liga/${id}`,
+    })
+  }
+
   const resolvedTournament = await resolveTournament(tournament.searchTerms, tournament.country)
     .catch(() => null)
   const displayName = resolvedTournament?.name || tournament.title
 
   return buildSeoMetadata({
-    title: override?.title ?? `Tabla de Posiciones ${displayName} | Hay Fulbo`,
+    title: `Tabla de Posiciones ${displayName} | Hay Fulbo`,
     description:
-      override?.description ??
       `Consultá fixture, tabla de posiciones, resultados, goleadores, asistencias y estadísticas de ${displayName} en Hay Fulbo.`,
     path: `/liga/${id}`,
   })

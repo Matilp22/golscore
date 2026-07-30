@@ -171,18 +171,18 @@ honestidad, no en inventar datos.
 
 | Módulo | Funcionalidad actual | Ruta | Fuente de datos | Estado nuevo | Validación |
 | --- | --- | --- | --- | --- | --- |
-| Mundial | portada integrada al sitio | `/liga/selecciones-mundial` | config + contenido + datos | pendiente | D,N,M,T,X,L,E,Ø,A,P,Q,R |
-| Mundial | partidos y TV | misma | fixtures/broadcasts | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,Q,R |
-| Mundial | grupos y clasificación | misma | standings/reglas | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,Q,R |
-| Mundial | llaves reales | misma | fixtures/series | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,P,Q,R |
-| Mundial | simulador | misma | estado local/reglas | pendiente | I,M,T,X,Ø,A,P,Q,R |
-| Mundial | estadísticas y goleadores | misma | caché/API-Football | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,P,Q,R |
-| Mundial | selecciones y jugadores | misma | equipos/planteles | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,P,Q,R |
-| Mundial | sedes | misma | config/equipos | pendiente | D,C,I,N,M,T,X,Ø,A,Q,R |
-| Mundial | noticias e historia | misma | contenido local/Supabase historial | pendiente | D,I,N,M,T,X,Ø,A,Q,R |
-| Mundial | favoritos | misma | localStorage | pendiente | D,I,N,M,T,X,Ø,A,Q,R |
-| Mundial | assets reales/fallback | misma | `public`/remotos | pendiente | D,M,T,X,Ø,A,P,Q,R |
-| Mundial | estados sin datos | misma | fuentes vacías | pendiente | Ø,M,T,X,A,Q,R |
+| Mundial | portada integrada al sitio | `/liga/selecciones-mundial` | config + contenido + datos | validado | Datos reales, metadata específica, identidad nueva, navegación contextual, 12 anchos y consola/hidratación limpios en build de producción local. |
+| Mundial | partidos y TV | misma | fixtures/broadcasts | implementado | 104 fixtures reales sin duplicados, marcador/penales/estado/sede, equipos, partido y recordatorio validados; el resumen de liga no expone TV y no se inventa. |
+| Mundial | grupos y clasificación | misma | standings/reglas | validado | 48 selecciones y 13 tablas, incluida mejores terceros, renderizadas desde caché real; tabs de tabla/partidos preservados. |
+| Mundial | llaves reales | misma | fixtures/series | validado | Cuadro oficial y cruces reales visibles, con navegación y estados pendientes preservados. |
+| Mundial | simulador | misma | estado local/reglas | implementado | Cambio de tab oficial/simulador, carga del editor y retorno a llaves comprobados sin error de consola; el fixture finalizado no permite validar una edición nueva y su persistencia. |
+| Mundial | estadísticas y goleadores | misma | caché/API-Football | implementado | Componente conectado y vacío honesto; el caché de QA no produjo líderes para validar contenido positivo. |
+| Mundial | selecciones y jugadores | misma | equipos/planteles | implementado | 48 selecciones reales, logos/fallback y enlaces de equipo validados; jugadores se consultan desde cada selección. |
+| Mundial | sedes | misma | config/equipos | validado | Tres países y 16 sedes editoriales visibles; el estadio específico se toma del fixture cuando existe. |
+| Mundial | noticias e historia | misma | contenido local/Supabase historial | validado | Seis artículos reales enlazados y 22 campeones/sedes históricas visibles; sin tarjeta editorial simulada. |
+| Mundial | favoritos | misma | localStorage | implementado | Favoritos de selecciones preservados en sus fichas y accesibles desde shell; falta una acción directa en portada. |
+| Mundial | assets reales/fallback | misma | `public`/remotos | validado | Trofeo local cargado con dimensiones reales, logos mediante `SafeImage`, sin carrusel roto ni error de red interno. |
+| Mundial | estados sin datos | misma | fuentes vacías | implementado | Vacíos explícitos para torneo, fixture, grupos, llaves, estadísticas, selecciones y noticias; falta forzar un dataset mundialista totalmente vacío en E2E. |
 
 ## 6. Equipos, selecciones y jugadores
 
