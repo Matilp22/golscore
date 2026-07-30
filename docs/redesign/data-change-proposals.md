@@ -1,7 +1,7 @@
 # Hay Fulbo: propuestas de datos no ejecutadas
 
-Fecha: 2026-07-30  
-Estado: documentación solamente  
+Fecha: 2026-07-30
+Estado: documentación solamente
 Alcance ejecutado sobre Supabase: ninguno
 
 Este documento registra capacidades que no pueden completarse con el contrato

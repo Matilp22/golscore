@@ -1,7 +1,7 @@
 # Hay Fulbo: nueva arquitectura de información
 
-Estado: Etapa 2 definida  
-Fecha: 2026-07-29  
+Estado: Etapa 2 definida
+Fecha: 2026-07-29
 Principio rector: encontrar el partido primero; entender el contexto después.
 
 ## 1. Objetivos medibles

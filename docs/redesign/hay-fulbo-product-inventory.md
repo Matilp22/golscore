@@ -1,8 +1,8 @@
 # Hay Fulbo: inventario integral previo al rediseño
 
-Estado del documento: completo para Etapa 0  
-Fecha de corte: 2026-07-29 (America/Buenos_Aires)  
-Rama de auditoría: `codex/hay-fulbo-redesign-complete-preview`  
+Estado del documento: completo para Etapa 0
+Fecha de corte: 2026-07-29 (America/Buenos_Aires)
+Rama de auditoría: `codex/hay-fulbo-redesign-complete-preview`
 Base inmutable: `origin/main` en `5695513c3566bc90f674c9f951d38cf898601fb5`
 
 ## 1. Estado inicial del repositorio y aislamiento

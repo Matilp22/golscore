@@ -1,7 +1,7 @@
 # Hay Fulbo: concepto visual y sistema de diseño
 
-Estado: Etapas 3 y 4 definidas  
-Versión: HF Matchday 1.0  
+Estado: Etapas 3 y 4 definidas
+Versión: HF Matchday 1.0
 Fecha: 2026-07-29
 
 ## 1. Concepto: “Tribuna de papel”

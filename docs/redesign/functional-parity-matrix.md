@@ -1,6 +1,6 @@
 # Hay Fulbo: matriz de paridad funcional
 
-Estado del documento: línea de base de Etapa 1  
+Estado del documento: línea de base de Etapa 1
 Fecha de corte: 2026-07-30
 Base de comparación: `origin/main@5695513c3566bc90f674c9f951d38cf898601fb5`
 
