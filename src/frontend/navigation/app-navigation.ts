@@ -13,6 +13,7 @@ export const DESKTOP_NAVIGATION: AppNavigationItem[] = [
   { key: 'world', label: 'Mundial 2026', href: '/liga/selecciones-mundial', icon: 'world' },
   { key: 'news', label: 'Noticias', href: '/noticias', icon: 'news' },
   { key: 'prode', label: 'Prode', href: '/prode', icon: 'prode' },
+  { key: 'guess-player', label: 'Adiviná', href: '/juegos/adivina-el-futbolista', icon: 'matches' },
   { key: 'mi-torneito', label: 'Mi Torneito', href: '/mi-torneito', icon: 'tournament' },
 ]
 
@@ -36,6 +37,7 @@ export const MORE_NAVIGATION: AppNavigationItem[] = [
   { key: 'news', label: 'Noticias', href: '/noticias', icon: 'news' },
   { key: 'transfers', label: 'Mercado de pases', href: '/mercado-de-pases', icon: 'transfers' },
   { key: 'prode', label: 'Prode', href: '/prode', icon: 'prode' },
+  { key: 'guess-player', label: '¿Quién es el futbolista?', href: '/juegos/adivina-el-futbolista', icon: 'matches' },
   { key: 'mi-torneito', label: 'Mi Torneito', href: '/mi-torneito', icon: 'tournament' },
 ]
 

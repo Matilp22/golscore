@@ -1,0 +1,127 @@
+.cluePanel {
+  max-width: 720px;
+}
+
+.clues {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-height: 150px;
+}
+
+.crestWrap {
+  display: flex;
+  min-height: 148px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 16px 12px;
+  text-align: center;
+}
+
+.clubName {
+  align-self: auto;
+  font-size: 14px;
+  text-align: center;
+}
+
+.crest {
+  width: 68px;
+  height: 72px;
+  grid-row: auto;
+  background: transparent;
+  clip-path: none;
+  filter: drop-shadow(0 5px 3px rgba(16, 36, 47, 0.2));
+}
+
+.crest::after {
+  display: none;
+}
+
+.extraClues {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.extraClues > div {
+  min-height: 92px;
+  align-items: center;
+  text-align: center;
+}
+
+.clueActions {
+  align-items: flex-end;
+  gap: 16px;
+}
+
+.hintButtons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+.hintButtons span {
+  width: 100%;
+  color: #7a8588;
+  font: 800 9px var(--hf-font-data);
+  letter-spacing: 0.12em;
+}
+
+.hintButtons button {
+  padding: 8px 10px;
+  border: 1px solid #aac3b2;
+  border-radius: 999px;
+  background: #edf5ee;
+  font-size: 11px;
+}
+
+.knowledgeRank {
+  margin: 28px auto 0;
+  padding: 18px;
+  border: 1px solid #d7bc80;
+  background: #fff7df;
+}
+
+.knowledgeRank small {
+  display: block;
+  margin-bottom: 6px;
+  color: #9a6916;
+  font: 900 9px var(--hf-font-data);
+  letter-spacing: 0.15em;
+}
+
+.knowledgeRank strong {
+  color: #173f38;
+  font: 700 24px var(--hf-font-editorial);
+}
+
+@media (max-width: 800px) {
+  .clues {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .crestWrap {
+    min-height: 142px;
+    padding: 14px 6px;
+  }
+
+  .crest {
+    width: 54px;
+    height: 60px;
+  }
+
+  .clubName {
+    font-size: 11px;
+  }
+
+  .extraClues {
+    grid-template-columns: 1fr;
+  }
+
+  .clueActions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
