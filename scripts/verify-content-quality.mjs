@@ -351,6 +351,8 @@ function verifyEditorialSections(findings) {
   const newsDetailPage = 'src/app/noticias/[slug]/page.tsx'
   const transfersPage = 'src/app/mercado-de-pases/page.tsx'
   const transfersDetailPage = 'src/app/mercado-de-pases/[slug]/page.tsx'
+  const transferMovementDetail =
+    'src/frontend/components/TransferMovementDetail.tsx'
   const navConfig = 'src/frontend/navigation/sidebar-navigation.tsx'
   const appShell = read('src/frontend/components/AppShell.tsx')
 
@@ -394,10 +396,22 @@ function verifyEditorialSections(findings) {
     for (const required of [
       'getTransferMarketItemBySlug',
       'getTransferMarketEditorialArticleBySlug',
-      'Esta información está marcada como rumor',
     ]) {
       if (!source.includes(required)) addFinding(findings, `${transfersDetailPage} no usa ${required}.`)
     }
+  }
+
+  if (!exists(transferMovementDetail)) {
+    addFinding(findings, `${transferMovementDetail} no existe.`)
+  } else if (
+    !read(transferMovementDetail).includes(
+      'Esta información está marcada como rumor'
+    )
+  ) {
+    addFinding(
+      findings,
+      `${transferMovementDetail} no comunica el estado de rumor.`
+    )
   }
 
   if (!exists(navConfig)) {

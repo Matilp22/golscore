@@ -245,7 +245,7 @@ export default async function MercadoDePasesPage({
               <p>
                 {filtersActive
                   ? 'Probá otro estado o tipo. No completamos el resultado con operaciones que no coinciden.'
-                  : 'No publicamos pases ficticios para llenar la pantalla. La sección queda lista para mostrar operaciones reales con su fuente y estado.'}
+                  : 'Próximamente vas a encontrar acá operaciones reales con su fuente y estado. No publicamos pases ficticios para llenar la pantalla.'}
               </p>
               {filtersActive ? (
                 <Link href="/mercado-de-pases">Limpiar filtros</Link>
