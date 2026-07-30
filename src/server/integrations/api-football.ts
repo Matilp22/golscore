@@ -4488,7 +4488,8 @@ async function enrichNationalSquadProfiles(
   supabase: ReturnType<typeof getSupabaseAdminClient>,
   players: TeamSquadPlayer[],
   nationalTeamExternalId: number,
-  maxProfiles = 8
+  maxProfiles = 8,
+  persistProfiles = true
 ) {
   if (!process.env.FOOTBALL_API_KEY) return players
 
@@ -4515,20 +4516,22 @@ async function enrichNationalSquadProfiles(
     }
   }
 
-  try {
-    await persistNationalSquadPlayerProfiles(
-      supabase,
-      nationalTeamExternalId,
-      players,
-      profiles,
-      profileLastSyncedAt
-    )
-  } catch (error) {
-    if (process.env.NODE_ENV === 'development') {
-      console.warn('[team-detail-data] No se pudieron persistir perfiles del plantel.', {
-        teamExternalId: nationalTeamExternalId,
-        message: error instanceof Error ? error.message : String(error),
-      })
+  if (persistProfiles) {
+    try {
+      await persistNationalSquadPlayerProfiles(
+        supabase,
+        nationalTeamExternalId,
+        players,
+        profiles,
+        profileLastSyncedAt
+      )
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[team-detail-data] No se pudieron persistir perfiles del plantel.', {
+          teamExternalId: nationalTeamExternalId,
+          message: error instanceof Error ? error.message : String(error),
+        })
+      }
     }
   }
 
@@ -4542,6 +4545,7 @@ async function enrichNationalSquadProfiles(
 type PublicDetailDataOptions = {
   allowApiEnrichment?: boolean
   deepPlayerProfileLimit?: number
+  persistApiEnrichment?: boolean
 }
 
 export async function getTeamDetail(
@@ -4574,7 +4578,7 @@ export async function getTeamDetail(
     apiSquadPlayers
   )
 
-  if (apiTeamDetail) {
+  if (apiTeamDetail && options.persistApiEnrichment !== false) {
     try {
       await persistApiTeamProfileSafe(supabase, resolvedExternalId, team, apiTeamDetail)
     } catch (error) {
@@ -4592,7 +4596,8 @@ export async function getTeamDetail(
       supabase,
       squadPlayers,
       resolvedExternalId,
-      options.deepPlayerProfileLimit
+      options.deepPlayerProfileLimit,
+      options.persistApiEnrichment !== false
     )
   }
 
@@ -4697,7 +4702,7 @@ export async function getPlayerDetail(
 
   if (!player && !apiDetail) return null
 
-  if (shouldUseApiEnrichment) {
+  if (shouldUseApiEnrichment && options.persistApiEnrichment !== false) {
     try {
       await persistApiPlayerDetailProfileSafe(supabase, playerExternalId, player, apiDetail)
     } catch (error) {
