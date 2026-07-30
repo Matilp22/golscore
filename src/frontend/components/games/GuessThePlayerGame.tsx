@@ -13,7 +13,7 @@ import updateStyles from './GuessThePlayerGameUpdate.module.css'
 
 const ROUND_SIZE = 10
 const PLAYER_STARTING_POINTS = 1000
-const EXTRA_CLUE_COST = 150
+const EXTRA_CLUE_COST = 50
 const HISTORY_KEY = 'hf-guess-player-history-v1'
 
 const LEVELS: Array<{
@@ -30,6 +30,18 @@ const LEVELS: Array<{
 
 type GameStatus = 'playing' | 'correct' | 'revealed' | 'finished'
 type ExtraClue = 'nationality' | 'age' | 'position'
+
+function startingTeamClues(level: GuessLevel) {
+  if (level === 'facil') return 3
+  if (level === 'intermedio') return 2
+  return 1
+}
+
+function startingExtraClues(level: GuessLevel): ExtraClue[] {
+  return level === 'avanzado'
+    ? ['nationality', 'age', 'position']
+    : []
+}
 
 function normalize(value: string) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
@@ -91,7 +103,7 @@ export default function GuessThePlayerGame({
   const [round, setRound] = useState<GuessPlayer[]>([])
   const [current, setCurrent] = useState(0)
   const [extraClues, setExtraClues] = useState<ExtraClue[]>([])
-  const [teamCluesShown, setTeamCluesShown] = useState(1)
+  const [teamCluesShown, setTeamCluesShown] = useState(3)
   const [answer, setAnswer] = useState('')
   const [score, setScore] = useState(0)
   const [correctCount, setCorrectCount] = useState(0)
@@ -106,19 +118,16 @@ export default function GuessThePlayerGame({
   }, [current, status, extraClues])
 
   const visibleTeams = useMemo(() => {
-    if (!player || !level) return []
-    const maximum = level === 'facil' ? 3 : level === 'intermedio' ? 2 : 3
-    return player.teams.slice(0, Math.min(teamCluesShown, maximum))
-  }, [level, player, teamCluesShown])
-
-  const maximumTeamClues = level === 'intermedio' ? 2 : 3
+    if (!player) return []
+    return player.teams.slice(0, teamCluesShown)
+  }, [player, teamCluesShown])
 
   function startGame(nextLevel: GuessLevel) {
     setLevel(nextLevel)
     setRound(createRound(nextLevel))
     setCurrent(0)
-    setExtraClues([])
-    setTeamCluesShown(1)
+    setExtraClues(startingExtraClues(nextLevel))
+    setTeamCluesShown(startingTeamClues(nextLevel))
     setAnswer('')
     setScore(0)
     setCorrectCount(0)
@@ -150,7 +159,7 @@ export default function GuessThePlayerGame({
   }
 
   function revealAnotherTeam() {
-    if (!player || teamCluesShown >= Math.min(maximumTeamClues, player.teams.length)) return
+    if (!player || teamCluesShown >= player.teams.length) return
     setTeamCluesShown((value) => value + 1)
     setPlayerPoints((value) => Math.max(100, value - EXTRA_CLUE_COST))
     setMessage(`Nuevo equipo revelado: −${EXTRA_CLUE_COST} puntos`)
@@ -162,13 +171,14 @@ export default function GuessThePlayerGame({
   }
 
   function nextPlayer() {
+    if (!level) return
     if (current === ROUND_SIZE - 1) {
       setStatus('finished')
       return
     }
     setCurrent((value) => value + 1)
-    setExtraClues([])
-    setTeamCluesShown(1)
+    setExtraClues(startingExtraClues(level))
+    setTeamCluesShown(startingTeamClues(level))
     setPlayerPoints(PLAYER_STARTING_POINTS)
     setAnswer('')
     setMessage('')
@@ -252,7 +262,10 @@ export default function GuessThePlayerGame({
         </aside>
         <div className={`${styles.cluePanel} ${updateStyles.cluePanel}`}>
           <div className={styles.clueTitle}><span>EQUIPOS REVELADOS</span><b>{playerPoints} PTS EN JUEGO</b></div>
-          <div className={`${styles.clues} ${updateStyles.clues}`}>
+          <div
+            key={`clubs-${player.id}`}
+            className={`${styles.clues} ${updateStyles.clues}`}
+          >
             {visibleTeams.map((team, index) => (
               <ClubCrest
                 key={`${player.id}-${team}`}
@@ -262,7 +275,10 @@ export default function GuessThePlayerGame({
               />
             ))}
           </div>
-          <div className={updateStyles.extraClues}>
+          <div
+            key={`facts-${player.id}`}
+            className={updateStyles.extraClues}
+          >
             {extraClues.includes('nationality') ? <div className={styles.fact}><small>Nacionalidad</small><strong>{player.nationality}</strong></div> : null}
             {extraClues.includes('age') ? <div className={styles.fact}><small>Edad</small><strong>{player.age} años</strong></div> : null}
             {extraClues.includes('position') ? <div className={styles.fact}><small>Posición</small><strong>{player.position}</strong></div> : null}
@@ -280,7 +296,7 @@ export default function GuessThePlayerGame({
                   <button
                     type="button"
                     onClick={revealAnotherTeam}
-                    disabled={teamCluesShown >= Math.min(maximumTeamClues, player.teams.length)}
+                    disabled={teamCluesShown >= player.teams.length}
                   >
                     Otro equipo
                   </button>
