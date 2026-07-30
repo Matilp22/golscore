@@ -331,13 +331,14 @@ export default function GuessThePlayerGame({
               <div className={`${styles.clueActions} ${updateStyles.clueActions}`}>
                 <div className={updateStyles.hintButtons}>
                   <span>PEDIR PISTA (−{EXTRA_CLUE_COST})</span>
-                  <button
-                    type="button"
-                    onClick={revealAnotherTeam}
-                    disabled={teamCluesShown >= player.teams.length}
-                  >
-                    Otro equipo
-                  </button>
+                  {teamCluesShown < player.teams.length ? (
+                    <button
+                      type="button"
+                      onClick={revealAnotherTeam}
+                    >
+                      Otro equipo
+                    </button>
+                  ) : null}
                   <button type="button" onClick={() => revealClue('nationality')} disabled={extraClues.includes('nationality')}>Nacionalidad</button>
                   <button type="button" onClick={() => revealClue('age')} disabled={extraClues.includes('age')}>Edad</button>
                   <button type="button" onClick={() => revealClue('position')} disabled={extraClues.includes('position')}>Posición</button>
