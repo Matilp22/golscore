@@ -233,40 +233,40 @@ honestidad, no en inventar datos.
 
 | Módulo | Funcionalidad actual | Ruta | Fuente de datos | Estado nuevo | Validación |
 | --- | --- | --- | --- | --- | --- |
-| Prode | portada/listado de partidos | `/prode` | API propia + Supabase | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,P,S,Q,R |
-| Prode | filtros de partidos | `/prode` | estado cliente | pendiente | I,M,T,X,Ø,A,Q,R |
-| Prode | formulario de pronóstico | `/prode` | API/Supabase autenticado | pendiente | D,C,I,M,T,X,L,E,Ø,A,S,Q,R |
-| Prode | bloqueo por horario/estado | `/prode` | reglas + fixture | pendiente | D,C,I,M,T,X,Ø,A,S,Q,R |
-| Prode | pronóstico persistido | `/prode` | predictions | pendiente | D,C,I,L,E,S,Q,R |
-| Prode | puntaje y explicación | `/prode` | scores/results | pendiente | D,C,M,T,X,Ø,A,Q,R |
-| Prode | ranking | `/prode` | leaderboard | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,P,Q,R |
-| Prode | grupos Mundial | `/prode` | endpoint world-cup-groups | pendiente | D,C,M,T,X,L,E,Ø,A,Q,R |
-| Prode privado | lista, búsqueda y creación | `/prode/torneos` | Supabase/API propia | pendiente | D,I,N,M,T,X,L,E,Ø,A,S,Q,R |
-| Prode privado | detalle y miembros | `/prode/torneos/[id]` | Supabase/API propia | pendiente | D,I,N,M,T,X,L,E,Ø,A,S,Q,R |
-| Prode privado | invitación/aceptar/revocar | invitación/detalle | Supabase/API propia | pendiente | D,I,N,M,T,X,L,E,Ø,A,S,Q,R |
-| Prode privado | solicitud/aprobar/rechazar | detalle | Supabase/API propia | pendiente | D,I,M,T,X,L,E,Ø,A,S,Q,R |
-| Prode privado | chat y eliminación | detalle | Supabase/API propia | pendiente | D,I,M,T,X,L,E,Ø,A,S,Q,R |
-| Prode | sesión ausente/vencida | todas Prode | Supabase Auth | pendiente | I,N,M,T,X,E,Ø,A,S,Q,R |
+| Prode | portada/listado de partidos | `/prode` | API propia + Supabase | validado | Copa del Mundo 2026, fase Final y partido España–Argentina cargados desde las fuentes existentes; navegación única, consola limpia y 12 anchos comprobados. |
+| Prode | filtros de partidos | `/prode` | estado cliente | validado | Selects nativos etiquetados de liga y fecha/fase; selección inicial real, teclado y responsive 320–1920 px comprobados. |
+| Prode | formulario de pronóstico | `/prode` | API/Supabase autenticado | implementado | Inputs, validación, borrador y guardado real preservados; guardado positivo bloqueado por ausencia de una cuenta QA aislada y por no mutar predicciones reales. |
+| Prode | bloqueo por horario/estado | `/prode` | reglas + fixture | validado | Final real renderizada con controles deshabilitados y acción “Bloqueado”; regla temporal existente preservada. |
+| Prode | pronóstico persistido | `/prode` | predictions | implementado | Lectura y actualización posterior al guardado conectadas al contrato existente; persistencia positiva bloqueada sin credencial QA aislada. |
+| Prode | puntaje y explicación | `/prode` | scores/results | validado | Resumen de puntos/predicciones/exactos y reglas 3/1/0 visibles y responsive; estado sin puntos comprobado. |
+| Prode | ranking | `/prode` | leaderboard | validado | Endpoint real total/por fecha completa la carga y presenta el vacío correcto sin errores de consola. |
+| Prode | grupos Mundial | `/prode` | endpoint world-cup-groups | implementado | Selector y tabla condicional preservados; el dataset de QA abrió la Final y no permitió validar una fase de grupos positiva. |
+| Prode privado | lista, búsqueda y creación | `/prode/torneos` | Supabase/API propia | implementado | Estado sin sesión, shell nuevo, navegación y responsive validados; listado, búsqueda y creación positivos bloqueados sin cuenta QA aislada. |
+| Prode privado | detalle y miembros | `/prode/torneos/[id]` | Supabase/API propia | implementado | Contratos, permisos y rutas preservados; validación positiva bloqueada sin membresía QA. |
+| Prode privado | invitación/aceptar/revocar | invitación/detalle | Supabase/API propia | implementado | Acciones reales preservadas; no se emitieron ni revocaron invitaciones sobre datos reales durante QA. |
+| Prode privado | solicitud/aprobar/rechazar | detalle | Supabase/API propia | implementado | Flujos y estados existentes preservados; validación positiva requiere dos identidades QA aisladas. |
+| Prode privado | chat y eliminación | detalle | Supabase/API propia | implementado | UI y API existentes preservadas; escrituras y eliminación bloqueadas deliberadamente por aislamiento. |
+| Prode | sesión ausente/vencida | todas Prode | Supabase Auth | validado | Carga de sesión y mensaje honesto sin usuario comprobados en `/prode/torneos`, sin requests de escritura. |
 
 ## 9. Mi Torneito
 
 | Módulo | Funcionalidad actual | Ruta | Fuente de datos | Estado nuevo | Validación |
 | --- | --- | --- | --- | --- | --- |
-| Mi Torneito | portada sin datos ficticios | `/mi-torneito` | contenido local + Supabase real | pendiente | D,I,N,M,T,X,Ø,A,Q,R |
-| Mi Torneito | listado de torneos | `/mi-torneito/torneos` | repositorio Supabase | pendiente | D,I,N,M,T,X,L,E,Ø,A,P,S,Q,R |
-| Mi Torneito | solicitud de torneo | `/mi-torneito/solicitar` | Supabase | pendiente | D,I,N,M,T,X,L,E,Ø,A,S,Q,R |
-| Torneo | identidad y navegación | `/mi-torneito/t/[tournamentSlug]` | Supabase | pendiente | D,I,N,M,T,X,L,E,Ø,A,S,Q,R |
-| Torneo | fixture y fechas | misma | rounds/matches | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,Q,R |
-| Torneo | resultados | misma | matches | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,Q,R |
-| Torneo | tabla | misma | partidos calculados/datos | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,Q,R |
-| Torneo | equipos y planteles | torneo/equipo | teams | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,Q,R |
-| Torneo | goleadores | misma | partidos/eventos disponibles | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,Q,R |
-| Torneo | detalle de partido | `/mi-torneito/t/[tournamentSlug]/p/[matchId]` | matches | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,Q,R |
-| Torneo | detalle de equipo | `/mi-torneito/t/[tournamentSlug]/e/[teamSlug]` | teams/matches | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,Q,R |
+| Mi Torneito | portada sin datos ficticios | `/mi-torneito` | contenido local + Supabase real | validado | Hero nuevo muestra el conteo y último torneo del repositorio; se eliminaron partido, equipos y tabla hardcodeados. Capturas y 12 anchos comprobados. |
+| Mi Torneito | listado de torneos | `/mi-torneito/torneos` | repositorio Supabase | validado | Torneo publicado real y enlace dinámico comprobados; estado vacío honesto implementado. |
+| Mi Torneito | solicitud de torneo | `/mi-torneito/solicitar` | Supabase | implementado | Campos, límites, errores y acción real preservados; formulario no enviado para no crear una solicitud en la base real. |
+| Torneo | identidad y navegación | `/mi-torneito/t/[tournamentSlug]` | Supabase | validado | Apertura del slug publicado, identidad, secciones y regreso comprobados. |
+| Torneo | fixture y fechas | misma | rounds/matches | validado | Lista real o vacío por fuente renderizados; enlace a detalle comprobado cuando existió partido. |
+| Torneo | resultados | misma | matches | validado | Marcador y estado salen del repositorio y el detalle conserva fecha/sede/transmisión. |
+| Torneo | tabla | misma | partidos calculados/datos | validado | Tabla calculada o vacío explícito visible en el torneo publicado, sin datos de demostración en UI. |
+| Torneo | equipos y planteles | torneo/equipo | teams | implementado | Grilla y detalle de equipo conectados; no existe modelo de planteles individuales en el contrato actual. |
+| Torneo | goleadores | misma | partidos/eventos disponibles | pendiente | El repositorio actual no expone eventos/goleadores; requiere propuesta de datos separada, sin migración ejecutada. |
+| Torneo | detalle de partido | `/mi-torneito/t/[tournamentSlug]/p/[matchId]` | matches | validado | Ruta dinámica, heading accesible, marcador e información real comprobados cuando hubo partido publicado. |
+| Torneo | detalle de equipo | `/mi-torneito/t/[tournamentSlug]/e/[teamSlug]` | teams/matches | validado | Ruta dinámica, identidad, campaña y fixture comprobados cuando hubo equipo publicado. |
 | Organizador | acceso por permiso | `/mi-torneito/admin` | Auth/admin assignments | pendiente | D,I,N,M,T,X,L,E,Ø,A,S,Q,R |
 | Organizador | carga y edición | `/mi-torneito/admin` | repositorio Supabase | pendiente | D,C,I,M,T,X,L,E,Ø,A,S,Q,R |
 | Organizador | confirmaciones y errores | `/mi-torneito/admin` | estado de mutación | pendiente | I,M,T,X,E,Ø,A,S,Q,R |
-| Mi Torneito | sin torneos/sin datos | todas | colecciones vacías | pendiente | Ø,M,T,X,A,Q,R |
+| Mi Torneito | sin torneos/sin datos | todas | colecciones vacías | implementado | Vacíos específicos para portada, listado, fixture, tabla, equipos y campaña; la fuente QA contenía un torneo y no permitió validar el vacío global en runtime. |
 
 ## 10. Autenticación, perfil y administración
 

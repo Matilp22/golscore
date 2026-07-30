@@ -177,15 +177,15 @@ export function MiTorneitoLanding({
 
       <section className="hf-mi-hero">
         <div className="hf-mi-hero-copy">
-          <p className="hf-mi-kicker">Nuevo producto</p>
+          <p className="hf-mi-kicker">El fútbol de todos los días</p>
           <h1>Mi Torneito</h1>
           <span>
-            Tu liga amateur con fixture, tabla, resultados, equipos y links para compartir,
-            todo dentro de Hay Fulbo.
+            Tu competencia amateur con fixture, tabla, resultados, equipos y
+            páginas públicas dentro del mismo Hay Fulbo.
           </span>
           <div className="hf-mi-hero-actions">
             <a href="#solicitar" className="hf-mi-primary-button">
-              Crear mi torneo
+              Solicitar mi torneo
               <ArrowIcon />
             </a>
             <Link href="/mi-torneito/torneos" className="hf-mi-secondary-button">
@@ -193,19 +193,27 @@ export function MiTorneitoLanding({
             </Link>
           </div>
         </div>
-        <div className="hf-mi-hero-panel" aria-label="Vista previa de Mi Torneito">
-          <div className="hf-mi-live-pill">En vivo</div>
-          <div className="hf-mi-mini-score">
-            <span>Los Pibes FC</span>
-            <strong>2 - 1</strong>
-            <span>La Banda</span>
-          </div>
-          <div className="hf-mi-mini-table">
-            <span>Tabla</span>
-            <strong>1. Los Pibes FC · 12 pts</strong>
-            <strong>2. La Banda · 9 pts</strong>
-            <strong>3. Norte Unido · 7 pts</strong>
-          </div>
+        <div className="hf-mi-hero-panel" aria-label="Estado real de Mi Torneito">
+          <span className="hf-mi-hero-panel-kicker">Ahora en Hay Fulbo</span>
+          <strong className="hf-mi-hero-panel-count">{tournaments.length}</strong>
+          <span className="hf-mi-hero-panel-label">
+            {tournaments.length === 1 ? 'torneo publicado' : 'torneos publicados'}
+          </span>
+          {tournaments[0] ? (
+            <Link
+              href={`/mi-torneito/t/${tournaments[0].slug}`}
+              className="hf-mi-hero-featured"
+            >
+              <small>Último disponible</small>
+              <strong>{tournaments[0].name}</strong>
+              <ArrowIcon />
+            </Link>
+          ) : (
+            <p className="hf-mi-hero-panel-empty">
+              Todavía no hay una competencia pública. No mostramos fixtures ni
+              equipos de ejemplo.
+            </p>
+          )}
         </div>
       </section>
 
@@ -227,7 +235,7 @@ export function MiTorneitoLanding({
         <div className="hf-mi-section-head">
           <div>
             <p className="hf-mi-kicker">Cómo funciona</p>
-            <h2>Un MVP concierge, sin fricción</h2>
+            <h2>De la solicitud al primer partido</h2>
           </div>
         </div>
         <div className="hf-mi-steps">
@@ -262,7 +270,7 @@ export function MiTorneitoLanding({
         ) : (
           <EmptyState
             title="Todavía no hay torneos publicados"
-            description="Cuando un superadmin publique un torneo, va a aparecer en esta sección."
+            description="Cuando se publique el primero, va a aparecer en esta sección con sus datos reales."
           />
         )}
       </section>
@@ -283,7 +291,7 @@ export function MiTorneitoLanding({
           </details>
           <details>
             <summary>¿Hay pagos o planes en esta versión?</summary>
-            <p>No. Esta primera versión es un MVP funcional sin pagos integrados.</p>
+            <p>No. La versión actual no tiene pagos integrados.</p>
           </details>
           <details>
             <summary>¿La tabla se carga a mano?</summary>
@@ -580,6 +588,9 @@ export function MiTorneitoMatchPageView({
         <Link href={`/mi-torneito/t/${bundle.tournament.slug}`} className="hf-mi-back-link">
           {bundle.tournament.name}
         </Link>
+        <h1 className="sr-only">
+          {home?.name ?? 'Local'} vs {away?.name ?? 'Visitante'}
+        </h1>
         <p className="hf-mi-kicker">
           {round?.name ?? 'Fecha'} · {formatMiTorneitoDateTime(match.scheduledAt)}
         </p>
