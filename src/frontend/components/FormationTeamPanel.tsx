@@ -212,7 +212,7 @@ export default function FormationTeamPanel({
         </div>
       ) : null}
 
-      <div className="mt-2 rounded-xl border border-white/6 bg-[#161a20] px-2 py-1.5 md:mt-3 md:px-3 md:py-2">
+      <div className="hf-lineup-coach mt-2 rounded-xl border px-2 py-1.5 md:mt-3 md:px-3 md:py-2">
         <p className="text-[11px] uppercase tracking-wide text-[#8d98a7]">{t('lineup.coach')}</p>
         <p className="mt-1 truncate text-xs font-semibold text-white sm:text-sm">
           {coachName || t('common.notAvailable')}
@@ -314,7 +314,7 @@ function PlayerRow({
   return (
     <div
       data-match-detail="lineup-player"
-      className={`flex min-w-0 items-center gap-1.5 rounded-xl border border-white/6 bg-[#161a20] px-1.5 py-1.5 md:gap-2.5 md:px-3 ${
+      className={`hf-lineup-player flex min-w-0 items-center gap-1.5 rounded-xl border px-1.5 py-1.5 md:gap-2.5 md:px-3 ${
         align === 'right' ? 'flex-row-reverse text-right' : ''
       }`}
     >

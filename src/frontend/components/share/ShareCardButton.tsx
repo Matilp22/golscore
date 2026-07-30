@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 import { useShareCardAsImage } from '@/frontend/hooks/useShareCardAsImage'
@@ -30,6 +30,9 @@ export default function ShareCardButton({
 }: ShareCardButtonProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [localMessage, setLocalMessage] = useState('')
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const closeRef = useRef<HTMLButtonElement>(null)
   const absoluteUrl = typeof window !== 'undefined' ? new URL(url, window.location.origin).href : url
   const shareOptions = useMemo(
     () => ({
@@ -53,17 +56,56 @@ export default function ShareCardButton({
   useEffect(() => {
     if (!isOpen) return
 
+    const previouslyFocused = document.activeElement as HTMLElement | null
+    const triggerElement = triggerRef.current
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    closeRef.current?.focus()
+
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsOpen(false)
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setIsOpen(false)
+        return
+      }
+
+      if (event.key !== 'Tab' || !dialogRef.current) return
+
+      const focusable = [
+        ...dialogRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        ),
+      ]
+
+      if (!focusable.length) {
+        event.preventDefault()
+        dialogRef.current.focus()
+        return
+      }
+
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
     }
 
     document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      document.body.style.overflow = previousOverflow
+      ;(previouslyFocused ?? triggerElement)?.focus()
+    }
   }, [isOpen])
 
   return (
     <div data-share-exclude="true" data-share-ignore="true">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => {
           setLocalMessage('')
@@ -94,35 +136,39 @@ export default function ShareCardButton({
       {isOpen && typeof document !== 'undefined'
         ? createPortal(
             <div
-              className="fixed inset-0 z-[1100] isolate flex items-end justify-center bg-[#020403]/95 px-3 py-4 backdrop-blur-md sm:items-center"
+              className="hf-share-modal fixed inset-0 z-[1100] isolate flex items-end justify-center px-3 py-4 sm:items-center"
               data-share-exclude="true"
               data-share-ignore="true"
             >
               <button
                 type="button"
-                className="absolute inset-0 z-0 cursor-default"
+                className="hf-share-backdrop absolute inset-0 z-0 cursor-default"
                 aria-label="Cerrar compartir"
+                tabIndex={-1}
                 onClick={() => setIsOpen(false)}
               />
               <div
+                ref={dialogRef}
                 role="dialog"
                 aria-modal="true"
                 aria-label="Opciones para compartir"
-                className="relative z-10 w-full max-w-sm rounded-2xl border border-[#335142] bg-[#07100d] p-4 text-sm text-white shadow-[0_28px_90px_rgba(0,0,0,0.86),0_0_0_1px_rgba(127,240,178,0.08)]"
+                tabIndex={-1}
+                className="hf-share-dialog relative z-10 w-full max-w-sm p-4 text-sm"
               >
-                <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="hf-share-dialog-header mb-3 flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-[11px] font-black uppercase tracking-[0.12em] text-[#7ff0b2]">
+                    <p className="hf-type-overline">
                       Compartir imagen
                     </p>
-                    <p className="mt-1 text-xs text-[#9aa7b5]">
+                    <p className="mt-1 text-xs">
                       Genera una imagen de esta card.
                     </p>
                   </div>
                   <button
+                    ref={closeRef}
                     type="button"
                     onClick={() => setIsOpen(false)}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-lg font-black text-white transition hover:bg-white/[0.08]"
+                    className="hf-share-close inline-flex h-9 w-9 items-center justify-center rounded-xl border text-lg font-black transition"
                     aria-label="Cerrar"
                     title="Cerrar"
                   >
@@ -130,7 +176,7 @@ export default function ShareCardButton({
                   </button>
                 </div>
 
-                <div className="grid gap-2">
+                <div className="hf-share-actions grid gap-2">
                   <button
                     type="button"
                     onClick={shareImage}
@@ -185,7 +231,7 @@ export default function ShareCardButton({
                   </button>
                 </div>
                 {localMessage || message || error ? (
-                  <p className={`mt-3 text-xs ${error ? 'text-red-200' : 'text-[#9aa7b5]'}`}>
+                  <p className={`hf-share-feedback mt-3 text-xs ${error ? 'is-error' : ''}`}>
                     {error || message || localMessage}
                   </p>
                 ) : null}

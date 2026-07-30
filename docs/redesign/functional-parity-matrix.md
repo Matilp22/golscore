@@ -113,33 +113,33 @@ honestidad, no en inventar datos.
 
 | Módulo | Funcionalidad actual | Ruta | Fuente de datos | Estado nuevo | Validación |
 | --- | --- | --- | --- | --- | --- |
-| Partido | competencia, etapa y jornada | `/partido/[id]` | fixture/caché | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,Q,R |
-| Partido | fecha, hora Argentina y estado | `/partido/[id]` | fixture normalizado | pendiente | D,C,M,T,X,Ø,A,Q,R |
-| Partido | equipos, escudos y navegación | `/partido/[id]` | fixture/teams | pendiente | D,C,I,N,M,T,X,Ø,A,Q,R |
-| Partido | minuto y agregado | `/partido/[id]` | fixture/live sync | pendiente | D,C,M,T,X,Ø,A,P,Q,R |
-| Partido | marcador, penales y global | `/partido/[id]` | fixture/serie | pendiente | D,C,M,T,X,Ø,A,Q,R |
-| Partido | estadio, árbitro y TV | `/partido/[id]` | fixture/broadcasts | pendiente | D,C,I,M,T,X,Ø,A,Q,R |
-| Partido | recordatorio | `/partido/[id]` | localStorage | pendiente | I,M,T,X,Ø,A,Q,R |
-| Partido | compartir | `/partido/[id]` | Web Share/share card | pendiente | D,I,M,T,X,E,Ø,A,Q,R |
-| Partido | tabs y anclas | `/partido/[id]` | navegación local | pendiente | I,N,M,T,X,A,Q |
-| Resumen | goleadores e incidencias clave | `/partido/[id]` | eventos | pendiente | D,C,M,T,X,Ø,A,Q,R |
-| Cronología | goles, autogoles y penales | `/partido/[id]` | `/fixtures/events`/caché | pendiente | D,C,M,T,X,E,Ø,A,Q,R |
-| Cronología | penales errados | `/partido/[id]` | eventos | pendiente | D,C,M,T,X,Ø,A,Q,R |
-| Cronología | tarjetas | `/partido/[id]` | eventos | pendiente | D,C,M,T,X,Ø,A,Q,R |
-| Cronología | cambios, VAR y lesiones | `/partido/[id]` | eventos | pendiente | D,C,M,T,X,Ø,A,Q,R |
-| Cronología | tiempo agregado y eventos desconocidos | `/partido/[id]` | eventos normalizados | pendiente | D,C,M,T,X,Ø,A,Q,R |
-| Estadísticas | porcentajes | `/partido/[id]` | estadísticas | pendiente | D,C,M,T,X,E,Ø,A,Q,R |
-| Estadísticas | valores absolutos | `/partido/[id]` | estadísticas | pendiente | D,C,M,T,X,E,Ø,A,Q,R |
-| Estadísticas | valor cero, igual o nulo | `/partido/[id]` | estadísticas | pendiente | D,C,M,T,X,Ø,A,Q,R |
-| Formaciones | dibujo táctico y once | `/partido/[id]` | lineups | pendiente | D,C,M,T,X,E,Ø,A,Q,R |
-| Formaciones | posiciones, nombres y dorsales | `/partido/[id]` | lineups | pendiente | D,C,I,N,M,T,X,Ø,A,Q,R |
-| Formaciones | suplentes | `/partido/[id]` | lineups | pendiente | D,C,I,N,M,T,X,Ø,A,Q,R |
-| Formaciones | entrenadores | `/partido/[id]` | lineups | pendiente | D,C,M,T,X,Ø,A,Q,R |
-| Formaciones | cambios y jugador enlazado | `/partido/[id]` | lineup/eventos/player id | pendiente | D,C,I,N,M,T,X,Ø,A,Q |
-| Formaciones | formación ausente | `/partido/[id]` | caché vacía | pendiente | Ø,M,T,X,A,Q,R |
-| Videos | highlights reales | `/partido/[id]` | YouTube/caché | pendiente | D,I,M,T,X,L,E,Ø,A,P,Q,R |
+| Partido | competencia, etapa y jornada | `/partido/[id]` | fixture/caché | validado | Ronda y competencia reales con navegación comprobada. |
+| Partido | fecha, hora Argentina y estado | `/partido/[id]` | fixture normalizado | validado | Fecha Argentina y estado FINAL 96' verificados. |
+| Partido | equipos, escudos y navegación | `/partido/[id]` | fixture/teams | validado | Dos equipos reales, escudos y enlaces comprobados. |
+| Partido | minuto y agregado | `/partido/[id]` | fixture/live sync | implementado | Minuto/agregado renderizados; falta fixture en vivo aislado. |
+| Partido | marcador, penales y global | `/partido/[id]` | fixture/serie | implementado | Marcador validado; falta caso QA con penales/global. |
+| Partido | estadio, árbitro y TV | `/partido/[id]` | fixture/broadcasts | validado | Estadio y árbitro reales; ausencia de TV representada honestamente. |
+| Partido | recordatorio | `/partido/[id]` | localStorage | validado | Alta, estado accesible y baja en fixture próximo. |
+| Partido | compartir | `/partido/[id]` | Web Share/share card | implementado | Diálogo abre/cierra con Escape; generación/compartir externo no ejecutados. |
+| Partido | tabs y anclas | `/partido/[id]` | navegación local | validado | Seis destinos contextuales y scroll a estadísticas comprobados. |
+| Resumen | goleadores e incidencias clave | `/partido/[id]` | eventos | validado | Resumen real y cronología de 17 eventos comprobados. |
+| Cronología | goles, autogoles y penales | `/partido/[id]` | `/fixtures/events`/caché | implementado | Goles validados; faltan fixtures QA con autogol y penal. |
+| Cronología | penales errados | `/partido/[id]` | eventos | implementado | Normalización y presentación preservadas; sin caso QA. |
+| Cronología | tarjetas | `/partido/[id]` | eventos | validado | Amarillas reales verificadas. |
+| Cronología | cambios, VAR y lesiones | `/partido/[id]` | eventos | implementado | Cambios validados; VAR y lesión sin caso QA. |
+| Cronología | tiempo agregado y eventos desconocidos | `/partido/[id]` | eventos normalizados | implementado | Agregado 90+5/45+2 validado; evento desconocido sin caso QA. |
+| Estadísticas | porcentajes | `/partido/[id]` | estadísticas | validado | Posesión y precisión reales verificadas. |
+| Estadísticas | valores absolutos | `/partido/[id]` | estadísticas | validado | 16 métricas reales renderizadas. |
+| Estadísticas | valor cero, igual o nulo | `/partido/[id]` | estadísticas | validado | Ceros/empates visibles y todas las barras limitadas a 0–100 %. |
+| Formaciones | dibujo táctico y once | `/partido/[id]` | lineups | validado | Dos campos tácticos completos comprobados. |
+| Formaciones | posiciones, nombres y dorsales | `/partido/[id]` | lineups | validado | Datos reales visibles en mobile y desktop. |
+| Formaciones | suplentes | `/partido/[id]` | lineups | validado | Cambio de tab y estado `aria-pressed` comprobados. |
+| Formaciones | entrenadores | `/partido/[id]` | lineups | validado | Entrenadores reales visibles por equipo. |
+| Formaciones | cambios y jugador enlazado | `/partido/[id]` | lineup/eventos/player id | implementado | Cambios visibles; navegación de jugador queda para módulo jugadores. |
+| Formaciones | formación ausente | `/partido/[id]` | caché vacía | validado | Estado honesto verificado con partido postergado. |
+| Videos | highlights reales | `/partido/[id]` | YouTube/caché | validado | Fuente real e iframe lazy comprobados; recurso publicitario externo permitido por dominio. |
 | Historial | enfrentamientos directos | `/partido/[id]/historial` | caché/head-to-head | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,P,Q,R |
-| Partido | actualización en vivo | `/partido/[id]` | live sync | pendiente | D,C,P,Q,R |
+| Partido | actualización en vivo | `/partido/[id]` | live sync | implementado | Contrato preservado; endpoint interceptado en QA para impedir escrituras. |
 | Partido | loading, error y no encontrado | `/partido/[id]` | App Router | pendiente | L,E,Ø,N,M,T,X,A,Q |
 
 ## 4. Competencias, tablas, grupos y llaves

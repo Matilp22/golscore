@@ -42,10 +42,10 @@ function LineupTabButton({
     <button
       type="button"
       onClick={onClick}
-      className={`min-h-9 flex-1 rounded-lg px-2 py-1.5 text-[11px] font-black uppercase tracking-[0.1em] transition sm:px-3 ${
+      className={`hf-lineup-tab-button min-h-9 flex-1 rounded-lg px-2 py-1.5 text-[11px] font-black uppercase tracking-[0.1em] transition sm:px-3 ${
         active
-          ? 'bg-[#163828] text-[#7ff0b2] shadow-[inset_0_0_0_1px_rgba(127,240,178,0.22)]'
-          : 'text-[#8d98a7] hover:bg-white/5 hover:text-white'
+          ? 'is-active'
+          : ''
       }`}
       aria-pressed={active}
     >
@@ -64,8 +64,8 @@ export default function LineupTabs({ teams }: LineupTabsProps) {
   )
 
   return (
-    <div className="mt-3 md:mt-4" data-match-detail="lineup-tabs">
-      <div className="mb-3 flex rounded-xl border border-white/6 bg-[#161a20] p-1">
+    <div className="hf-lineup-tabs mt-3 md:mt-4" data-match-detail="lineup-tabs">
+      <div className="hf-lineup-tabs-list mb-3 flex rounded-xl border p-1">
         <LineupTabButton
           active={activeTab === 'starters'}
           label={t('lineup.starters')}
@@ -80,8 +80,8 @@ export default function LineupTabs({ teams }: LineupTabsProps) {
         />
       </div>
 
-      <div className="rounded-2xl border border-white/8 bg-[#111418] p-2 sm:p-3 md:p-4">
-        <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-b border-white/6 pb-3 font-black uppercase tracking-[0.08em] text-white">
+      <div className="hf-lineup-content rounded-2xl border p-2 sm:p-3 md:p-4">
+        <div className="hf-lineup-team-header mb-3 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-b pb-3 font-black uppercase tracking-[0.08em]">
           <span className="truncate text-left text-[clamp(0.78rem,2.7vw,1.08rem)] leading-none">{teams[0]?.title ?? t('prode.home')}</span>
           <span className="rounded-full border border-[#70ff9d]/20 bg-[#70ff9d]/10 px-2 py-1 text-[#70ff9d]">vs</span>
           <span className="truncate text-right text-[clamp(0.78rem,2.7vw,1.08rem)] leading-none">{teams[1]?.title ?? t('prode.away')}</span>

@@ -44,6 +44,8 @@ import type { MatchSummarySource } from '@/shared/utils/match-summary'
 import { buildSeoMetadata } from '@/shared/seo'
 import ShareCardButton from '@/frontend/components/share/ShareCardButton'
 import MatchSummaryPlayer from '@/frontend/components/MatchSummaryPlayer'
+import MatchDetailNavigation from '@/frontend/components/match-detail/MatchDetailNavigation'
+import MatchReminderButton from '@/frontend/components/matches/MatchReminderButton'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { cache } from 'react'
@@ -1260,17 +1262,17 @@ function MatchTeamCard({
 }) {
   const card = (
     <div
-      className={`flex h-[94px] min-w-0 flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2 text-center transition md:h-full md:flex-row md:gap-3 md:rounded-2xl md:px-4 md:py-4 ${
+      className={`hf-match-detail-team-card flex h-[94px] min-w-0 flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2 text-center transition md:h-full md:flex-row md:gap-3 md:rounded-2xl md:px-4 md:py-4 ${
         side === 'away' ? 'md:flex-row-reverse md:text-right' : 'md:text-left'
       }`}
       style={getPanelStyle(colors)}
     >
       <TeamLogo logo={logo} name={name} />
       <div className="min-w-0">
-        <p className="line-clamp-2 text-[11px] font-black leading-tight text-white md:truncate md:text-xl">
+        <p className="hf-match-detail-team-name line-clamp-2 text-[11px] font-black leading-tight md:truncate md:text-xl">
           {name}
         </p>
-        <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-[#dce5ef] md:mt-1 md:text-xs md:tracking-[0.12em]">
+        <p className="hf-match-detail-team-role mt-0.5 text-[9px] font-semibold uppercase tracking-[0.1em] md:mt-1 md:text-xs md:tracking-[0.12em]">
           {role}
         </p>
       </div>
@@ -1282,7 +1284,7 @@ function MatchTeamCard({
   return (
     <Link
       href={`/equipo/${id}`}
-      className="block h-[94px] min-w-0 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7ff0b2] md:h-full md:rounded-2xl"
+      className="hf-match-detail-team-link block h-[94px] min-w-0 rounded-xl focus:outline-none md:h-full md:rounded-2xl"
     >
       {card}
     </Link>
@@ -1293,9 +1295,10 @@ function getPanelStyle(style: TeamStyle) {
   const secondary = style.secondary || style.shirt
 
   return {
-    backgroundImage: `linear-gradient(135deg, ${style.shirt}3d 0%, ${secondary}33 52%, rgba(15, 19, 23, 0.94) 100%)`,
-    borderColor: `${style.border}66`,
-    boxShadow: `inset 0 1px 0 ${style.border}1a`,
+    backgroundColor: '#fffefa',
+    backgroundImage: `linear-gradient(135deg, ${style.shirt}1f 0%, ${secondary}12 58%, rgba(255, 254, 250, 0.96) 100%)`,
+    borderColor: `${style.border}52`,
+    boxShadow: `inset 0 4px 0 ${style.border}, 0 1px 2px rgba(16, 36, 47, 0.08)`,
   }
 }
 
@@ -1325,8 +1328,11 @@ function MatchSummarySection({
   if (!isLoading && (error || !source)) return null
 
   return (
-    <div id={shareId} className={`hf-card w-full overflow-hidden rounded-2xl ${className}`}>
-      <div className="hf-section-head px-2 py-3 md:px-4">
+    <div
+      id={shareId}
+      className={`hf-card hf-match-detail-panel hf-match-detail-summary w-full overflow-hidden rounded-2xl ${className}`}
+    >
+      <div className="hf-section-head hf-match-detail-panel-heading px-2 py-3 md:px-4">
         <div className="flex items-center justify-between gap-3">
           <span aria-hidden="true" className="h-10 w-10" />
           <h2 className="text-base font-bold text-white">{t(locale, 'match.summaryTitle')}</h2>
@@ -1392,8 +1398,12 @@ function MatchHistorySection({
     preferCountryTeamNames ? translateCountryName(name, locale) || name : name
 
   return (
-    <div id={shareId} data-match-detail="history-card" className="hf-card w-full overflow-hidden rounded-2xl">
-      <div className="hf-section-head hf-match-history-head px-2 py-3 md:px-4">
+    <div
+      id={shareId}
+      data-match-detail="history-card"
+      className="hf-card hf-match-detail-panel hf-match-detail-history w-full overflow-hidden rounded-2xl"
+    >
+      <div className="hf-section-head hf-match-history-head hf-match-detail-panel-heading px-2 py-3 md:px-4">
         <div className="flex items-center justify-between gap-3">
           <span aria-hidden="true" className="h-10 w-10" />
           <div className="min-w-0 text-center">
@@ -1416,20 +1426,20 @@ function MatchHistorySection({
 
       {latestMatches.length ? (
         <div className="p-2 md:p-3">
-          <div className="grid grid-cols-3 gap-2">
-            <div className="rounded-xl border border-white/6 bg-[#13181d] px-2 py-2 text-center">
+          <div className="hf-match-detail-history-summary grid grid-cols-3 gap-2">
+            <div className="rounded-xl border px-2 py-2 text-center">
               <p className="text-lg font-black text-white">{history.summary.homePerspectiveWins}</p>
               <p className="truncate text-[10px] font-bold uppercase tracking-[0.08em] text-[#8d98a7]">
                 {homeTeamName}
               </p>
             </div>
-            <div className="rounded-xl border border-white/6 bg-[#13181d] px-2 py-2 text-center">
+            <div className="rounded-xl border px-2 py-2 text-center">
               <p className="text-lg font-black text-white">{history.summary.draws}</p>
               <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#8d98a7]">
                 {t(locale, 'match.draws')}
               </p>
             </div>
-            <div className="rounded-xl border border-white/6 bg-[#13181d] px-2 py-2 text-center">
+            <div className="rounded-xl border px-2 py-2 text-center">
               <p className="text-lg font-black text-white">{history.summary.awayPerspectiveWins}</p>
               <p className="truncate text-[10px] font-bold uppercase tracking-[0.08em] text-[#8d98a7]">
                 {awayTeamName}
@@ -1437,11 +1447,11 @@ function MatchHistorySection({
             </div>
           </div>
 
-          <div className="mt-2 rounded-xl border border-white/6 bg-[#13181d] px-3 py-2 text-center text-xs font-semibold text-[#c8d0da]">
+          <div className="hf-match-detail-history-total mt-2 rounded-xl border px-3 py-2 text-center text-xs font-semibold">
             {history.summary.total} {t(locale, 'home.matchPlural')} · {t(locale, 'match.goals')} {homeTeamName}: {history.summary.homePerspectiveGoals} · {awayTeamName}: {history.summary.awayPerspectiveGoals}
           </div>
 
-          <div className="mt-2 divide-y divide-white/7 overflow-hidden rounded-xl border border-white/6 bg-[#10151a]">
+          <div className="hf-match-detail-history-list mt-2 divide-y overflow-hidden rounded-xl border">
             {latestMatches.map((match) => {
               const historyHomeName = formatHistoryTeamName(match.homeTeam.name)
               const historyAwayName = formatHistoryTeamName(match.awayTeam.name)
@@ -1449,7 +1459,7 @@ function MatchHistorySection({
               return (
                 <article
                   key={`${match.fixtureExternalId ?? match.date}-${match.homeTeam.name}-${match.awayTeam.name}`}
-                  className="px-2 py-2"
+                  className="hf-match-detail-history-row px-2 py-2"
                 >
                   <div className="mb-1 flex items-center justify-between gap-2 text-[10px] font-semibold text-[#8d98a7]">
                     <span className="truncate">{formatMatchDateTimeArgentina(match.date)}</span>
@@ -1467,7 +1477,7 @@ function MatchHistorySection({
                         unoptimized
                       />
                     </div>
-                    <span className="min-w-[58px] rounded-lg border border-white/8 bg-black/30 px-2 py-1 text-center text-xs font-black text-white">
+                    <span className="hf-match-detail-history-score min-w-[58px] rounded-lg border px-2 py-1 text-center text-xs font-black">
                       {match.scoreLabel}
                     </span>
                     <div className="flex min-w-0 items-center gap-1.5">
@@ -1489,7 +1499,7 @@ function MatchHistorySection({
 
           <Link
             href={historyHref}
-            className="mt-3 inline-flex min-h-10 w-full items-center justify-center rounded-xl border border-[#25553d] bg-[#163828] px-3 py-2 text-sm font-black text-[#7ff0b2] transition hover:border-[#7ff0b2]/60 hover:bg-[#1b4a32]"
+            className="hf-match-detail-history-action mt-3 inline-flex min-h-10 w-full items-center justify-center rounded-xl border px-3 py-2 text-sm font-black transition"
             data-share-exclude="true"
             data-share-ignore="true"
           >
@@ -2197,14 +2207,16 @@ export default async function PartidoDetallePage({ params }: PageProps) {
     const message = t(locale, 'home.dataError')
 
     return (
-      <div className="min-h-screen text-white">
-        <div className="mx-0 w-full max-w-none px-0 py-3 md:mx-auto md:max-w-6xl md:px-4 md:py-10">
-          <div className="w-full rounded-2xl border border-[#5a2a2a] bg-[#3b1919] p-4 md:p-6">
-            <h1 className="text-2xl font-black">{t(locale, 'match.detailUnavailable')}</h1>
-            <p className="mt-2 text-[#ffd5d5]">{message}</p>
+      <main className="hf-match-detail-page min-h-screen">
+        <div className="hf-match-detail-inner">
+          <div className="hf-match-detail-state is-error" role="alert">
+            <span className="hf-type-overline">Partido no disponible</span>
+            <h1>{t(locale, 'match.detailUnavailable')}</h1>
+            <p>{message}</p>
+            <Link href="/">Volver a la agenda</Link>
           </div>
         </div>
-      </div>
+      </main>
     )
   }
 
@@ -2212,14 +2224,16 @@ export default async function PartidoDetallePage({ params }: PageProps) {
 
   if (!fixture) {
     return (
-      <div className="min-h-screen text-white">
-        <div className="mx-0 w-full max-w-none px-0 py-3 md:mx-auto md:max-w-6xl md:px-4 md:py-10">
-          <div className="w-full rounded-2xl border border-white/8 bg-[#111418] p-4 md:p-6">
-            <h1 className="text-2xl font-black">Partido no encontrado</h1>
-            <p className="mt-2 text-[#8d98a7]">No existe información para este partido.</p>
+      <main className="hf-match-detail-page min-h-screen">
+        <div className="hf-match-detail-inner">
+          <div className="hf-match-detail-state">
+            <span className="hf-type-overline">Sin datos</span>
+            <h1>Partido no encontrado</h1>
+            <p>No existe información para este partido.</p>
+            <Link href="/">Volver a la agenda</Link>
           </div>
         </div>
-      </div>
+      </main>
     )
   }
 
@@ -2349,6 +2363,45 @@ export default async function PartidoDetallePage({ params }: PageProps) {
   const matchDetailLiveSyncUrl = shouldRunMatchDetailLiveSync
     ? `/api/match-detail/live-sync?fixture=${fixture.fixture.id}`
     : null
+  const matchDetailNavigationItems = [
+    {
+      href: `#${shareCardId}`,
+      label: 'Partido',
+      detail: headerStatusLabel,
+    },
+    ...(matchIsFinished && summarySource
+      ? [
+          {
+            href: `#${summaryShareId}`,
+            label: 'Resumen',
+            detail: 'Video',
+          },
+        ]
+      : []),
+    {
+      href: `#${timelineShareId}`,
+      label: 'Cronología',
+      detail: `${timelineEvents.length} eventos`,
+    },
+    {
+      href: `#${formationShareId}`,
+      label: 'Formaciones',
+      detail:
+        confirmedLineupPlayers > 0
+          ? `${confirmedLineupPlayers} jugadores`
+          : lineupStatusLabel,
+    },
+    {
+      href: `#${statsShareId}`,
+      label: 'Estadísticas',
+      detail: `${statPairs.length} métricas`,
+    },
+    {
+      href: `#${historyShareId}`,
+      label: 'Historial',
+      detail: `${data.headToHead.summary.total} partidos`,
+    },
+  ]
 
   if (process.env.NODE_ENV === 'development') {
     console.info('[match-detail-render]', {
@@ -2366,9 +2419,12 @@ export default async function PartidoDetallePage({ params }: PageProps) {
   }
 
   return (
-    <div className="min-h-screen text-white">
-      <div className="w-full max-w-none px-0 py-3 lg:mx-auto lg:max-w-7xl lg:px-5 lg:py-6">
-        <header id={shareCardId} className="hf-hero relative mb-4 w-full overflow-hidden rounded-3xl">
+    <main className="hf-match-detail-page min-h-screen">
+      <div className="hf-match-detail-inner">
+        <header
+          id={shareCardId}
+          className="hf-match-detail-hero relative w-full overflow-hidden"
+        >
           <div data-share-exclude="true">
             <AutoRefresh
               intervalMs={matchDetailRefreshIntervalMs}
@@ -2380,8 +2436,29 @@ export default async function PartidoDetallePage({ params }: PageProps) {
             />
           </div>
 
-          <div className="relative z-10 border-b border-white/6 px-3 py-4 pr-16 md:px-5 md:py-5 md:pr-20">
-            <div className="absolute right-3 top-3 z-20 md:right-5 md:top-5" data-share-exclude="true">
+          <div className="hf-match-detail-competition relative z-10 px-3 py-4 pr-24 md:px-5 md:py-5 md:pr-28">
+            <div
+              className="hf-match-detail-actions absolute right-3 top-3 z-20 md:right-5 md:top-5"
+              data-share-exclude="true"
+            >
+              {!matchIsFinished ? (
+                <MatchReminderButton
+                  compact
+                  reminder={{
+                    matchId: String(fixture.fixture.id),
+                    href: matchDetailHref,
+                    home: homeTeamDisplayName,
+                    away: awayTeamDisplayName,
+                    homeLogo: homeTeam.logo_url ?? homeTeam.logo,
+                    awayLogo: awayTeam.logo_url ?? awayTeam.logo,
+                    date: fixture.fixture.date,
+                    displayTime: formatMatchTime(fixture.fixture.date),
+                    status: headerStatusLabel,
+                    tvLabel: broadcastLabel || t(locale, 'common.notAvailable'),
+                    tvLogoUrl: primaryBroadcastLogo,
+                  }}
+                />
+              ) : null}
               <ShareCardButton
                 targetId={shareCardId}
                 fileName={`hay-fulbo-${fixture.fixture.id}.png`}
@@ -2392,25 +2469,37 @@ export default async function PartidoDetallePage({ params }: PageProps) {
             </div>
 
             <div className="min-w-0">
+              <p className="hf-type-overline">
+                {fixture.league.round || 'Competencia'}
+              </p>
+              <h1 className="hf-match-detail-title">
+                {homeTeamDisplayName} vs {awayTeamDisplayName}
+              </h1>
+              <div className="hf-match-detail-context">
                 {tournamentHref ? (
                   <Link
                     href={tournamentHref}
-                    className="inline-flex max-w-full text-xl font-black leading-tight text-white underline-offset-4 drop-shadow-[0_2px_12px_rgba(0,0,0,0.45)] transition hover:text-[#7ff0b2] hover:underline md:text-3xl"
+                    className="hf-match-detail-tournament"
                   >
-                    <span className="truncate">{tournamentName}</span>
+                    {tournamentName}
                   </Link>
                 ) : (
-                  <h1 className="text-xl font-black leading-tight text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.45)] md:text-3xl">
+                  <span className="hf-match-detail-tournament">
                     {tournamentName}
-                  </h1>
+                  </span>
                 )}
-                <p className="mt-1.5 text-sm font-bold leading-tight text-white/90 md:text-base">
+                <span aria-hidden="true">·</span>
+                <time
+                  className="hf-match-detail-kickoff"
+                  dateTime={fixture.fixture.date}
+                >
                   {formatHeaderDateTime(fixture.fixture.date, locale)}
-                </p>
+                </time>
+              </div>
             </div>
           </div>
 
-          <div className="relative z-10 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-2 py-2.5 md:gap-4 md:px-4 md:py-5">
+          <div className="hf-match-detail-scoreboard relative z-10 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-2 py-3 md:gap-4 md:px-4 md:py-5">
             <MatchTeamCard
               id={homeTeam.id}
               logo={homeTeam.logo_url ?? homeTeam.logo}
@@ -2420,10 +2509,10 @@ export default async function PartidoDetallePage({ params }: PageProps) {
               side="home"
             />
 
-            <div className="flex min-w-[76px] flex-col items-center justify-center text-center md:min-w-[150px] md:self-start md:pt-1">
+            <div className="hf-match-detail-score-center flex min-w-[76px] flex-col items-center justify-center text-center md:min-w-[150px] md:self-start md:pt-1">
               <div
-                className={`max-w-full truncate text-xs font-black uppercase tracking-[0.08em] md:rounded-md md:border md:border-[#25553d] md:bg-[#163828] md:px-3 md:py-1 md:text-[11px] md:tracking-[0.16em] ${
-                  headerStatusIsLive ? 'text-[#7ff0b2]' : 'text-[#dce5ef]'
+                className={`hf-match-detail-status max-w-full truncate text-xs font-black uppercase tracking-[0.08em] md:rounded-md md:border md:px-3 md:py-1 md:text-[11px] md:tracking-[0.16em] ${
+                  headerStatusIsLive ? 'is-live' : ''
                 }`}
               >
                 <LiveMatchClockLabel
@@ -2435,7 +2524,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                   renderedAt={renderedAt}
                 />
               </div>
-              <div className="mt-1 whitespace-nowrap text-3xl font-black leading-none tracking-normal text-white md:mt-2 md:text-6xl">
+              <div className="hf-match-detail-score mt-1 whitespace-nowrap text-3xl font-black leading-none tracking-normal md:mt-2 md:text-6xl">
                 {formatMatchScoreWithPenalties({
                   goalsHome: goals.home,
                   goalsAway: goals.away,
@@ -2455,16 +2544,16 @@ export default async function PartidoDetallePage({ params }: PageProps) {
             />
           </div>
 
-          <div className="relative z-10 grid grid-cols-3 gap-1.5 border-t border-white/6 bg-black/20 px-2 py-2 text-center text-[#c8d0da] md:gap-2 md:px-4">
-            <div className="min-w-0 rounded-lg border border-white/6 bg-white/[0.025] px-1.5 py-2">
+          <div className="hf-match-detail-facts relative z-10 grid grid-cols-3 gap-1.5 px-2 py-2 text-center md:gap-2 md:px-4">
+            <div className="min-w-0 rounded-lg border px-1.5 py-2">
               <span className="block truncate text-[clamp(0.58rem,2vw,0.68rem)] font-black uppercase tracking-[0.08em] text-[#8d98a7]">
                 {t(locale, 'match.stadium')}
               </span>
-              <strong className="mt-1 block min-w-0 overflow-hidden text-[clamp(0.72rem,2.7vw,0.88rem)] font-semibold leading-tight text-white [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] [overflow-wrap:anywhere]">
+              <strong className="mt-1 block min-w-0 overflow-hidden text-[clamp(0.72rem,2.7vw,0.88rem)] font-semibold leading-tight [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] [overflow-wrap:anywhere]">
                 {formatVenue(fixture.fixture.venue, locale)}
               </strong>
             </div>
-            <div className="min-w-0 rounded-lg border border-white/6 bg-white/[0.025] px-1.5 py-2">
+            <div className="min-w-0 rounded-lg border px-1.5 py-2">
               <span className="block truncate text-[clamp(0.58rem,2vw,0.68rem)] font-black uppercase tracking-[0.08em] text-[#8d98a7]">
                 TV
               </span>
@@ -2481,21 +2570,23 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                     unoptimized
                   />
                 ) : null}
-                <strong className="block min-w-0 overflow-hidden text-[clamp(0.72rem,2.7vw,0.88rem)] font-semibold leading-tight text-white [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] [overflow-wrap:anywhere]">
+                <strong className="block min-w-0 overflow-hidden text-[clamp(0.72rem,2.7vw,0.88rem)] font-semibold leading-tight [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] [overflow-wrap:anywhere]">
                   {broadcastLabel || t(locale, 'common.notAvailable')}
                 </strong>
               </div>
             </div>
-            <div className="min-w-0 rounded-lg border border-white/6 bg-white/[0.025] px-1.5 py-2">
+            <div className="min-w-0 rounded-lg border px-1.5 py-2">
               <span className="block truncate text-[clamp(0.58rem,2vw,0.68rem)] font-black uppercase tracking-[0.08em] text-[#8d98a7]">
                 {t(locale, 'match.referee')}
               </span>
-              <strong className="mt-1 block min-w-0 overflow-hidden text-[clamp(0.72rem,2.7vw,0.88rem)] font-semibold leading-tight text-white [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] [overflow-wrap:anywhere]">
+              <strong className="mt-1 block min-w-0 overflow-hidden text-[clamp(0.72rem,2.7vw,0.88rem)] font-semibold leading-tight [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] [overflow-wrap:anywhere]">
                 {formatReferee(fixture.fixture.referee, locale)}
               </strong>
             </div>
           </div>
         </header>
+
+        <MatchDetailNavigation items={matchDetailNavigationItems} />
 
         {matchIsFinished && summarySource ? (
           <MatchSummarySection
@@ -2523,10 +2614,13 @@ export default async function PartidoDetallePage({ params }: PageProps) {
           </details>
         ) : null}
 
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_320px]">
-          <section className="space-y-4">
-            <div id={timelineShareId} className="hf-card w-full overflow-hidden rounded-2xl">
-              <div className="hf-section-head flex items-center justify-between gap-3 px-2 py-3 md:px-4">
+        <div className="hf-match-detail-layout grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_320px]">
+          <section className="hf-match-detail-primary space-y-4">
+            <div
+              id={timelineShareId}
+              className="hf-card hf-match-detail-panel hf-match-detail-timeline w-full overflow-hidden rounded-2xl"
+            >
+              <div className="hf-section-head hf-match-detail-panel-heading flex items-center justify-between gap-3 px-2 py-3 md:px-4">
                 <span aria-hidden="true" className="h-10 w-10" />
                 <h2 className="text-base font-bold text-white">Minuto a minuto</h2>
                 <ShareCardButton
@@ -2540,7 +2634,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
 
               {events.length || hasPenaltyShootout ? (
                 <div>
-                  <div className="grid grid-cols-[1fr_56px_1fr] border-b border-white/6 bg-[#12171c] px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8d98a7] md:grid-cols-[1fr_72px_1fr] md:px-3">
+                  <div className="hf-match-detail-timeline-labels grid grid-cols-[1fr_56px_1fr] border-b px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] md:grid-cols-[1fr_72px_1fr] md:px-3">
                     <div>{homeTeamDisplayName}</div>
                     <div className="text-center">Min</div>
                     <div className="text-right">{awayTeamDisplayName}</div>
@@ -2572,7 +2666,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                       <div
                         data-match-detail="timeline-event"
                         key={`${event.time?.elapsed || 'x'}-${event.time?.extra || 0}-${index}`}
-                        className="grid grid-cols-[1fr_56px_1fr] items-center border-b border-white/6 px-2 py-2 last:border-b-0 md:grid-cols-[1fr_72px_1fr] md:px-3"
+                        className="hf-match-detail-timeline-row grid grid-cols-[1fr_56px_1fr] items-center border-b px-2 py-2 last:border-b-0 md:grid-cols-[1fr_72px_1fr] md:px-3"
                         >
                         <div className="min-w-0 pr-3">
                           {renderOnHomeSide ? (
@@ -2633,8 +2727,11 @@ export default async function PartidoDetallePage({ params }: PageProps) {
             </div>
 
             {confirmedLineupPlayers > 0 ? (
-              <div id={formationShareId} className="hf-card w-full overflow-hidden rounded-2xl">
-                <div className="hf-section-head flex items-center justify-between gap-3 px-2 py-3 md:px-4">
+              <div
+                id={formationShareId}
+                className="hf-card hf-match-detail-panel hf-match-detail-formations w-full overflow-hidden rounded-2xl"
+              >
+                <div className="hf-section-head hf-match-detail-panel-heading flex items-center justify-between gap-3 px-2 py-3 md:px-4">
                   <h2 className="text-base font-bold text-white">Alineaciones</h2>
                   <div className="flex shrink-0 items-center gap-2">
                     <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-black uppercase tracking-[0.03em] text-[#b8f7d2]">
@@ -2711,12 +2808,33 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                   />
                 </div>
               </div>
-            ) : null}
+            ) : (
+              <div
+                id={formationShareId}
+                className="hf-match-detail-panel hf-match-detail-formations w-full overflow-hidden rounded-2xl"
+              >
+                <div className="hf-match-detail-panel-heading px-3 py-4 md:px-4">
+                  <h2>Alineaciones</h2>
+                </div>
+                <div className="hf-match-detail-empty">
+                  <span className="hf-type-overline">{lineupStatusLabel}</span>
+                  <p>
+                    {matchIsFinished
+                      ? 'No se publicó una formación confirmada para este partido.'
+                      : 'La formación aparecerá cuando los equipos la confirmen.'}
+                  </p>
+                </div>
+              </div>
+            )}
           </section>
 
-          <aside className="space-y-4">
-            <div id={statsShareId} data-match-detail="stats-card" className="w-full overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
-              <div className="border-b border-white/6 bg-[#13181d] px-2 py-3 md:px-4">
+          <aside className="hf-match-detail-aside space-y-4">
+            <div
+              id={statsShareId}
+              data-match-detail="stats-card"
+              className="hf-match-detail-panel hf-match-detail-stats w-full overflow-hidden rounded-2xl border"
+            >
+              <div className="hf-match-detail-panel-heading border-b px-2 py-3 md:px-4">
                 <div className="flex items-center justify-between gap-3">
                   <span aria-hidden="true" className="h-10 w-10" />
                   <h2 className="text-lg font-bold tracking-[0.01em] text-white">Estadísticas</h2>
@@ -2742,7 +2860,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                       <div
                         data-match-detail="statistics-row"
                         key={`${stat.type}-${index}`}
-                        className="rounded-xl border border-white/6 bg-[#13181d] px-2.5 py-2"
+                        className="hf-match-detail-stat-row rounded-xl border px-2.5 py-2"
                       >
                         <div className="mb-1.5 flex items-center justify-between gap-2">
                           <span className="text-sm font-extrabold text-white">
@@ -2756,7 +2874,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                           </span>
                         </div>
 
-                        <div className="relative h-2 overflow-hidden rounded-full bg-[#1b2128]">
+                        <div className="hf-match-detail-stat-track relative h-2 overflow-hidden rounded-full">
                           <div
                             className="absolute left-0 top-0 h-full bg-[linear-gradient(90deg,#2fbf71_0%,#7ff0b2_100%)]"
                             style={{ width: `${splitPoint}%` }}
@@ -2823,6 +2941,6 @@ export default async function PartidoDetallePage({ params }: PageProps) {
           </aside>
         </div>
       </div>
-    </div>
+    </main>
   )
 }

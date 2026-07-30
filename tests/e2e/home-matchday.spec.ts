@@ -1,39 +1,8 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test } from '@playwright/test'
+
+import { prepareReadOnlyPage } from './read-only-page'
 
 const FIXTURE_DATE = '2026-07-29'
-const EXTERNAL_CONSOLE_ERRORS = [
-  'googlesyndication',
-  'googleads',
-  '_vercel/insights',
-  'ERR_BLOCKED_BY_CLIENT',
-]
-
-async function prepareReadOnlyPage(page: Page) {
-  await page.route('**/api/home/live-sync**', async (route) => {
-    await route.fulfill({
-      status: 204,
-      body: '',
-    })
-  })
-
-  const internalErrors: string[] = []
-  page.on('console', (message) => {
-    const source = `${message.text()} ${message.location().url}`
-    if (
-      message.type() === 'error' &&
-      !EXTERNAL_CONSOLE_ERRORS.some((allowed) =>
-        source.includes(allowed)
-      )
-    ) {
-      internalErrors.push(source.trim())
-    }
-  })
-  page.on('pageerror', (error) => {
-    internalErrors.push(error.message)
-  })
-
-  return internalErrors
-}
 
 test.describe('Home Matchday', () => {
   test('no desborda en la matriz responsive completa', async ({ page }) => {
