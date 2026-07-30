@@ -9,7 +9,10 @@ import {
 } from '@/content/editorial'
 import EditorialArticleCard from '@/frontend/components/EditorialArticleCard'
 import { getPublicPageIndexability } from '@/shared/content-quality'
-import { formatEditorialCategory } from '@/shared/editorial-format'
+import {
+  formatEditorialCategory,
+  formatEditorialDate,
+} from '@/shared/editorial-format'
 import { buildSeoMetadata } from '@/shared/seo'
 
 type NoticiasPageProps = {
@@ -58,6 +61,7 @@ export default async function NoticiasPage({ searchParams }: NoticiasPageProps) 
   const articles = selectedCategory
     ? getNewsArticles(selectedCategory)
     : allArticles
+  const [leadArticle, ...secondaryArticles] = articles
   const editorialWordCount = allArticles.reduce(
     (sum, article) => sum + getEditorialWordCount(article),
     0
@@ -72,83 +76,130 @@ export default async function NoticiasPage({ searchParams }: NoticiasPageProps) 
   })
 
   return (
-    <main className="min-w-0 space-y-5 text-white">
-      <header className="hf-card hf-section-head rounded-2xl px-4 py-5 sm:px-5">
-        <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7ff0b2]">
-          Editorial
-        </p>
-        <h1 className="mt-2 text-2xl font-black leading-tight sm:text-3xl">
-          Noticias
-        </h1>
-        <p className="mt-3 max-w-3xl text-sm leading-6 text-[#c8d3cf]">
-          Guías, análisis y actualidad del fútbol argentino e internacional con
-          contenido propio de Hay Fulbo.
-        </p>
+    <main className="hf-editorial-page">
+      <header className="hf-editorial-page-hero">
+        <div>
+          <p className="hf-type-overline">La conversación futbolera</p>
+          <h1>Noticias</h1>
+          <p>
+            Contexto, análisis y actualidad para entender qué pasó y qué viene,
+            con autoría y fuentes visibles.
+          </p>
+        </div>
+        <dl>
+          <div>
+            <dt>Notas publicadas</dt>
+            <dd className="hf-type-data">{allArticles.length}</dd>
+          </div>
+          <div>
+            <dt>Secciones</dt>
+            <dd className="hf-type-data">{categories.length}</dd>
+          </div>
+          <div>
+            <dt>Última actualización</dt>
+            <dd>
+              {allArticles[0]
+                ? formatEditorialDate(allArticles[0].updatedAt)
+                : 'Sin publicaciones'}
+            </dd>
+          </div>
+        </dl>
       </header>
 
-      {categories.length ? (
-        <nav
-          aria-label="Filtrar noticias por categoria"
-          className="flex min-w-0 flex-wrap gap-2"
+      <nav
+        aria-label="Filtrar noticias por categoría"
+        className="hf-editorial-filters"
+      >
+        <Link
+          href="/noticias"
+          className={!selectedCategory ? 'is-active' : ''}
+          aria-current={!selectedCategory ? 'page' : undefined}
         >
-          <Link
-            href="/noticias"
-            className={`rounded-xl border px-3 py-2 text-xs font-black uppercase tracking-[0.1em] transition ${
-              selectedCategory
-                ? 'border-white/10 bg-white/[0.035] text-[#c8d3cf] hover:border-[#70ff9d]/25 hover:text-white'
-                : 'border-[#70ff9d]/30 bg-[#70ff9d]/12 text-white'
-            }`}
-            aria-current={!selectedCategory ? 'page' : undefined}
-          >
-            Todas
-          </Link>
-          {categories.map((category) => {
-            const active = selectedCategory === category
+          Todas
+          <span>{allArticles.length}</span>
+        </Link>
+        {categories.map((category) => {
+          const active = selectedCategory === category
+          const categoryCount = allArticles.filter(
+            (article) => article.category === category
+          ).length
 
-            return (
-              <Link
-                key={category}
-                href={`/noticias?categoria=${category}`}
-                className={`rounded-xl border px-3 py-2 text-xs font-black uppercase tracking-[0.1em] transition ${
-                  active
-                    ? 'border-[#70ff9d]/30 bg-[#70ff9d]/12 text-white'
-                    : 'border-white/10 bg-white/[0.035] text-[#c8d3cf] hover:border-[#70ff9d]/25 hover:text-white'
-                }`}
-                aria-current={active ? 'page' : undefined}
-              >
-                {formatEditorialCategory(category)}
-              </Link>
-            )
-          })}
-        </nav>
-      ) : null}
+          return (
+            <Link
+              key={category}
+              href={`/noticias?categoria=${category}`}
+              className={active ? 'is-active' : ''}
+              aria-current={active ? 'page' : undefined}
+            >
+              {formatEditorialCategory(category)}
+              <span>{categoryCount}</span>
+            </Link>
+          )
+        })}
+      </nav>
 
-      {articles.length ? (
+      {leadArticle ? (
         <section
-          aria-label="Articulos disponibles"
-          className="grid gap-3 md:grid-cols-2 xl:grid-cols-3"
+          className="hf-editorial-feed"
+          aria-labelledby="editorial-feed-title"
         >
-          {articles.map((article) => (
-            <EditorialArticleCard
-              key={article.slug}
-              article={{
-                ...article,
-                readingMinutes: getEditorialReadingMinutes(article),
-              }}
-              href={`/noticias/${article.slug}`}
-              actionLabel="Leer artículo"
-            />
-          ))}
+          <div className="hf-editorial-feed-heading">
+            <div>
+              <p className="hf-type-overline">
+                {selectedCategory
+                  ? formatEditorialCategory(selectedCategory)
+                  : 'Últimas publicaciones'}
+              </p>
+              <h2 id="editorial-feed-title">
+                {selectedCategory ? 'En esta sección' : 'Para empezar'}
+              </h2>
+            </div>
+            <span>
+              {articles.length} {articles.length === 1 ? 'nota' : 'notas'}
+            </span>
+          </div>
+          <EditorialArticleCard
+            article={{
+              ...leadArticle,
+              readingMinutes: getEditorialReadingMinutes(leadArticle),
+            }}
+            href={`/noticias/${leadArticle.slug}`}
+            actionLabel="Leer artículo"
+            featured
+          />
+          {secondaryArticles.length ? (
+            <div className="hf-editorial-card-grid">
+              {secondaryArticles.map((article) => (
+                <EditorialArticleCard
+                  key={article.slug}
+                  article={{
+                    ...article,
+                    readingMinutes: getEditorialReadingMinutes(article),
+                  }}
+                  href={`/noticias/${article.slug}`}
+                  actionLabel="Leer artículo"
+                />
+              ))}
+            </div>
+          ) : null}
         </section>
       ) : (
-        <section className="hf-card rounded-2xl p-5 text-sm leading-6 text-[#c8d3cf]">
-          Todavía no hay noticias publicadas.
+        <section className="hf-editorial-empty">
+          <span aria-hidden="true">00</span>
+          <div>
+            <h2>No hay notas en esta sección</h2>
+            <p>
+              No completamos el espacio con contenido ficticio. Probá otra
+              categoría o volvé a todas las noticias.
+            </p>
+            <Link href="/noticias">Ver todas las noticias</Link>
+          </div>
         </section>
       )}
 
       {!indexability.index ? (
-        <p className="text-xs leading-5 text-[#83938d]">
-          Esta seccion se mantiene fuera de indexacion hasta tener contenido
+        <p className="hf-editorial-index-note">
+          Esta sección se mantiene fuera de indexación hasta tener contenido
           editorial suficiente.
         </p>
       ) : null}

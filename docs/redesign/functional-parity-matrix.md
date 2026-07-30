@@ -215,18 +215,18 @@ honestidad, no en inventar datos.
 
 | Módulo | Funcionalidad actual | Ruta | Fuente de datos | Estado nuevo | Validación |
 | --- | --- | --- | --- | --- | --- |
-| Noticias | portada editorial | `/noticias` | contenido local | pendiente | D,I,N,M,T,X,L,E,Ø,A,P,Q,R |
-| Noticias | categorías/listado | `/noticias` | contenido local | pendiente | D,I,N,M,T,X,Ø,A,Q,R |
-| Artículo | título, bajada e imagen | `/noticias/[slug]` | contenido local | pendiente | D,M,T,X,Ø,A,P,Q,R |
-| Artículo | autor, fecha y tiempo de lectura | `/noticias/[slug]` | metadata local | pendiente | D,C,M,T,X,Ø,A,Q,R |
-| Artículo | cuerpo y encabezados | `/noticias/[slug]` | contenido local | pendiente | D,M,T,X,A,Q,R |
-| Artículo | relacionados y compartir | `/noticias/[slug]` | contenido/share | pendiente | D,I,N,M,T,X,E,Ø,A,Q,R |
-| Artículo | SEO y dato estructurado | `/noticias/[slug]` | metadata/SEO | pendiente | D,C,N,Q,R |
-| Noticias | imagen o listado ausente | noticias | fallback/colección vacía | pendiente | Ø,M,T,X,A,Q,R |
-| Mercado | listado y categorías | `/mercado-de-pases` | contenido local | pendiente | D,I,N,M,T,X,L,E,Ø,A,Q,R |
-| Mercado | artículo | `/mercado-de-pases/[slug]` | contenido local | pendiente | D,I,N,M,T,X,L,E,Ø,A,Q,R |
-| Análisis | listado | `/analisis` | Markdown local | pendiente | D,I,N,M,T,X,L,E,Ø,A,Q,R |
-| Análisis | guía/artículo | `/analisis/[slug]` | Markdown local | pendiente | D,I,N,M,T,X,L,E,Ø,A,Q,R |
+| Noticias | portada editorial | `/noticias` | contenido local | validado | Jerarquía editorial nueva, artículo principal y secundarios reales, navegación y 12 anchos comprobados en build de producción local. |
+| Noticias | categorías/listado | `/noticias` | contenido local | validado | Filtros por categoría con conteos reales, estado seleccionado y navegación por teclado comprobados; sin duplicar artículos. |
+| Artículo | título, bajada e imagen | `/noticias/[slug]` | contenido local | validado | Título, bajada e imagen real o reemplazo editorial explícito verificados a 320 y 1920 px. |
+| Artículo | autor, fecha y tiempo de lectura | `/noticias/[slug]` | metadata local | validado | Autor, fecha legible y tiempo calculado renderizados desde metadata real. |
+| Artículo | cuerpo y encabezados | `/noticias/[slug]` | contenido local | validado | Cuerpo, secciones, listas, imágenes intermedias y fuentes preservados con jerarquía semántica. |
+| Artículo | relacionados y compartir | `/noticias/[slug]` | contenido/share | validado | Relacionados reales y diálogo de compartir comprobados con apertura, foco, cierre y enlace copiable. |
+| Artículo | SEO y dato estructurado | `/noticias/[slug]` | metadata/SEO | validado | Metadata existente preservada y `NewsArticle` JSON-LD verificado en el HTML renderizado. |
+| Noticias | imagen o listado ausente | noticias | fallback/colección vacía | implementado | Reemplazo sin imagen validado sin solicitudes rotas; el vacío total está implementado pero la colección real actual no permite forzarlo en E2E sin mock. |
+| Mercado | listado y categorías | `/mercado-de-pases` | contenido local | validado | Cero movimientos reales se presenta como vacío honesto; filtros por tipo/estado, metodología y 12 anchos validados sin contenido ficticio. |
+| Mercado | artículo | `/mercado-de-pases/[slug]` | contenido local | implementado | Detalle tipado listo para un movimiento real y guías metodológicas navegadas; bloque positivo sin validar porque `TRANSFER_MARKET_ITEMS` está vacío. |
+| Análisis | listado | `/analisis` | Markdown local | validado | Listado editorial de guías reales, metadata y enlaces comprobados en mobile y desktop. |
+| Análisis | guía/artículo | `/analisis/[slug]` | Markdown local | validado | Parser Markdown, encabezados, listas, fuentes, compartir, relacionados, metadata y `Article` JSON-LD comprobados. |
 
 ## 8. Prode
 
