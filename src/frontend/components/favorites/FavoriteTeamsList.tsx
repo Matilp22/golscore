@@ -30,9 +30,9 @@ export default function FavoriteTeamsList({ onOpenSearch, compact = false }: Fav
   if (!favorites.length) {
     return (
       <div className="hf-favorite-teams-empty">
-        <p>Agrega tus equipos favoritos para verlos aca.</p>
+        <p>Agregá tus equipos favoritos para encontrarlos acá.</p>
         <button type="button" onClick={onOpenSearch}>
-          Elegi tu equipo
+          Elegí tu equipo
         </button>
       </div>
     )
@@ -63,7 +63,7 @@ export default function FavoriteTeamsList({ onOpenSearch, compact = false }: Fav
         </div>
       ))}
       {favorites.length > (compact ? 3 : 6) ? (
-        <span className="hf-favorite-teams-more">+{favorites.length - (compact ? 3 : 6)} mas</span>
+        <span className="hf-favorite-teams-more">+{favorites.length - (compact ? 3 : 6)} más</span>
       ) : null}
     </div>
   )

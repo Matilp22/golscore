@@ -13,7 +13,7 @@ import {
 import AppAudioPreferenceBridge from '@/frontend/components/AppAudioPreferenceBridge'
 import BackButton from '@/frontend/components/BackButton'
 import BrandMark from '@/frontend/components/BrandMark'
-import FavoriteTeamsList from '@/frontend/components/favorites/FavoriteTeamsList'
+import FavoritesCenter from '@/frontend/components/favorites/FavoritesCenter'
 import GlobalSearch from '@/frontend/components/global/GlobalSearch'
 import NotificationBell from '@/frontend/components/global/NotificationBell'
 import { LocaleProvider } from '@/frontend/components/LocaleProvider'
@@ -337,12 +337,10 @@ export default function AppShell({
 
       <MobileSheet
         open={overlay === 'favorites'}
-        title="Tus equipos"
+        title="Tus favoritos"
         onClose={closeOverlay}
       >
-        <FavoriteTeamsList
-          onOpenSearch={() => setOverlay('search')}
-        />
+        <FavoritesCenter onOpenSearch={() => setOverlay('search')} />
       </MobileSheet>
 
       <MobileSheet

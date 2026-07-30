@@ -2,7 +2,8 @@
 
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useState, useTransition } from 'react'
+import { useState, useTransition, type FormEvent } from 'react'
+
 import {
   getSupabaseBrowserClient,
   sendPasswordRecoveryEmail,
@@ -10,7 +11,6 @@ import {
   signUpWithEmail,
   upsertUserProfile,
 } from '@/lib/supabase/supabaseClient'
-import BrandMark from '@/frontend/components/BrandMark'
 import {
   getAuthCallbackBaseUrl,
   getAuthCallbackUrl,
@@ -30,179 +30,194 @@ type AuthFormProps = {
   showModeSwitch?: boolean
 }
 
+type NoticeTone = 'info' | 'error' | 'success'
+
 function getLoginStatusMessage(searchParams: { get: (name: string) => string | null }) {
   if (searchParams.get('passwordUpdated') === '1') {
     return 'Tu contraseña fue actualizada. Ya podés iniciar sesión.'
   }
 
   if (searchParams.get('authError') === 'recovery_link_invalid') {
-    return 'El enlace es inválido o expiró. Solicitá un nuevo enlace para restablecer tu contraseña.'
+    return 'El enlace es inválido o expiró. Solicitá uno nuevo para restablecer tu contraseña.'
   }
 
   return ''
 }
 
-function getSupabaseConfigErrorMessage(error: unknown) {
-  if (error instanceof Error) {
-    return `${error.message} Pegá tus claves públicas en .env.local y reiniciá npm run dev.`
-  }
+function getServiceErrorMessage(error: unknown) {
+  console.warn('[auth] El servicio de acceso no está disponible.', {
+    message: error instanceof Error ? error.message : 'Configuración ausente',
+  })
 
-  return 'Supabase no está configurado. Pegá tus claves públicas en .env.local y reiniciá npm run dev.'
+  return 'El acceso no está disponible en este momento. Intentá nuevamente más tarde.'
 }
 
 export default function AuthForm({
   mode,
   defaultNext = '/prode',
-  loginDescription = 'Entrá con tu email y contraseña para usar el prode.',
+  loginDescription = 'Entrá con tu email y contraseña para usar el Prode.',
   showModeSwitch = true,
 }: AuthFormProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const nextPath = getSafeAuthNextPath(searchParams.get('next'), defaultNext)
   const isLogin = mode === 'login'
+  const initialMessage = isLogin ? getLoginStatusMessage(searchParams) : ''
 
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [message, setMessage] = useState(() =>
-    isLogin ? getLoginStatusMessage(searchParams) : ''
+  const [message, setMessage] = useState(initialMessage)
+  const [noticeTone, setNoticeTone] = useState<NoticeTone>(
+    searchParams.get('authError') ? 'error' : 'info'
   )
+  const [showPassword, setShowPassword] = useState(false)
   const [isPending, startTransition] = useTransition()
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  function showNotice(text: string, tone: NoticeTone = 'error') {
+    setNoticeTone(tone)
+    setMessage(text)
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setMessage('')
 
-    startTransition(async () => {
-      try {
-        getSupabaseBrowserClient()
-      } catch (error) {
-        setMessage(getSupabaseConfigErrorMessage(error))
-        return
-      }
+    const cleanEmail = email.trim()
+    let cleanUsername = ''
 
-      const supabase = getSupabaseBrowserClient()
-      const cleanEmail = email.trim()
+    if (!isLogin) {
+      const validation = validateUsername(username)
 
-      if (isLogin) {
-        const { error } = await signInWithEmail(cleanEmail, password)
-
-        if (error) {
-          setMessage(translateAuthError(error, 'login'))
-          return
-        }
-
-        await supabase.auth.getSession()
-        router.replace(nextPath)
-        router.refresh()
-        return
-      }
-
-      const { username: cleanUsername, error: usernameError } = validateUsername(username)
-
-      if (usernameError) {
-        setMessage(usernameError)
+      if (validation.error) {
+        showNotice(validation.error)
         return
       }
 
       const passwordError = validateAuthPassword(password)
 
       if (passwordError) {
-        setMessage(passwordError)
+        showNotice(passwordError)
         return
       }
 
-      const { data, error } = await signUpWithEmail(cleanEmail, password, {
-        username: cleanUsername,
-        displayName: cleanUsername,
-        emailRedirectTo: getAuthCallbackUrl(nextPath),
-      })
+      cleanUsername = validation.username
+    }
 
-      if (error) {
-        setMessage(translateAuthError(error, 'register'))
-        return
-      }
+    startTransition(async () => {
+      try {
+        const supabase = getSupabaseBrowserClient()
 
-      if (data.session && data.user) {
-        const { error: profileError } = await upsertUserProfile({
-          id: data.user.id,
-          email: data.user.email ?? cleanEmail,
+        if (isLogin) {
+          const { error } = await signInWithEmail(cleanEmail, password)
+
+          if (error) {
+            showNotice(translateAuthError(error, 'login'))
+            return
+          }
+
+          await supabase.auth.getSession()
+          router.replace(nextPath)
+          router.refresh()
+          return
+        }
+
+        const { data, error } = await signUpWithEmail(cleanEmail, password, {
           username: cleanUsername,
           displayName: cleanUsername,
+          emailRedirectTo: getAuthCallbackUrl(nextPath),
         })
 
-        if (profileError) {
-          console.warn('[auth/register] No se pudo asegurar el perfil inicial', {
-            message: profileError.message,
-            code: profileError.code ?? null,
-            details: profileError.details ?? null,
-          })
+        if (error) {
+          showNotice(translateAuthError(error, 'register'))
+          return
         }
-      }
 
-      if (!data.session) {
-        setMessage('Cuenta creada. Revisá tu correo para confirmar el acceso.')
-        return
-      }
+        if (data.session && data.user) {
+          const { error: profileError } = await upsertUserProfile({
+            id: data.user.id,
+            email: data.user.email ?? cleanEmail,
+            username: cleanUsername,
+            displayName: cleanUsername,
+          })
 
-      await supabase.auth.getSession()
-      router.replace(nextPath)
-      router.refresh()
+          if (profileError) {
+            console.warn('[auth/register] No se pudo asegurar el perfil inicial', {
+              message: profileError.message,
+              code: profileError.code ?? null,
+              details: profileError.details ?? null,
+            })
+          }
+        }
+
+        if (!data.session) {
+          showNotice(
+            'Cuenta creada. Revisá tu correo para confirmar el acceso.',
+            'success'
+          )
+          return
+        }
+
+        await supabase.auth.getSession()
+        router.replace(nextPath)
+        router.refresh()
+      } catch (error) {
+        showNotice(getServiceErrorMessage(error))
+      }
     })
   }
 
-  const handlePasswordRecovery = () => {
+  function handlePasswordRecovery() {
     setMessage('')
 
     const cleanEmail = email.trim()
 
     if (!cleanEmail || !cleanEmail.includes('@')) {
-      setMessage('Ingresá tu email para enviarte el enlace de recuperación.')
+      showNotice('Ingresá tu email para enviarte el enlace de recuperación.')
       return
     }
 
     startTransition(async () => {
       try {
         getSupabaseBrowserClient()
+        const { error } = await sendPasswordRecoveryEmail(
+          cleanEmail,
+          getAuthCallbackBaseUrl()
+        )
+
+        if (error) {
+          showNotice(translateAuthError(error, 'passwordRecovery'))
+          return
+        }
+
+        showNotice(
+          'Si existe una cuenta asociada a ese email, vas a recibir un enlace para restablecer la contraseña.',
+          'success'
+        )
       } catch (error) {
-        setMessage(getSupabaseConfigErrorMessage(error))
-        return
+        showNotice(getServiceErrorMessage(error))
       }
-
-      const { error } = await sendPasswordRecoveryEmail(
-        cleanEmail,
-        getAuthCallbackBaseUrl()
-      )
-
-      if (error) {
-        setMessage(translateAuthError(error, 'passwordRecovery'))
-        return
-      }
-
-      setMessage('Si existe una cuenta asociada a ese email, vas a recibir un enlace para restablecer la contraseña.')
     })
   }
 
   return (
-    <div className="hf-card rounded-3xl p-5">
-      <div className="mb-4">
-        <BrandMark />
+    <section className="hf-account-card">
+      <div className="hf-account-card-heading">
+        <span className="hf-type-overline">
+          {isLogin ? 'Bienvenido de vuelta' : 'Tu ficha de hincha'}
+        </span>
+        <h1>{isLogin ? 'Iniciar sesión' : 'Crear una cuenta'}</h1>
+        <p>
+          {isLogin
+            ? loginDescription
+            : 'Elegí cómo querés aparecer en el Prode. Podés cambiar tus datos más adelante.'}
+        </p>
       </div>
-      <h1 className="text-2xl font-black text-white">
-        {isLogin ? 'Iniciar sesión' : 'Registrarse'}
-      </h1>
-      <p className="mt-2 text-sm text-[#8d98a7]">
-        {isLogin
-          ? loginDescription
-          : 'Creá tu cuenta para guardar predicciones y sumar puntos.'}
-      </p>
 
-      <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+      <form onSubmit={handleSubmit} className="hf-account-form" aria-busy={isPending}>
         {!isLogin ? (
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-[#c8d0da]">
-              Nombre de usuario
-            </label>
+          <label className="hf-account-field">
+            <span>Nombre de usuario</span>
             <input
               type="text"
               value={username}
@@ -211,50 +226,55 @@ export default function AuthForm({
               minLength={3}
               maxLength={40}
               autoComplete="username"
-              className="hf-input h-11 w-full rounded-xl px-3 text-sm outline-none transition"
               placeholder="Tu nombre en el Prode"
             />
-          </div>
+            <small>Entre 3 y 40 caracteres.</small>
+          </label>
         ) : null}
 
-        <div>
-          <label className="mb-2 block text-sm font-semibold text-[#c8d0da]">
-            Email
-          </label>
+        <label className="hf-account-field">
+          <span>Email</span>
           <input
             type="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             required
-            className="hf-input h-11 w-full rounded-xl px-3 text-sm outline-none transition"
+            autoComplete="email"
+            inputMode="email"
             placeholder="vos@correo.com"
           />
-        </div>
+        </label>
 
-        <div>
-          <label className="mb-2 block text-sm font-semibold text-[#c8d0da]">
-            Contraseña
-          </label>
-          <input
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-            minLength={AUTH_PASSWORD_MIN_LENGTH}
-            className="hf-input h-11 w-full rounded-xl px-3 text-sm outline-none transition"
-            placeholder="********"
-          />
-        </div>
+        <label className="hf-account-field">
+          <span>Contraseña</span>
+          <span className="hf-account-password">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+              minLength={isLogin ? undefined : AUTH_PASSWORD_MIN_LENGTH}
+              autoComplete={isLogin ? 'current-password' : 'new-password'}
+              placeholder="Tu contraseña"
+            />
+            <button
+              type="button"
+              aria-pressed={showPassword}
+              onClick={() => setShowPassword((current) => !current)}
+            >
+              {showPassword ? 'Ocultar' : 'Mostrar'}
+            </button>
+          </span>
+          {!isLogin ? (
+            <small>Mínimo {AUTH_PASSWORD_MIN_LENGTH} caracteres.</small>
+          ) : null}
+        </label>
 
-        <button
-          type="submit"
-          disabled={isPending}
-          className="hf-button inline-flex h-11 w-full items-center justify-center rounded-xl px-4 text-sm font-black disabled:cursor-wait disabled:opacity-70"
-        >
+        <button type="submit" disabled={isPending} className="hf-account-submit">
           {isPending
             ? isLogin
-              ? 'Ingresando...'
-              : 'Creando cuenta...'
+              ? 'Ingresando…'
+              : 'Creando cuenta…'
             : isLogin
               ? 'Iniciar sesión'
               : 'Crear cuenta'}
@@ -266,20 +286,23 @@ export default function AuthForm({
           type="button"
           onClick={handlePasswordRecovery}
           disabled={isPending}
-          className="mt-3 w-full rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 text-sm font-bold text-[#7ff0b2] transition hover:border-[#70ff9d]/25 hover:bg-[#70ff9d]/10 hover:text-white disabled:cursor-wait disabled:opacity-70"
+          className="hf-account-recovery"
         >
           ¿Olvidaste tu contraseña?
         </button>
       ) : null}
 
       {message ? (
-        <p className="mt-4 rounded-xl border border-white/8 bg-[#0f1317] px-3 py-2 text-sm text-[#dce7f2]">
+        <p
+          className={`hf-account-notice is-${noticeTone}`}
+          role={noticeTone === 'error' ? 'alert' : 'status'}
+        >
           {message}
         </p>
       ) : null}
 
       {showModeSwitch ? (
-        <div className="mt-4 text-sm text-[#8d98a7]">
+        <div className="hf-account-switch">
           {isLogin ? '¿No tenés cuenta?' : '¿Ya tenés cuenta?'}{' '}
           <Link
             href={
@@ -287,12 +310,11 @@ export default function AuthForm({
                 ? `/register?next=${encodeURIComponent(nextPath)}`
                 : `/login?next=${encodeURIComponent(nextPath)}`
             }
-            className="font-semibold text-[#7ff0b2] hover:text-white"
           >
-            {isLogin ? 'Registrate' : 'Iniciá sesión'}
+            {isLogin ? 'Crear cuenta' : 'Iniciar sesión'}
           </Link>
         </div>
       ) : null}
-    </div>
+    </section>
   )
 }

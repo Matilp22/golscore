@@ -1,4 +1,5 @@
 import ResetPasswordForm from '@/frontend/components/auth/ResetPasswordForm'
+import AuthFrame from '@/frontend/components/auth/AuthFrame'
 import { buildNoIndexMetadata } from '@/shared/seo'
 
 export const metadata = buildNoIndexMetadata(
@@ -9,10 +10,8 @@ export const metadata = buildNoIndexMetadata(
 
 export default function ResetPasswordPage() {
   return (
-    <div className="min-h-screen text-white">
-      <div className="mx-0 w-full max-w-none px-0 py-3 md:mx-auto md:max-w-md md:px-4 md:py-8">
-        <ResetPasswordForm />
-      </div>
-    </div>
+    <AuthFrame context="recovery">
+      <ResetPasswordForm />
+    </AuthFrame>
   )
 }

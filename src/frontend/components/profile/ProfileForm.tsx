@@ -1,13 +1,15 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState, useTransition, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
+import { useEffect, useState, useTransition, type FormEvent } from 'react'
+
 import { useAuth } from '@/frontend/hooks/useAuth'
 import { writeAppAudioEnabled } from '@/frontend/hooks/useAppAudioPreference'
-import { getSupabaseBrowserClient } from '@/lib/supabase/supabaseClient'
 import { APP_AUDIO_PREFERENCE } from '@/lib/audio-config'
-import { normalizeUsername } from '@/shared/utils/usernames'
+import { getSupabaseBrowserClient } from '@/lib/supabase/supabaseClient'
+import { validateAuthPassword } from '@/shared/utils/password-policy'
+import { validateUsername } from '@/shared/utils/usernames'
 
 type ProfileError = {
   message: string
@@ -81,18 +83,11 @@ async function loadProfile(userId: string) {
     }
   }
 
-  const base = await profilesQuery()
-    .select('username')
-    .eq('id', userId)
-    .maybeSingle()
+  const base = await profilesQuery().select('username').eq('id', userId).maybeSingle()
 
   return {
     data: base.data
-      ? {
-          ...base.data,
-          show_home_predictions: null,
-          audio_enabled: null,
-        }
+      ? { ...base.data, show_home_predictions: null, audio_enabled: null }
       : null,
     error: base.error,
   }
@@ -127,10 +122,7 @@ async function saveProfile(value: ProfileUpsert) {
   }
 
   const base = await profilesQuery().upsert(
-    {
-      id: value.id,
-      username: value.username,
-    },
+    { id: value.id, username: value.username },
     { onConflict: 'id' }
   )
 
@@ -153,58 +145,49 @@ function SettingToggle({
   onChange: (enabled: boolean) => void
 }) {
   return (
-    <section className="rounded-2xl border border-white/8 bg-black/20 p-3 sm:p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <h2 className="text-sm font-bold text-white">{title}</h2>
-          <p className="mt-1 text-xs leading-relaxed text-[#8d98a7]">
-            {description}
-          </p>
-        </div>
-        <button
-          type="button"
-          aria-pressed={enabled}
-          onClick={() => onChange(!enabled)}
-          className={`h-10 shrink-0 rounded-xl border px-4 text-sm font-black transition ${
-            enabled
-              ? 'border-[#70ff9d]/35 bg-[#70ff9d]/15 text-[#7ff0b2]'
-              : 'border-white/10 bg-black/30 text-[#c8d0da] hover:border-[#70ff9d]/25 hover:text-white'
-          }`}
-        >
-          {enabled ? 'Activado' : 'Desactivado'}
-        </button>
+    <section className="hf-profile-setting">
+      <div>
+        <h2>{title}</h2>
+        <p>{description}</p>
       </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        onClick={() => onChange(!enabled)}
+        className={enabled ? 'is-enabled' : ''}
+      >
+        <span aria-hidden="true" />
+        {enabled ? 'Activado' : 'Desactivado'}
+      </button>
     </section>
   )
 }
 
-function SignedOutProfileState() {
+function SignedOutProfileState({ unavailable = false }: { unavailable?: boolean }) {
   return (
-    <section className="rounded-3xl border border-white/8 bg-[#111418] p-4 shadow-[0_10px_30px_rgba(0,0,0,0.18)] sm:p-6">
-      <div className="rounded-2xl border border-[#70ff9d]/15 bg-[#0b1412]/80 p-4">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#70ff9d]">
-          Mi cuenta
-        </p>
-        <h2 className="mt-2 text-xl font-black text-white">
-          Iniciá sesión para ver tu perfil
+    <section className="hf-profile-signed-out">
+      <div className="hf-profile-signed-out-mark" aria-hidden="true">
+        HF
+      </div>
+      <div>
+        <span className="hf-type-overline">
+          {unavailable ? 'Sesión no disponible' : 'Tu cuenta'}
+        </span>
+        <h2>
+          {unavailable
+            ? 'No pudimos comprobar tu sesión'
+            : 'Iniciá sesión para ver tu perfil'}
         </h2>
-        <p className="mt-2 text-sm leading-relaxed text-[#9aa7b5]">
-          Desde acá podés editar tu usuario, email, contraseña y preferencias de la app.
+        <p>
+          {unavailable
+            ? 'Podés volver a intentar desde el acceso. Tus favoritos locales siguen guardados en este dispositivo.'
+            : 'Editá tus datos y preferencias. Los favoritos locales funcionan incluso sin una cuenta.'}
         </p>
-        <div className="mt-4 grid gap-2 sm:grid-cols-2">
-          <Link
-            href="/login?next=%2Fperfil"
-            className="hf-button inline-flex min-h-11 items-center justify-center rounded-xl px-4 text-sm font-black"
-          >
-            Iniciar sesión
-          </Link>
-          <Link
-            href="/register?next=%2Fperfil"
-            className="hf-button-secondary inline-flex min-h-11 items-center justify-center rounded-xl px-4 text-sm font-bold text-[#c8d0da]"
-          >
-            Crear cuenta
-          </Link>
-        </div>
+      </div>
+      <div className="hf-profile-signed-out-actions">
+        <Link href="/login?next=%2Fperfil">Iniciar sesión</Link>
+        <Link href="/register?next=%2Fperfil">Crear cuenta</Link>
       </div>
     </section>
   )
@@ -212,7 +195,7 @@ function SignedOutProfileState() {
 
 export default function ProfileForm() {
   const router = useRouter()
-  const { user, isLoading } = useAuth()
+  const { user, isLoading, error: authError } = useAuth()
   const [activeTab, setActiveTab] = useState<ProfileTab>('account')
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
@@ -224,48 +207,62 @@ export default function ProfileForm() {
   )
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [loadError, setLoadError] = useState('')
   const [isPending, startTransition] = useTransition()
 
   useEffect(() => {
-    if (isLoading) return
+    if (isLoading || !user) return
 
-    if (!user) {
-      return
-    }
+    let active = true
 
-    loadProfile(user.id)
-      .then(({ data, error }) => {
-        if (error) {
-          console.warn('[profile] No se pudo cargar profiles', {
-            message: error.message,
-            code: error.code ?? null,
-            details: error.details ?? null,
-          })
-          return
-        }
+    queueMicrotask(() => {
+      if (!active) return
 
-        const nextAudioEnabled =
-          data?.audio_enabled ?? APP_AUDIO_PREFERENCE.enabledByDefault
+      setEmail(user.email ?? '')
+      setUsername(
+        typeof user.user_metadata?.username === 'string'
+          ? user.user_metadata.username
+          : ''
+      )
+      setLoadError('')
 
-        setEmail(user.email ?? '')
-        setUsername(
-          data?.username ||
-            (typeof user.user_metadata?.username === 'string'
-              ? user.user_metadata.username
-              : '')
-        )
-        setShowHomePredictions(Boolean(data?.show_home_predictions))
-        setAudioEnabled(nextAudioEnabled)
-        writeAppAudioEnabled(nextAudioEnabled)
-      })
-      .catch((error: unknown) => {
-        console.warn('[profile] Error cargando perfil', {
-          message: error instanceof Error ? error.message : 'Error desconocido',
+      loadProfile(user.id)
+        .then(({ data, error }) => {
+          if (!active) return
+
+          if (error) {
+            console.warn('[profile] No se pudo cargar profiles', {
+              message: error.message,
+              code: error.code ?? null,
+              details: error.details ?? null,
+            })
+            setLoadError('No pudimos cargar todas tus preferencias. Podés editar los datos disponibles.')
+            return
+          }
+
+          const nextAudioEnabled =
+            data?.audio_enabled ?? APP_AUDIO_PREFERENCE.enabledByDefault
+
+          if (data?.username) setUsername(data.username)
+          setShowHomePredictions(Boolean(data?.show_home_predictions))
+          setAudioEnabled(nextAudioEnabled)
+          writeAppAudioEnabled(nextAudioEnabled)
         })
-      })
-  }, [isLoading, router, user])
+        .catch((caught: unknown) => {
+          if (!active) return
+          console.warn('[profile] Error cargando perfil', {
+            message: caught instanceof Error ? caught.message : 'Error desconocido',
+          })
+          setLoadError('No pudimos cargar todas tus preferencias. Podés volver a intentarlo.')
+        })
+    })
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    return () => {
+      active = false
+    }
+  }, [isLoading, user])
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError('')
     setMessage('')
@@ -275,11 +272,11 @@ export default function ProfileForm() {
       return
     }
 
-    const cleanUsername = normalizeUsername(username)
+    const usernameValidation = validateUsername(username)
     const cleanEmail = email.trim()
 
-    if (cleanUsername.length < 3) {
-      setError('El nombre de usuario debe tener al menos 3 caracteres.')
+    if (usernameValidation.error) {
+      setError(usernameValidation.error)
       return
     }
 
@@ -289,220 +286,251 @@ export default function ProfileForm() {
     }
 
     if (password || repeatPassword) {
-      if (password.length < 6) {
-        setError('La nueva contraseña debe tener al menos 6 caracteres.')
-        return
-      }
+      const passwordError = validateAuthPassword(password, repeatPassword)
 
-      if (password !== repeatPassword) {
-        setError('Las contraseñas no coinciden.')
+      if (passwordError) {
+        setError(passwordError)
         return
       }
     }
 
     startTransition(async () => {
-      const supabase = getSupabaseBrowserClient()
-      const notices: string[] = []
-
-      const profileResult = await saveProfile({
-        id: user.id,
-        username: cleanUsername,
-        show_home_predictions: showHomePredictions,
-        audio_enabled: audioEnabled,
-      })
-
-      if (profileResult.error) {
-        setError(profileResult.error.message)
-        return
-      }
-
-      if (profileResult.missingHomePredictionPreference) {
-        notices.push('Falta aplicar la migración del Prode para guardar esa preferencia.')
-      }
-
-      if (profileResult.missingAudioPreference) {
-        notices.push('Falta aplicar la migración de audio para guardar esa preferencia.')
-      } else {
-        writeAppAudioEnabled(audioEnabled)
-      }
-
-      const metadataResult = await supabase.auth.updateUser({
-        data: {
+      try {
+        const supabase = getSupabaseBrowserClient()
+        const notices: string[] = []
+        const cleanUsername = usernameValidation.username
+        const profileResult = await saveProfile({
+          id: user.id,
           username: cleanUsername,
-        },
-      })
-
-      if (metadataResult.error) {
-        console.warn('[profile] No se pudo actualizar metadata de username', {
-          message: metadataResult.error.message,
-          code: metadataResult.error.code ?? null,
+          show_home_predictions: showHomePredictions,
+          audio_enabled: audioEnabled,
         })
-      }
 
-      if (cleanEmail && cleanEmail !== user.email) {
-        const { error: emailError } = await supabase.auth.updateUser({ email: cleanEmail })
-
-        if (emailError) {
-          setError(emailError.message)
+        if (profileResult.error) {
+          setError('No pudimos guardar el perfil. Intentá nuevamente.')
           return
         }
 
-        notices.push('Revisá tu correo para confirmar el cambio de email si Supabase lo solicita.')
-      }
-
-      if (password) {
-        const { error: passwordError } = await supabase.auth.updateUser({ password })
-
-        if (passwordError) {
-          setError(passwordError.message)
-          return
+        if (profileResult.missingHomePredictionPreference) {
+          notices.push('La preferencia del Prode todavía no está disponible en esta cuenta.')
         }
-      }
 
-      setPassword('')
-      setRepeatPassword('')
-      setMessage(
-        notices.length
-          ? `Perfil actualizado. ${notices.join(' ')}`
-          : 'Perfil actualizado correctamente.'
-      )
-      router.refresh()
+        if (profileResult.missingAudioPreference) {
+          notices.push('La preferencia de audio queda guardada solo en este dispositivo.')
+        } else {
+          writeAppAudioEnabled(audioEnabled)
+        }
+
+        const metadataResult = await supabase.auth.updateUser({
+          data: { username: cleanUsername },
+        })
+
+        if (metadataResult.error) {
+          console.warn('[profile] No se pudo actualizar metadata de username', {
+            message: metadataResult.error.message,
+            code: metadataResult.error.code ?? null,
+          })
+        }
+
+        if (cleanEmail && cleanEmail !== user.email) {
+          const { error: emailError } = await supabase.auth.updateUser({
+            email: cleanEmail,
+          })
+
+          if (emailError) {
+            setError('No pudimos actualizar el email.')
+            return
+          }
+
+          notices.push('Revisá tu correo para confirmar el cambio de email.')
+        }
+
+        if (password) {
+          const { error: passwordError } = await supabase.auth.updateUser({ password })
+
+          if (passwordError) {
+            setError('No pudimos actualizar la contraseña.')
+            return
+          }
+        }
+
+        setPassword('')
+        setRepeatPassword('')
+        setMessage(
+          notices.length
+            ? `Perfil actualizado. ${notices.join(' ')}`
+            : 'Perfil actualizado correctamente.'
+        )
+        router.refresh()
+      } catch {
+        setError('No pudimos guardar los cambios. Revisá tu conexión e intentá nuevamente.')
+      }
     })
   }
 
   if (isLoading) {
     return (
-      <div className="rounded-3xl border border-white/8 bg-[#111418] p-5 text-sm text-[#8d98a7]">
-        Cargando perfil...
+      <div className="hf-profile-loading" aria-live="polite" aria-busy="true">
+        <span />
+        <span />
+        <span />
+        <p>Cargando tu perfil…</p>
       </div>
     )
   }
 
-  if (!user) {
-    return <SignedOutProfileState />
-  }
+  if (!user) return <SignedOutProfileState unavailable={Boolean(authError)} />
 
-  const tabs: Array<{ id: ProfileTab; label: string }> = [
-    { id: 'account', label: 'Mi cuenta' },
-    { id: 'settings', label: 'Configuración' },
+  const tabs: Array<{ id: ProfileTab; label: string; description: string }> = [
+    { id: 'account', label: 'Mi cuenta', description: 'Usuario y acceso' },
+    { id: 'settings', label: 'Preferencias', description: 'Cómo se siente la app' },
   ]
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="space-y-4 rounded-3xl border border-white/8 bg-[#111418] p-4 shadow-[0_10px_30px_rgba(0,0,0,0.18)] sm:p-6"
-    >
-      <div
-        role="tablist"
-        aria-label="Secciones del perfil"
-        className="grid grid-cols-2 gap-2 rounded-2xl border border-white/8 bg-black/20 p-1"
-      >
+    <form onSubmit={handleSubmit} className="hf-profile-card" aria-busy={isPending}>
+      <div className="hf-profile-tabs" role="tablist" aria-label="Secciones del perfil">
         {tabs.map((tab) => {
           const selected = activeTab === tab.id
 
           return (
             <button
               key={tab.id}
+              id={`profile-tab-${tab.id}`}
               type="button"
               role="tab"
               aria-selected={selected}
+              aria-controls={`profile-panel-${tab.id}`}
+              tabIndex={selected ? 0 : -1}
               onClick={() => setActiveTab(tab.id)}
-              className={`min-h-10 rounded-xl px-3 text-sm font-black transition ${
-                selected
-                  ? 'bg-[#70ff9d] text-[#07100d] shadow-[0_0_24px_rgba(112,255,157,0.18)]'
-                  : 'text-[#c8d0da] hover:bg-white/[0.04] hover:text-white'
-              }`}
+              onKeyDown={(event) => {
+                if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+                event.preventDefault()
+                const nextTab = tab.id === 'account' ? 'settings' : 'account'
+                setActiveTab(nextTab)
+                window.requestAnimationFrame(() => {
+                  document.getElementById(`profile-tab-${nextTab}`)?.focus()
+                })
+              }}
+              className={selected ? 'is-active' : ''}
             >
-              {tab.label}
+              <strong>{tab.label}</strong>
+              <small>{tab.description}</small>
             </button>
           )
         })}
       </div>
 
+      {loadError ? (
+        <p className="hf-account-notice" role="status">
+          {loadError}
+        </p>
+      ) : null}
+
       {activeTab === 'account' ? (
-        <div role="tabpanel" className="grid gap-4 md:grid-cols-2">
-          <label className="space-y-2">
-            <span className="text-sm font-semibold text-[#c8d0da]">Nombre de usuario</span>
-            <input
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              className="h-11 w-full rounded-xl border border-white/10 bg-white px-3 text-sm font-semibold text-black outline-none transition focus:border-[#7ff0b2]"
-              autoComplete="username"
-            />
-          </label>
+        <section
+          id="profile-panel-account"
+          role="tabpanel"
+          aria-labelledby="profile-tab-account"
+          className="hf-profile-panel"
+        >
+          <div className="hf-profile-section-heading">
+            <span className="hf-type-overline">Identidad</span>
+            <h2>Cómo aparecés en Hay Fulbo</h2>
+            <p>El cambio de email puede requerir una confirmación por correo.</p>
+          </div>
+          <div className="hf-profile-fields">
+            <label className="hf-account-field">
+              <span>Nombre de usuario</span>
+              <input
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                autoComplete="username"
+                required
+                minLength={3}
+                maxLength={40}
+              />
+            </label>
 
-          <label className="space-y-2">
-            <span className="text-sm font-semibold text-[#c8d0da]">Email</span>
-            <input
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              className="h-11 w-full rounded-xl border border-white/10 bg-white px-3 text-sm font-semibold text-black outline-none transition focus:border-[#7ff0b2]"
-              type="email"
-              autoComplete="email"
-            />
-          </label>
+            <label className="hf-account-field">
+              <span>Email</span>
+              <input
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                required
+              />
+            </label>
 
-          <label className="space-y-2">
-            <span className="text-sm font-semibold text-[#c8d0da]">Nueva contraseña</span>
-            <input
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="h-11 w-full rounded-xl border border-white/10 bg-white px-3 text-sm font-semibold text-black outline-none transition focus:border-[#7ff0b2]"
-              type="password"
-              autoComplete="new-password"
-              placeholder="Opcional"
-            />
-          </label>
+            <label className="hf-account-field">
+              <span>Nueva contraseña</span>
+              <input
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                type="password"
+                autoComplete="new-password"
+                placeholder="Dejala vacía para no cambiarla"
+              />
+            </label>
 
-          <label className="space-y-2">
-            <span className="text-sm font-semibold text-[#c8d0da]">Repetir nueva contraseña</span>
-            <input
-              value={repeatPassword}
-              onChange={(event) => setRepeatPassword(event.target.value)}
-              className="h-11 w-full rounded-xl border border-white/10 bg-white px-3 text-sm font-semibold text-black outline-none transition focus:border-[#7ff0b2]"
-              type="password"
-              autoComplete="new-password"
-              placeholder="Opcional"
-            />
-          </label>
-        </div>
+            <label className="hf-account-field">
+              <span>Repetir nueva contraseña</span>
+              <input
+                value={repeatPassword}
+                onChange={(event) => setRepeatPassword(event.target.value)}
+                type="password"
+                autoComplete="new-password"
+                placeholder="Repetí la nueva contraseña"
+              />
+            </label>
+          </div>
+        </section>
       ) : (
-        <div role="tabpanel" className="space-y-3">
-          <SettingToggle
-            title="Pronóstico en resultados"
-            description="Mostrá en el inicio el marcador que guardaste en tu Prode. Solo vos lo ves cuando iniciás sesión."
-            enabled={showHomePredictions}
-            onChange={setShowHomePredictions}
-          />
-
-          <SettingToggle
-            title="Sonidos de la app"
-            description="Activá o desactivá todos los audios de Hay Fulbo, incluido el fondo de la Copa del Mundo."
-            enabled={audioEnabled}
-            onChange={setAudioEnabled}
-          />
-        </div>
+        <section
+          id="profile-panel-settings"
+          role="tabpanel"
+          aria-labelledby="profile-tab-settings"
+          className="hf-profile-panel"
+        >
+          <div className="hf-profile-section-heading">
+            <span className="hf-type-overline">Preferencias</span>
+            <h2>Tu manera de vivir los partidos</h2>
+            <p>Los cambios se aplican al guardar. Las opciones disponibles dependen del perfil actual.</p>
+          </div>
+          <div className="hf-profile-settings">
+            <SettingToggle
+              title="Pronóstico en resultados"
+              description="Mostrá en el inicio el marcador que guardaste en tu Prode. Solo vos lo ves con la sesión iniciada."
+              enabled={showHomePredictions}
+              onChange={setShowHomePredictions}
+            />
+            <SettingToggle
+              title="Sonidos de la app"
+              description="Activá o desactivá los audios de Hay Fulbo, incluido el ambiente de la Copa del Mundo."
+              enabled={audioEnabled}
+              onChange={setAudioEnabled}
+            />
+          </div>
+        </section>
       )}
 
       {error ? (
-        <p className="rounded-xl border border-[#653131] bg-[#35141a] px-3 py-2 text-sm text-[#ffd5d5]">
+        <p className="hf-account-notice is-error" role="alert">
           {error}
         </p>
       ) : null}
 
       {message ? (
-        <p className="rounded-xl border border-[#25553d] bg-[#13251d] px-3 py-2 text-sm text-[#7ff0b2]">
+        <p className="hf-account-notice is-success" role="status">
           {message}
         </p>
       ) : null}
 
-      <div className="flex justify-end">
-        <button
-          type="submit"
-          disabled={isPending}
-          className="h-11 rounded-xl border border-[#25553d] bg-[#163828] px-5 text-sm font-bold text-[#7ff0b2] transition hover:bg-[#1b4330] disabled:cursor-wait disabled:opacity-70"
-        >
-          {isPending ? 'Guardando...' : 'Guardar cambios'}
+      <div className="hf-profile-actions">
+        <small>Tu sesión sigue activa después de guardar.</small>
+        <button type="submit" disabled={isPending} className="hf-account-submit">
+          {isPending ? 'Guardando…' : 'Guardar cambios'}
         </button>
       </div>
     </form>

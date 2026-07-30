@@ -145,14 +145,17 @@ export default function NotificationBell() {
     getDismissedSnapshot,
     getServerSnapshot
   )
-  const panelRef = useRef<HTMLDivElement>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
-  const { data } = useGlobalActionsData(true)
+  const { data, isLoading, error } = useGlobalActionsData(true)
   const { favorites } = useFavoriteTeams()
   const { reminders } = useMatchReminders()
 
   useEffect(() => {
     if (!open) return
+
+    dialogRef.current?.focus()
 
     function handleKeydown(event: KeyboardEvent) {
       if (event.key !== 'Escape') return
@@ -163,8 +166,7 @@ export default function NotificationBell() {
     }
 
     function handlePointerDown(event: PointerEvent) {
-      if (panelRef.current?.contains(event.target as Node)) return
-      if (triggerRef.current?.contains(event.target as Node)) return
+      if (rootRef.current?.contains(event.target as Node)) return
       setOpen(false)
     }
 
@@ -287,7 +289,7 @@ export default function NotificationBell() {
   }
 
   return (
-    <div className="hf-notification-root" ref={panelRef}>
+    <div className="hf-notification-root" ref={rootRef}>
       <button
         ref={triggerRef}
         type="button"
@@ -299,6 +301,7 @@ export default function NotificationBell() {
         }
         aria-expanded={open}
         aria-haspopup="dialog"
+        aria-controls={open ? 'hf-notification-panel' : undefined}
         onClick={() => setOpen((current) => !current)}
       >
         <BellIcon />
@@ -309,9 +312,12 @@ export default function NotificationBell() {
 
       {open ? (
         <div
+          id="hf-notification-panel"
+          ref={dialogRef}
           className="hf-notification-panel"
           role="dialog"
           aria-label="Notificaciones"
+          tabIndex={-1}
         >
           <div className="hf-notification-head">
             <div>
@@ -340,7 +346,19 @@ export default function NotificationBell() {
             </div>
           </div>
 
-          {notifications.length ? (
+          {error && notifications.length ? (
+            <p className="hf-notification-data-note" role="status">
+              Los datos en vivo no se pudieron actualizar. Mostramos tus avisos guardados.
+            </p>
+          ) : null}
+
+          {isLoading && !notifications.length ? (
+            <div className="hf-notification-empty" aria-live="polite">
+              <span className="hf-ui-spinner" aria-hidden="true" />
+              <strong>Buscando novedades</strong>
+              <p>Revisamos partidos, recordatorios y tus favoritos.</p>
+            </div>
+          ) : notifications.length ? (
             <div className="hf-notification-list">
               {notifications.map((notification) => {
                 const unread = !readIds.includes(notification.id)
@@ -360,6 +378,11 @@ export default function NotificationBell() {
                   </Link>
                 )
               })}
+            </div>
+          ) : error ? (
+            <div className="hf-notification-empty is-error" role="status">
+              <strong>No pudimos actualizar las novedades</strong>
+              <p>Volvé a abrir la campana para reintentar.</p>
             </div>
           ) : (
             <div className="hf-notification-empty">

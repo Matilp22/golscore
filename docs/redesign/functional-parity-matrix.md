@@ -72,14 +72,15 @@ honestidad, no en inventar datos.
 | Favoritos | agregar equipo/selección | equipo, home, búsqueda | localStorage actual | validado | D,I,N,M,X,Ø,A,Q,R |
 | Favoritos | quitar favorito | shell, equipo, búsqueda | localStorage actual | validado | I,M,X,Ø,A,Q,R |
 | Favoritos | persistencia después de recarga | todas | localStorage actual | validado | I,M,X,Q,R |
-| Favoritos | listado/acceso dedicado | shell/home | localStorage actual | implementado | D,I,N,M,T,X,Ø,A,Q,R |
+| Favoritos | listado/acceso dedicado | shell/home | localStorage/Supabase actual | validado | Panel único de equipos y competiciones accesible desde mobile y desktop; navegación, vacío y 12 anchos comprobados. |
 | Favoritos | usuario no autenticado | todas | localStorage actual | validado | I,Ø,A,Q,R |
-| Notificaciones | abrir/cerrar campana | todas | estado cliente | pendiente | I,M,T,X,A,Q |
-| Notificaciones | recordatorios | todas | localStorage | pendiente | D,I,N,M,X,Ø,A,Q,R |
-| Notificaciones | equipos favoritos | todas | favoritos + partidos | pendiente | D,C,I,N,M,X,Ø,A,Q,R |
-| Notificaciones | partido/evento en vivo | todas | caché/eventos | pendiente | D,C,I,N,M,X,Ø,A,P,Q,R |
-| Notificaciones | leído y limpiar | todas | localStorage | pendiente | I,M,X,Ø,A,Q,R |
-| Notificaciones | estado sin novedades | todas | agregado cliente | pendiente | Ø,M,X,A,Q,R |
+| Favoritos | competiciones con sesión | shell/navegación | Supabase con fallback local | implementado | Consulta, eliminación optimista, error y fallback preservados; mutación remota positiva no ejecutada para no alterar datos reales. |
+| Notificaciones | abrir/cerrar campana | todas | estado cliente | validado | Diálogo, foco inicial, Escape, retorno de foco y cierre comprobados. |
+| Notificaciones | recordatorios | todas | localStorage | validado | Recordatorio persistido con el mecanismo real, contador, contenido y navegación renderizados. |
+| Notificaciones | equipos favoritos | todas | favoritos + partidos | implementado | Cruce por ID/nombre y estados próximo/en vivo preservado; el dataset de QA no produjo un partido favorito activo. |
+| Notificaciones | partido/evento en vivo | todas | caché/eventos | implementado | Agregación y prioridades conectadas a caché real; falta un evento en vivo positivo durante la ventana de QA. |
+| Notificaciones | leído y limpiar | todas | localStorage | validado | Marcar leídas, contador, persistencia y limpiar comprobados sin infraestructura simulada de push. |
+| Notificaciones | estado sin novedades | todas | agregado cliente | validado | Vacío honesto posterior a limpiar comprobado; error y carga diferenciados implementados. |
 | PWA | prompt de instalación | todas | navegador + localStorage | pendiente | I,M,T,X,Ø,A,Q,R |
 | PWA | opt-in de push | todas | Notification API/VAPID | pendiente | D,I,M,T,X,E,Ø,A,S,Q,R |
 | PWA | alta/baja de suscripción | `/api/pwa/push-subscriptions` | Supabase | pendiente | D,I,E,Ø,S,Q,R |
@@ -271,14 +272,14 @@ honestidad, no en inventar datos.
 
 | Módulo | Funcionalidad actual | Ruta | Fuente de datos | Estado nuevo | Validación |
 | --- | --- | --- | --- | --- | --- |
-| Auth | iniciar sesión | `/login` | Supabase Auth | pendiente | D,I,N,M,T,X,L,E,Ø,A,S,Q,R |
-| Auth | registro | `/register` | Supabase Auth + profile | pendiente | D,I,N,M,T,X,L,E,Ø,A,S,Q,R |
-| Auth | recuperación por correo | `/restablecer-contrasena` | Supabase Auth | pendiente | D,I,N,M,T,X,L,E,Ø,A,S,Q,R |
-| Auth | callback y redirección | `/auth/callback` | Supabase SSR | pendiente | D,I,N,E,S,Q,R |
-| Auth | sesión persistente | todas | cookies Supabase SSR | pendiente | D,I,N,M,X,S,Q,R |
-| Auth | cerrar sesión | shell/perfil | Supabase Auth | pendiente | D,I,N,M,T,X,L,E,A,S,Q,R |
+| Auth | iniciar sesión | `/login` | Supabase Auth | implementado | UI nueva, campos/autocomplete, estados, redirección segura y 12 anchos validados; acceso positivo bloqueado por ausencia de credencial QA aislada. |
+| Auth | registro | `/register` | Supabase Auth + profile | implementado | Validación local anterior a Supabase, estados y responsive validados sin crear usuarios en la base real; alta positiva bloqueada por aislamiento. |
+| Auth | recuperación por correo | `/restablecer-contrasena` | Supabase Auth | implementado | Solicitud, recuperación y cambio mantienen contratos reales; email positivo no enviado para evitar una mutación externa, enlace ausente/expirado validado. |
+| Auth | callback y redirección | `/auth/callback` | Supabase SSR | implementado | Validación de token/code y `next` seguro preservados; caso inválido comprobado, intercambio positivo requiere enlace QA real. |
+| Auth | sesión persistente | todas | cookies Supabase SSR | implementado | Suscripción y lectura SSR/cliente preservadas; sesión positiva no validada por falta de usuario QA aislado. |
+| Auth | cerrar sesión | shell/perfil | Supabase Auth | implementado | Acción real preservada en mobile y desktop; falta sesión QA positiva para ejecutarla sin afectar una cuenta real. |
 | Auth | ruta protegida y sesión vencida | perfil/privadas/admin | proxy + servidor | pendiente | D,I,N,E,Ø,A,S,Q,R |
-| Perfil | datos y preferencias | `/perfil` | profiles/Auth | pendiente | D,I,N,M,T,X,L,E,Ø,A,S,Q,R |
+| Perfil | datos y preferencias | `/perfil` | profiles/Auth | implementado | UI, tabs, validaciones, switches, carga/error y fallback de columnas opcionales implementados; estado sin sesión y 12 anchos validados, guardado positivo bloqueado por credenciales. |
 | Admin | login separado | `/admin/login` | Supabase Auth | pendiente | D,I,N,M,T,X,L,E,Ø,A,S,Q,R |
 | Admin | control `ADMIN_EMAILS` | `/admin/*` | servidor | pendiente | D,I,N,E,Ø,S,Q,R |
 | Admin | dashboard | `/admin` | servicios admin | pendiente | D,I,N,M,T,X,L,E,Ø,A,S,Q,R |

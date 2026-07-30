@@ -1,5 +1,6 @@
 import { Suspense } from 'react'
 import AuthForm from '@/frontend/components/auth/AuthForm'
+import AuthFrame from '@/frontend/components/auth/AuthFrame'
 import { buildNoIndexMetadata } from '@/shared/seo'
 
 export const metadata = buildNoIndexMetadata(
@@ -10,12 +11,10 @@ export const metadata = buildNoIndexMetadata(
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen text-white">
-      <div className="mx-0 w-full max-w-none px-0 py-3 md:mx-auto md:max-w-md md:px-4 md:py-8">
-        <Suspense fallback={null}>
-          <AuthForm mode="login" />
-        </Suspense>
-      </div>
-    </div>
+    <AuthFrame context="login">
+      <Suspense fallback={<div className="hf-account-card-skeleton" aria-label="Cargando acceso" />}>
+        <AuthForm mode="login" />
+      </Suspense>
+    </AuthFrame>
   )
 }

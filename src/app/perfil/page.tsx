@@ -9,16 +9,16 @@ export const metadata = buildNoIndexMetadata(
 
 export default function ProfilePage() {
   return (
-    <main className="min-w-0 space-y-4">
-      <header className="hf-hero overflow-hidden rounded-3xl px-4 py-5 sm:px-6">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#7ff0b2]">
-          Cuenta
-        </p>
-        <h1 className="mt-1 text-2xl font-black text-white md:text-3xl">
-          Mi perfil
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm text-[#8d98a7]">
-          Editá tu usuario, email, contraseña y preferencias de la app sin cerrar tu sesión actual.
+    <main className="hf-profile-page">
+      <header className="hf-profile-hero">
+        <div>
+          <span className="hf-type-overline">Cuenta y preferencias</span>
+          <h1>Tu lugar en Hay Fulbo</h1>
+          <p>Administrá tu identidad, acceso y experiencia sin salir del partido.</p>
+        </div>
+        <p className="hf-profile-hero-note">
+          Los favoritos de equipos quedan en este dispositivo y funcionan aunque
+          cierres sesión.
         </p>
       </header>
 

@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState, useTransition, type FormEvent } from 'react'
+
 import { getSupabaseBrowserClient } from '@/lib/supabase/supabaseClient'
 import { translateAuthError } from '@/shared/utils/auth-errors'
 import {
@@ -18,10 +19,7 @@ type SessionStatus = 'checking' | 'ready' | 'invalid'
 
 function RequestNewLinkButton() {
   return (
-    <Link
-      href="/login"
-      className="hf-button inline-flex min-h-11 items-center justify-center rounded-xl px-4 text-sm font-black"
-    >
+    <Link href="/login" className="hf-account-submit">
       Solicitar un nuevo enlace
     </Link>
   )
@@ -35,6 +33,7 @@ export default function ResetPasswordForm() {
   const [repeatPassword, setRepeatPassword] = useState('')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [showPasswords, setShowPasswords] = useState(false)
   const [isPending, startTransition] = useTransition()
 
   useEffect(() => {
@@ -46,19 +45,16 @@ export default function ResetPasswordForm() {
       supabase.auth
         .getSession()
         .then(({ data }) => {
-          if (!active) return
-          setSessionStatus(data.session ? 'ready' : 'invalid')
+          if (active) setSessionStatus(data.session ? 'ready' : 'invalid')
         })
         .catch(() => {
-          if (!active) return
-          setSessionStatus('invalid')
+          if (active) setSessionStatus('invalid')
         })
 
       const {
         data: { subscription },
       } = supabase.auth.onAuthStateChange((event, session) => {
         if (!active) return
-
         if (event === 'PASSWORD_RECOVERY' || session) {
           setSessionStatus(session ? 'ready' : 'invalid')
         }
@@ -81,7 +77,7 @@ export default function ResetPasswordForm() {
     }
   }, [])
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError('')
     setMessage('')
@@ -99,130 +95,142 @@ export default function ResetPasswordForm() {
     }
 
     startTransition(async () => {
-      const supabase = getSupabaseBrowserClient()
-      const { error } = await supabase.auth.updateUser({
-        password,
-      })
+      try {
+        const supabase = getSupabaseBrowserClient()
+        const { error } = await supabase.auth.updateUser({ password })
 
-      if (error) {
-        setError(translateAuthError(error, 'passwordRecovery'))
-        return
+        if (error) {
+          setError(translateAuthError(error, 'passwordRecovery'))
+          return
+        }
+
+        setPassword('')
+        setRepeatPassword('')
+        setMessage('Contraseña actualizada correctamente.')
+
+        const { error: signOutError } = await supabase.auth.signOut()
+
+        if (signOutError) {
+          console.warn('[auth/reset-password] No se pudo cerrar la sesión de recuperación', {
+            code: signOutError.code ?? null,
+            status: signOutError.status ?? null,
+          })
+        }
+
+        redirectTimer.current = window.setTimeout(() => {
+          router.replace('/login?passwordUpdated=1')
+          router.refresh()
+        }, 700)
+      } catch {
+        setError('No pudimos actualizar la contraseña. Intentá nuevamente.')
       }
-
-      setPassword('')
-      setRepeatPassword('')
-      setMessage('Contraseña actualizada correctamente.')
-
-      const { error: signOutError } = await supabase.auth.signOut()
-
-      if (signOutError) {
-        console.warn('[auth/reset-password] No se pudo cerrar la sesión de recuperación', {
-          code: signOutError.code ?? null,
-          status: signOutError.status ?? null,
-        })
-      }
-
-      redirectTimer.current = window.setTimeout(() => {
-        router.replace('/login?passwordUpdated=1')
-        router.refresh()
-      }, 700)
     })
   }
 
   if (sessionStatus === 'checking') {
     return (
-      <div className="hf-card rounded-3xl p-5 text-sm text-[#8d98a7]">
-        Verificando enlace...
-      </div>
+      <section className="hf-account-card" aria-live="polite" aria-busy="true">
+        <div className="hf-account-card-heading">
+          <span className="hf-type-overline">Verificando acceso</span>
+          <h1>Un momento</h1>
+          <p>Estamos comprobando que el enlace siga vigente.</p>
+        </div>
+        <div className="hf-account-card-skeleton" aria-hidden="true" />
+      </section>
     )
   }
 
   if (sessionStatus === 'invalid') {
     return (
-      <section className="hf-card rounded-3xl p-5">
-        <h1 className="text-2xl font-black text-white">Restablecer contraseña</h1>
-        <p className="mt-3 text-sm leading-relaxed text-[#c8d0da]">
+      <section className="hf-account-card">
+        <div className="hf-account-card-heading">
+          <span className="hf-type-overline">Enlace vencido</span>
+          <h1>Necesitás un enlace nuevo</h1>
+          <p>
+            Por seguridad, los enlaces de recuperación son temporales. Solicitá otro para
+            continuar.
+          </p>
+        </div>
+        <p className="hf-account-notice is-error" role="alert">
           El enlace es inválido o expiró.
         </p>
-        <p className="mt-2 text-sm leading-relaxed text-[#8d98a7]">
-          Solicitá un nuevo enlace. Si necesitás ayuda, escribinos a{' '}
-          <a className="font-bold text-[#7ff0b2]" href={ACCOUNT_HELP_MAILTO}>
-            {ACCOUNT_EMAIL}
-          </a>
-          .
+        <RequestNewLinkButton />
+        <p className="hf-account-help">
+          Si necesitás ayuda, escribinos a{' '}
+          <a href={ACCOUNT_HELP_MAILTO}>{ACCOUNT_EMAIL}</a>.
         </p>
-        <div className="mt-5">
-          <RequestNewLinkButton />
-        </div>
       </section>
     )
   }
 
   return (
-    <form onSubmit={handleSubmit} className="hf-card rounded-3xl p-5">
-      <h1 className="text-2xl font-black text-white">Restablecer contraseña</h1>
-      <p className="mt-2 text-sm leading-relaxed text-[#8d98a7]">
-        Ingresá una nueva contraseña para tu cuenta de Hay Fulbo.
-      </p>
+    <form
+      onSubmit={handleSubmit}
+      className="hf-account-card hf-account-form-card"
+      aria-busy={isPending}
+    >
+      <div className="hf-account-card-heading">
+        <span className="hf-type-overline">Último paso</span>
+        <h1>Elegí una contraseña nueva</h1>
+        <p>Usá una clave que no repitas en otros servicios.</p>
+      </div>
 
-      <div className="mt-5 space-y-4">
-        <label className="block space-y-2">
-          <span className="text-sm font-semibold text-[#c8d0da]">Nueva contraseña</span>
+      <div className="hf-account-form">
+        <label className="hf-account-field">
+          <span>Nueva contraseña</span>
           <input
-            type="password"
+            type={showPasswords ? 'text' : 'password'}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             minLength={AUTH_PASSWORD_MIN_LENGTH}
             autoComplete="new-password"
-            className="hf-input h-11 w-full rounded-xl px-3 text-sm outline-none transition"
             required
           />
+          <small>Mínimo {AUTH_PASSWORD_MIN_LENGTH} caracteres.</small>
         </label>
 
-        <label className="block space-y-2">
-          <span className="text-sm font-semibold text-[#c8d0da]">Repetir contraseña</span>
+        <label className="hf-account-field">
+          <span>Repetir contraseña</span>
           <input
-            type="password"
+            type={showPasswords ? 'text' : 'password'}
             value={repeatPassword}
             onChange={(event) => setRepeatPassword(event.target.value)}
             minLength={AUTH_PASSWORD_MIN_LENGTH}
             autoComplete="new-password"
-            className="hf-input h-11 w-full rounded-xl px-3 text-sm outline-none transition"
             required
           />
         </label>
+
+        <button
+          type="button"
+          className="hf-account-show-password"
+          aria-pressed={showPasswords}
+          onClick={() => setShowPasswords((current) => !current)}
+        >
+          {showPasswords ? 'Ocultar contraseñas' : 'Mostrar contraseñas'}
+        </button>
       </div>
 
       {error ? (
-        <p className="mt-4 rounded-xl border border-[#653131] bg-[#35141a] px-3 py-2 text-sm text-[#ffd5d5]">
+        <p className="hf-account-notice is-error" role="alert">
           {error}
         </p>
       ) : null}
 
       {message ? (
-        <p className="mt-4 rounded-xl border border-[#25553d] bg-[#13251d] px-3 py-2 text-sm text-[#7ff0b2]">
+        <p className="hf-account-notice is-success" role="status">
           {message}
         </p>
       ) : null}
 
-      <button
-        type="submit"
-        disabled={isPending}
-        className="hf-button mt-5 inline-flex h-11 w-full items-center justify-center rounded-xl px-4 text-sm font-black disabled:cursor-wait disabled:opacity-70"
-      >
-        {isPending ? 'Guardando...' : 'Guardar nueva contraseña'}
+      <button type="submit" disabled={isPending} className="hf-account-submit">
+        {isPending ? 'Guardando…' : 'Guardar nueva contraseña'}
       </button>
 
-      <div className="mt-4 flex flex-col gap-2 text-sm text-[#8d98a7]">
-        <Link className="font-bold text-[#7ff0b2] hover:text-white" href="/login">
-          Solicitar un nuevo enlace
-        </Link>
-        <p>
-          ¿Necesitás ayuda?{' '}
-          <a className="font-bold text-[#7ff0b2] hover:text-white" href={ACCOUNT_HELP_MAILTO}>
-            {ACCOUNT_EMAIL}
-          </a>
-        </p>
+      <div className="hf-account-help">
+        <Link href="/login">Solicitar un nuevo enlace</Link>
+        <span aria-hidden="true">·</span>
+        <a href={ACCOUNT_HELP_MAILTO}>Pedir ayuda</a>
       </div>
     </form>
   )
