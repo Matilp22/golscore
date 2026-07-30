@@ -6,8 +6,8 @@ type AdminTableProps = {
 
 export default function AdminTable({ children }: AdminTableProps) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-white/8 bg-black/10">
-      <table className="hf-table min-w-full border-collapse text-left text-sm">
+    <div className="hf-admin-table-wrap">
+      <table className="hf-admin-table">
         {children}
       </table>
     </div>

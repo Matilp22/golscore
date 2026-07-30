@@ -18,9 +18,9 @@ const quickLinks = [
 ] as const
 
 const healthStatusStyles: Record<AdminHealthStatus, string> = {
-  ok: 'border-[#70ff9d]/20 bg-[#0c1c14]/70 text-[#dce7f2]',
-  warning: 'border-amber-300/25 bg-amber-300/10 text-amber-100',
-  error: 'border-[#ff5f62]/30 bg-[#331414]/70 text-[#ffd5d5]',
+  ok: 'is-ok',
+  warning: 'is-warning',
+  error: 'is-error',
 }
 
 export default async function AdminDashboardPage() {
@@ -48,7 +48,7 @@ export default async function AdminDashboardPage() {
           {healthReport.checks.map((check) => (
             <div
               key={check.key}
-              className={`rounded-xl border px-3 py-2 ${healthStatusStyles[check.status]}`}
+              className={`hf-admin-health ${healthStatusStyles[check.status]}`}
             >
               <div className="flex items-start justify-between gap-2">
                 <p className="font-black">{check.label}</p>
@@ -64,31 +64,31 @@ export default async function AdminDashboardPage() {
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <AdminCard title="Estado general">
-          <p className="text-3xl font-black text-white">
+          <p className="hf-admin-metric">
             {stats.status === 'ok' ? 'OK' : 'Revisar'}
           </p>
-          <p className="mt-1 text-sm text-[#9aa7b5]">
+          <p className="hf-admin-meta">
             Lectura server-side con Supabase service role.
           </p>
         </AdminCard>
 
-        <AdminCard title="Ultima sincronizacion">
-          <p className="text-xl font-black text-white">
+        <AdminCard title="Última sincronización">
+          <p className="hf-admin-metric is-date">
             {formatDateTime(stats.lastSyncAt)}
           </p>
-          <p className="mt-1 text-sm text-[#9aa7b5]">
-            Derivado de `football_fixture_cache.updated_at`.
+          <p className="hf-admin-meta">
+            Derivado de football_fixture_cache.updated_at.
           </p>
         </AdminCard>
 
         <AdminCard title={`Fixtures ${stats.today.date}`}>
-          <p className="text-3xl font-black text-white">{stats.today.fixtures}</p>
-          <p className="mt-1 text-sm text-[#9aa7b5]">Cacheados para hoy.</p>
+          <p className="hf-admin-metric">{stats.today.fixtures}</p>
+          <p className="hf-admin-meta">Cacheados para hoy.</p>
         </AdminCard>
 
         <AdminCard title={`Fixtures ${stats.tomorrow.date}`}>
-          <p className="text-3xl font-black text-white">{stats.tomorrow.fixtures}</p>
-          <p className="mt-1 text-sm text-[#9aa7b5]">Cacheados para manana.</p>
+          <p className="hf-admin-metric">{stats.tomorrow.fixtures}</p>
+          <p className="hf-admin-meta">Cacheados para mañana.</p>
         </AdminCard>
       </div>
 
@@ -103,11 +103,11 @@ export default async function AdminDashboardPage() {
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-[#9aa7b5]">No hay datos todavia.</p>
+          <p className="hf-admin-meta">No hay datos todavía.</p>
         )}
       </AdminCard>
 
-      <AdminCard title="Accesos rapidos">
+      <AdminCard title="Accesos rápidos">
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {quickLinks.map((link) => (
             <Link

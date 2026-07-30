@@ -263,9 +263,9 @@ honestidad, no en inventar datos.
 | Torneo | goleadores | misma | partidos/eventos disponibles | pendiente | El repositorio actual no expone eventos/goleadores; requiere propuesta de datos separada, sin migración ejecutada. |
 | Torneo | detalle de partido | `/mi-torneito/t/[tournamentSlug]/p/[matchId]` | matches | validado | Ruta dinámica, heading accesible, marcador e información real comprobados cuando hubo partido publicado. |
 | Torneo | detalle de equipo | `/mi-torneito/t/[tournamentSlug]/e/[teamSlug]` | teams/matches | validado | Ruta dinámica, identidad, campaña y fixture comprobados cuando hubo equipo publicado. |
-| Organizador | acceso por permiso | `/mi-torneito/admin` | Auth/admin assignments | pendiente | D,I,N,M,T,X,L,E,Ø,A,S,Q,R |
-| Organizador | carga y edición | `/mi-torneito/admin` | repositorio Supabase | pendiente | D,C,I,M,T,X,L,E,Ø,A,S,Q,R |
-| Organizador | confirmaciones y errores | `/mi-torneito/admin` | estado de mutación | pendiente | I,M,T,X,E,Ø,A,S,Q,R |
+| Organizador | acceso por permiso | `/mi-torneito/admin` | Auth/admin assignments | validado | Estado sin sesión, explicación, CTA real y 12 anchos comprobados sin inventar asignaciones. Acceso positivo requiere una cuenta QA con torneo asignado. |
+| Organizador | carga y edición | `/mi-torneito/admin` | repositorio Supabase | implementado | Formularios y server actions existentes preservados e integrados al sistema nuevo; no se escribieron equipos, fixtures ni resultados reales durante QA. |
+| Organizador | confirmaciones y errores | `/mi-torneito/admin` | estado de mutación | implementado | Feedback y retornos preservados; caso positivo bloqueado por ausencia de identidad QA asignada. |
 | Mi Torneito | sin torneos/sin datos | todas | colecciones vacías | implementado | Vacíos específicos para portada, listado, fixture, tabla, equipos y campaña; la fuente QA contenía un torneo y no permitió validar el vacío global en runtime. |
 
 ## 10. Autenticación, perfil y administración
@@ -278,18 +278,18 @@ honestidad, no en inventar datos.
 | Auth | callback y redirección | `/auth/callback` | Supabase SSR | implementado | Validación de token/code y `next` seguro preservados; caso inválido comprobado, intercambio positivo requiere enlace QA real. |
 | Auth | sesión persistente | todas | cookies Supabase SSR | implementado | Suscripción y lectura SSR/cliente preservadas; sesión positiva no validada por falta de usuario QA aislado. |
 | Auth | cerrar sesión | shell/perfil | Supabase Auth | implementado | Acción real preservada en mobile y desktop; falta sesión QA positiva para ejecutarla sin afectar una cuenta real. |
-| Auth | ruta protegida y sesión vencida | perfil/privadas/admin | proxy + servidor | pendiente | D,I,N,E,Ø,A,S,Q,R |
+| Auth | ruta protegida y sesión vencida | perfil/privadas/admin | proxy + servidor | validado | `/admin` cerró el acceso server-side sin cargar herramientas; `/mi-torneito/admin` mostró acceso requerido. Sesión vencida positiva requiere cookie QA controlada. |
 | Perfil | datos y preferencias | `/perfil` | profiles/Auth | implementado | UI, tabs, validaciones, switches, carga/error y fallback de columnas opcionales implementados; estado sin sesión y 12 anchos validados, guardado positivo bloqueado por credenciales. |
-| Admin | login separado | `/admin/login` | Supabase Auth | pendiente | D,I,N,M,T,X,L,E,Ø,A,S,Q,R |
-| Admin | control `ADMIN_EMAILS` | `/admin/*` | servidor | pendiente | D,I,N,E,Ø,S,Q,R |
-| Admin | dashboard | `/admin` | servicios admin | pendiente | D,I,N,M,T,X,L,E,Ø,A,S,Q,R |
-| Admin | anuncios | `/admin/ads` | admin_ad_slots | pendiente | D,I,N,M,T,X,L,E,Ø,A,S,Q,R |
-| Admin | TV | `/admin/broadcasts` | reglas/overrides | pendiente | D,I,N,M,T,X,L,E,Ø,A,S,Q,R |
-| Admin | destacados | `/admin/featured-matches` | featured matches | pendiente | D,I,N,M,T,X,L,E,Ø,A,S,Q,R |
-| Admin | partidos | `/admin/matches` | matches/overrides | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,S,Q,R |
-| Admin | sincronización | `/admin/sync` | handlers admin | pendiente | D,I,N,M,T,X,L,E,Ø,A,S,Q,R |
-| Admin | visibilidad | `/admin/visibility` | visibility rules | pendiente | D,I,N,M,T,X,L,E,Ø,A,S,Q,R |
-| Admin | Mi Torneito | `/admin/mi-torneito/*` | tablas Mi Torneito | pendiente | D,I,N,M,T,X,L,E,Ø,A,S,Q,R |
+| Admin | login separado | `/admin/login` | Supabase Auth | validado | Experiencia editorial privada, noindex, estado de configuración, responsive 320–1920 px y consola comprobados; formulario positivo no disponible porque el entorno QA no define ADMIN_EMAILS. |
+| Admin | control `ADMIN_EMAILS` | `/admin/*` | servidor | validado | Fail-closed comprobado: `/admin` devolvió “Admin no configurado” y no montó el shell ni consultó herramientas. |
+| Admin | dashboard | `/admin` | servicios admin | implementado | Shell, métricas, salud y accesos rápidos adoptan el sistema nuevo; lectura positiva bloqueada por guard sin ADMIN_EMAILS. |
+| Admin | anuncios | `/admin/ads` | admin_ad_slots | implementado | Formularios, acciones y permisos preservados dentro de cards/inputs nuevos; CRUD positivo no ejecutado. |
+| Admin | TV | `/admin/broadcasts` | reglas/overrides | implementado | Búsqueda, edición, activación y reglas preservadas con presentación nueva; escrituras bloqueadas durante QA. |
+| Admin | destacados | `/admin/featured-matches` | featured matches | implementado | Contratos, tabla y acciones preservados en el shell nuevo; validación autenticada pendiente de cuenta QA admin. |
+| Admin | partidos | `/admin/matches` | matches/overrides | implementado | Editor completo conserva campos, estados y server actions; no se alteraron partidos reales. |
+| Admin | sincronización | `/admin/sync` | handlers admin | implementado | Formularios manuales y estado de caché preservados; no se disparó ningún sync. |
+| Admin | visibilidad | `/admin/visibility` | visibility rules | implementado | Alta/edición y activación preservadas; no se modificaron reglas reales. |
+| Admin | Mi Torneito | `/admin/mi-torneito/*` | tablas Mi Torneito | implementado | Resumen, solicitudes, torneos y detalle heredan navegación, cards, tablas y formularios nuevos; flujo positivo bloqueado por guard. |
 
 ## 11. Plataforma, SEO, anuncios y estados transversales
 
