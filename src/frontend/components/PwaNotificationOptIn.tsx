@@ -118,17 +118,21 @@ export default function PwaNotificationOptIn() {
   }
 
   return (
-    <div className="hf-pwa-notification-optin" role="dialog" aria-label="Activar notificaciones">
+    <section
+      className="hf-pwa-notification-optin"
+      role="dialog"
+      aria-labelledby="hf-pwa-notification-title"
+    >
       <button
         type="button"
         className="hf-pwa-notification-close"
         onClick={dismiss}
         aria-label="Cerrar aviso de notificaciones"
       >
-        x
+        <span aria-hidden="true">×</span>
       </button>
-      <strong>Notificaciones de HAY FULBO</strong>
-      <p>{message}</p>
+      <strong id="hf-pwa-notification-title">Notificaciones de Hay Fulbo</strong>
+      <p aria-live="polite">{message}</p>
       <button
         type="button"
         onClick={enableNotifications}
@@ -136,6 +140,6 @@ export default function PwaNotificationOptIn() {
       >
         {status === 'saving' ? 'Activando...' : status === 'ready' ? 'Listo' : 'Activar'}
       </button>
-    </div>
+    </section>
   )
 }

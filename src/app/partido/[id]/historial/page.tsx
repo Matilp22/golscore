@@ -3,9 +3,15 @@ import type { Metadata } from 'next'
 
 import { TeamLogo } from '@/frontend/components/AssetImage'
 import ShareCardButton from '@/frontend/components/share/ShareCardButton'
-import { buildMatchHistoryViewModel } from '@/server/match-history'
-import { formatMatchDateTimeArgentina } from '@/shared/utils/argentina-time'
+import { getFootballPublicReadMode } from '@/server/football-public-read-mode'
+import { runWithFootballApiReadAudit } from '@/server/football-public-read-guard'
+import {
+  buildMatchHistoryViewModel,
+  type MatchHistoryItem,
+  type MatchHistoryTeam,
+} from '@/server/match-history'
 import { buildSeoMetadata } from '@/shared/seo'
+import { formatMatchDateTimeArgentina } from '@/shared/utils/argentina-time'
 
 type PageProps = {
   params: Promise<{ id: string }>
@@ -16,227 +22,262 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   return buildSeoMetadata({
     title: 'Historial del partido | Hay Fulbo',
-    description: 'Historial de enfrentamientos entre selecciones y equipos en Hay Fulbo.',
+    description:
+      'Historial de enfrentamientos entre selecciones y equipos en Hay Fulbo.',
     path: `/partido/${id}/historial`,
   })
 }
 
 function formatHistoryDate(date: string | null) {
-  if (!date) return 'Fecha no disponible'
+  return date ? formatMatchDateTimeArgentina(date) : 'Fecha no disponible'
+}
 
-  return formatMatchDateTimeArgentina(date)
+function TeamIdentity({
+  team,
+  align = 'start',
+}: {
+  team: MatchHistoryTeam
+  align?: 'start' | 'end'
+}) {
+  const content = (
+    <>
+      {align === 'start' ? (
+        <TeamLogo
+          src={team.logoUrl}
+          alt={team.name}
+          size={38}
+          className="h-10 w-10 object-contain"
+          fallbackClassName="h-8 w-7"
+          unoptimized
+        />
+      ) : null}
+      <span>{team.name}</span>
+      {align === 'end' ? (
+        <TeamLogo
+          src={team.logoUrl}
+          alt={team.name}
+          size={38}
+          className="h-10 w-10 object-contain"
+          fallbackClassName="h-8 w-7"
+          unoptimized
+        />
+      ) : null}
+    </>
+  )
+
+  if (team.externalId) {
+    return (
+      <Link
+        href={`/equipo/${team.externalId}`}
+        className={`hf-history-team is-${align}`}
+      >
+        {content}
+      </Link>
+    )
+  }
+
+  return <div className={`hf-history-team is-${align}`}>{content}</div>
+}
+
+function HistoryMatchRow({ item }: { item: MatchHistoryItem }) {
+  const content = (
+    <>
+      <div className="hf-history-match-meta">
+        <time dateTime={item.date ?? undefined}>
+          {formatHistoryDate(item.date)}
+        </time>
+        <span>{item.status ?? 'Sin estado confirmado'}</span>
+      </div>
+
+      <div className="hf-history-match-score">
+        <div>
+          <TeamLogo
+            src={item.homeTeam.logoUrl}
+            alt={item.homeTeam.name}
+            size={24}
+            className="h-6 w-6 object-contain"
+            fallbackClassName="h-5 w-4"
+            unoptimized
+          />
+          <span>{item.homeTeam.name}</span>
+        </div>
+        <strong>{item.scoreLabel}</strong>
+        <div>
+          <TeamLogo
+            src={item.awayTeam.logoUrl}
+            alt={item.awayTeam.name}
+            size={24}
+            className="h-6 w-6 object-contain"
+            fallbackClassName="h-5 w-4"
+            unoptimized
+          />
+          <span>{item.awayTeam.name}</span>
+        </div>
+      </div>
+
+      <div className="hf-history-match-competition">
+        <strong>{item.competition}</strong>
+        <span>{item.stage}</span>
+      </div>
+    </>
+  )
+
+  return item.externalId ? (
+    <Link
+      href={`/partido/${item.externalId}`}
+      className="hf-history-match"
+      aria-label={`${item.homeTeam.name} ${item.scoreLabel} ${item.awayTeam.name}`}
+    >
+      {content}
+    </Link>
+  ) : (
+    <article className="hf-history-match">{content}</article>
+  )
 }
 
 export default async function MatchHistoryPage({ params }: PageProps) {
   const { id } = await params
-  let history: Awaited<ReturnType<typeof buildMatchHistoryViewModel>> | null = null
-  let loadError: unknown = null
+  let history: Awaited<ReturnType<typeof buildMatchHistoryViewModel>> | null =
+    null
 
   try {
-    history = await buildMatchHistoryViewModel(id)
-  } catch (error) {
-    loadError = error
+    history = (
+      await runWithFootballApiReadAudit(
+        {
+          route: 'match-history',
+          cacheOnly:
+            getFootballPublicReadMode('match-detail') === 'cache-only',
+        },
+        () => buildMatchHistoryViewModel(id)
+      )
+    ).result
+  } catch {
+    history = null
   }
 
-  if (loadError || !history) {
+  if (!history) {
     return (
-      <div className="min-h-screen text-white" data-match-history-page="true">
-        <div className="mx-0 w-full max-w-none px-0 py-3 md:mx-auto md:max-w-6xl md:px-4 md:py-10">
-          <div className="w-full rounded-2xl border border-[#5a2a2a] bg-[#3b1919] p-4 md:p-6">
-            <h1 className="text-2xl font-black">Historial no disponible</h1>
-            <p className="mt-2 text-[#ffd5d5]">
-              {loadError instanceof Error
-                ? loadError.message
-                : 'No se pudo cargar el historial de este partido.'}
-            </p>
-            <Link
-              href={`/partido/${id}`}
-              className="mt-4 inline-flex min-h-10 items-center justify-center rounded-xl border border-white/10 bg-[#10151a] px-3 py-2 text-sm font-black text-[#dce5ef] transition hover:border-[#7ff0b2]/60 hover:text-white"
-            >
-              Volver al partido
-            </Link>
-          </div>
-        </div>
-      </div>
+      <main className="hf-history-page">
+        <section className="hf-history-unavailable" role="alert">
+          <p className="hf-type-overline">Historial</p>
+          <h1>No pudimos cargar estos enfrentamientos</h1>
+          <p>
+            El partido sigue disponible. Volvé a intentarlo más tarde para
+            consultar los cruces anteriores.
+          </p>
+          <Link href={`/partido/${id}`}>Volver al partido</Link>
+        </section>
+      </main>
     )
   }
 
   const historyShareId = `match-history-card-${id}`
   const historyShareTitle = `${history.homeTeam.name} vs ${history.awayTeam.name} | Historial Hay Fulbo`
-  const historyShareText = `Historial: ${history.homeTeam.name} vs ${history.awayTeam.name}`
 
   return (
-    <div className="min-h-screen text-white" data-match-history-page="true">
-      <div className="w-full max-w-none px-0 py-3 lg:mx-auto lg:max-w-6xl lg:px-5 lg:py-6">
-        <header className="hf-hero relative overflow-hidden rounded-3xl">
-          <div className="relative z-10 flex flex-col gap-4 px-3 py-4 md:flex-row md:items-center md:justify-between md:px-5 md:py-5">
-            <div className="min-w-0">
-              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#d5a940]">
-                Historial
-              </p>
-              <h1 className="mt-1 text-2xl font-black text-white md:text-3xl">
-                {history.homeTeam.name} vs {history.awayTeam.name}
-              </h1>
-              <p className="mt-2 text-sm font-semibold text-white/85">
-                Copas, eliminatorias y amistosos registrados entre estos equipos.
-              </p>
-            </div>
+    <main className="hf-history-page" data-match-history-page="true">
+      <nav className="hf-history-breadcrumbs" aria-label="Migas de pan">
+        <Link href="/">Inicio</Link>
+        <span aria-hidden="true">/</span>
+        <Link href={`/partido/${id}`}>Partido</Link>
+        <span aria-hidden="true">/</span>
+        <span aria-current="page">Historial</span>
+      </nav>
 
-            <Link
-              href={`/partido/${id}`}
-              className="inline-flex min-h-10 items-center justify-center rounded-xl border border-[#25553d] bg-[#163828] px-3 py-2 text-sm font-black text-[#7ff0b2] transition hover:border-[#7ff0b2]/60 hover:bg-[#1b4a32] sm:px-4"
-            >
-              Volver al partido
-            </Link>
-          </div>
+      <header className="hf-history-hero">
+        <div className="hf-history-hero-copy">
+          <p className="hf-type-overline">Enfrentamientos directos</p>
+          <h1>
+            {history.homeTeam.name} vs {history.awayTeam.name}
+          </h1>
+          <p>
+            Copas, eliminatorias y amistosos registrados entre ambos equipos.
+          </p>
+        </div>
 
-          <div className="relative z-10 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-t border-white/6 bg-black/20 px-3 py-3 md:gap-5 md:px-5">
-            <div className="flex min-w-0 items-center justify-end gap-2 text-right">
-              <span className="truncate text-sm font-black text-white md:text-lg">
-                {history.homeTeam.name}
-              </span>
-              <TeamLogo
-                src={history.homeTeam.logoUrl}
-                alt={history.homeTeam.name}
-                size={34}
-                className="h-8 w-8 object-contain"
-                fallbackClassName="h-7 w-6"
-                unoptimized
-              />
-            </div>
-            <span className="rounded-lg border border-[#d5a940]/40 bg-[#7c5513]/40 px-3 py-1 text-xs font-black text-[#f7d879]">
-              vs
-            </span>
-            <div className="flex min-w-0 items-center gap-2">
-              <TeamLogo
-                src={history.awayTeam.logoUrl}
-                alt={history.awayTeam.name}
-                size={34}
-                className="h-8 w-8 object-contain"
-                fallbackClassName="h-7 w-6"
-                unoptimized
-              />
-              <span className="truncate text-sm font-black text-white md:text-lg">
-                {history.awayTeam.name}
-              </span>
-            </div>
+        <div className="hf-history-versus" aria-label="Equipos">
+          <TeamIdentity team={history.homeTeam} align="end" />
+          <span>VS</span>
+          <TeamIdentity team={history.awayTeam} />
+        </div>
+
+        <Link href={`/partido/${id}`} className="hf-button-secondary">
+          Volver al partido
+        </Link>
+      </header>
+
+      <dl className="hf-history-summary" aria-label="Resumen del historial">
+        <div>
+          <dt>Partidos con resultado</dt>
+          <dd>{history.summary.total}</dd>
+        </div>
+        <div>
+          <dt>Ganó {history.homeTeam.name}</dt>
+          <dd>{history.summary.homePerspectiveWins}</dd>
+        </div>
+        <div>
+          <dt>Empates</dt>
+          <dd>{history.summary.draws}</dd>
+        </div>
+        <div>
+          <dt>Ganó {history.awayTeam.name}</dt>
+          <dd>{history.summary.awayPerspectiveWins}</dd>
+        </div>
+        <div>
+          <dt>Goles</dt>
+          <dd>
+            {history.summary.homePerspectiveGoals}
+            <span aria-hidden="true">–</span>
+            {history.summary.awayPerspectiveGoals}
+          </dd>
+        </div>
+      </dl>
+
+      {history.warnings.length ? (
+        <p className="hf-history-notice" role="note">
+          El historial puede estar incompleto mientras se actualizan algunas
+          fuentes.
+        </p>
+      ) : null}
+
+      <section
+        id={historyShareId}
+        className="hf-history-list"
+        aria-labelledby="history-list-title"
+      >
+        <header>
+          <div>
+            <p className="hf-type-overline">Archivo de partidos</p>
+            <h2 id="history-list-title">Enfrentamientos</h2>
           </div>
+          <ShareCardButton
+            targetId={historyShareId}
+            fileName={`hay-fulbo-historial-${id}.png`}
+            title={historyShareTitle}
+            text={`Historial: ${history.homeTeam.name} vs ${history.awayTeam.name}`}
+            url={`/partido/${id}/historial`}
+          />
         </header>
 
-        <main className="mt-4 space-y-4">
-          {history.warnings.length ? (
-            <section className="rounded-2xl border border-[#574b20] bg-[#3f3616] px-4 py-3 text-sm text-[#f3d36c]">
-              {history.warnings.join(' ')}
-            </section>
-          ) : null}
-
-          <section className="grid gap-3 md:grid-cols-4">
-            <div className="hf-card rounded-2xl p-4 text-center">
-              <p className="text-2xl font-black text-white">{history.summary.homePerspectiveWins}</p>
-              <p className="mt-1 truncate text-xs font-bold uppercase tracking-[0.08em] text-[#8d98a7]">
-                Gano {history.homeTeam.name}
-              </p>
-            </div>
-            <div className="hf-card rounded-2xl p-4 text-center">
-              <p className="text-2xl font-black text-white">{history.summary.draws}</p>
-              <p className="mt-1 text-xs font-bold uppercase tracking-[0.08em] text-[#8d98a7]">
-                Empates
-              </p>
-            </div>
-            <div className="hf-card rounded-2xl p-4 text-center">
-              <p className="text-2xl font-black text-white">{history.summary.awayPerspectiveWins}</p>
-              <p className="mt-1 truncate text-xs font-bold uppercase tracking-[0.08em] text-[#8d98a7]">
-                Gano {history.awayTeam.name}
-              </p>
-            </div>
-            <div className="hf-card rounded-2xl p-4 text-center">
-              <p className="text-2xl font-black text-white">
-                {history.summary.homePerspectiveGoals} - {history.summary.awayPerspectiveGoals}
-              </p>
-              <p className="mt-1 text-xs font-bold uppercase tracking-[0.08em] text-[#8d98a7]">
-                Goles
-              </p>
-            </div>
-          </section>
-
-          <section id={historyShareId} className="hf-card overflow-hidden rounded-2xl">
-            <div className="hf-section-head flex items-center justify-between gap-3 px-3 py-3 md:px-4">
-              <span aria-hidden="true" className="h-10 w-10" />
-              <h2 className="text-lg font-black text-[#071b2f]">Enfrentamientos</h2>
-              <ShareCardButton
-                targetId={historyShareId}
-                fileName={`hay-fulbo-historial-${id}.png`}
-                title={historyShareTitle}
-                text={historyShareText}
-                url={`/partido/${id}/historial`}
+        {history.items.length ? (
+          <div>
+            {history.items.map((item) => (
+              <HistoryMatchRow
+                key={`${item.id}-${item.externalId ?? 'local'}`}
+                item={item}
               />
-            </div>
-
-            {history.items.length ? (
-              <div className="divide-y divide-white/7">
-                {history.items.map((item) => (
-                  <article
-                    key={`${item.id}-${item.externalId ?? 'local'}`}
-                    className="grid gap-3 px-3 py-3 md:grid-cols-[170px_minmax(0,1fr)_220px] md:items-center md:px-4"
-                  >
-                    <div>
-                      <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#1f7a3f]">
-                        {formatHistoryDate(item.date)}
-                      </p>
-                      <p className="mt-1 text-xs font-semibold text-[#68717a]">
-                        {item.status ?? 'Sin estado'}
-                      </p>
-                    </div>
-
-                    <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
-                      <div className="flex min-w-0 items-center justify-end gap-2 text-right">
-                        <span className="truncate text-sm font-black text-[#071b2f]">
-                          {item.homeTeam.name}
-                        </span>
-                        <TeamLogo
-                          src={item.homeTeam.logoUrl}
-                          alt={item.homeTeam.name}
-                          size={22}
-                          className="h-[22px] w-[22px] object-contain"
-                          fallbackClassName="h-5 w-4"
-                          unoptimized
-                        />
-                      </div>
-                      <span className="min-w-[58px] rounded-lg border border-white/8 bg-[#10151a] px-2 py-1 text-center text-sm font-black text-white">
-                        {item.scoreLabel}
-                      </span>
-                      <div className="flex min-w-0 items-center gap-2">
-                        <TeamLogo
-                          src={item.awayTeam.logoUrl}
-                          alt={item.awayTeam.name}
-                          size={22}
-                          className="h-[22px] w-[22px] object-contain"
-                          fallbackClassName="h-5 w-4"
-                          unoptimized
-                        />
-                        <span className="truncate text-sm font-black text-[#071b2f]">
-                          {item.awayTeam.name}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div data-match-history-dark="true" className="rounded-xl border border-white/8 bg-[#10151a] px-3 py-2">
-                      <p className="text-xs font-black text-white">{item.competition}</p>
-                      <p className="mt-1 text-xs font-semibold text-white/75">
-                        {item.stage}
-                      </p>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <div className="px-4 py-6 text-sm text-[#8d98a7]">
-                No hay enfrentamientos previos registrados para estos equipos.
-              </div>
-            )}
-          </section>
-        </main>
-      </div>
-    </div>
+            ))}
+          </div>
+        ) : (
+          <div className="hf-history-empty">
+            <strong>Todavía no hay cruces anteriores registrados</strong>
+            <p>
+              Mostramos este estado sin completar el historial con partidos
+              estimados.
+            </p>
+          </div>
+        )}
+      </section>
+    </main>
   )
 }

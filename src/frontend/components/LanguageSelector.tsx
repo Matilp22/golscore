@@ -1,8 +1,5 @@
 'use client'
 
-import { useTransition } from 'react'
-import { useRouter } from 'next/navigation'
-
 import {
   LOCALE_COOKIE_NAME,
   SUPPORTED_LOCALES,
@@ -29,9 +26,6 @@ export default function LanguageSelector({
   locale,
   compact = false,
 }: LanguageSelectorProps) {
-  const router = useRouter()
-  const [isPending, startTransition] = useTransition()
-
   function handleChange(nextLocale: AppLocale) {
     if (nextLocale === locale) return
 
@@ -42,25 +36,22 @@ export default function LanguageSelector({
       'samesite=lax',
     ].join('; ')
 
-    startTransition(() => {
-      router.refresh()
-    })
+    window.location.reload()
   }
 
   return (
-    <label className="inline-flex min-w-0 items-center gap-1.5 rounded-xl border border-white/8 bg-white/[0.035] px-2 py-1.5 text-xs font-bold text-[#dce7e2] shadow-[0_8px_24px_rgba(0,0,0,0.12)]">
+    <label className="hf-language-selector">
       <span className={compact ? 'sr-only' : 'hidden sm:inline'}>
         {t(locale, 'language.label')}
       </span>
       <select
         value={locale}
-        disabled={isPending}
         onChange={(event) => handleChange(event.target.value as AppLocale)}
         aria-label={t(locale, 'language.label')}
-        className="min-w-0 bg-transparent text-xs font-black uppercase text-white outline-none disabled:cursor-wait disabled:opacity-70"
+        className="hf-language-selector-control"
       >
         {SUPPORTED_LOCALES.map((option) => (
-          <option key={option} value={option} className="bg-[#07100d] text-white">
+          <option key={option} value={option}>
             {compact ? option.toUpperCase() : getOptionLabel(locale, option)}
           </option>
         ))}

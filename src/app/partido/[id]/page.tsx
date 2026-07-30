@@ -71,9 +71,22 @@ const loadMatchDetailPageData = cache(async (id: string) =>
   ).then((audit) => audit.result)
 )
 
+function isValidMatchId(id: string) {
+  return /^[1-9]\d*$/.test(id)
+}
+
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params
   const locale = await getRequestLocale()
+
+  if (!isValidMatchId(id)) {
+    return buildSeoMetadata({
+      title: 'Partido no encontrado | Hay Fulbo',
+      description: 'El partido solicitado no está disponible en Hay Fulbo.',
+      path: `/partido/${id}`,
+      noIndex: true,
+    })
+  }
 
   try {
     const data = await loadMatchDetailPageData(id)
@@ -2194,6 +2207,22 @@ function hasVisualFormation(lineup?: MatchLineup | null) {
 export default async function PartidoDetallePage({ params }: PageProps) {
   const { id } = await params
   const locale = await getRequestLocale()
+
+  if (!isValidMatchId(id)) {
+    return (
+      <main className="hf-match-detail-page min-h-screen">
+        <div className="hf-match-detail-inner">
+          <div className="hf-match-detail-state">
+            <span className="hf-type-overline">Sin datos</span>
+            <h1>Partido no encontrado</h1>
+            <p>No existe información para este partido.</p>
+            <Link href="/">Volver a la agenda</Link>
+          </div>
+        </div>
+      </main>
+    )
+  }
+
   let data: Awaited<ReturnType<typeof buildMatchDetailViewModel>>
 
   try {

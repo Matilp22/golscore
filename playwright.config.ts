@@ -36,5 +36,12 @@ export default defineConfig({
         url: baseURL,
         reuseExistingServer: true,
         timeout: 120_000,
+        env: {
+          FOOTBALL_PUBLIC_READ_MODE: 'cache-only',
+          HOME_READ_MODE: 'cache-only',
+          LEAGUE_READ_MODE: 'cache-only',
+          MATCH_DETAIL_READ_MODE: 'cache-only',
+          PRODE_READ_MODE: 'cache-only',
+        },
       },
 })

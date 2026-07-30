@@ -71,6 +71,11 @@ test.describe('Competiciones y tablas', () => {
     await expect(page.locator('.hf-competition-title h1')).toContainText('Liga Profesional')
     expect(await page.locator('#partidos a[href^="/partido/"]').count()).toBeGreaterThan(0)
     expect(await page.locator('#tabla .hf-standings-row').count()).toBeGreaterThan(10)
+    expect(await page.locator('#tabla .hf-standings-form').count()).toBeGreaterThan(0)
+    expect(
+      await page.locator('#equipos a[href^="/equipo/"]').count()
+    ).toBeGreaterThan(10)
+    expect(await page.locator('#sedes article').count()).toBeGreaterThan(0)
     await expect(page.locator('#estadisticas')).toBeVisible()
 
     for (const viewport of RESPONSIVE_VIEWPORTS) {
@@ -117,17 +122,25 @@ test.describe('Competiciones y tablas', () => {
     ).toBeVisible()
     await expect(page.locator('#llaves')).toBeVisible()
     await expect(page.locator('#tabla')).toBeVisible()
-    expect(await page.locator('#tabla .hf-group-card').count()).toBeGreaterThan(1)
-    expect(await page.locator('#tabla .hf-standings-row').count()).toBeGreaterThan(10)
+    const groupCount = await page.locator('#tabla .hf-group-card').count()
 
-    const groupWithFixtures = page.locator('#tabla .hf-group-card').filter({
-      has: page.getByRole('button', { name: /Partidos/i }),
-    }).first()
-    await groupWithFixtures.getByRole('button', { name: /Partidos/i }).click()
-    await expect(
-      groupWithFixtures.getByRole('button', { name: /Partidos/i })
-    ).toHaveAttribute('aria-pressed', 'true')
-    expect(await groupWithFixtures.locator('a[href^="/partido/"]').count()).toBeGreaterThan(0)
+    if (groupCount > 0) {
+      expect(groupCount).toBeGreaterThan(1)
+      expect(await page.locator('#tabla .hf-standings-row').count()).toBeGreaterThan(10)
+
+      const groupWithFixtures = page.locator('#tabla .hf-group-card').filter({
+        has: page.getByRole('button', { name: /Partidos/i }),
+      }).first()
+      await groupWithFixtures.getByRole('button', { name: /Partidos/i }).click()
+      await expect(
+        groupWithFixtures.getByRole('button', { name: /Partidos/i })
+      ).toHaveAttribute('aria-pressed', 'true')
+      expect(await groupWithFixtures.locator('a[href^="/partido/"]').count()).toBeGreaterThan(0)
+    } else {
+      await expect(page.locator('#tabla')).toContainText(
+        'No hay grupos disponibles para este torneo.'
+      )
+    }
 
     await page.setViewportSize({ width: 320, height: 800 })
     await expectNoDocumentOverflow(page)

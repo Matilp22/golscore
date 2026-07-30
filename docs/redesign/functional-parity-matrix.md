@@ -1,7 +1,7 @@
 # Hay Fulbo: matriz de paridad funcional
 
 Estado del documento: línea de base de Etapa 1  
-Fecha de corte: 2026-07-29  
+Fecha de corte: 2026-07-30
 Base de comparación: `origin/main@5695513c3566bc90f674c9f951d38cf898601fb5`
 
 ## Cómo se usa
@@ -54,11 +54,11 @@ honestidad, no en inventar datos.
 | Shell | sidebar desktop | todas | navegación local | no aplica | reemplazada por navegación horizontal según la nueva IA |
 | Shell | navegación mobile inferior | todas | navegación local | validado | I,N,M,T,A,Q,R |
 | Shell | menú mobile “Más” | todas | navegación local + sesión | validado | I,N,M,A,Q,R |
-| Shell | navegación contextual por torneo | `/liga/[id]` | configuración de competencia | pendiente | D,I,N,M,T,X,A,Q,R |
+| Shell | navegación contextual por torneo | `/liga/[id]` | configuración de competencia | validado | Anclas dinámicas para partidos, clasificación, llaves, equipos y sedes; interacción y 12 anchos comprobados en competencias reales. |
 | Shell | footer y enlaces legales | todas | local | implementado | I,N,M,T,X,A,Q,R |
 | Shell | botón volver | rutas de detalle | historial del router | implementado | I,N,M,T,X,A,Q |
-| Shell | selector de idioma | todas | cookie/locales | pendiente | I,N,M,T,X,A,Q,R |
-| Shell | preferencias de audio de torneo | competencias compatibles | localStorage | pendiente | I,M,X,A,Q,R |
+| Shell | selector de idioma | todas | cookie/locales | validado | Cookie `hf_locale`, recarga de documento, atributo `lang` y contenido de servidor comprobados en Chromium. |
+| Shell | preferencias de audio de torneo | competencias compatibles | localStorage | implementado | Controles reales, preferencia persistente y puente con el perfil preservados; sincronización positiva de cuenta bloqueada sin una credencial QA aislada. |
 | Búsqueda | abrir, cerrar, Escape y autofoco | todas | estado cliente | validado | I,M,T,X,A,Q |
 | Búsqueda | foco confinado y restaurado | todas | estado cliente | validado | I,M,T,X,A,Q |
 | Búsqueda | equipos y selecciones | todas | caché de partidos/equipos | validado | D,I,N,M,X,L,E,Ø,A,Q,R |
@@ -81,9 +81,10 @@ honestidad, no en inventar datos.
 | Notificaciones | partido/evento en vivo | todas | caché/eventos | implementado | Agregación y prioridades conectadas a caché real; falta un evento en vivo positivo durante la ventana de QA. |
 | Notificaciones | leído y limpiar | todas | localStorage | validado | Marcar leídas, contador, persistencia y limpiar comprobados sin infraestructura simulada de push. |
 | Notificaciones | estado sin novedades | todas | agregado cliente | validado | Vacío honesto posterior a limpiar comprobado; error y carga diferenciados implementados. |
-| PWA | prompt de instalación | todas | navegador + localStorage | pendiente | I,M,T,X,Ø,A,Q,R |
-| PWA | opt-in de push | todas | Notification API/VAPID | pendiente | D,I,M,T,X,E,Ø,A,S,Q,R |
-| PWA | alta/baja de suscripción | `/api/pwa/push-subscriptions` | Supabase | pendiente | D,I,E,Ø,S,Q,R |
+| PWA | prompt de instalación | todas | navegador + localStorage | validado | Listener real del navegador, prompt, aceptación, cierre y persistencia comprobados en Chromium. |
+| PWA | opt-in de push | todas | Notification API/VAPID | implementado | Permisos, carga, error, estado no compatible y ausencia de VAPID son honestos; alta positiva bloqueada porque el entorno QA no expone una clave pública ni autoriza notificaciones. |
+| PWA | alta/baja de suscripción | `/api/pwa/push-subscriptions` | Supabase | implementado | Contrato, autenticación y errores preservados; no se escribió una suscripción remota sin usuario/dispositivo QA aislado. |
+| Juego editorial | Adiviná el futbolista | `/juegos/adivina-el-futbolista` | banco editorial local + logos Supabase | validado | Selección de nivel, foco, respuesta, feedback, pistas, estado deshabilitado, consola y mobile 320 px comprobados sin mutaciones. |
 
 ## 2. Home y descubrimiento de partidos
 
@@ -107,7 +108,7 @@ honestidad, no en inventar datos.
 | Home | noticias importantes | `/` | contenido local | validado | Contenido real y enlaces editoriales comprobados. |
 | Home | accesos rápidos | `/` | navegación local | validado | Cuatro destinos reales presentes y accesibles. |
 | Home | sin partidos en fecha | `/` | caché vacía | implementado | Estado único implementado; falta fixture de QA completamente vacío. |
-| Home | carga, error, offline y timeout | `/` | servidor/red | pendiente | L,E,Ø,M,T,X,A,Q |
+| Home | carga, error, offline y timeout | `/` | servidor/red | validado | Skeleton Matchday, datos parciales ante timeout de extras, vacío y recuperación offline comprobados sin exponer errores técnicos. |
 | Home | actualización en vivo sin duplicados | `/` | endpoint live sync | implementado | Deduplicación por fixture id validada; sincronización real no ejecutada en QA aislado. |
 
 ## 3. Detalle e historial de partido
@@ -139,9 +140,9 @@ honestidad, no en inventar datos.
 | Formaciones | cambios y jugador enlazado | `/partido/[id]` | lineup/eventos/player id | implementado | Cambios visibles; navegación de jugador queda para módulo jugadores. |
 | Formaciones | formación ausente | `/partido/[id]` | caché vacía | validado | Estado honesto verificado con partido postergado. |
 | Videos | highlights reales | `/partido/[id]` | YouTube/caché | validado | Fuente real e iframe lazy comprobados; recurso publicitario externo permitido por dominio. |
-| Historial | enfrentamientos directos | `/partido/[id]/historial` | caché/head-to-head | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,P,Q,R |
+| Historial | enfrentamientos directos | `/partido/[id]/historial` | caché/head-to-head | validado | Ruta reconstruida con resumen, encuentros reales o vacío honesto, navegación y 12 anchos comprobados en build de producción local. |
 | Partido | actualización en vivo | `/partido/[id]` | live sync | implementado | Contrato preservado; endpoint interceptado en QA para impedir escrituras. |
-| Partido | loading, error y no encontrado | `/partido/[id]` | App Router | pendiente | L,E,Ø,N,M,T,X,A,Q |
+| Partido | loading, error y no encontrado | `/partido/[id]` | App Router | validado | Skeleton, error temporal y partido inexistente diferenciados; ID inválido evita fetch, expone noindex, CTA y 12 anchos sin overflow. |
 
 ## 4. Competencias, tablas, grupos y llaves
 
@@ -155,16 +156,16 @@ honestidad, no en inventar datos.
 | Tabla | liga general | `/liga/[id]`, `/tablas` | standings cache | validado | Más de diez filas reales, acceso desde `/tablas` y navegación al ancla comprobados. |
 | Tabla | zonas y grupos | `/liga/[id]` | standings/reglas | validado | Zonas de Liga Profesional y ocho grupos de Libertadores comprobados. |
 | Tabla | clasificación/promedios/descenso | `/liga/[id]` | standings + reglas locales | validado | Tabla anual, promedios y leyendas de clasificación revisados visualmente con datos reales. |
-| Tabla | forma y estados V/E/D | `/liga/[id]` | standings | pendiente | D,C,M,T,X,Ø,A,Q,R |
+| Tabla | forma y estados V/E/D | `/liga/[id]` | standings | validado | V/E/D incluyen texto y nombre accesible cuando la fuente los entrega; el dataset sin forma muestra “Forma no disponible” sin inventar resultados. |
 | Llaves | partido único | `/liga/[id]` | fixtures/reglas | implementado | Cuadro responsive y estados a confirmar comprobados; falta fixture QA finalizado de partido único. |
 | Llaves | ida/vuelta y global | `/liga/[id]` | fixtures/series | implementado | Contratos y componentes CONMEBOL preservados; falta serie finalizada específica para validar global. |
 | Llaves | penales | `/liga/[id]` | fixtures | implementado | Formateo de penales preservado; falta fixture QA específico. |
 | Líderes | goleadores | `/liga/[id]`, `/estadisticas` | caché/API-Football | implementado | Estado vacío honesto validado; el caché de QA no devolvió jugadores. |
 | Líderes | asistencias y tarjetas | `/liga/[id]`, `/estadisticas` | caché/API-Football | implementado | Estados vacíos honestos validados; falta dataset con líderes. |
-| Competencia | equipos participantes | `/liga/[id]` | fixtures/standings | pendiente | D,C,I,N,M,T,X,Ø,A,Q,R |
-| Competencia | noticias e historia | `/liga/[id]` | contenido local/campeones | pendiente | D,I,N,M,T,X,Ø,A,Q,R |
-| Campeones | historial | `/liga/[id]/campeones` | tablas locales/Supabase | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,Q,R |
-| Competencia | sedes cuando existen | `/liga/[id]` | config/equipos | pendiente | D,C,I,N,M,T,X,Ø,A,Q |
+| Competencia | equipos participantes | `/liga/[id]` | fixtures/standings | validado | Identidades reales deduplicadas, más de diez enlaces de equipo y presentación responsive comprobados en Liga Profesional. |
+| Competencia | noticias e historia | `/liga/[id]` | contenido local/campeones | implementado | Historia de campeones real y accesible validada; noticias se muestran sólo en competiciones con fuente editorial disponible, sin tarjetas simuladas. |
+| Campeones | historial | `/liga/[id]/campeones` | tablas locales/Supabase | validado | Palmarés, ranking y 22 finales mundialistas reales comprobados con navegación, SEO, consola y 12 anchos. |
+| Competencia | sedes cuando existen | `/liga/[id]` | fixtures | validado | Sedes y ciudades se derivan de fixtures reales, se deduplican y se ocultan sólo cuando la fuente no las publica. |
 | Competencia | sin fixture/tabla/líderes | `/liga/[id]` | fuente vacía | implementado | Superficies vacías y de error rediseñadas; falta forzar las tres fuentes vacías en E2E. |
 | Competencia | variantes Argentina/CONMEBOL/UEFA | `/liga/[id]` | reglas específicas | implementado | Argentina y CONMEBOL validados; UEFA conserva lógica pero requiere pasada visual específica. |
 
@@ -260,7 +261,7 @@ honestidad, no en inventar datos.
 | Torneo | resultados | misma | matches | validado | Marcador y estado salen del repositorio y el detalle conserva fecha/sede/transmisión. |
 | Torneo | tabla | misma | partidos calculados/datos | validado | Tabla calculada o vacío explícito visible en el torneo publicado, sin datos de demostración en UI. |
 | Torneo | equipos y planteles | torneo/equipo | teams | implementado | Grilla y detalle de equipo conectados; no existe modelo de planteles individuales en el contrato actual. |
-| Torneo | goleadores | misma | partidos/eventos disponibles | pendiente | El repositorio actual no expone eventos/goleadores; requiere propuesta de datos separada, sin migración ejecutada. |
+| Torneo | goleadores | misma | partidos/eventos disponibles | bloqueado | El contrato actual no expone eventos ni jugadores goleadores. La propuesta separada está documentada en `docs/redesign/data-change-proposals.md`; no se ejecutó ninguna migración, política ni escritura. |
 | Torneo | detalle de partido | `/mi-torneito/t/[tournamentSlug]/p/[matchId]` | matches | validado | Ruta dinámica, heading accesible, marcador e información real comprobados cuando hubo partido publicado. |
 | Torneo | detalle de equipo | `/mi-torneito/t/[tournamentSlug]/e/[teamSlug]` | teams/matches | validado | Ruta dinámica, identidad, campaña y fixture comprobados cuando hubo equipo publicado. |
 | Organizador | acceso por permiso | `/mi-torneito/admin` | Auth/admin assignments | validado | Estado sin sesión, explicación, CTA real y 12 anchos comprobados sin inventar asignaciones. Acceso positivo requiere una cuenta QA con torneo asignado. |
@@ -314,13 +315,13 @@ honestidad, no en inventar datos.
 | Estado | offline y timeout | páginas interactivas | navegador/red | validado | Corte de red simulado en búsqueda produce mensaje útil sin `Failed to fetch`; Home conserva fallback de datos parciales ante timeout de extras. |
 | Estado | sesión vencida/permiso insuficiente | protegidas | Auth/permisos | validado | Perfil, Prode privado, organizador y admin presentan estados honestos; admin cierra acceso si falta configuración. |
 | Assets | logo/foto/imagen ausente | todas | fallback local | validado | Fallbacks de escudo, foto e imagen faltante comprobados en entidades/editorial sin romper layout. |
-| Responsive | sin overflow ni solapamiento | todas | CSS/layout | en desarrollo | Módulos principales validados individualmente en 12 anchos; falta la corrida global final antes del Preview. |
+| Responsive | sin overflow ni solapamiento | todas | CSS/layout | validado | Módulos principales y rutas secundarias comprobados en 320, 360, 390, 412, 430, 768, 820, 1024, 1280, 1366, 1440 y 1920 px; la suite cubre tablas, cards, modales, formularios y estados. |
 | Accesibilidad | landmarks y jerarquía | todas | HTML | validado | Auditoría DOM exige un único main final, al menos un H1, IDs únicos, alt y nombres accesibles; se corrigieron landmarks anidados en admin. |
 | Accesibilidad | foco visible y orden | todas | HTML/CSS | validado | Búsqueda, favoritos, notificaciones, navegación y formularios tienen foco/teclado comprobados; selectores Prode reemplazados por controles nativos. |
 | Accesibilidad | reduced motion | todas | CSS/cliente | validado | Media query reduce animaciones/transiciones y `scroll-behavior`; comportamiento computado comprobado en Chromium. |
 | Performance | imágenes y LCP | públicas | Next Image/assets | implementado | Componentes de assets preservan optimización/fallback y heroes evitan dependencias pesadas; medición final queda para Preview. |
-| Performance | bundle e hidratación | todas | RSC/client boundaries | implementado | Build de 82 páginas, componentes servidor preservados y límites cliente acotados; falta medición final del deployment. |
-| Seguridad | secretos solo servidor | todas | env/server-only | en desarrollo | No se agregaron secretos ni variables; falta escaneo final del diff antes del push. |
+| Performance | bundle e hidratación | todas | RSC/client boundaries | implementado | Build de 83 páginas, componentes servidor preservados y límites cliente acotados; falta medición final del deployment. |
+| Seguridad | secretos solo servidor | todas | env/server-only | validado | 131 archivos cambiados inspeccionados: 0 nombres prohibidos, 0 `.env`, 0 patrones de secreto literal y 0 cambios bajo `supabase/`. |
 | Seguridad | producción/Supabase intactos | infraestructura | Git/Vercel/Supabase | en desarrollo | No hubo migraciones, RLS, DNS ni deploy productivo; falta verificar rama remota y Preview final. |
 
 ## 12. Condición de salida

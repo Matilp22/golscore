@@ -67,10 +67,12 @@ export default function PwaInstallPrompt() {
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
     window.addEventListener('appinstalled', handleAppInstalled)
+    document.documentElement.dataset.pwaInstallListener = 'ready'
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
       window.removeEventListener('appinstalled', handleAppInstalled)
+      delete document.documentElement.dataset.pwaInstallListener
     }
   }, [])
 
@@ -92,24 +94,28 @@ export default function PwaInstallPrompt() {
   }
 
   return (
-    <div className="hf-card fixed inset-x-3 bottom-3 z-50 mx-auto max-w-md rounded-xl p-3 text-white backdrop-blur">
-      <div className="flex min-w-0 items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-bold">Instalar HAY FULBO</p>
-          <p className="mt-1 text-xs leading-5 text-[#8d98a7]">
+    <section
+      className="hf-pwa-install-prompt"
+      role="dialog"
+      aria-labelledby="hf-pwa-install-title"
+    >
+      <div>
+        <div>
+          <p id="hf-pwa-install-title">Instalar Hay Fulbo</p>
+          <p>
             {installPrompt
-              ? 'Agrega HAY FULBO a tu pantalla de inicio.'
-              : 'iPhone: Compartir -> Agregar a pantalla de inicio.'}
+              ? 'Agregá Hay Fulbo a tu pantalla de inicio para volver más rápido.'
+              : 'En iPhone: Compartir y después Agregar a pantalla de inicio.'}
           </p>
         </div>
 
         <button
           type="button"
           onClick={dismissPrompt}
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/8 bg-white/[0.03] text-sm font-bold text-[#c7d0da] transition hover:bg-white/[0.08]"
-          aria-label="Cerrar aviso de instalacion"
+          className="hf-pwa-install-close"
+          aria-label="Cerrar aviso de instalación"
         >
-          x
+          <span aria-hidden="true">×</span>
         </button>
       </div>
 
@@ -117,11 +123,11 @@ export default function PwaInstallPrompt() {
         <button
           type="button"
           onClick={installApp}
-          className="hf-button mt-3 inline-flex min-h-10 w-full items-center justify-center rounded-lg px-3 py-2 text-sm font-black"
+          className="hf-pwa-install-action"
         >
-          Instalar HAY FULBO
+          Instalar Hay Fulbo
         </button>
       ) : null}
-    </div>
+    </section>
   )
 }

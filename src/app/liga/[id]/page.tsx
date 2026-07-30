@@ -2236,6 +2236,100 @@ function SectionCard({
   )
 }
 
+type CompetitionTeamItem = {
+  id: number | null
+  name: string
+  logo: string | null
+}
+
+type CompetitionVenueItem = {
+  name: string
+  city: string | null
+  country: string | null
+}
+
+function normalizeCompetitionItemKey(value: string) {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+}
+
+function buildCompetitionTeams(
+  fixtures: LeagueFixtureSummary[],
+  groups: LeagueStandingGroup[]
+) {
+  const teams = new Map<string, CompetitionTeamItem>()
+
+  function addTeam(team: CompetitionTeamItem) {
+    const key = team.id
+      ? `id:${team.id}`
+      : `name:${normalizeCompetitionItemKey(team.name)}`
+    const previous = teams.get(key)
+
+    teams.set(key, {
+      id: previous?.id ?? team.id,
+      name: previous?.name || team.name,
+      logo: previous?.logo ?? team.logo,
+    })
+  }
+
+  for (const group of groups) {
+    for (const row of group.rows) {
+      addTeam({
+        id: row.teamId ?? null,
+        name: row.teamName,
+        logo: row.teamLogo ?? null,
+      })
+    }
+  }
+
+  for (const fixture of fixtures) {
+    addTeam({
+      id: fixture.homeId ?? null,
+      name: fixture.home,
+      logo: fixture.homeLogo ?? null,
+    })
+    addTeam({
+      id: fixture.awayId ?? null,
+      name: fixture.away,
+      logo: fixture.awayLogo ?? null,
+    })
+  }
+
+  return [...teams.values()].sort((a, b) =>
+    a.name.localeCompare(b.name, 'es-AR')
+  )
+}
+
+function buildCompetitionVenues(fixtures: LeagueFixtureSummary[]) {
+  const venues = new Map<string, CompetitionVenueItem>()
+
+  for (const fixture of fixtures) {
+    const name = fixture.venueName?.trim()
+    const city = fixture.venueCity?.trim() || null
+    const country = fixture.venueCountry?.trim() || null
+
+    if (!name && !city) continue
+
+    const key = normalizeCompetitionItemKey(
+      [name, city, country].filter(Boolean).join('|')
+    )
+
+    venues.set(key, {
+      name: name || city || 'Sede',
+      city,
+      country,
+    })
+  }
+
+  return [...venues.values()].sort((a, b) =>
+    a.name.localeCompare(b.name, 'es-AR')
+  )
+}
+
 function formatGroupFixtureDateTime(date: string | null) {
   if (!date) return 'A programar'
 
@@ -2489,6 +2583,49 @@ function GroupFixtures({
   )
 }
 
+function StandingForm({ form }: { form?: string }) {
+  const results = (form ?? '')
+    .toUpperCase()
+    .replace(/[^WDL]/g, '')
+    .slice(-5)
+
+  if (!results) {
+    return (
+      <span
+        className="hf-standings-form is-unavailable"
+        aria-label="Forma reciente no disponible"
+      >
+        Forma no disponible
+      </span>
+    )
+  }
+
+  const labels = {
+    W: { short: 'V', label: 'Victoria', tone: 'is-win' },
+    D: { short: 'E', label: 'Empate', tone: 'is-draw' },
+    L: { short: 'D', label: 'Derrota', tone: 'is-loss' },
+  } as const
+
+  return (
+    <span className="hf-standings-form" aria-label="Últimos resultados">
+      {[...results].map((result, index) => {
+        const item = labels[result as keyof typeof labels]
+
+        return (
+          <span
+            key={`${result}-${index}`}
+            className={item.tone}
+            title={item.label}
+            aria-label={item.label}
+          >
+            {item.short}
+          </span>
+        )
+      })}
+    </span>
+  )
+}
+
 function StandingsTable({
   rows,
   showAverage = false,
@@ -2581,6 +2718,24 @@ function StandingsTable({
             const rowToneClass = rowAccent.includes('border-l-transparent')
               ? 'is-neutral'
               : 'is-highlight'
+            const teamIdentity = (
+              <>
+                <TeamLogo
+                  src={row.teamLogo}
+                  alt={displayTeamName}
+                  size={compact ? 16 : 18}
+                  className={`${compact ? 'h-4 w-4' : 'h-[18px] w-[18px]'} object-contain`}
+                  fallbackClassName={compact ? 'h-3.5 w-3' : 'h-4 w-3'}
+                  unoptimized
+                />
+                <div className="hf-standing-team-copy">
+                  <span className={`min-w-0 truncate font-medium ${compact ? 'text-[10.5px] sm:text-[12px]' : 'text-[10.5px] sm:text-[13px]'}`}>
+                    {displayTeamName}
+                  </span>
+                  <StandingForm form={row.form} />
+                </div>
+              </>
+            )
 
             return (
               <tr
@@ -2589,19 +2744,18 @@ function StandingsTable({
               >
                 <td className={`${cellPadding} font-semibold`}>{row.rank || index + 1}</td>
                 <td className={cellPadding}>
-                  <div className={`flex min-w-0 items-center ${compact ? 'gap-1' : 'gap-1.5'}`}>
-                    <TeamLogo
-                      src={row.teamLogo}
-                      alt={displayTeamName}
-                      size={compact ? 16 : 18}
-                      className={`${compact ? 'h-4 w-4' : 'h-[18px] w-[18px]'} object-contain`}
-                      fallbackClassName={compact ? 'h-3.5 w-3' : 'h-4 w-3'}
-                      unoptimized
-                    />
-                    <span className={`min-w-0 truncate font-medium ${compact ? 'text-[10.5px] sm:text-[12px]' : 'text-[10.5px] sm:text-[13px]'}`}>
-                      {displayTeamName}
-                    </span>
-                  </div>
+                  {row.teamId ? (
+                    <Link
+                      href={`/equipo/${row.teamId}`}
+                      className={`hf-standing-team-link ${compact ? 'gap-1' : 'gap-1.5'}`}
+                    >
+                      {teamIdentity}
+                    </Link>
+                  ) : (
+                    <div className={`hf-standing-team-link ${compact ? 'gap-1' : 'gap-1.5'}`}>
+                      {teamIdentity}
+                    </div>
+                  )}
                 </td>
                 <td className={`${cellPadding} text-center font-black text-white`}>{row.points}</td>
                 {thirdPlaceTable ? null : (
@@ -3108,6 +3262,12 @@ export default async function LigaPage({ params }: PageProps) {
     locale === 'es' && displayOptions.countryNameEs
       ? displayOptions.countryNameEs
       : translateCountryName(resolvedTournament?.country || tournament.country, locale)
+  const competitionTeams = isWorldCupTournament
+    ? []
+    : buildCompetitionTeams(fixtures, standings)
+  const competitionVenues = isWorldCupTournament
+    ? []
+    : buildCompetitionVenues(fixtures)
   const hasTournamentData =
     fixtures.length > 0 ||
     standings.some((group) => group.rows.length > 0) ||
@@ -3242,11 +3402,17 @@ export default async function LigaPage({ params }: PageProps) {
         ...(currentRoundBlocks.length
           ? [{ key: 'partidos', label: 'Partidos', href: '#partidos', active: true }]
           : []),
-        ...(shouldRenderStandings && (displayPrimaryGroups.length || uefaLeaguePhaseRows.length)
+        ...(shouldRenderStandings
           ? [{ key: 'tabla', label: 'Clasificación', href: '#tabla' }]
           : []),
         ...(shouldRenderKnockoutBracket || isUefaLeaguePhaseTournament || showConmebolGroupStage
           ? [{ key: 'llaves', label: 'Llaves', href: '#llaves' }]
+          : []),
+        ...(competitionTeams.length
+          ? [{ key: 'equipos', label: 'Equipos', href: '#equipos' }]
+          : []),
+        ...(competitionVenues.length
+          ? [{ key: 'sedes', label: 'Sedes', href: '#sedes' }]
           : []),
         { key: 'estadisticas', label: 'Estadísticas', href: '#estadisticas' },
       ]
@@ -3476,14 +3642,16 @@ export default async function LigaPage({ params }: PageProps) {
                   />
                 </section>
               ) : shouldRenderStandings && !displayOptions.hideEmptyStandings ? (
-                <SectionCard
-                  title="Grupos"
-                  subtitle="Fase de grupos"
-                >
-                  <p className="text-sm text-[#8d98a7]">
-                    No hay grupos disponibles para este torneo.
-                  </p>
-                </SectionCard>
+                <section id="tabla" className="scroll-mt-28">
+                  <SectionCard
+                    title="Grupos"
+                    subtitle="Fase de grupos"
+                  >
+                    <p className="text-sm text-[#8d98a7]">
+                      No hay grupos disponibles para este torneo.
+                    </p>
+                  </SectionCard>
+                </section>
               ) : null}
             </>
           ) : null}
@@ -3580,15 +3748,22 @@ export default async function LigaPage({ params }: PageProps) {
                 })}
               </section>
             )
-          ) : !isUefaLeaguePhaseTournament && !showConmebolGroupStage && shouldRenderStandings && !displayOptions.hideEmptyStandings ? (
-            <SectionCard
-              title="Tabla de posiciones"
-              subtitle="Algunos torneos de copa no publican tabla tradicional."
-            >
-              <p className="text-sm text-[#8d98a7]">
-                No hay tabla de posiciones disponible para este torneo.
-              </p>
-            </SectionCard>
+          ) : !isUefaLeaguePhaseTournament &&
+            !showConmebolGroupStage &&
+            shouldRenderStandings &&
+            !displayOptions.hideEmptyStandings &&
+            !annualTable.length &&
+            !promedioTable.length ? (
+            <section id="tabla" className="scroll-mt-28">
+              <SectionCard
+                title="Tabla de posiciones"
+                subtitle="Algunos torneos de copa no publican tabla tradicional."
+              >
+                <p className="text-sm text-[#8d98a7]">
+                  No hay tabla de posiciones disponible para este torneo.
+                </p>
+              </SectionCard>
+            </section>
           ) : null}
 
           {visibleSecondaryGroups.length ? (
@@ -3630,7 +3805,12 @@ export default async function LigaPage({ params }: PageProps) {
           ) : null}
 
           {displayOptions.showAnnualTable || displayOptions.showPromedios ? (
-            <div className={compactSummaryTables ? 'grid gap-4 xl:grid-cols-2' : 'space-y-4'}>
+            <div
+              id={!displayPrimaryGroups.length ? 'tabla' : undefined}
+              className={`scroll-mt-28 ${
+                compactSummaryTables ? 'grid gap-4 xl:grid-cols-2' : 'space-y-4'
+              }`}
+            >
               {displayOptions.showAnnualTable && annualTable.length ? (
                 <SectionCard title="Tabla anual">
                   <StandingsTable
@@ -3665,6 +3845,78 @@ export default async function LigaPage({ params }: PageProps) {
                 </SectionCard>
               ) : null}
             </div>
+          ) : null}
+
+          {competitionTeams.length ? (
+            <section id="equipos" className="scroll-mt-28">
+              <SectionCard
+                title="Equipos participantes"
+                subtitle={`${competitionTeams.length} equipos identificados en partidos y tablas de esta edición.`}
+              >
+                <div className="hf-competition-team-grid">
+                  {competitionTeams.map((team) => {
+                    const displayName =
+                      translateCountryName(team.name, locale) || team.name
+                    const content = (
+                      <>
+                        <TeamLogo
+                          src={team.logo}
+                          alt={displayName}
+                          size={32}
+                          className="h-8 w-8 object-contain"
+                          fallbackClassName="h-7 w-6"
+                          unoptimized
+                        />
+                        <span>{displayName}</span>
+                      </>
+                    )
+
+                    return team.id ? (
+                      <Link
+                        key={`team-${team.id}`}
+                        href={`/equipo/${team.id}`}
+                        aria-label={`Ver ${displayName}`}
+                      >
+                        {content}
+                      </Link>
+                    ) : (
+                      <div key={`team-${normalizeCompetitionItemKey(team.name)}`}>
+                        {content}
+                      </div>
+                    )
+                  })}
+                </div>
+              </SectionCard>
+            </section>
+          ) : null}
+
+          {competitionVenues.length ? (
+            <section id="sedes" className="scroll-mt-28">
+              <SectionCard
+                title="Sedes"
+                subtitle="Estadios confirmados en los partidos disponibles."
+              >
+                <div className="hf-competition-venue-grid">
+                  {competitionVenues.map((venue) => (
+                    <article
+                      key={normalizeCompetitionItemKey(
+                        [venue.name, venue.city, venue.country]
+                          .filter(Boolean)
+                          .join('|')
+                      )}
+                    >
+                      <span className="hf-type-overline">Estadio</span>
+                      <h3>{venue.name}</h3>
+                      <p>
+                        {[venue.city, translateCountryName(venue.country, locale)]
+                          .filter(Boolean)
+                          .join(' · ') || 'Ubicación no disponible'}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              </SectionCard>
+            </section>
           ) : null}
 
           {!isWorldCupTournament ? (
