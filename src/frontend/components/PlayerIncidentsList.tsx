@@ -35,19 +35,26 @@ function normalizeRoundName(value: string) {
 function translateRoundName(value: string, tournamentName?: string) {
   const normalized = normalizeRoundName(value)
 
-  if (normalized.includes('regular season')) {
-    return tournamentName || 'Temporada regular'
-  }
-
-  if (normalized.includes('third place') || normalized.includes('3rd place') || normalized.includes('tercer puesto')) {
+  if (normalized.includes('regular season')) return tournamentName || 'Temporada regular'
+  if (
+    normalized.includes('third place') ||
+    normalized.includes('3rd place') ||
+    normalized.includes('tercer puesto')
+  ) {
     return 'Tercer puesto'
   }
   if (normalized.includes('final') && !normalized.includes('semi')) return 'Final'
   if (normalized.includes('semi')) return 'Semifinales'
   if (normalized.includes('quarter')) return 'Cuartos de final'
-  if (normalized.includes('octavos') || normalized.includes('round of 16')) return 'Octavos de final'
-  if (normalized.includes('16th finals') || normalized.includes('dieciseisavos')) return 'Dieciseisavos'
-  if (normalized.includes('32nd finals') || normalized.includes('treintaidosavos')) return 'Treintaidosavos'
+  if (normalized.includes('octavos') || normalized.includes('round of 16')) {
+    return 'Octavos de final'
+  }
+  if (normalized.includes('16th finals') || normalized.includes('dieciseisavos')) {
+    return 'Dieciseisavos'
+  }
+  if (normalized.includes('32nd finals') || normalized.includes('treintaidosavos')) {
+    return 'Treintaidosavos'
+  }
   if (normalized.includes('group') || normalized.includes('grupo')) {
     const match = normalized.match(/\b(?:group|grupo)\s+([a-z0-9]+)\b/)
     if (match) return `Grupo ${match[1].toUpperCase()}`
@@ -98,7 +105,6 @@ export default function PlayerIncidentsList({
           `/api/leader-events?leagueId=${leagueId}&season=${season}&playerId=${playerId}&statType=${statType}&playerName=${encodeURIComponent(playerName)}&teamId=${teamId || ''}&expectedCount=${expectedCount || ''}`,
           { cache: 'no-store' }
         )
-
         const data = (await response.json()) as {
           error?: string
           matches?: PlayerEventMatch[]
@@ -107,20 +113,17 @@ export default function PlayerIncidentsList({
         if (!response.ok) {
           throw new Error(data.error || 'No se pudieron cargar las incidencias.')
         }
-
-        if (!active) return
-
-        setMatches(data.matches || [])
-      } catch (err) {
-        if (!active) return
-
-        setError(
-          err instanceof Error ? err.message : 'No se pudieron cargar las incidencias.'
-        )
-      } finally {
+        if (active) setMatches(data.matches || [])
+      } catch (loadError) {
         if (active) {
-          setLoading(false)
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : 'No se pudieron cargar las incidencias.'
+          )
         }
+      } finally {
+        if (active) setLoading(false)
       }
     }
 
@@ -132,39 +135,40 @@ export default function PlayerIncidentsList({
   }, [leagueId, season, playerId, playerName, teamId, expectedCount, statType])
 
   return (
-    <div className="hf-card w-full overflow-hidden rounded-2xl">
-      <div className="hf-section-head px-2 py-2 md:px-3">
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <h2 className="text-base font-bold text-white">Partidos con incidencias</h2>
-            <p className="mt-0.5 text-xs text-[#8d98a7]">
-              Encuentros donde registró {statTypeLabels[statType]}.
-            </p>
-          </div>
-          <span className="text-[10px] uppercase tracking-[0.14em] text-[#8d98a7]">
-            {matches.length} partidos
-          </span>
+    <section className="hf-entity-panel hf-player-incidents">
+      <header className="hf-entity-panel-heading">
+        <div>
+          <p className="hf-type-overline">Incidencias</p>
+          <h2>Partidos con registro</h2>
+          <p>Encuentros donde registró {statTypeLabels[statType]}.</p>
         </div>
-      </div>
+        <span>{matches.length} partidos</span>
+      </header>
 
       {loading ? (
-        <div className="px-2 py-4 text-xs text-[#8d98a7] md:px-3">Buscando incidencias del jugador...</div>
+        <div className="hf-entity-loading" role="status">
+          <span className="hf-spinner" aria-hidden="true" />
+          Buscando incidencias del jugador…
+        </div>
       ) : error ? (
-        <div className="px-2 py-4 text-xs text-[#ffb1b1] md:px-3">{error}</div>
+        <div className="hf-state-inline is-error" role="alert">
+          <strong>No pudimos cargar las incidencias</strong>
+          <p>{error}</p>
+        </div>
       ) : matches.length ? (
-        <div className="space-y-2 p-2 md:p-3">
+        <div className="hf-player-incident-list">
           {matches.map((match) => (
             <Link
               key={match.fixtureId}
               href={`/partido/${match.fixtureId}`}
-              className="hf-card-hover block rounded-2xl border border-white/6 bg-black/20 px-2 py-2.5 transition duration-300 ease-out hover:-translate-y-0.5 hover:border-[#70ff9d]/25 md:px-3"
+              className="hf-player-incident"
             >
-              <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="hf-player-incident-head">
                 <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7ff0b2]">
+                  <p className="hf-type-overline">
                     {translateRoundName(match.round, tournamentName)}
                   </p>
-                  <p className="mt-0.5 text-[13px] font-semibold text-white">
+                  <strong>
                     {match.home}{' '}
                     {formatMatchScoreWithPenalties({
                       goalsHome: match.goalsHome,
@@ -173,17 +177,14 @@ export default function PlayerIncidentsList({
                       awayPenaltyScore: match.awayPenaltyScore,
                     })}{' '}
                     {match.away}
-                  </p>
+                  </strong>
                 </div>
-                <p className="text-[11px] text-[#8d98a7]">{formatDate(match.date)}</p>
+                <time>{formatDate(match.date)}</time>
               </div>
 
-              <div className="mt-2 flex flex-wrap gap-1.5">
+              <div className="hf-player-incident-events">
                 {match.events.map((event, index) => (
-                  <span
-                    key={`${match.fixtureId}-${index}`}
-                    className="inline-flex rounded-full border border-white/8 bg-[#0f1317] px-2 py-0.5 text-[11px] font-semibold text-[#dce5ef]"
-                  >
+                  <span key={`${match.fixtureId}-${index}`}>
                     {event.label}
                     {event.minute !== null && event.minute !== undefined
                       ? ` ${formatEventMinute(event.minute, event.extraMinute)}`
@@ -195,10 +196,10 @@ export default function PlayerIncidentsList({
           ))}
         </div>
       ) : (
-        <div className="px-2 py-4 text-xs text-[#8d98a7] md:px-3">
+        <div className="hf-competition-empty">
           No se encontraron partidos con ese registro en este torneo.
         </div>
       )}
-    </div>
+    </section>
   )
 }

@@ -615,10 +615,38 @@ estadísticas que las fuentes actuales no provean.
   cuando `league-leaders` agota su timeout y Liga Profesional reconstruye
   promedios históricos. No se alteró ese contrato durante el rediseño; queda
   registrado como riesgo de performance para una optimización separada.
-- Durante una detención del servidor de QA, Next.js 16.2.1 emitió una vez
+- Durante detenciones y QA, Next.js 16.2.1 emitió de forma recurrente
   `Unexpected root span type 'ResolveMetadata.generateMetadata'`. El build,
   TypeScript y las páginas completaron correctamente; debe vigilarse en la
   verificación del Preview y en futuras actualizaciones de Next.js.
+- La ficha anterior de equipo sólo consultaba perfil/plantel y mostraba una
+  tarjeta fija de competiciones vacía. El rediseño deriva competiciones,
+  próximos partidos y resultados desde el caché Supabase existente, sin
+  modificar esquema ni ejecutar escrituras.
+- `getTeamDetail` y `getPlayerDetail` podían persistir enriquecimiento del
+  proveedor durante una visita pública. Se añadió una opción explícita de
+  sólo lectura y las nuevas fichas la usan con persistencia desactivada; el
+  comportamiento por defecto de otros consumidores permanece intacto.
+- Las fichas además respetan `FOOTBALL_PUBLIC_READ_MODE=cache-only` y desactivan
+  enriquecimiento de API-Football cuando `VERCEL_ENV=preview`. El Preview se
+  alimenta de Supabase/caché real sin generar consumo ni tracking del proveedor.
+- Los IDs dinámicos inválidos llegaban a API-Football como `NaN`. Equipo,
+  metadata y jugador ahora validan entero positivo antes de cualquier fetch,
+  evitando consumo inútil y logs técnicos.
+- La búsqueda mezclaba coincidencias generales por país antes que el resultado
+  específico del catálogo; buscar “Argentina” podía ocultar a la Selección
+  detrás de ocho clubes. Los resultados específicos ahora tienen prioridad y
+  la navegación por teclado a `/equipo/26` quedó validada.
+- Los medios principales de equipo/jugador reservan tamaño y cargan con
+  prioridad. Las fotos del plantel permanecen lazy para no sumar decenas de
+  solicitudes al LCP.
+- La fuente actual de jugador no entrega una trayectoria completa ni dorsal en
+  el detalle. La UI declara el límite y propaga el dorsal real desde el contexto
+  del plantel; no se hardcodearon clubes ni estadísticas.
+- El rendimiento de equipo se calcula desde fixtures finalizados del último año
+  y el entrenador se lee de la lineup cacheada más reciente. Las noticias usan
+  tags/título/resumen del contenido editorial local; si no hay coincidencias se
+  presenta un vacío explícito.
 - No recorrer APIs administrativas en E2E.
 - No crear migraciones ni ejecutar comandos remotos de Supabase.
 - Desplegar únicamente Preview desde la rama, inspeccionar su metadata de

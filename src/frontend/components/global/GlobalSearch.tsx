@@ -364,10 +364,10 @@ export default function GlobalSearch({
     }
 
     const teams = uniqueTeams([
+      ...(catalog?.teams ?? []),
       ...data.teams.filter((team) =>
         matchesQuery(debouncedQuery, [team.name, team.country])
       ),
-      ...(catalog?.teams ?? []),
     ]).slice(0, 8)
 
     return [

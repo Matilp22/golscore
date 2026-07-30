@@ -9,25 +9,35 @@ export default function TeamsPageClient() {
   const [isSearchOpen, setIsSearchOpen] = useState(false)
 
   return (
-    <main className="hf-directory-page">
-      <section className="hf-directory-hero">
-        <p>Equipos</p>
-        <h1>Tus equipos favoritos</h1>
-        <span>Buscá equipos, abrilos y marcá favoritos para tenerlos siempre en la sidebar.</span>
-      </section>
+    <main className="hf-teams-hub">
+      <header className="hf-teams-hub-hero">
+        <div>
+          <p className="hf-type-overline">Tu tribuna</p>
+          <h1>Equipos que seguís</h1>
+          <p>Guardá clubes y selecciones para encontrarlos rápido desde cualquier pantalla.</p>
+        </div>
+        <button type="button" className="hf-button" onClick={() => setIsSearchOpen(true)}>
+          Buscar equipo
+        </button>
+      </header>
 
-      <section className="hf-directory-section">
-        <div className="hf-directory-section-head">
-          <h2>Mi equipo</h2>
+      <section className="hf-entity-panel">
+        <header className="hf-entity-panel-heading">
+          <div>
+            <p className="hf-type-overline">Favoritos</p>
+            <h2>Mis equipos</h2>
+          </div>
           <button
             type="button"
-            className="hf-directory-action"
+            className="hf-button-secondary"
             onClick={() => setIsSearchOpen(true)}
           >
-            Buscar equipo
+            Agregar
           </button>
+        </header>
+        <div className="hf-teams-hub-list">
+          <FavoriteTeamsList onOpenSearch={() => setIsSearchOpen(true)} />
         </div>
-        <FavoriteTeamsList onOpenSearch={() => setIsSearchOpen(true)} />
       </section>
 
       <GlobalSearch open={isSearchOpen} onOpenChange={setIsSearchOpen} />

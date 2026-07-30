@@ -1,11 +1,17 @@
 import { PlayerPhoto } from '@/frontend/components/AssetImage'
+import EntityNewsList from '@/frontend/components/entities/EntityNewsList'
 import PlayerIncidentsList from '@/frontend/components/PlayerIncidentsList'
 import { buildSeoMetadata } from '@/shared/seo'
+import Link from 'next/link'
+import { getNewsArticles } from '@/content/editorial'
 import {
   getPlayerDetail,
   type LeaderStatType,
 } from '@/lib/api-football'
+import { TOURNAMENT_PAGE_CONFIGS } from '@/lib/tournament-pages'
 import { translateCountryNameToSpanish } from '@/shared/utils/country-names'
+import { matchesEntityContent } from '@/shared/utils/entity-content'
+import { getTournamentExternalLeagueId } from '@/shared/utils/asset-urls'
 import { formatPlayerHeight, formatPlayerWeight } from '@/shared/utils/player-profile'
 
 type PageProps = {
@@ -20,6 +26,7 @@ type PageProps = {
     teamId?: string
     teamName?: string
     teamLogo?: string
+    number?: string
   }>
 }
 
@@ -87,9 +94,9 @@ function InfoRow({
   value: string
 }) {
   return (
-    <div className="flex items-center justify-between gap-2 border-b border-white/6 py-2 last:border-b-0">
-      <span className="text-xs text-[#8d98a7]">{label}</span>
-      <span className="text-right text-xs font-semibold text-white">{value}</span>
+    <div className="hf-entity-info-row">
+      <span>{label}</span>
+      <strong>{value}</strong>
     </div>
   )
 }
@@ -97,18 +104,26 @@ function InfoRow({
 function SummaryStat({
   label,
   value,
-  accent,
 }: {
   label: string
   value: string | number
-  accent: string
 }) {
   return (
-    <div className="rounded-xl border border-white/6 bg-black/20 px-2 py-2.5 md:px-3">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-[#8d98a7]">{label}</p>
-      <p className={`mt-1 text-xl font-black ${accent}`}>{value}</p>
+    <div>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
     </div>
   )
+}
+
+function getCompetitionHref(leagueId?: number) {
+  if (!leagueId) return null
+
+  const tournament = TOURNAMENT_PAGE_CONFIGS.find(
+    (candidate) => getTournamentExternalLeagueId(candidate.key) === leagueId
+  )
+
+  return tournament ? `/liga/${tournament.key}` : null
 }
 
 export default async function JugadorPage({ params, searchParams }: PageProps) {
@@ -127,25 +142,29 @@ export default async function JugadorPage({ params, searchParams }: PageProps) {
   const fallbackTeamId = Number(query.teamId) || undefined
   const fallbackTeamName = query.teamName || undefined
   const fallbackTeamLogo = query.teamLogo || undefined
+  const fallbackNumber = query.number || undefined
+  const allowApiEnrichment =
+    process.env.FOOTBALL_PUBLIC_READ_MODE !== 'cache-only' &&
+    process.env.VERCEL_ENV !== 'preview'
 
-  if (!playerId) {
+  if (!Number.isInteger(playerId) || playerId <= 0) {
     return (
-      <div className="min-h-screen text-white">
-        <div className="mx-0 w-full max-w-none px-0 py-3 md:mx-auto md:max-w-6xl md:px-4 md:py-10">
-          <div className="w-full rounded-2xl border border-[#5a2a2a] bg-[#3b1919] p-4 md:p-6">
-            <h1 className="text-2xl font-black">Jugador no disponible</h1>
-            <p className="mt-2 text-[#ffd5d5]">
-              Faltan datos para mostrar la ficha del jugador.
-            </p>
-          </div>
-        </div>
-      </div>
+      <main className="hf-state-page">
+        <section className="hf-state-surface">
+          <span className="hf-state-surface-icon" aria-hidden="true">?</span>
+          <p className="hf-type-overline">Ficha incompleta</p>
+          <h1>Jugador no disponible</h1>
+          <p>Faltan datos para mostrar la ficha del jugador.</p>
+          <Link className="hf-button-secondary" href="/">Volver al inicio</Link>
+        </section>
+      </main>
     )
   }
 
   try {
     const playerDetail = await getPlayerDetail(playerId, season, leagueId || undefined, {
-      allowApiEnrichment: true,
+      allowApiEnrichment,
+      persistApiEnrichment: false,
     })
 
     const player = playerDetail?.player || {
@@ -172,106 +191,90 @@ export default async function JugadorPage({ params, searchParams }: PageProps) {
       yellowCards: 0,
       redCards: 0,
     }
+    const competitionHref = getCompetitionHref(league?.id)
+    const relatedNews = getNewsArticles()
+      .filter((article) => matchesEntityContent(player.name, article))
+      .slice(0, 3)
 
     return (
-      <div className="min-h-screen text-white">
-        <div className="w-full max-w-none px-0 py-3 lg:mx-auto lg:max-w-7xl lg:px-5 lg:py-6">
-          <header className="hf-hero mb-4 w-full overflow-hidden rounded-3xl">
-            <div className="flex flex-col gap-3 px-2 py-3 md:flex-row md:items-center md:justify-between md:gap-4 md:px-4 md:py-5">
-              <div className="flex items-center gap-4">
-                <div className="flex h-20 w-20 items-center justify-center overflow-hidden">
-                  <PlayerPhoto
-                    player={player}
-                    src={player.photo_url ?? player.photo}
-                    alt={player.name}
-                    size={80}
-                    className="h-20 w-20 rounded-full object-cover"
-                    fallbackClassName="h-20 w-20 rounded-full"
-                    unoptimized
-                  />
-                </div>
-
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#7ff0b2]">
-                    Jugador
-                  </p>
-                  <h1 className="mt-1 text-2xl font-bold text-white md:text-3xl">
-                    {player.name}
-                  </h1>
-                  <p className="mt-1 text-sm text-[#8d98a7]">
-                    {team?.name || 'Sin equipo'}
-                    {league?.name ? ` · ${league.name}` : ''}
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid gap-2 text-sm md:grid-cols-3">
-                <SummaryStat label="Goles" value={statistics.goals} accent="text-[#7ff0b2]" />
-                <SummaryStat
-                  label="Asistencias"
-                  value={statistics.assists}
-                  accent="text-sky-300"
-                />
-                <SummaryStat
-                  label="Tarjetas"
-                  value={`${statistics.yellowCards}/${statistics.redCards}`}
-                  accent="text-[#f3d36c]"
-                />
-              </div>
+      <main className="hf-player-page" data-player-id={playerId}>
+        <header className="hf-entity-hero">
+          <div className="hf-entity-identity">
+            <div className="hf-entity-mark is-player">
+              <PlayerPhoto
+                player={player}
+                src={player.photo_url ?? player.photo}
+                alt={player.name}
+                size={96}
+                className="h-24 w-24 rounded-full object-cover"
+                fallbackClassName="h-24 w-24 rounded-full"
+                priority
+                unoptimized
+              />
             </div>
-          </header>
 
-          <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
-            <aside className="space-y-4">
-              <div className="hf-card w-full overflow-hidden rounded-2xl">
-                <div className="hf-section-head px-2 py-2 md:px-3">
-                  <h2 className="text-base font-bold text-white">Ficha</h2>
+            <div className="hf-entity-title">
+              <p className="hf-type-overline">Jugador</p>
+              <h1>{player.name}</h1>
+              <p>
+                {team?.id && team.name ? (
+                  <Link href={`/equipo/${team.id}`}>{team.name}</Link>
+                ) : (
+                  team?.name || 'Sin equipo'
+                )}
+                {league?.name ? (
+                  <>
+                    {' · '}
+                    {competitionHref ? (
+                      <Link href={competitionHref}>{league.name}</Link>
+                    ) : (
+                      league.name
+                    )}
+                  </>
+                ) : null}
+              </p>
+            </div>
+          </div>
+
+          <dl className="hf-player-summary">
+            <SummaryStat label="Goles" value={statistics.goals} />
+            <SummaryStat label="Asistencias" value={statistics.assists} />
+            <SummaryStat
+              label="Tarjetas"
+              value={`${statistics.yellowCards}/${statistics.redCards}`}
+            />
+          </dl>
+        </header>
+
+        <nav className="hf-entity-nav" aria-label={`Secciones de ${player.name}`}>
+          <a href="#temporada">Temporada</a>
+          <a href="#partidos">Partidos</a>
+          <a href="#ficha">Ficha</a>
+        </nav>
+
+        <div className="hf-player-layout">
+          <div className="hf-player-primary">
+            <section id="temporada" className="hf-entity-panel">
+              <header className="hf-entity-panel-heading">
+                <div>
+                  <p className="hf-type-overline">{season}</p>
+                  <h2>Rendimiento de temporada</h2>
                 </div>
+                {competitionHref && league?.name ? (
+                  <Link href={competitionHref}>Ver competencia →</Link>
+                ) : null}
+              </header>
+              <dl className="hf-player-stat-grid">
+                <div><dt>Partidos</dt><dd>{statistics.appearances}</dd></div>
+                <div><dt>Titular</dt><dd>{statistics.lineups}</dd></div>
+                <div><dt>Minutos</dt><dd>{formatMinutes(statistics.minutes)}</dd></div>
+                <div><dt>Posición</dt><dd>{formatPosition(statistics.position)}</dd></div>
+                <div><dt>Valoración</dt><dd>{formatRating(statistics.rating)}</dd></div>
+                <div><dt>Competencia</dt><dd>{league?.name || 'No disponible'}</dd></div>
+              </dl>
+            </section>
 
-                <div className="px-2 py-1 md:px-3">
-                  <InfoRow label="Edad" value={String(player.age || 'No disponible')} />
-                  <InfoRow
-                    label="Nacionalidad"
-                    value={translateCountryNameToSpanish(player.nationality) || 'No disponible'}
-                  />
-                  <InfoRow label="Nacimiento" value={formatDate(player.birthDate)} />
-                  <InfoRow
-                    label="Lugar"
-                    value={
-                      [player.birthPlace, birthCountry].filter(Boolean).join(', ') ||
-                      'No disponible'
-                    }
-                  />
-                  <InfoRow
-                    label="Altura"
-                    value={formatPlayerHeight(player.height) || 'No disponible'}
-                  />
-                  <InfoRow
-                    label="Peso"
-                    value={formatPlayerWeight(player.weight) || 'No disponible'}
-                  />
-                  <InfoRow label="Lesionado" value={player.injured ? 'Sí' : 'No'} />
-                </div>
-              </div>
-
-              <div className="hf-card w-full overflow-hidden rounded-2xl">
-                <div className="hf-section-head px-2 py-2 md:px-3">
-                  <h2 className="text-base font-bold text-white">Temporada</h2>
-                </div>
-
-                <div className="px-2 py-1 md:px-3">
-                  <InfoRow label="Competencia" value={league?.name || 'No disponible'} />
-                  <InfoRow label="País" value={leagueCountry || 'No disponible'} />
-                  <InfoRow label="Apariciones" value={String(statistics.appearances)} />
-                  <InfoRow label="Titular" value={String(statistics.lineups)} />
-                  <InfoRow label="Minutos" value={formatMinutes(statistics.minutes)} />
-                  <InfoRow label="Posición" value={formatPosition(statistics.position)} />
-                  <InfoRow label="Valoración" value={formatRating(statistics.rating)} />
-                </div>
-              </div>
-            </aside>
-
-            <main className="space-y-4">
+            <section id="partidos">
               <PlayerIncidentsList
                 leagueId={leagueId || undefined}
                 season={season}
@@ -282,23 +285,77 @@ export default async function JugadorPage({ params, searchParams }: PageProps) {
                 tournamentName={league?.name}
                 statType={statType}
               />
-            </main>
+            </section>
+
+            <section className="hf-state-inline">
+              <strong>Trayectoria no sincronizada</strong>
+              <p>La fuente actual todavía no ofrece un historial completo de clubes para esta ficha.</p>
+            </section>
+
+            <section className="hf-entity-panel">
+              <header className="hf-entity-panel-heading">
+                <div>
+                  <p className="hf-type-overline">Editorial</p>
+                  <h2>Noticias relacionadas</h2>
+                </div>
+                <Link href="/noticias">Ver noticias →</Link>
+              </header>
+              <EntityNewsList
+                articles={relatedNews}
+                emptyMessage={`Todavía no hay noticias etiquetadas para ${player.name}.`}
+              />
+            </section>
           </div>
+
+          <aside id="ficha" className="hf-player-aside">
+            <section className="hf-entity-panel">
+              <header className="hf-entity-panel-heading">
+                <h2>Ficha personal</h2>
+              </header>
+              <div className="hf-entity-info-list">
+                <InfoRow label="Edad" value={String(player.age || 'No disponible')} />
+                <InfoRow label="Dorsal" value={fallbackNumber || 'No disponible'} />
+                <InfoRow
+                  label="Nacionalidad"
+                  value={translateCountryNameToSpanish(player.nationality) || 'No disponible'}
+                />
+                <InfoRow label="Nacimiento" value={formatDate(player.birthDate)} />
+                <InfoRow
+                  label="Lugar"
+                  value={
+                    [player.birthPlace, birthCountry].filter(Boolean).join(', ') ||
+                    'No disponible'
+                  }
+                />
+                <InfoRow
+                  label="Altura"
+                  value={formatPlayerHeight(player.height) || 'No disponible'}
+                />
+                <InfoRow
+                  label="Peso"
+                  value={formatPlayerWeight(player.weight) || 'No disponible'}
+                />
+                <InfoRow label="Lesionado" value={player.injured ? 'Sí' : 'No'} />
+                <InfoRow label="País de liga" value={leagueCountry || 'No disponible'} />
+              </div>
+            </section>
+          </aside>
         </div>
-      </div>
+      </main>
     )
   } catch {
     const message = 'Datos temporalmente no disponibles. Intentá nuevamente en unos minutos.'
 
     return (
-      <div className="min-h-screen text-white">
-        <div className="mx-0 w-full max-w-none px-0 py-3 md:mx-auto md:max-w-6xl md:px-4 md:py-10">
-          <div className="w-full rounded-2xl border border-[#5a2a2a] bg-[#3b1919] p-4 md:p-6">
-            <h1 className="text-2xl font-black">Jugador no disponible</h1>
-            <p className="mt-2 text-[#ffd5d5]">{message}</p>
-          </div>
-        </div>
-      </div>
+      <main className="hf-state-page">
+        <section className="hf-state-surface">
+          <span className="hf-state-surface-icon" aria-hidden="true">!</span>
+          <p className="hf-type-overline">Error de datos</p>
+          <h1>Jugador no disponible</h1>
+          <p>{message}</p>
+          <Link className="hf-button-secondary" href="/">Volver al inicio</Link>
+        </section>
+      </main>
     )
   }
 }

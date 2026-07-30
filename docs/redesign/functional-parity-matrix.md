@@ -188,28 +188,28 @@ honestidad, no en inventar datos.
 
 | Módulo | Funcionalidad actual | Ruta | Fuente de datos | Estado nuevo | Validación |
 | --- | --- | --- | --- | --- | --- |
-| Equipo | identidad, escudo, país | `/equipo/[id]` | Supabase + `/teams` | pendiente | D,C,M,T,X,L,E,Ø,A,P,Q,R |
-| Equipo | estadio y entrenador | `/equipo/[id]` | team/venue/squad | pendiente | D,C,M,T,X,Ø,A,Q,R |
-| Equipo | competiciones clickeables | `/equipo/[id]` | fixtures/standings | pendiente | D,C,I,N,M,T,X,Ø,A,Q,R |
-| Equipo | competiciones primero en mobile | `/equipo/[id]` | layout | pendiente | M,T,A,Q,R |
-| Equipo | plantel y jugadores | `/equipo/[id]` | `/players/squads` + `/players` | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,P,Q,R |
-| Equipo | forma reciente | `/equipo/[id]` | fixtures | pendiente | D,C,M,T,X,Ø,A,Q,R |
-| Equipo | próximos partidos | `/equipo/[id]` | fixtures/cache | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,Q,R |
-| Equipo | últimos resultados | `/equipo/[id]` | fixtures/cache | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,Q,R |
-| Equipo | estadísticas | `/equipo/[id]` | player/team aggregates | pendiente | D,C,M,T,X,E,Ø,A,Q,R |
-| Equipo | títulos, participaciones y descensos | `/equipo/[id]` | extras locales/cache | pendiente | D,C,M,T,X,Ø,A,Q,R |
-| Equipo | ranking FIFA de selección | `/equipo/[id]` | extras disponibles | pendiente | D,C,M,T,X,Ø,A,Q,R |
-| Equipo | noticias | `/equipo/[id]` | contenido local | pendiente | D,I,N,M,T,X,Ø,A,Q,R |
-| Equipo | favorito | `/equipo/[id]` | localStorage | pendiente | I,M,T,X,A,Q,R |
-| Equipo | dato/logo/competición ausente | `/equipo/[id]` | fuentes parciales | pendiente | Ø,M,T,X,A,Q,R |
-| Jugador | foto, nombre y nacionalidad | `/jugador/[id]` | Supabase + `/players` | pendiente | D,C,M,T,X,L,E,Ø,A,P,Q,R |
-| Jugador | edad, posición y dorsal | `/jugador/[id]` | `/players`/squad | pendiente | D,C,M,T,X,Ø,A,Q,R |
-| Jugador | club y selección navegables | `/jugador/[id]` | estadísticas/equipo | pendiente | D,C,I,N,M,T,X,Ø,A,Q,R |
-| Jugador | estadísticas, goles y asistencias | `/jugador/[id]` | `/players` | pendiente | D,C,M,T,X,E,Ø,A,Q,R |
-| Jugador | tarjetas, partidos y competiciones | `/jugador/[id]` | player/event matches | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,P,Q,R |
-| Jugador | trayectoria | `/jugador/[id]` | datos disponibles | pendiente | D,C,M,T,X,Ø,A,Q |
-| Jugador | noticias | `/jugador/[id]` | contenido disponible | pendiente | D,I,N,M,T,X,Ø,A,Q |
-| Jugador | información parcial/no encontrado | `/jugador/[id]` | App Router/fuente parcial | pendiente | E,Ø,N,M,T,X,A,Q,R |
+| Equipo | identidad, escudo, país | `/equipo/[id]` | Supabase + `/teams` | validado | Boca y Argentina reales; carga prioritaria/fallback, 12 anchos, sin overflow ni errores de consola. |
+| Equipo | estadio y entrenador | `/equipo/[id]` | team/venue + lineups cacheadas | validado | Estadio completo y entrenador real de la última lineup disponible; fallback “No sincronizado” preservado. |
+| Equipo | competiciones clickeables | `/equipo/[id]` | fixtures/standings | implementado | Cuatro competiciones reales de Boca y enlaces a configuraciones conocidas; falta navegación E2E de cada variante. |
+| Equipo | competiciones primero en mobile | `/equipo/[id]` | layout | validado | Orden DOM inmediatamente posterior a la navegación contextual comprobado a 320 y 390 px. |
+| Equipo | plantel y jugadores | `/equipo/[id]` | `/players/squads` + `/players` | validado | 38 jugadores reales de Boca, agrupados por posición; navegación dinámica a jugador comprobada. |
+| Equipo | forma reciente | `/equipo/[id]` | fixtures | validado | Seis resultados reales, marcador, estado y competencia comprobados. |
+| Equipo | próximos partidos | `/equipo/[id]` | fixtures/cache | validado | Seis encuentros reales, fecha Argentina, rivales, estados y enlaces a partido comprobados. |
+| Equipo | últimos resultados | `/equipo/[id]` | fixtures/cache | validado | Marcadores y estados finales reales renderizados; estado vacío equivalente implementado. |
+| Equipo | estadísticas | `/equipo/[id]` | fixtures calculados | validado | PJ, ganados, empatados, perdidos, GF y GC de los últimos 12 meses calculados desde 27 resultados reales. |
+| Equipo | títulos, participaciones y descensos | `/equipo/[id]` | extras locales/cache | implementado | Extras curados existentes visibles para selecciones; clubes y descensos siguen sin fuente completa. |
+| Equipo | ranking FIFA de selección | `/equipo/[id]` | extras disponibles | implementado | Panel de ranking/títulos conectado a extras existentes; no se inventa un ranking actual sin fuente sincronizada. |
+| Equipo | noticias | `/equipo/[id]` | contenido editorial local | validado | Noticias etiquetadas reales verificadas en Argentina y vacío honesto verificado en Boca. |
+| Equipo | favorito | `/equipo/[id]` | localStorage | validado | Agregar, estado `aria-pressed`, persistencia, listado en `/equipos` y eliminación comprobados. |
+| Equipo | dato/logo/competición ausente | `/equipo/[id]` | fuentes parciales | implementado | Fallbacks y vacíos honestos conectados; ID inválido corta antes de cualquier llamada al proveedor. |
+| Jugador | foto, nombre y nacionalidad | `/jugador/[id]` | Supabase + `/players` | validado | Ficha real de A. Marchesín abierta desde el plantel; foto prioritaria completa y nacionalidad verificadas. |
+| Jugador | edad, posición y dorsal | `/jugador/[id]` | `/players`/squad | validado | Edad/posición desde detalle y dorsal real propagado desde el plantel; dorsal 1 comprobado. |
+| Jugador | club y selección navegables | `/jugador/[id]` | estadísticas/equipo | implementado | Club real enlazado y validado; la relación separada con selección depende de disponibilidad de fuente. |
+| Jugador | estadísticas, goles y asistencias | `/jugador/[id]` | `/players` | validado | Temporada, partidos, titularidades, minutos, valoración, goles y asistencias reales comprobados. |
+| Jugador | tarjetas, partidos y competiciones | `/jugador/[id]` | player/event matches | implementado | Tarjetas y competencia conectadas; incidencias muestran lista real o vacío honesto, sin dataset positivo en QA. |
+| Jugador | trayectoria | `/jugador/[id]` | datos disponibles | bloqueado | La fuente actual no ofrece historial completo; se muestra el límite de forma explícita y accesible. |
+| Jugador | noticias | `/jugador/[id]` | contenido editorial local | implementado | Filtro real por tags/título/resumen y vacío honesto; falta un jugador con artículos positivos para QA. |
+| Jugador | información parcial/no encontrado | `/jugador/[id]` | App Router/fuente parcial | implementado | ID inválido validado sin fetch; error y datos parciales tienen superficies honestas, falta forzar timeout real. |
 
 ## 7. Noticias, análisis y mercado
 
