@@ -47,6 +47,30 @@ function normalize(value: string) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
 }
 
+function getPlayerSurname(name: string) {
+  const cleanedName = name.replace(/\b(jr\.?|junior)\b/gi, '').trim()
+  const parts = cleanedName.split(/\s+/)
+
+  if (normalize(cleanedName) === normalize('Son Heung-min')) return 'Son'
+  if (parts.length === 1) return cleanedName
+
+  const lastName = parts.at(-1) || cleanedName
+  const previousPart = parts.at(-2)?.toLowerCase()
+  return previousPart && ['da', 'de', 'del', 'di', 'dos', 'van', 'von'].includes(previousPart)
+    ? `${parts.at(-2)} ${lastName}`
+    : lastName
+}
+
+const SURNAME_PLAYER_IDS = Object.values(GUESS_PLAYER_POOLS)
+  .flat()
+  .reduce<Map<string, Set<string>>>((surnameMap, candidate) => {
+    const surname = normalize(getPlayerSurname(candidate.name))
+    const playerIds = surnameMap.get(surname) || new Set<string>()
+    playerIds.add(candidate.id)
+    surnameMap.set(surname, playerIds)
+    return surnameMap
+  }, new Map())
+
 function shuffle<T>(items: T[]) {
   const copy = [...items]
   for (let index = copy.length - 1; index > 0; index -= 1) {
@@ -139,13 +163,27 @@ export default function GuessThePlayerGame({
   function submitAnswer(event: React.FormEvent) {
     event.preventDefault()
     if (!player || !answer.trim() || status !== 'playing') return
-    const accepted = [player.name, ...(player.aliases || [])].some((name) => normalize(name) === normalize(answer))
+    const normalizedAnswer = normalize(answer)
+    const normalizedSurname = normalize(getPlayerSurname(player.name))
+    const surnameIsUnique = SURNAME_PLAYER_IDS.get(normalizedSurname)?.size === 1
+    const matchesFullName = [player.name, ...(player.aliases || [])].some(
+      (name) => normalize(name) === normalizedAnswer
+    )
+    const matchesUniqueSurname =
+      surnameIsUnique && normalizedSurname === normalizedAnswer
+    const accepted = matchesFullName || matchesUniqueSurname
+
     if (accepted) {
       const points = playerPoints
       setScore((value) => value + points)
       setCorrectCount((value) => value + 1)
       setMessage(`¡Golazo! +${points} puntos`)
       setStatus('correct')
+    } else if (
+      normalizedSurname === normalizedAnswer &&
+      !surnameIsUnique
+    ) {
+      setMessage(`Hay más de un ${getPlayerSurname(player.name)}. Escribí el nombre completo.`)
     } else {
       setMessage('No es ese. Probá otra vez o pedí una pista.')
     }
