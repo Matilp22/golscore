@@ -88,26 +88,26 @@ honestidad, no en inventar datos.
 
 | Módulo | Funcionalidad actual | Ruta | Fuente de datos | Estado nuevo | Validación |
 | --- | --- | --- | --- | --- | --- |
-| Home | fecha actual Argentina | `/` | utilidades Argentina | pendiente | C,M,T,X,Q,R |
-| Home | anterior, hoy y siguiente | `/` | navegación por query/fecha | pendiente | I,N,M,T,X,A,Q,R |
-| Home | selector de fecha | `/` | estado/URL | pendiente | I,N,M,T,X,A,Q,R |
-| Home | partidos en vivo | `/` | caché Supabase + live sync | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,P,Q,R |
-| Home | próximos partidos | `/` | caché Supabase | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,P,Q,R |
-| Home | partidos finalizados | `/` | caché Supabase | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,P,Q,R |
-| Home | suspendido/postergado/cancelado | `/` | estado del fixture | pendiente | D,C,I,N,M,T,X,Ø,A,Q,R |
-| Home | agrupación por competencia | `/` | fixture + config | pendiente | D,C,I,N,M,T,X,Ø,A,Q,R |
-| Home | marcador, penales y minuto | `/` | fixture normalizado | pendiente | D,C,M,T,X,Ø,A,Q,R |
-| Home | incidencias/goleadores | `/` | eventos/caché | pendiente | D,C,M,T,X,E,Ø,A,P,Q,R |
-| Home | televisión | `/` | broadcasts y overrides | pendiente | D,C,I,M,T,X,Ø,A,Q,R |
-| Home | enlaces a partido | `/` | fixture id | pendiente | D,I,N,M,T,X,A,Q,R |
-| Home | enlaces a equipo/selección | `/` | team id | pendiente | D,I,N,M,T,X,A,Q,R |
-| Home | enlaces a competencia | `/` | config/league id | pendiente | D,I,N,M,T,X,A,Q,R |
-| Home | favoritos destacados | `/` | localStorage + partidos | pendiente | D,I,N,M,T,X,Ø,A,Q,R |
-| Home | noticias importantes | `/` | contenido local | pendiente | D,I,N,M,T,X,Ø,A,Q,R |
-| Home | accesos rápidos | `/` | navegación local | pendiente | I,N,M,T,X,A,Q |
-| Home | sin partidos en fecha | `/` | caché vacía | pendiente | Ø,M,T,X,A,Q,R |
+| Home | fecha actual Argentina | `/` | utilidades Argentina | implementado | Fecha del servidor normalizada a Argentina; falta prueba temporal aislada. |
+| Home | anterior, hoy y siguiente | `/` | navegación por query/fecha | validado | Cambio real de URL/fecha en Playwright. |
+| Home | selector de fecha | `/` | estado/URL | validado | Envío real del formulario y retorno a jornada con datos. |
+| Home | partidos en vivo | `/` | caché Supabase + live sync | implementado | Sección, estado y vacío implementados; live sync se intercepta en QA para evitar escrituras. |
+| Home | próximos partidos | `/` | caché Supabase | validado | Datos reales, horarios, enlaces y responsive 320–1920 px. |
+| Home | partidos finalizados | `/` | caché Supabase | validado | 24 resultados reales, marcadores e incidencias verificados. |
+| Home | suspendido/postergado/cancelado | `/` | estado del fixture | validado | Cuatro postergados reales conservados en sección específica. |
+| Home | agrupación por competencia | `/` | fixture + config | validado | Identidad, enlace y conteo por competencia comprobados. |
+| Home | marcador, penales y minuto | `/` | fixture normalizado | validado | Marcadores y penales reales renderizados con estado textual. |
+| Home | incidencias/goleadores | `/` | eventos/caché | validado | Goleadores reales visibles también en mobile. |
+| Home | televisión | `/` | broadcasts y overrides | implementado | Render condicional conectado; fecha QA sin transmisión confirmada. |
+| Home | enlaces a partido | `/` | fixture id | validado | Todos los href únicos apuntan a `/partido/[id]`. |
+| Home | enlaces a equipo/selección | `/` | team id | validado | Enlaces reales a `/equipo/[id]` comprobados. |
+| Home | enlaces a competencia | `/` | config/league id | validado | Enlaces reales a `/liga/[id]` comprobados. |
+| Home | favoritos destacados | `/` | localStorage + partidos | validado | Persistencia, render y eliminación real verificados. |
+| Home | noticias importantes | `/` | contenido local | validado | Contenido real y enlaces editoriales comprobados. |
+| Home | accesos rápidos | `/` | navegación local | validado | Cuatro destinos reales presentes y accesibles. |
+| Home | sin partidos en fecha | `/` | caché vacía | implementado | Estado único implementado; falta fixture de QA completamente vacío. |
 | Home | carga, error, offline y timeout | `/` | servidor/red | pendiente | L,E,Ø,M,T,X,A,Q |
-| Home | actualización en vivo sin duplicados | `/` | endpoint live sync | pendiente | D,C,P,Q,R |
+| Home | actualización en vivo sin duplicados | `/` | endpoint live sync | implementado | Deduplicación por fixture id validada; sincronización real no ejecutada en QA aislado. |
 
 ## 3. Detalle e historial de partido
 

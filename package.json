@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test",
     "verify:public-reads": "node scripts/verify-public-read-boundaries.mjs",
     "verify:content-quality": "node scripts/verify-content-quality.mjs",
     "verify:world-cup-bracket": "node scripts/verify-world-cup-bracket.mjs"
@@ -23,6 +24,7 @@
     "react-dom": "19.2.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
