@@ -9,6 +9,16 @@ const EXTERNAL_CONSOLE_ERRORS = [
 ]
 
 export async function prepareReadOnlyPage(page: Page) {
+  const goto = page.goto.bind(page)
+
+  page.goto = ((url, options) =>
+    goto(url, {
+      ...options,
+      // Interactive assertions require the client chunks to be loaded. Waiting
+      // only for DOMContentLoaded can race React hydration on cold deployments.
+      waitUntil: 'load',
+    })) as Page['goto']
+
   for (const endpoint of [
     '**/api/home/live-sync**',
     '**/api/match-detail/live-sync**',

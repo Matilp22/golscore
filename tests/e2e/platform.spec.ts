@@ -85,10 +85,15 @@ test.describe('Plataforma, estados y SEO', () => {
     await expect(
       state.getByRole('link', { name: 'Ver competiciones' })
     ).toHaveAttribute('href', '/competiciones')
-    await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
-      'content',
-      /noindex/
-    )
+    const robotsMetadata = page.locator('meta[name="robots"]')
+    expect(await robotsMetadata.count()).toBeGreaterThan(0)
+    expect(
+      await robotsMetadata.evaluateAll((elements) =>
+        elements.every((element) =>
+          element.getAttribute('content')?.includes('noindex')
+        )
+      )
+    ).toBe(true)
     await expectBasicAccessibility(page)
     await validateWidths(page)
 

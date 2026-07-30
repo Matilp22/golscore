@@ -4,6 +4,10 @@ import Link from 'next/link'
 export const metadata: Metadata = {
   title: 'Página no encontrada | Hay Fulbo',
   description: 'La página que buscás no está disponible en Hay Fulbo.',
+  robots: {
+    index: false,
+    follow: false,
+  },
 }
 
 export default function NotFound() {

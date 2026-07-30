@@ -310,7 +310,7 @@ honestidad, no en inventar datos.
 | Observabilidad | Sentry | errores | Sentry config | implementado | Captura preservada en error segmentado y global; no se provocó una excepción real para evitar enviar ruido a observabilidad. |
 | Error | error global recuperable | todas | App Router/Sentry | implementado | Pantalla nueva con reintento, regreso, referencia y captura; no se forzó un fallo raíz real. |
 | Error | error segmentado | módulos de datos | App Router | implementado | Boundary raíz de aplicación agregado con reset y navegación, manteniendo el shell; prueba positiva destructiva no necesaria. |
-| Error | 404 de producto | ruta inexistente | App Router | validado | Status 404, noindex automático único, diseño nuevo, enlaces, consola esperada y 12 anchos comprobados. |
+| Error | 404 de producto | ruta inexistente | App Router | validado | Status 404, metadata restrictiva `noindex`, diseño nuevo, enlaces, consola esperada y 12 anchos comprobados. |
 | Estado | skeletons consistentes | páginas de datos | loading.tsx/componentes | validado | Root, competencia, partido, equipo y jugador usan skeletons Matchday; auditoría espera y confirma su retirada antes de validar landmarks. |
 | Estado | offline y timeout | páginas interactivas | navegador/red | validado | Corte de red simulado en búsqueda produce mensaje útil sin `Failed to fetch`; Home conserva fallback de datos parciales ante timeout de extras. |
 | Estado | sesión vencida/permiso insuficiente | protegidas | Auth/permisos | validado | Perfil, Prode privado, organizador y admin presentan estados honestos; admin cierra acceso si falta configuración. |
@@ -322,7 +322,7 @@ honestidad, no en inventar datos.
 | Performance | imágenes y LCP | públicas | Next Image/assets | implementado | Componentes de assets preservan optimización/fallback y heroes evitan dependencias pesadas; medición final queda para Preview. |
 | Performance | bundle e hidratación | todas | RSC/client boundaries | implementado | Build de 83 páginas, componentes servidor preservados y límites cliente acotados; falta medición final del deployment. |
 | Seguridad | secretos solo servidor | todas | env/server-only | validado | 131 archivos cambiados inspeccionados: 0 nombres prohibidos, 0 `.env`, 0 patrones de secreto literal y 0 cambios bajo `supabase/`. |
-| Seguridad | producción/Supabase intactos | infraestructura | Git/Vercel/Supabase | en desarrollo | No hubo migraciones, RLS, DNS ni deploy productivo; falta verificar rama remota y Preview final. |
+| Seguridad | producción/Supabase intactos | infraestructura | Git/Vercel/Supabase | validado | Rama remota exclusiva y Preview con `target: null` verificados; `main` y el deployment productivo conservaron el commit `5695513c`; no hubo migraciones, RLS, DNS, dominios ni deploy productivo. |
 
 ## 12. Condición de salida
 
