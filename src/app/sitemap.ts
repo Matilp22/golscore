@@ -24,6 +24,12 @@ type SitemapEntry = MetadataRoute.Sitemap[number]
 const staticRoutes = [
   { path: '/', priority: 1 },
   { path: '/prode', priority: 0.8 },
+  { path: '/competiciones', priority: 0.8 },
+  { path: '/tablas', priority: 0.65 },
+  { path: '/estadisticas', priority: 0.65 },
+  { path: '/equipos', priority: 0.65 },
+  { path: '/mi-torneito', priority: 0.65 },
+  { path: '/mi-torneito/torneos', priority: 0.6 },
   { path: '/analisis', priority: 0.75 },
   ...TRUST_PAGE_PATHS.map((path) => ({ path, priority: 0.45 })),
 ] as const

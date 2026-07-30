@@ -20,37 +20,37 @@ export default async function ProtectedAdminLayout({
 
   if (current.status === 'supabase_not_configured') {
     return (
-      <main className="hf-admin-standalone">
+      <section className="hf-admin-standalone">
         <AdminNotice
           title="Supabase no está configurado"
           message="Configurá NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY para iniciar sesión."
           tone="danger"
         />
-      </main>
+      </section>
     )
   }
 
   if (current.status === 'access_denied') {
     return (
-      <main className="hf-admin-standalone">
+      <section className="hf-admin-standalone">
         <AdminNotice
           title="Acceso denegado"
           message="Tu usuario está conectado, pero el email no está incluido en ADMIN_EMAILS."
           tone="danger"
         />
-      </main>
+      </section>
     )
   }
 
   if (current.status === 'admin_not_configured') {
     return (
-      <main className="hf-admin-standalone">
+      <section className="hf-admin-standalone">
         <AdminNotice
           title="Admin no configurado"
           message="Configurá ADMIN_EMAILS con al menos un email autorizado para habilitar el panel."
           tone="danger"
         />
-      </main>
+      </section>
     )
   }
 

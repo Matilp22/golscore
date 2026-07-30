@@ -295,33 +295,33 @@ honestidad, no en inventar datos.
 
 | Módulo | Funcionalidad actual | Ruta | Fuente de datos | Estado nuevo | Validación |
 | --- | --- | --- | --- | --- | --- |
-| SEO | title y description | públicas | metadata API | pendiente | D,C,N,Q,R |
-| SEO | canonical | públicas | `SITE_URL` | pendiente | D,C,N,Q,R |
-| SEO | Open Graph/Twitter | públicas | metadata/contenido | pendiente | D,C,Q,R |
-| SEO | datos estructurados | contenido/deporte | builders locales | pendiente | D,C,Q,R |
-| SEO | sitemap y robots | `/sitemap.xml`, `/robots.txt` | rutas/contenido | pendiente | D,C,N,Q,R |
-| SEO | enlaces internos/headings | públicas | UI | pendiente | I,N,M,T,X,A,Q,R |
-| SEO | alias/redirecciones | legacy | App Router | pendiente | N,Q,R |
-| Ads | script y cuenta | todas habilitadas | env/config | pendiente | D,M,T,X,E,Ø,P,Q,R |
-| Ads | slot sin CLS | rutas habilitadas | admin/env | pendiente | D,M,T,X,Ø,A,P,Q,R |
-| Analítica | Google Analytics | todas | env/script | pendiente | D,S,Q,R |
-| Analítica | Vercel Analytics | todas | Vercel | pendiente | D,S,Q,R |
-| Observabilidad | Sentry | errores | Sentry config | pendiente | D,E,S,Q,R |
-| Error | error global recuperable | todas | App Router/Sentry | pendiente | I,N,M,T,X,E,A,Q |
-| Error | error segmentado | módulos de datos | App Router | pendiente | I,N,M,T,X,E,A,Q |
-| Error | 404 de producto | ruta inexistente | App Router | pendiente | N,M,T,X,Ø,A,Q |
-| Estado | skeletons consistentes | páginas de datos | loading.tsx/componentes | pendiente | L,M,T,X,A,P,Q |
-| Estado | offline y timeout | páginas interactivas | navegador/red | pendiente | E,Ø,M,T,X,A,Q |
-| Estado | sesión vencida/permiso insuficiente | protegidas | Auth/permisos | pendiente | E,Ø,N,M,T,X,A,S,Q |
-| Assets | logo/foto/imagen ausente | todas | fallback local | pendiente | Ø,M,T,X,A,P,Q,R |
-| Responsive | sin overflow ni solapamiento | todas | CSS/layout | pendiente | M,T,X,A,Q |
-| Accesibilidad | landmarks y jerarquía | todas | HTML | pendiente | M,T,X,A,Q |
-| Accesibilidad | foco visible y orden | todas | HTML/CSS | pendiente | I,M,T,X,A,Q |
-| Accesibilidad | reduced motion | todas | CSS/cliente | pendiente | M,T,X,A,Q |
-| Performance | imágenes y LCP | públicas | Next Image/assets | pendiente | M,T,X,P,Q |
-| Performance | bundle e hidratación | todas | RSC/client boundaries | pendiente | P,Q,R |
-| Seguridad | secretos solo servidor | todas | env/server-only | pendiente | S,Q,R |
-| Seguridad | producción/Supabase intactos | infraestructura | Git/Vercel/Supabase | pendiente | S,Q,R |
+| SEO | title y description | públicas | metadata API | validado | Home, Noticias y Mi Torneito exponen descripción no vacía; 404 y admin tienen títulos/estados propios. |
+| SEO | canonical | públicas | `SITE_URL` | validado | Canonical exacto por pathname comprobado en Home, Noticias y Mi Torneito. |
+| SEO | Open Graph/Twitter | públicas | metadata/contenido | validado | `og:title` y `twitter:card` comprobados en tres familias de página; cards editoriales verificadas en su suite. |
+| SEO | datos estructurados | contenido/deporte | builders locales | validado | JSON-LD de artículo y contenido editorial comprobado por la suite editorial; builders existentes preservados. |
+| SEO | sitemap y robots | `/sitemap.xml`, `/robots.txt` | rutas/contenido | validado | Respuesta real comprobada; sitemap incorpora secciones públicas y excluye admin/perfil, robots bloquea `/admin`. |
+| SEO | enlaces internos/headings | públicas | UI | validado | Un H1, un landmark main final, enlaces nombrados, IDs únicos e imágenes con alt auditados en páginas representativas; suites de módulo cubren navegación interna. |
+| SEO | alias/redirecciones | legacy | App Router | validado | `/contact`, `/privacy-policy` y `/terms` redirigen a sus rutas canónicas actuales. |
+| Ads | script y cuenta | todas habilitadas | env/config | validado | Meta de cuenta y script afterInteractive comprobados; Auth no renderiza slot. Publisher preservado sin tocar configuración productiva. |
+| Ads | slot sin CLS | rutas habilitadas | admin/env | implementado | Slot reserva 120 px y muestra etiqueta accesible; el entorno local no define `NEXT_PUBLIC_ADSENSE_DISPLAY_SLOT_ID`, por lo que falta runtime positivo. |
+| Analítica | Google Analytics | todas | env/script | implementado | Carga condicional y page views preservados; `NEXT_PUBLIC_GA_MEASUREMENT_ID` no está disponible en el entorno local para prueba positiva. |
+| Analítica | Vercel Analytics | todas | Vercel | implementado | Componente oficial preservado en layout; validación runtime pendiente del Preview de Vercel. |
+| Observabilidad | Sentry | errores | Sentry config | implementado | Captura preservada en error segmentado y global; no se provocó una excepción real para evitar enviar ruido a observabilidad. |
+| Error | error global recuperable | todas | App Router/Sentry | implementado | Pantalla nueva con reintento, regreso, referencia y captura; no se forzó un fallo raíz real. |
+| Error | error segmentado | módulos de datos | App Router | implementado | Boundary raíz de aplicación agregado con reset y navegación, manteniendo el shell; prueba positiva destructiva no necesaria. |
+| Error | 404 de producto | ruta inexistente | App Router | validado | Status 404, noindex automático único, diseño nuevo, enlaces, consola esperada y 12 anchos comprobados. |
+| Estado | skeletons consistentes | páginas de datos | loading.tsx/componentes | validado | Root, competencia, partido, equipo y jugador usan skeletons Matchday; auditoría espera y confirma su retirada antes de validar landmarks. |
+| Estado | offline y timeout | páginas interactivas | navegador/red | validado | Corte de red simulado en búsqueda produce mensaje útil sin `Failed to fetch`; Home conserva fallback de datos parciales ante timeout de extras. |
+| Estado | sesión vencida/permiso insuficiente | protegidas | Auth/permisos | validado | Perfil, Prode privado, organizador y admin presentan estados honestos; admin cierra acceso si falta configuración. |
+| Assets | logo/foto/imagen ausente | todas | fallback local | validado | Fallbacks de escudo, foto e imagen faltante comprobados en entidades/editorial sin romper layout. |
+| Responsive | sin overflow ni solapamiento | todas | CSS/layout | en desarrollo | Módulos principales validados individualmente en 12 anchos; falta la corrida global final antes del Preview. |
+| Accesibilidad | landmarks y jerarquía | todas | HTML | validado | Auditoría DOM exige un único main final, al menos un H1, IDs únicos, alt y nombres accesibles; se corrigieron landmarks anidados en admin. |
+| Accesibilidad | foco visible y orden | todas | HTML/CSS | validado | Búsqueda, favoritos, notificaciones, navegación y formularios tienen foco/teclado comprobados; selectores Prode reemplazados por controles nativos. |
+| Accesibilidad | reduced motion | todas | CSS/cliente | validado | Media query reduce animaciones/transiciones y `scroll-behavior`; comportamiento computado comprobado en Chromium. |
+| Performance | imágenes y LCP | públicas | Next Image/assets | implementado | Componentes de assets preservan optimización/fallback y heroes evitan dependencias pesadas; medición final queda para Preview. |
+| Performance | bundle e hidratación | todas | RSC/client boundaries | implementado | Build de 82 páginas, componentes servidor preservados y límites cliente acotados; falta medición final del deployment. |
+| Seguridad | secretos solo servidor | todas | env/server-only | en desarrollo | No se agregaron secretos ni variables; falta escaneo final del diff antes del push. |
+| Seguridad | producción/Supabase intactos | infraestructura | Git/Vercel/Supabase | en desarrollo | No hubo migraciones, RLS, DNS ni deploy productivo; falta verificar rama remota y Preview final. |
 
 ## 12. Condición de salida
 

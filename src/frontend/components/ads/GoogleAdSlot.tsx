@@ -45,11 +45,12 @@ export default function GoogleAdSlot({
 
   return (
     <aside
-      className={`mx-auto w-full max-w-5xl overflow-hidden rounded-2xl border border-white/8 bg-black/10 ${className}`}
+      className={`hf-ad-slot ${className}`}
       aria-label="Publicidad"
     >
+      <span className="hf-ad-slot-label">Publicidad</span>
       <ins
-        className="adsbygoogle block"
+        className="adsbygoogle"
         style={{
           display: 'block',
           minHeight: 90,

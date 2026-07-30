@@ -8,7 +8,7 @@ export const fetchCache = 'force-no-store'
 
 function AdminLoginFrame({ children }: { children: ReactNode }) {
   return (
-    <main className="hf-admin-login">
+    <div className="hf-admin-login">
       <section className="hf-admin-login-story" aria-label="Administración Hay Fulbo">
         <span className="hf-type-overline">Operaciones Hay Fulbo</span>
         <p className="hf-admin-login-title">La trastienda del partido.</p>
@@ -33,7 +33,7 @@ function AdminLoginFrame({ children }: { children: ReactNode }) {
         </ul>
       </section>
       <div className="hf-admin-login-content">{children}</div>
-    </main>
+    </div>
   )
 }
 

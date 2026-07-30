@@ -39,7 +39,7 @@ export default function AdminShell({ userEmail, children }: AdminShellProps) {
             <AdminSidebar orientation="grid" />
           </div>
         </details>
-        <main className="hf-admin-main">{children}</main>
+        <div className="hf-admin-main">{children}</div>
       </div>
     </div>
   )

@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import type { GlobalSearchCatalogData } from '@/shared/global-actions-data'
 
 const catalogCache = new Map<string, GlobalSearchCatalogData>()
+const SEARCH_TIMEOUT_MS = 8_000
 
 export function useSearchCatalog(query: string, enabled = true) {
   const normalizedQuery = query.trim().toLocaleLowerCase('es')
@@ -24,6 +25,11 @@ export function useSearchCatalog(query: string, enabled = true) {
     if (!shouldFetch || catalogCache.has(normalizedQuery)) return
 
     const controller = new AbortController()
+    let timedOut = false
+    const timeoutId = window.setTimeout(() => {
+      timedOut = true
+      controller.abort()
+    }, SEARCH_TIMEOUT_MS)
 
     fetch(`/api/search-catalog?q=${encodeURIComponent(normalizedQuery)}`, {
       cache: 'no-store',
@@ -45,19 +51,26 @@ export function useSearchCatalog(query: string, enabled = true) {
         })
       })
       .catch((fetchError: unknown) => {
-        if (controller.signal.aborted) return
+        if (controller.signal.aborted && !timedOut) return
+
+        void fetchError
 
         setRequestState({
           query: normalizedQuery,
           data: null,
-          error:
-            fetchError instanceof Error
-              ? fetchError.message
-              : 'No pudimos completar la búsqueda.',
+          error: timedOut
+            ? 'La búsqueda tardó demasiado. Probá de nuevo.'
+            : 'No pudimos completar la búsqueda.',
         })
       })
+      .finally(() => {
+        window.clearTimeout(timeoutId)
+      })
 
-    return () => controller.abort()
+    return () => {
+      window.clearTimeout(timeoutId)
+      controller.abort()
+    }
   }, [normalizedQuery, shouldFetch])
 
   const stateForQuery =
