@@ -27,7 +27,7 @@ export function GroupTabs({ activeTab, onChange }: GroupTabsProps) {
   ]
 
   return (
-    <div className="inline-flex shrink-0 rounded-lg border border-white/8 bg-[#0c1115] p-0.5 sm:rounded-xl sm:p-1">
+    <div className="hf-group-tabs" role="group" aria-label="Vista del grupo">
       {tabs.map((tab) => {
         const isActive = activeTab === tab.key
 
@@ -36,11 +36,7 @@ export function GroupTabs({ activeTab, onChange }: GroupTabsProps) {
             key={tab.key}
             type="button"
             onClick={() => onChange(tab.key)}
-            className={`min-h-7 rounded-md px-2 text-[11px] font-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7ff0b2]/70 sm:min-h-8 sm:rounded-lg sm:px-3 sm:text-xs ${
-              isActive
-                ? 'bg-[#7ff0b2] text-[#07100b] shadow-[0_0_18px_rgba(127,240,178,0.18)]'
-                : 'text-[#9eacb8] hover:bg-white/[0.05] hover:text-white'
-            }`}
+            className={isActive ? 'is-active' : ''}
             aria-pressed={isActive}
           >
             {tab.label}
@@ -71,15 +67,15 @@ export function GroupStageCard({
   const visibleTab = hasFixtures ? activeTab : 'table'
 
   return (
-    <section id={id} className="hf-tournament-dark-panel min-w-0 scroll-mt-28 overflow-hidden rounded-2xl border border-white/8 bg-[#0f1317]/92">
-      <div className="flex min-w-0 items-center justify-between gap-2 border-b border-white/6 bg-[#13181d] px-2 py-1.5 md:px-3 md:py-2">
-        <div className="min-w-0 flex-1">
-          <h2 className="truncate text-sm font-semibold text-white md:text-base md:font-bold">{title}</h2>
+    <section id={id} className="hf-group-card">
+      <header className="hf-group-card-heading">
+        <div>
+          <h2>{title}</h2>
         </div>
         {hasFixtures ? <GroupTabs activeTab={activeTab} onChange={setActiveTab} /> : null}
-      </div>
+      </header>
 
-      <div className="p-2 md:p-2.5">
+      <div className="hf-group-card-body">
         {visibleTab === 'table' ? table : fixtures}
       </div>
     </section>
@@ -94,7 +90,7 @@ export default function GroupStageGrid({
   defaultTab?: GroupStageTab
 }) {
   return (
-    <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2">
+    <div className="hf-group-grid">
       {groups.map((group) => (
         <GroupStageCard
           id={group.id}

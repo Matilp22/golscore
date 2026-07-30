@@ -1,5 +1,4 @@
-import Link from 'next/link'
-
+import CompetitionDirectory from '@/frontend/components/competition/CompetitionDirectory'
 import { SIDEBAR_SECTION_CONFIGS } from '@/lib/tournament-pages'
 import { getRequestLocale } from '@/server/request-locale'
 import {
@@ -11,7 +10,7 @@ import { buildSeoMetadata } from '@/shared/seo'
 export async function generateMetadata() {
   return buildSeoMetadata({
     title: 'Tablas | Hay Fulbo',
-    description: 'Acceso rapido a las tablas de posiciones por competicion.',
+    description: 'Acceso rápido a las tablas de posiciones por competición.',
     path: '/tablas',
   })
 }
@@ -27,37 +26,30 @@ function getInitials(name: string) {
 
 export default async function TablesPage() {
   const locale = await getRequestLocale()
+  const sections = SIDEBAR_SECTION_CONFIGS.map((section) => ({
+    key: section.key,
+    name: getSectionDisplayName(section.key, section.title, locale),
+    items: section.tournaments.map((tournament) => {
+      const name = getTournamentDisplayName(tournament.key, tournament.title, locale)
+
+      return {
+        key: tournament.key,
+        name,
+        href: `/liga/${tournament.key}#tabla`,
+        initials: getInitials(name),
+      }
+    }),
+  }))
 
   return (
-    <main className="hf-directory-page">
-      <section className="hf-directory-hero">
-        <p>Tablas</p>
-        <h1>Posiciones por competición</h1>
-        <span>Entrá a una competición para revisar su tabla, grupos y contexto deportivo.</span>
-      </section>
-
-      <div className="hf-directory-sections">
-        {SIDEBAR_SECTION_CONFIGS.map((section) => (
-          <section key={section.key} className="hf-directory-section">
-            <div className="hf-directory-section-head">
-              <h2>{getSectionDisplayName(section.key, section.title, locale)}</h2>
-              <span>{section.tournaments.length} torneos</span>
-            </div>
-            <div className="hf-directory-grid">
-              {section.tournaments.map((tournament) => {
-                const name = getTournamentDisplayName(tournament.key, tournament.title, locale)
-
-                return (
-                  <Link key={tournament.key} href={`/liga/${tournament.key}#posiciones`} className="hf-directory-card">
-                    <span className="hf-directory-shield" aria-hidden="true">{getInitials(name)}</span>
-                    <span>{name}</span>
-                  </Link>
-                )
-              })}
-            </div>
-          </section>
-        ))}
-      </div>
-    </main>
+    <CompetitionDirectory
+      eyebrow="Centro de tablas"
+      title="Posiciones sin vueltas"
+      description="Accedé a la clasificación de cada competencia. Si el torneo tiene zonas, grupos o promedios, vas a encontrar su estructura completa."
+      searchLabel="Filtrar tablas"
+      searchPlaceholder="Ej. Liga Profesional, Champions…"
+      emptyMessage="No encontramos una tabla con ese nombre o región."
+      sections={sections}
+    />
   )
 }

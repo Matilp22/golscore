@@ -146,26 +146,26 @@ honestidad, no en inventar datos.
 
 | Módulo | Funcionalidad actual | Ruta | Fuente de datos | Estado nuevo | Validación |
 | --- | --- | --- | --- | --- | --- |
-| Competencias | catálogo y acceso | `/competiciones` | config de torneos | pendiente | D,I,N,M,T,X,L,E,Ø,A,Q,R |
-| Competencia | identidad, país y temporada | `/liga/[id]` | config + Supabase | pendiente | D,C,N,M,T,X,L,E,Ø,A,Q,R |
-| Competencia | fase/jornada actual | `/liga/[id]` | fixture/reglas | pendiente | D,C,I,N,M,T,X,Ø,A,Q,R |
-| Competencia | fixture por fecha/fase | `/liga/[id]` | caché de fixtures | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,P,Q,R |
-| Competencia | navegación a partido/equipo | `/liga/[id]` | ids del fixture | pendiente | D,I,N,M,T,X,A,Q,R |
-| Tabla | liga general | `/liga/[id]`, `/tablas` | standings cache | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,P,Q,R |
-| Tabla | zonas y grupos | `/liga/[id]` | standings/reglas | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,Q,R |
-| Tabla | clasificación/promedios/descenso | `/liga/[id]` | standings + reglas locales | pendiente | D,C,M,T,X,E,Ø,A,Q,R |
+| Competencias | catálogo y acceso | `/competiciones` | config de torneos | validado | Catálogo real, filtro, cero resultados, enlaces y 12 anchos comprobados sin overflow ni consola interna. |
+| Competencia | identidad, país y temporada | `/liga/[id]` | config + Supabase | validado | Identidad y temporada reales comprobadas en Liga Profesional y Libertadores. |
+| Competencia | fase/jornada actual | `/liga/[id]` | fixture/reglas | validado | Selector de jornada y bloques reales comprobados. |
+| Competencia | fixture por fecha/fase | `/liga/[id]` | caché de fixtures | validado | Partidos reales por día/fase, estados y marcador comprobados en caché de solo lectura. |
+| Competencia | navegación a partido/equipo | `/liga/[id]` | ids del fixture | implementado | Enlaces reales a partido preservados; navegación a equipo depende de cada componente y requiere pasada específica. |
+| Tabla | liga general | `/liga/[id]`, `/tablas` | standings cache | validado | Más de diez filas reales, acceso desde `/tablas` y navegación al ancla comprobados. |
+| Tabla | zonas y grupos | `/liga/[id]` | standings/reglas | validado | Zonas de Liga Profesional y ocho grupos de Libertadores comprobados. |
+| Tabla | clasificación/promedios/descenso | `/liga/[id]` | standings + reglas locales | validado | Tabla anual, promedios y leyendas de clasificación revisados visualmente con datos reales. |
 | Tabla | forma y estados V/E/D | `/liga/[id]` | standings | pendiente | D,C,M,T,X,Ø,A,Q,R |
-| Llaves | partido único | `/liga/[id]` | fixtures/reglas | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,Q,R |
-| Llaves | ida/vuelta y global | `/liga/[id]` | fixtures/series | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,Q,R |
-| Llaves | penales | `/liga/[id]` | fixtures | pendiente | D,C,M,T,X,Ø,A,Q,R |
-| Líderes | goleadores | `/liga/[id]`, `/estadisticas` | caché/API-Football | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,P,Q,R |
-| Líderes | asistencias y tarjetas | `/liga/[id]`, `/estadisticas` | caché/API-Football | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,P,Q,R |
+| Llaves | partido único | `/liga/[id]` | fixtures/reglas | implementado | Cuadro responsive y estados a confirmar comprobados; falta fixture QA finalizado de partido único. |
+| Llaves | ida/vuelta y global | `/liga/[id]` | fixtures/series | implementado | Contratos y componentes CONMEBOL preservados; falta serie finalizada específica para validar global. |
+| Llaves | penales | `/liga/[id]` | fixtures | implementado | Formateo de penales preservado; falta fixture QA específico. |
+| Líderes | goleadores | `/liga/[id]`, `/estadisticas` | caché/API-Football | implementado | Estado vacío honesto validado; el caché de QA no devolvió jugadores. |
+| Líderes | asistencias y tarjetas | `/liga/[id]`, `/estadisticas` | caché/API-Football | implementado | Estados vacíos honestos validados; falta dataset con líderes. |
 | Competencia | equipos participantes | `/liga/[id]` | fixtures/standings | pendiente | D,C,I,N,M,T,X,Ø,A,Q,R |
 | Competencia | noticias e historia | `/liga/[id]` | contenido local/campeones | pendiente | D,I,N,M,T,X,Ø,A,Q,R |
 | Campeones | historial | `/liga/[id]/campeones` | tablas locales/Supabase | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,Q,R |
 | Competencia | sedes cuando existen | `/liga/[id]` | config/equipos | pendiente | D,C,I,N,M,T,X,Ø,A,Q |
-| Competencia | sin fixture/tabla/líderes | `/liga/[id]` | fuente vacía | pendiente | Ø,M,T,X,A,Q,R |
-| Competencia | variantes Argentina/CONMEBOL/UEFA | `/liga/[id]` | reglas específicas | pendiente | D,C,I,N,M,T,X,L,E,Ø,A,P,Q,R |
+| Competencia | sin fixture/tabla/líderes | `/liga/[id]` | fuente vacía | implementado | Superficies vacías y de error rediseñadas; falta forzar las tres fuentes vacías en E2E. |
+| Competencia | variantes Argentina/CONMEBOL/UEFA | `/liga/[id]` | reglas específicas | implementado | Argentina y CONMEBOL validados; UEFA conserva lógica pero requiere pasada visual específica. |
 
 ## 5. Mundial 2026
 

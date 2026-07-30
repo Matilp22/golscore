@@ -1,6 +1,4 @@
-import Image from 'next/image'
-import Link from 'next/link'
-
+import CompetitionDirectory from '@/frontend/components/competition/CompetitionDirectory'
 import {
   SIDEBAR_SECTION_CONFIGS,
   type TournamentPageConfig,
@@ -27,7 +25,7 @@ function resolveTournamentLogo(tournament: TournamentPageConfig) {
 export async function generateMetadata() {
   return buildSeoMetadata({
     title: 'Competiciones | Hay Fulbo',
-    description: 'Todas las competiciones disponibles en Hay Fulbo, agrupadas por categoria y pais.',
+    description: 'Todas las competiciones disponibles en Hay Fulbo, agrupadas por categoría y país.',
     path: '/competiciones',
   })
 }
@@ -38,69 +36,36 @@ function getTournamentInitials(name: string) {
     .split(/\s+/)
     .filter(Boolean)
 
-  return (words[0]?.[0] ?? 'H') + (words[1]?.[0] ?? words[0]?.[1] ?? 'F')
-}
-
-function CompetitionLogo({ tournament, name }: { tournament: TournamentPageConfig; name: string }) {
-  const logo = resolveTournamentLogo(tournament)
-
-  if (logo) {
-    return (
-      <span className="hf-directory-logo">
-        <Image src={logo} alt="" width={44} height={44} className="h-11 w-11 object-contain" />
-      </span>
-    )
-  }
-
-  return (
-    <span className="hf-directory-shield" aria-hidden="true">
-      {getTournamentInitials(name).toUpperCase()}
-    </span>
-  )
+  return ((words[0]?.[0] ?? 'H') + (words[1]?.[0] ?? words[0]?.[1] ?? 'F')).toUpperCase()
 }
 
 export default async function CompetitionsPage() {
   const locale = await getRequestLocale()
+  const sections = SIDEBAR_SECTION_CONFIGS.map((section) => ({
+    key: section.key,
+    name: getSectionDisplayName(section.key, section.title, locale),
+    items: section.tournaments.map((tournament) => {
+      const name = getTournamentDisplayName(tournament.key, tournament.title, locale)
+
+      return {
+        key: tournament.key,
+        name,
+        href: `/liga/${tournament.key}`,
+        logo: resolveTournamentLogo(tournament),
+        initials: getTournamentInitials(name),
+      }
+    }),
+  }))
 
   return (
-    <main className="hf-directory-page">
-      <section className="hf-directory-hero">
-        <p>Competiciones</p>
-        <h1>Todas las ligas y torneos</h1>
-        <span>Elegí una competición para ver partidos, tablas, estadísticas y calendario.</span>
-      </section>
-
-      <div className="hf-directory-sections">
-        {SIDEBAR_SECTION_CONFIGS.map((section) => {
-          const sectionTitle = getSectionDisplayName(section.key, section.title, locale)
-
-          return (
-            <section key={section.key} id={section.key} className="hf-directory-section">
-              <div className="hf-directory-section-head">
-                <h2>{sectionTitle}</h2>
-                <span>{section.tournaments.length} torneos</span>
-              </div>
-
-              <div className="hf-directory-grid">
-                {section.tournaments.map((tournament) => {
-                  const tournamentName = getTournamentDisplayName(tournament.key, tournament.title, locale)
-
-                  return (
-                    <Link
-                      key={tournament.key}
-                      href={`/liga/${tournament.key}`}
-                      className="hf-directory-card"
-                    >
-                      <CompetitionLogo tournament={tournament} name={tournamentName} />
-                      <span>{tournamentName}</span>
-                    </Link>
-                  )
-                })}
-              </div>
-            </section>
-          )
-        })}
-      </div>
-    </main>
+    <CompetitionDirectory
+      eyebrow="Mapa de competiciones"
+      title="Todo el fútbol, bien ordenado"
+      description="Encontrá ligas, copas y torneos internacionales. Cada competencia conserva sus partidos, formato, tablas y estadísticas reales."
+      searchLabel="Filtrar competiciones"
+      searchPlaceholder="Ej. Libertadores, Argentina, Premier…"
+      emptyMessage="Probá con el nombre de una liga, copa, país o región."
+      sections={sections}
+    />
   )
 }

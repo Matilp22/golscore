@@ -1752,10 +1752,10 @@ function TableLegend({
   items: Array<{ label: string; tone: string }>
 }) {
   return (
-    <div className="mt-4 space-y-2 border-t border-white/6 pt-3">
+    <div className="hf-table-legend">
       {items.map((item) => (
-        <div key={item.label} className="flex items-center gap-2 text-xs text-[#dce5ef]">
-          <span className={`h-3 w-3 rounded-full ${item.tone}`} />
+        <div key={item.label}>
+          <span className={`hf-table-legend-tone ${item.tone}`} />
           <span>{item.label}</span>
         </div>
       ))}
@@ -1841,8 +1841,8 @@ function PromediosTable({
   const seasonWidth = seasons.length ? `${Math.max(8, 34 / seasons.length)}%` : '0%'
 
   return (
-    <div className="w-full overflow-hidden">
-      <table className={`w-full table-fixed ${compact ? 'text-[10.5px] sm:text-[12px]' : 'text-[10.5px] sm:text-[13px]'}`}>
+    <div className="hf-standings-table-wrap">
+      <table className={`hf-standings-table ${compact ? 'is-compact' : ''}`}>
         <colgroup>
           <col style={{ width: '7%' }} />
           <col style={{ width: '32%' }} />
@@ -1853,8 +1853,8 @@ function PromediosTable({
             <col key={season} style={{ width: seasonWidth }} />
           ))}
         </colgroup>
-        <thead className="text-left text-[#8d98a7]">
-          <tr className="border-b border-white/6">
+        <thead>
+          <tr>
             <th className={`${cellPadding} font-semibold`}>#</th>
             <th className={`${cellPadding} font-semibold`}>Equipo</th>
             <th className={`${cellPadding} text-center font-semibold`}>PROM</th>
@@ -2212,14 +2212,14 @@ function SectionCard({
   children: ReactNode
 }) {
   return (
-    <section className="hf-card w-full overflow-hidden rounded-3xl">
-      <div className="hf-section-head px-2 py-2 md:px-3">
-        <h2 className="text-base font-bold text-white md:text-lg">{title}</h2>
+    <section className="hf-competition-card">
+      <header className="hf-competition-card-heading">
+        <h2>{title}</h2>
         {subtitle ? (
-          <p className="mt-0.5 text-xs text-[#8d98a7]">{subtitle}</p>
+          <p>{subtitle}</p>
         ) : null}
-      </div>
-      <div className="p-2 md:p-3">{children}</div>
+      </header>
+      <div className="hf-competition-card-body">{children}</div>
     </section>
   )
 }
@@ -2429,7 +2429,7 @@ function GroupFixtures({
 }) {
   if (!fixtures.length) {
     return (
-      <div className="rounded-xl border border-white/8 bg-[#10151a] px-3 py-4 text-center text-sm text-[#8d98a7]">
+      <div className="hf-competition-empty">
         No hay partidos de grupo disponibles.
       </div>
     )
@@ -2438,12 +2438,12 @@ function GroupFixtures({
   const sortedFixtures = [...fixtures].sort(compareFixturesByDateThenId)
 
   return (
-    <div className="grid min-w-0 grid-cols-2 gap-1.5 md:grid-cols-2 md:gap-2">
+    <div className="hf-group-fixtures">
       {sortedFixtures.map((fixture) => (
         <Link
           key={fixture.id}
           href={`/partido/${fixture.id}`}
-          className="block w-full min-w-0 overflow-hidden rounded-xl border border-white/8 bg-[#11161b] p-1.5 text-[11px] transition hover:border-[#2a5c46] hover:bg-[#151b21] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7ff0b2]/60 sm:p-2 md:p-3 md:text-sm"
+          className="hf-group-fixture"
         >
           <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1 md:gap-2">
             <FixtureTeamLabel
@@ -2454,7 +2454,7 @@ function GroupFixtures({
               translateTeamNames={translateTeamNames}
             />
 
-            <span className="min-w-[32px] shrink-0 rounded-md border border-white/8 bg-[#0d1216] px-1 py-0.5 text-center text-[10.5px] font-black leading-none text-white md:min-w-[52px] md:rounded-lg md:px-2 md:py-1 md:text-xs">
+            <span className="hf-group-fixture-score">
               <span className="md:hidden">{getGroupFixtureCompactScoreLabel(fixture)}</span>
               <span className="hidden md:inline">{getGroupFixtureScoreLabel(fixture)}</span>
             </span>
@@ -2468,7 +2468,7 @@ function GroupFixtures({
             />
           </div>
 
-          <div className="mt-1 text-center text-[10.5px] font-semibold text-[#9eacb8] md:mt-1.5 md:text-xs">
+          <div className="hf-group-fixture-time">
             {formatGroupFixtureDateTime(fixture.date)}
           </div>
         </Link>
@@ -2515,8 +2515,8 @@ function StandingsTable({
   const metricColumnWidth = `${(100 - Number.parseFloat(rankColumnWidth) - Number.parseFloat(teamColumnWidth)) / visibleMetricCount}%`
 
   return (
-    <div className="w-full overflow-hidden">
-      <table className={`w-full table-fixed ${compact ? 'text-[10.5px] sm:text-[12px]' : 'text-[10.5px] sm:text-[13px]'}`}>
+    <div className="hf-standings-table-wrap">
+      <table className={`hf-standings-table ${compact ? 'is-compact' : ''}`}>
         <colgroup>
           <col style={{ width: rankColumnWidth }} />
           <col style={{ width: teamColumnWidth }} />
@@ -2530,8 +2530,8 @@ function StandingsTable({
           <col style={{ width: metricColumnWidth }} />
           {showAverage ? <col style={{ width: metricColumnWidth }} /> : null}
         </colgroup>
-        <thead className="text-left text-[#8d98a7]">
-          <tr className="border-b border-white/6">
+        <thead>
+          <tr>
             <th className={`${cellPadding} font-semibold`}>#</th>
             <th className={`${cellPadding} font-semibold`}>Equipo</th>
             <th className={`${cellPadding} font-semibold text-center`}>{thirdPlaceTable ? 'Pts' : 'PTS'}</th>
@@ -2671,16 +2671,16 @@ function BracketView({
       title="Cuadro de llaves"
       subtitle="Cruces eliminatorios del torneo"
     >
-      <div className="bracket-scroll overflow-x-auto pb-1">
-        <div className="w-full min-w-max max-w-none md:min-w-full">
-          <div className="flex w-full items-start gap-3">
+      <div className="hf-bracket-scroll bracket-scroll">
+        <div className="hf-bracket-track">
+          <div className="hf-bracket-columns">
             {columns.map((column, columnIndex) => {
               const badge = columnIndex === columns.length - 1 ? getRoundBadge(column.label) : null
 
               return (
                 <div
                   key={column.key}
-                  className={`flex min-w-[191px] flex-1 flex-col rounded-[18px] border border-white/7 bg-[linear-gradient(180deg,rgba(255,255,255,0.035)_0%,rgba(255,255,255,0.02)_100%)] py-2.5 ${
+                  className={`hf-bracket-column ${
                     columnIndex === 0 ? 'pl-0 pr-2.5' : 'px-2.5'
                   }`}
                 >
@@ -2698,10 +2698,10 @@ function BracketView({
                   >
                     {column.matches.map((match) => {
                       const matchHref = getBracketMatchDetailHref(match, matchHrefByParticipantPair)
-                      const matchCardClassName = `block h-[48px] overflow-hidden rounded-xl border border-[#2a5c46] bg-[linear-gradient(180deg,#161d24_0%,#11181d_100%)] p-1 shadow-[inset_0_0_0_1px_rgba(127,240,178,0.06)] transition ${
+                      const matchCardClassName = `hf-bracket-match ${
                         matchHref
-                          ? 'cursor-pointer hover:border-[#3a7c5f] hover:bg-[linear-gradient(180deg,#182128_0%,#121a20_100%)]'
-                          : 'cursor-default'
+                          ? 'is-interactive'
+                          : 'is-placeholder'
                       }`
                       const matchCardContent = (
                         <div className="flex h-full flex-col justify-center gap-[2px]">
@@ -2713,10 +2713,10 @@ function BracketView({
                             return (
                               <div
                                 key={`${match.id}-${participantIndex}`}
-                                className={`flex h-[17px] items-center justify-between gap-2 rounded-md px-1.5 py-0.5 ${
+                                className={`hf-bracket-team ${
                                   team.isWinner
-                                    ? 'bg-[#143624] text-[#7ff0b2] shadow-[inset_0_0_0_1px_rgba(127,240,178,0.2)]'
-                                    : 'bg-[#121a20]'
+                                    ? 'is-winner'
+                                    : ''
                                 }`}
                               >
                                 <div className="flex min-w-0 items-center gap-2">
@@ -2796,12 +2796,15 @@ export default async function LigaPage({ params }: PageProps) {
 
   if (!tournament) {
     return (
-      <div className="min-h-screen bg-[#0a0d0b] px-2 py-3 text-white md:px-4 md:py-10">
-        <div className="w-full max-w-none rounded-3xl border border-white/8 bg-[#111418] p-4 md:mx-auto md:max-w-6xl md:p-6">
-          <h1 className="text-2xl font-black">Torneo no encontrado</h1>
-          <p className="mt-2 text-[#8d98a7]">No existe una configuracion para este torneo.</p>
-        </div>
-      </div>
+      <main className="hf-state-page">
+        <section className="hf-state-surface">
+          <span className="hf-state-surface-icon" aria-hidden="true">?</span>
+          <p className="hf-type-overline">Competición desconocida</p>
+          <h1>Torneo no encontrado</h1>
+          <p>No existe una configuración para este torneo.</p>
+          <Link className="hf-button" href="/competiciones">Ver competiciones</Link>
+        </section>
+      </main>
     )
   }
 
@@ -3100,9 +3103,8 @@ export default async function LigaPage({ params }: PageProps) {
     copaArgentinaChampions.length > 0
   const tournamentTheme = getTournamentTheme(tournament.key)
   const tournamentThemeStyle = {
-    background: tournamentTheme.background,
-    boxShadow: tournamentTheme.glow,
     '--tournament-accent': tournamentTheme.accent,
+    '--hf-competition-accent': tournamentTheme.accent,
   } as CSSProperties
   const headerLeagueLogo =
     isWorldCupTournament
@@ -3229,12 +3231,12 @@ export default async function LigaPage({ params }: PageProps) {
           ? [{ key: 'partidos', label: 'Partidos', href: '#partidos', active: true }]
           : []),
         ...(shouldRenderStandings && (displayPrimaryGroups.length || uefaLeaguePhaseRows.length)
-          ? [{ key: 'tabla', label: 'Clasificacion', href: '#tabla' }]
+          ? [{ key: 'tabla', label: 'Clasificación', href: '#tabla' }]
           : []),
         ...(shouldRenderKnockoutBracket || isUefaLeaguePhaseTournament || showConmebolGroupStage
           ? [{ key: 'llaves', label: 'Llaves', href: '#llaves' }]
           : []),
-        { key: 'estadisticas', label: 'Estadisticas', href: '#estadisticas' },
+        { key: 'estadisticas', label: 'Estadísticas', href: '#estadisticas' },
       ]
 
   if (isWorldCupTournament) {
@@ -3258,19 +3260,18 @@ export default async function LigaPage({ params }: PageProps) {
   }
 
   return (
-    <div className="min-h-screen bg-transparent text-white">
+    <div className="hf-competition-page" data-competition={tournament.key}>
       {isWorldCupTournament ? <WorldCupScrollReset /> : null}
-      <div className="w-full max-w-none px-0 py-3 lg:mx-auto lg:max-w-7xl lg:px-5 lg:py-6">
-        <main className="w-full min-w-0 space-y-4">
+      <div className="hf-competition-page-inner">
+        <main className="hf-competition-page-content">
           <header
-            className="hf-league-hero relative w-full overflow-hidden rounded-3xl border border-white/8"
+            className="hf-competition-hero"
             style={tournamentThemeStyle}
           >
-            <div className="pointer-events-none absolute inset-0 bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.035)_0_1px,transparent_1px_54px)] opacity-45" />
-            <div className="flex flex-col gap-3 px-2 py-3 md:flex-row md:items-center md:justify-between md:gap-4 md:px-4 md:py-5">
-              <div className="flex items-center gap-4">
+            <div className="hf-competition-hero-copy">
+              <div className="hf-competition-identity">
                 {headerLeagueLogo ? (
-                  <div className="flex h-16 w-16 items-center justify-center">
+                  <div className="hf-competition-logo">
                     <LeagueLogo
                       src={headerLeagueLogo}
                       alt={resolvedTournament?.name ?? visibleTournamentTitle}
@@ -3282,27 +3283,28 @@ export default async function LigaPage({ params }: PageProps) {
                   </div>
                 ) : null}
 
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--tournament-accent)]">
+                <div className="hf-competition-title">
+                  <p className="hf-type-overline">
                     {visibleTournamentCountry}
                   </p>
-                  <h1 className="mt-1 text-2xl font-bold text-white md:text-3xl">
+                  <h1>
                     {visibleTournamentTitle}
                   </h1>
-                  <p className="mt-1 text-sm text-[#8d98a7]">
+                  <p>
                     {tournamentSubtitle}
                   </p>
                 </div>
               </div>
 
+              <div className="hf-competition-hero-actions">
               {tournament.key === 'argentina-copa-argentina' ? (
-                <div className="flex justify-start md:justify-end">
+                <div>
                   <CopaArgentinaChampions champions={copaArgentinaChampions} />
                 </div>
               ) : null}
 
               {tournament.key !== 'argentina-copa-argentina' && tournamentChampions.length ? (
-                <div className="flex justify-start md:justify-end">
+                <div>
                   <TournamentChampionsButton
                     competitionName={visibleTournamentTitle}
                     champions={tournamentChampions}
@@ -3311,16 +3313,16 @@ export default async function LigaPage({ params }: PageProps) {
               ) : null}
 
               {tournament.key === 'selecciones-mundial' ? (
-                <div className="flex justify-start md:justify-end">
+                <div>
                   <Link
                     href={`/liga/${id}/campeones`}
-                    className="inline-flex min-h-10 items-center justify-center rounded-xl border border-[#f6ca58] bg-[linear-gradient(135deg,#7c5513_0%,#d5a940_48%,#8a5f16_100%)] px-3 py-2 text-sm font-black text-[#150f05] shadow-[0_0_18px_rgba(213,169,64,0.18),inset_0_1px_0_rgba(255,255,255,0.34)] transition hover:border-[#f0c85a] hover:shadow-[0_0_24px_rgba(240,200,90,0.28),inset_0_1px_0_rgba(255,255,255,0.4)] sm:px-4"
+                    className="hf-button-secondary"
                   >
                     Campeones
                   </Link>
                 </div>
               ) : null}
-
+              </div>
             </div>
           </header>
 
@@ -3334,9 +3336,10 @@ export default async function LigaPage({ params }: PageProps) {
           ) : null}
 
           {errorMessage ? (
-            <div className="w-full rounded-3xl border border-[#5a2a2a] bg-[#3b1919] p-4 md:p-6">
-              <p className="text-sm font-medium text-[#ffd5d5]">{errorMessage}</p>
-            </div>
+            <section className="hf-state-inline is-error" role="alert">
+              <strong>No pudimos cargar todos los datos</strong>
+              <p>{errorMessage}</p>
+            </section>
           ) : null}
 
           {!errorMessage && !hasTournamentData ? (

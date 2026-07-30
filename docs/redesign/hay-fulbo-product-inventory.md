@@ -611,6 +611,14 @@ estadísticas que las fuentes actuales no provean.
   solo interacción.
 - Reservar tamaño para imágenes y anuncios.
 - Probar una ruta real representativa por familia antes de declarar paridad.
+- La ruta de competencia puede tardar más de 20 segundos en modo cache-only
+  cuando `league-leaders` agota su timeout y Liga Profesional reconstruye
+  promedios históricos. No se alteró ese contrato durante el rediseño; queda
+  registrado como riesgo de performance para una optimización separada.
+- Durante una detención del servidor de QA, Next.js 16.2.1 emitió una vez
+  `Unexpected root span type 'ResolveMetadata.generateMetadata'`. El build,
+  TypeScript y las páginas completaron correctamente; debe vigilarse en la
+  verificación del Preview y en futuras actualizaciones de Next.js.
 - No recorrer APIs administrativas en E2E.
 - No crear migraciones ni ejecutar comandos remotos de Supabase.
 - Desplegar únicamente Preview desde la rama, inspeccionar su metadata de
