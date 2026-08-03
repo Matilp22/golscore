@@ -33,6 +33,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+/.*.log
+/.*.err
+/.*.out
+/.playwright-cli/
 
 # env files (can opt-in for committing if needed)
 .env*

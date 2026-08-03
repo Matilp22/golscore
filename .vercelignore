@@ -1,5 +1,14 @@
 .codex-remote-attachments/
 .guess-dev.*
+.local-*
+.match-centre*
+.orbit-*
+.pulse-*
+.qa-*
+.vercel-preview-*
+*.log
+*.err
+*.out
 .playwright-cli/
 output/playwright/
 playwright-report/
