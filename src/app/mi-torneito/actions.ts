@@ -134,7 +134,7 @@ async function authorizeTournamentMutation(tournamentId: string) {
 }
 
 export async function submitMiTorneitoRequestAction(formData: FormData) {
-  let target = '/mi-torneito?solicitud=ok#solicitar'
+  let target = '/mi-torneito/como-funciona?solicitud=ok#solicitar'
 
   try {
     const organizerName = readString(formData, 'organizerName')
@@ -157,7 +157,7 @@ export async function submitMiTorneitoRequestAction(formData: FormData) {
 
     revalidatePath('/mi-torneito')
   } catch (error) {
-    target = `/mi-torneito?solicitud=error&mensaje=${encodeURIComponent(
+    target = `/mi-torneito/como-funciona?solicitud=error&mensaje=${encodeURIComponent(
       getMiTorneitoErrorMessage(error)
     )}#solicitar`
   }

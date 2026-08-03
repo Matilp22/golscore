@@ -93,7 +93,6 @@ export default async function MercadoDePasesPage({
     status: selectedStatus,
     type: selectedType,
   })
-  const allMovements = getTransferMarketItems()
   const guides = getTransferMarketEditorialArticles()
   const filtersActive = Boolean(selectedStatus || selectedType)
 
@@ -108,20 +107,6 @@ export default async function MercadoDePasesPage({
             Cada movimiento conserva su fecha, estado y fuente.
           </p>
         </div>
-        <dl>
-          <div>
-            <dt>Movimientos verificados</dt>
-            <dd className="hf-type-data">{allMovements.length}</dd>
-          </div>
-          <div>
-            <dt>Guías editoriales</dt>
-            <dd className="hf-type-data">{guides.length}</dd>
-          </div>
-          <div>
-            <dt>Criterio</dt>
-            <dd>Primero la certeza</dd>
-          </div>
-        </dl>
       </header>
 
       <section

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState, useTransition } from 'react'
 
 import AppIcon from '@/frontend/components/navigation/AppIcon'
+import { TeamLogo } from '@/frontend/components/AssetImage'
 import { useAuth } from '@/frontend/hooks/useAuth'
 import {
   getSupabaseBrowserClient,
@@ -102,6 +103,12 @@ export default function AuthStatus() {
       : null) ||
     user?.email ||
     'Mi cuenta'
+  const favoriteTeamId = typeof user?.user_metadata?.favorite_team_id === 'string'
+    ? user.user_metadata.favorite_team_id
+    : null
+  const favoriteTeamLogo = typeof user?.user_metadata?.favorite_team_logo_url === 'string'
+    ? user.user_metadata.favorite_team_logo_url
+    : null
 
   function handleLogout() {
     setError('')
@@ -145,7 +152,15 @@ export default function AuthStatus() {
   return (
     <div className="hf-auth-user">
       <Link href="/perfil" title={currentUserLabel}>
-        <AppIcon name="profile" />
+        {favoriteTeamId ? (
+          <TeamLogo
+            src={favoriteTeamLogo}
+            team={{ id: favoriteTeamId }}
+            alt=""
+            size={26}
+            className="hf-auth-club-avatar"
+          />
+        ) : <AppIcon name="profile" />}
         <span>{currentUserLabel}</span>
       </Link>
       <button

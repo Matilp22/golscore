@@ -200,9 +200,8 @@ export default function AnalysisArticleDetail({
             <h2>Guías relacionadas</h2>
           </div>
           <div>
-            {relatedArticles.map((related, index) => (
+            {relatedArticles.map((related) => (
               <Link key={related.slug} href={`/analisis/${related.slug}`}>
-                <span>{String(index + 1).padStart(2, '0')}</span>
                 <strong>{related.title}</strong>
                 <small>
                   {related.category} · {formatEditorialDate(related.updatedAt)}

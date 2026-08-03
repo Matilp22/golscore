@@ -1,7 +1,6 @@
 import Link from 'next/link'
 
 import {
-  getEditorialCategories,
   getEditorialReadingMinutes,
   getEditorialWordCount,
   getNewsArticles,
@@ -9,10 +8,6 @@ import {
 } from '@/content/editorial'
 import EditorialArticleCard from '@/frontend/components/EditorialArticleCard'
 import { getPublicPageIndexability } from '@/shared/content-quality'
-import {
-  formatEditorialCategory,
-  formatEditorialDate,
-} from '@/shared/editorial-format'
 import { buildSeoMetadata } from '@/shared/seo'
 
 type NoticiasPageProps = {
@@ -43,23 +38,23 @@ export function generateMetadata() {
   })
 }
 
-function isEditorialCategory(value: string, categories: EditorialCategory[]) {
-  return categories.includes(value as EditorialCategory)
-}
+const NEWS_LEAGUE_FILTERS: Array<{
+  key: string
+  label: string
+  category: EditorialCategory
+}> = [
+  { key: 'liga-profesional', label: 'Liga Profesional', category: 'futbol-argentino' },
+  { key: 'libertadores', label: 'Copa Libertadores', category: 'libertadores' },
+  { key: 'champions', label: 'Champions League', category: 'champions' },
+]
 
 export default async function NoticiasPage({ searchParams }: NoticiasPageProps) {
   const params = searchParams ? await searchParams : {}
-  const rawCategory = Array.isArray(params.categoria)
-    ? params.categoria[0]
-    : params.categoria
+  const rawLeague = Array.isArray(params.liga) ? params.liga[0] : params.liga
   const allArticles = getNewsArticles()
-  const categories = getEditorialCategories(allArticles)
-  const selectedCategory =
-    rawCategory && isEditorialCategory(rawCategory, categories)
-      ? (rawCategory as EditorialCategory)
-      : undefined
-  const articles = selectedCategory
-    ? getNewsArticles(selectedCategory)
+  const selectedLeague = NEWS_LEAGUE_FILTERS.find((filter) => filter.key === rawLeague)
+  const articles = selectedLeague
+    ? getNewsArticles(selectedLeague.category)
     : allArticles
   const [leadArticle, ...secondaryArticles] = articles
   const editorialWordCount = allArticles.reduce(
@@ -86,52 +81,34 @@ export default async function NoticiasPage({ searchParams }: NoticiasPageProps) 
             con autoría y fuentes visibles.
           </p>
         </div>
-        <dl>
-          <div>
-            <dt>Notas publicadas</dt>
-            <dd className="hf-type-data">{allArticles.length}</dd>
-          </div>
-          <div>
-            <dt>Secciones</dt>
-            <dd className="hf-type-data">{categories.length}</dd>
-          </div>
-          <div>
-            <dt>Última actualización</dt>
-            <dd>
-              {allArticles[0]
-                ? formatEditorialDate(allArticles[0].updatedAt)
-                : 'Sin publicaciones'}
-            </dd>
-          </div>
-        </dl>
       </header>
 
       <nav
-        aria-label="Filtrar noticias por categoría"
+        aria-label="Filtrar noticias por liga"
         className="hf-editorial-filters"
       >
         <Link
           href="/noticias"
-          className={!selectedCategory ? 'is-active' : ''}
-          aria-current={!selectedCategory ? 'page' : undefined}
+          className={!selectedLeague ? 'is-active' : ''}
+          aria-current={!selectedLeague ? 'page' : undefined}
         >
           Todas
           <span>{allArticles.length}</span>
         </Link>
-        {categories.map((category) => {
-          const active = selectedCategory === category
+        {NEWS_LEAGUE_FILTERS.map((filter) => {
+          const active = selectedLeague?.key === filter.key
           const categoryCount = allArticles.filter(
-            (article) => article.category === category
+            (article) => article.category === filter.category
           ).length
 
           return (
             <Link
-              key={category}
-              href={`/noticias?categoria=${category}`}
+              key={filter.key}
+              href={`/noticias?liga=${filter.key}`}
               className={active ? 'is-active' : ''}
               aria-current={active ? 'page' : undefined}
             >
-              {formatEditorialCategory(category)}
+              {filter.label}
               <span>{categoryCount}</span>
             </Link>
           )
@@ -146,12 +123,12 @@ export default async function NoticiasPage({ searchParams }: NoticiasPageProps) 
           <div className="hf-editorial-feed-heading">
             <div>
               <p className="hf-type-overline">
-                {selectedCategory
-                  ? formatEditorialCategory(selectedCategory)
+                {selectedLeague
+                  ? selectedLeague.label
                   : 'Últimas publicaciones'}
               </p>
               <h2 id="editorial-feed-title">
-                {selectedCategory ? 'En esta sección' : 'Para empezar'}
+                {selectedLeague ? 'Noticias de esta liga' : 'Para empezar'}
               </h2>
             </div>
             <span>
@@ -185,7 +162,6 @@ export default async function NoticiasPage({ searchParams }: NoticiasPageProps) 
         </section>
       ) : (
         <section className="hf-editorial-empty">
-          <span aria-hidden="true">00</span>
           <div>
             <h2>No hay notas en esta sección</h2>
             <p>

@@ -20,7 +20,6 @@ type ProdePageShellProps = {
 const PRODE_CONTEXT_LINKS = [
   { href: '/prode', label: 'Pronósticos' },
   { href: '/prode/torneos', label: 'Torneos privados' },
-  { href: '/liga/selecciones-mundial', label: 'Mundial 2026' },
 ]
 
 export default function ProdePageShell({
@@ -57,11 +56,6 @@ export default function ProdePageShell({
           ) : null}
         </div>
 
-        <div className="hf-prode-matchday-rule" aria-label="Puntaje principal">
-          <span>Resultado exacto</span>
-          <strong>3</strong>
-          <small>puntos por acertar el marcador</small>
-        </div>
       </header>
 
       <nav className="hf-prode-context-nav" aria-label="Secciones del Prode">

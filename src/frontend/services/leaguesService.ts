@@ -32,7 +32,11 @@ export async function getLeagues(): Promise<TournamentOption[]> {
     .filter((league) => {
       const tournament = getAllowedTournamentByExternalId(league.external_id)
 
-      return Boolean(tournament && league.season === tournament.season)
+      return Boolean(
+        tournament &&
+        tournament.slug !== 'mundial-2026' &&
+        league.season === tournament.season
+      )
     })
     .map((league): TournamentOption => ({
       id: String(league.id),

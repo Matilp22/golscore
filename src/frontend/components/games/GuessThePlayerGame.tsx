@@ -103,7 +103,6 @@ function ClubCrest({
 }) {
   return (
     <div className={`${styles.crestWrap} ${updateStyles.crestWrap}`} style={{ '--delay': `${index * 90}ms` } as React.CSSProperties}>
-      <span className={styles.order}>{String(index + 1).padStart(2, '0')}</span>
       <span className={`${styles.crest} ${updateStyles.crest}`}>
         <TeamLogo
           src={logoUrl}
@@ -225,19 +224,18 @@ export default function GuessThePlayerGame({
 
   if (!level) {
     return (
-      <main className={styles.page}>
-        <section className={styles.hero}>
-          <div className={styles.heroBall} aria-hidden="true">?</div>
+      <main className={`${styles.page} ${updateStyles.page}`}>
+        <section className={`${styles.hero} ${updateStyles.hero}`}>
+          <div className={`${styles.heroBall} ${updateStyles.heroBall}`} aria-hidden="true">?</div>
           <p>HAY FULBO PRESENTA</p>
           <h1>¿Quién es el<br /><em>futbolista?</em></h1>
           <span>Leé su carrera. Confiá en tu memoria. Escribí el nombre.</span>
         </section>
-        <section className={styles.levelSection}>
-          <div className={styles.sectionHeading}><span>01</span><h2>Elegí tu cancha</h2><p>10 jugadores por partida</p></div>
-          <div className={styles.levelGrid}>
-            {LEVELS.map((item, index) => (
-              <button key={item.key} type="button" className={styles.levelCard} onClick={() => startGame(item.key)}>
-                <span className={styles.cardNumber}>0{index + 1}</span>
+        <section className={`${styles.levelSection} ${updateStyles.levelSection}`}>
+          <div className={styles.sectionHeading}><h2>Elegí tu cancha</h2><p>10 jugadores por partida</p></div>
+          <div className={`${styles.levelGrid} ${updateStyles.levelGrid}`}>
+            {LEVELS.map((item) => (
+              <button key={item.key} type="button" className={`${styles.levelCard} ${updateStyles.levelCard}`} onClick={() => startGame(item.key)}>
                 <small>{item.eyebrow}</small>
                 <h3>{item.label}</h3>
                 <p>{item.description}</p>
@@ -253,10 +251,10 @@ export default function GuessThePlayerGame({
 
   if (status === 'finished') {
     return (
-      <main className={`${styles.page} ${styles.resultPage}`}>
-        <section className={styles.resultCard}>
-          <span className={styles.resultKicker}>FINAL DEL PARTIDO</span>
-          <div className={styles.resultScore}>{score.toLocaleString('es-AR')}</div>
+      <main className={`${styles.page} ${updateStyles.page} ${styles.resultPage} ${updateStyles.resultPage}`}>
+        <section className={`${styles.resultCard} ${updateStyles.resultCard}`}>
+          <span className={`${styles.resultKicker} ${updateStyles.resultKicker}`}>FINAL DEL PARTIDO</span>
+          <div className={`${styles.resultScore} ${updateStyles.resultScore}`}>{score.toLocaleString('es-AR')}</div>
           <p>PUNTOS</p>
           <h1>{score >= 3500 ? 'Clase mundial.' : score >= 1800 ? 'Sabés de fútbol.' : 'Hay que mirar más fulbo.'}</h1>
           <span>Completaste los 10 futbolistas del nivel {level}. Aciertos: {correctCount}/10.</span>
@@ -274,7 +272,7 @@ export default function GuessThePlayerGame({
                       : 'Recién llegado al vestuario'}
             </strong>
           </div>
-          <div className={styles.resultActions}>
+          <div className={`${styles.resultActions} ${updateStyles.resultActions}`}>
             <button type="button" onClick={() => startGame(level)}>Jugar otra partida</button>
             <button type="button" onClick={() => setLevel(null)}>Cambiar nivel</button>
           </div>
@@ -284,17 +282,17 @@ export default function GuessThePlayerGame({
   }
 
   return (
-    <main className={styles.gamePage}>
-      <header className={styles.gameHeader}>
+    <main className={`${styles.gamePage} ${updateStyles.gamePage}`}>
+      <header className={`${styles.gameHeader} ${updateStyles.gameHeader}`}>
         <button type="button" onClick={() => setLevel(null)}>← Niveles</button>
         <div className={styles.progressMeta}><b>{current + 1}</b><span>/ {ROUND_SIZE}</span></div>
         <div><small>PUNTOS</small><strong>{score.toLocaleString('es-AR')}</strong></div>
       </header>
-      <div className={styles.progress}><span style={{ width: `${((current + 1) / ROUND_SIZE) * 100}%` }} /></div>
-      <section className={styles.gameBoard}>
-        <aside className={styles.boardIntro}>
-          <span className={styles.levelPill}>NIVEL {level.toUpperCase()}</span>
-          <p>JUGADOR {String(current + 1).padStart(2, '0')}</p>
+      <div className={`${styles.progress} ${updateStyles.progress}`}><span style={{ width: `${((current + 1) / ROUND_SIZE) * 100}%` }} /></div>
+      <section className={`${styles.gameBoard} ${updateStyles.gameBoard}`}>
+        <aside className={`${styles.boardIntro} ${updateStyles.boardIntro}`}>
+          <span className={`${styles.levelPill} ${updateStyles.levelPill}`}>NIVEL {level.toUpperCase()}</span>
+          <p>JUGADOR ACTUAL</p>
           <h1>Seguí<br />las <em>pistas.</em></h1>
           <small>Los clubes aparecen en orden cronológico. El primero siempre es donde debutó.</small>
         </aside>
@@ -323,11 +321,11 @@ export default function GuessThePlayerGame({
           </div>
           {status === 'playing' ? (
             <>
-              <form className={styles.answerForm} onSubmit={submitAnswer}>
+              <form className={`${styles.answerForm} ${updateStyles.answerForm}`} onSubmit={submitAnswer}>
                 <label htmlFor="player-answer">¿Quién es?</label>
                 <div><input ref={inputRef} id="player-answer" value={answer} onChange={(event) => setAnswer(event.target.value)} placeholder="Nombre del futbolista…" autoComplete="off" /><button type="submit">PROBAR</button></div>
               </form>
-              <p className={styles.feedback} aria-live="polite">{message}</p>
+              <p className={`${styles.feedback} ${updateStyles.feedback}`} aria-live="polite">{message}</p>
               <div className={`${styles.clueActions} ${updateStyles.clueActions}`}>
                 <div className={updateStyles.hintButtons}>
                   <span>PEDIR PISTA (−{EXTRA_CLUE_COST})</span>
@@ -347,7 +345,7 @@ export default function GuessThePlayerGame({
               </div>
             </>
           ) : (
-            <div className={styles.revealBox}>
+            <div className={`${styles.revealBox} ${updateStyles.revealBox}`}>
               <small>{status === 'correct' ? 'RESPUESTA CORRECTA' : 'EL FUTBOLISTA ERA'}</small>
               <strong>{player.name}</strong>
               <p>{message}</p>

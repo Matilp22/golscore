@@ -179,12 +179,11 @@ export function EditorialArticleDetail({
             <h2 id="editorial-related-title">Lecturas relacionadas</h2>
           </div>
           <div>
-            {relatedArticles.map((related, index) => (
+            {relatedArticles.map((related) => (
               <Link
                 key={related.slug}
                 href={`${relatedBasePath}/${related.slug}`}
               >
-                <span>{String(index + 1).padStart(2, '0')}</span>
                 <strong>{related.title}</strong>
                 <small>
                   {formatEditorialCategory(related.category)} ·{' '}

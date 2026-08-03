@@ -1,18 +1,10 @@
-import {
-  MiTorneitoLanding,
-} from '@/frontend/components/mi-torneito/MiTorneitoPublicViews'
+import MiTorneitoUtilityLanding from '@/frontend/components/mi-torneito/MiTorneitoUtilityLanding'
+import { MiTorneitoSetupNotice } from '@/frontend/components/mi-torneito/MiTorneitoPublicViews'
 import { listPublicMiTorneitoTournaments } from '@/server/mi-torneito/repository'
 import { buildSeoMetadata } from '@/shared/seo'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
-
-type PageProps = {
-  searchParams: Promise<{
-    solicitud?: string
-    mensaje?: string
-  }>
-}
 
 export async function generateMetadata() {
   return buildSeoMetadata({
@@ -22,27 +14,13 @@ export async function generateMetadata() {
   })
 }
 
-export default async function MiTorneitoPage({ searchParams }: PageProps) {
-  const params = await searchParams
+export default async function MiTorneitoPage() {
   const tournaments = await listPublicMiTorneitoTournaments(6)
-  const feedback =
-    params.solicitud === 'ok'
-      ? {
-          kind: 'success' as const,
-          message: 'Solicitud enviada. Te vamos a contactar para armar el torneo.',
-        }
-      : params.solicitud === 'error'
-        ? {
-            kind: 'error' as const,
-            message: params.mensaje || 'No se pudo enviar la solicitud.',
-          }
-        : null
 
   return (
-    <MiTorneitoLanding
-      tournaments={tournaments.data}
-      error={tournaments.error}
-      feedback={feedback}
-    />
+    <>
+      <MiTorneitoSetupNotice error={tournaments.error} />
+      <MiTorneitoUtilityLanding tournaments={tournaments.data} />
+    </>
   )
 }

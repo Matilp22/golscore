@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState, useTransition, type FormEvent } from 'react'
 
 import { useAuth } from '@/frontend/hooks/useAuth'
+import ProfileClubPicker, { type ProfileClub } from '@/frontend/components/profile/ProfileClubPicker'
 import { writeAppAudioEnabled } from '@/frontend/hooks/useAppAudioPreference'
 import { APP_AUDIO_PREFERENCE } from '@/lib/audio-config'
 import { getSupabaseBrowserClient } from '@/lib/supabase/supabaseClient'
@@ -199,6 +200,7 @@ export default function ProfileForm() {
   const [activeTab, setActiveTab] = useState<ProfileTab>('account')
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
+  const [profileClub, setProfileClub] = useState<ProfileClub | null>(null)
   const [password, setPassword] = useState('')
   const [repeatPassword, setRepeatPassword] = useState('')
   const [showHomePredictions, setShowHomePredictions] = useState(false)
@@ -223,6 +225,19 @@ export default function ProfileForm() {
         typeof user.user_metadata?.username === 'string'
           ? user.user_metadata.username
           : ''
+      )
+      setProfileClub(
+        typeof user.user_metadata?.favorite_team_id === 'string' &&
+        typeof user.user_metadata?.favorite_team_name === 'string'
+          ? {
+              id: user.user_metadata.favorite_team_id,
+              name: user.user_metadata.favorite_team_name,
+              logoUrl:
+                typeof user.user_metadata?.favorite_team_logo_url === 'string'
+                  ? user.user_metadata.favorite_team_logo_url
+                  : null,
+            }
+          : null
       )
       setLoadError('')
 
@@ -322,7 +337,12 @@ export default function ProfileForm() {
         }
 
         const metadataResult = await supabase.auth.updateUser({
-          data: { username: cleanUsername },
+          data: {
+            username: cleanUsername,
+            favorite_team_id: profileClub?.id ?? null,
+            favorite_team_name: profileClub?.name ?? null,
+            favorite_team_logo_url: profileClub?.logoUrl ?? null,
+          },
         })
 
         if (metadataResult.error) {
@@ -485,6 +505,7 @@ export default function ProfileForm() {
               />
             </label>
           </div>
+          <ProfileClubPicker value={profileClub} onChange={setProfileClub} />
         </section>
       ) : (
         <section

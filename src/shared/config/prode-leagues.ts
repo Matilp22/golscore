@@ -54,9 +54,9 @@ export const ALLOWED_TOURNAMENTS = [
   },
 ] as const
 
-export const DEFAULT_PRODE_TOURNAMENT_SLUG = 'mundial-2026'
 export type AllowedTournamentSlug = (typeof ALLOWED_TOURNAMENTS)[number]['slug']
 export type AllowedTournament = (typeof ALLOWED_TOURNAMENTS)[number]
+export const DEFAULT_PRODE_TOURNAMENT_SLUG: AllowedTournamentSlug = 'liga-profesional-argentina'
 
 export function normalizeLeagueName(value: string | null | undefined) {
   return (value ?? '')

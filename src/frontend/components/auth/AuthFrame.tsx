@@ -44,21 +44,18 @@ export default function AuthFrame({ children, context }: AuthFrameProps) {
         </div>
         <ul className="hf-account-access-benefits">
           <li>
-            <span aria-hidden="true">01</span>
             <div>
               <strong>Pronósticos y puntaje</strong>
               <small>Tu recorrido en el Prode queda asociado a tu sesión.</small>
             </div>
           </li>
           <li>
-            <span aria-hidden="true">02</span>
             <div>
               <strong>Torneos privados</strong>
               <small>Entrá a tus grupos y retomá cada competencia.</small>
             </div>
           </li>
           <li>
-            <span aria-hidden="true">03</span>
             <div>
               <strong>Control en tus manos</strong>
               <small>Podés cerrar sesión y cambiar tus datos cuando quieras.</small>

@@ -611,9 +611,6 @@ function NewsSection() {
               href={`/noticias/${article.slug}`}
               className={index === 0 ? 'is-lead' : ''}
             >
-              <span className="hf-world26-news-index">
-                {String(index + 1).padStart(2, '0')}
-              </span>
               <span>
                 <small>
                   {getEditorialReadingMinutes(article)} min · {article.author}
