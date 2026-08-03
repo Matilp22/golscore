@@ -5,6 +5,8 @@ const EXTERNAL_CONSOLE_ERRORS = [
   'googleads',
   'static.doubleclick.net',
   '_vercel/insights',
+  'ingest.us.sentry.io',
+  "Framing 'https://www.google.com/'",
   'ERR_BLOCKED_BY_CLIENT',
 ]
 

@@ -50,12 +50,20 @@ test.describe('Noticias y mercado editorial', () => {
     )
     expect(await articleLinks.count()).toBeGreaterThan(3)
 
-    const categoryFilter = page
-      .getByRole('navigation', { name: 'Filtrar noticias por categoría' })
-      .getByRole('link', { name: /Mundial 2026/ })
-    await categoryFilter.click()
-    await expect(page).toHaveURL(/categoria=mundial-2026/)
-    await expect(categoryFilter).toHaveAttribute('aria-current', 'page')
+    const leagueFilter = page
+      .getByRole('navigation', { name: 'Filtrar noticias por liga' })
+      .getByRole('link', { name: /Liga Profesional/ })
+    await leagueFilter.click()
+    await expect(page).toHaveURL(/liga=liga-profesional/)
+    await expect(leagueFilter).toHaveAttribute('aria-current', 'page')
+    if ((await articleLinks.count()) === 0) {
+      await expect(page.locator('.hf-editorial-empty')).toBeVisible()
+      await page
+        .getByRole('navigation', { name: 'Filtrar noticias por liga' })
+        .getByRole('link', { name: /^Todas/ })
+        .click()
+      await expect(page).toHaveURL(/\/noticias$/)
+    }
     expect(await articleLinks.count()).toBeGreaterThan(0)
 
     const firstArticle = articleLinks.first()

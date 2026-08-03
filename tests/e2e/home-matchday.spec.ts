@@ -10,7 +10,7 @@ test.describe('Home Matchday', () => {
     await page.goto(`/?date=${FIXTURE_DATE}`, {
       waitUntil: 'domcontentloaded',
     })
-    await expect(page.locator('.hf-matchday-page')).toBeVisible()
+    await expect(page.locator('.hf-orbit-home')).toBeVisible()
 
     for (const viewport of [
       { width: 320, height: 800 },
@@ -47,11 +47,11 @@ test.describe('Home Matchday', () => {
       waitUntil: 'domcontentloaded',
     })
 
-    const rows = page.locator('.hf-matchday-match')
+    const rows = page.locator('.hf-stream-match')
     await expect(rows.first()).toBeVisible()
 
     const matchHrefs = await page
-      .locator('.hf-matchday-score-link')
+      .locator('.hf-stream-match-outcome')
       .evaluateAll((links) =>
         links.map((link) => (link as HTMLAnchorElement).pathname)
       )
@@ -61,23 +61,17 @@ test.describe('Home Matchday', () => {
     expect(matchHrefs.every((href) => href.startsWith('/partido/'))).toBe(true)
     await expect(rows.first().locator('a[href^="/equipo/"]').first()).toBeVisible()
     await expect(
-      page.locator('.hf-matchday-match > header a[href^="/liga/"]').first()
+      page.locator('.hf-stream-match-league a[href^="/liga/"]').first()
     ).toBeVisible()
     await expect(
-      page.locator('.hf-matchday-news-grid a[href^="/noticias/"]').first()
+      page.locator('.hf-stream-news-list a[href^="/noticias/"]').first()
     ).toBeVisible()
-    await expect(page.locator('.hf-matchday-quick-grid a')).toHaveCount(4)
+    await expect(page.locator('.hf-stream-shortcuts a')).toHaveCount(4)
 
-    const sectionTotal = await page
-      .locator('.hf-matchday-section-count')
-      .evaluateAll((counts) =>
-        counts.reduce(
-          (total, count) =>
-            total + Number(count.firstChild?.textContent?.trim() ?? 0),
-          0
-        )
-      )
-    expect(sectionTotal).toBe(await rows.count())
+    const visibleTotal = Number(
+      await page.locator('.hf-stream-feed-heading > strong').textContent()
+    )
+    expect(visibleTotal).toBe(await rows.count())
 
     await page.screenshot({
       path: testInfo.outputPath('home-matchday-mobile.png'),
@@ -94,30 +88,32 @@ test.describe('Home Matchday', () => {
     })
 
     const activeDay = page.locator(
-      `.hf-matchday-day-switcher a[href="/?date=${FIXTURE_DATE}"]`
+      `.hf-stream-day-jump a[href="/?date=${FIXTURE_DATE}"]`
     )
     await expect(activeDay).toHaveAttribute('aria-current', 'date')
 
-    const todayLink = page
-      .locator('.hf-matchday-day-switcher a')
-      .filter({ hasText: 'Hoy' })
-    const todayHref = await todayLink.getAttribute('href')
-    expect(todayHref).toBeTruthy()
-    await todayLink.click()
-    await expect(page).toHaveURL(new RegExp(todayHref!.replace('?', '\\?')))
+    const adjacentDay = page.locator('.hf-stream-day-jump a').last()
+    const adjacentHref = await adjacentDay.getAttribute('href')
+    expect(adjacentHref).toBeTruthy()
+    await adjacentDay.click()
+    await expect(page).toHaveURL(new RegExp(adjacentHref!.replace('?', '\\?')))
 
-    const todayDate = new URL(todayHref!, 'http://127.0.0.1').searchParams.get(
+    const adjacentDate = new URL(adjacentHref!, 'http://127.0.0.1').searchParams.get(
       'date'
     )
-    await expect(page.locator('#home-date-picker')).toHaveValue(todayDate!)
+    await expect(page.locator('#stream-date-picker')).toHaveValue(adjacentDate!)
 
-    await page.locator('#home-date-picker').fill(FIXTURE_DATE)
-    await page.getByRole('button', { name: 'Ver jornada' }).click()
+    await page.locator('#stream-date-picker').fill(FIXTURE_DATE)
+    await page.locator('.hf-stream-calendar').getByRole('button', { name: 'Ver' }).click()
     await expect(page).toHaveURL(new RegExp(`date=${FIXTURE_DATE}`))
 
-    await page.locator('.hf-matchday-jump-nav a[href="#resultados"]').click()
-    await expect(page.locator('#resultados')).toBeInViewport()
-    await expect(page.locator('#home-date-picker')).toHaveValue(FIXTURE_DATE)
+    await page.getByRole('button', { name: /^Finales/ }).click()
+    await expect(page.getByRole('button', { name: /^Finales/ })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    )
+    await expect(page.locator('#partidos')).toBeInViewport()
+    await expect(page.locator('#stream-date-picker')).toHaveValue(FIXTURE_DATE)
 
     await page.screenshot({
       path: testInfo.outputPath('home-matchday-desktop.png'),
@@ -147,12 +143,12 @@ test.describe('Home Matchday', () => {
     })
 
     await expect(
-      page.locator('.hf-matchday-favorite a[href="/equipo/451"]')
+      page.locator('.hf-stream-favorite-team a[href="/equipo/451"]')
     ).toContainText('Boca Juniors')
     await page
       .getByRole('button', { name: 'Quitar Boca Juniors de favoritos' })
       .click()
-    await expect(page.locator('.hf-matchday-favorites-empty')).toBeVisible()
+    await expect(page.locator('.hf-stream-favorite-empty')).toBeVisible()
     expect(
       await page.evaluate(() =>
         JSON.parse(

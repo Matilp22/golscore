@@ -16,7 +16,8 @@ test.describe('Detalle de partido', () => {
     })
 
     await expect(page.locator('.hf-match-detail-page')).toBeVisible()
-    await expect(page.locator('.hf-match-detail-title')).toContainText(' vs ')
+    await expect(page.locator('.hf-match-detail-title')).toHaveText(/\S+/)
+    await expect(page.locator('.hf-match-detail-team-name')).toHaveCount(2)
     await expect(
       page.locator('.hf-match-detail-competition a[href^="/liga/"]')
     ).toBeVisible()

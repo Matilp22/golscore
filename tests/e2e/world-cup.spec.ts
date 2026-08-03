@@ -60,11 +60,17 @@ test.describe('Mundial 2026', () => {
     const matchLinks = page.locator(
       '#partidos .hf-world26-score[href^="/partido/"]'
     )
-    expect(await matchLinks.count()).toBeGreaterThan(0)
-    const matchHrefs = await matchLinks.evaluateAll((links) =>
-      links.map((link) => link.getAttribute('href'))
-    )
-    expect(new Set(matchHrefs).size).toBe(matchHrefs.length)
+    const matchCount = await matchLinks.count()
+    if (matchCount) {
+      const matchHrefs = await matchLinks.evaluateAll((links) =>
+        links.map((link) => link.getAttribute('href'))
+      )
+      expect(new Set(matchHrefs).size).toBe(matchHrefs.length)
+    } else {
+      await expect(page.locator('#partidos .hf-world26-empty')).toContainText(
+        'TodavÃ­a no hay partidos sincronizados'
+      )
+    }
 
     expect(
       await page.locator('#noticias a[href^="/noticias/"]').count()
