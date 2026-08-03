@@ -18,10 +18,10 @@ const QUICK_LINKS: Array<{
   icon: AppIconName
 }> = [
   {
-    label: 'Mundial 2026',
-    description: 'Partidos, grupos y llaves',
-    href: '/liga/selecciones-mundial',
-    icon: 'world',
+    label: 'Competiciones',
+    description: 'Ligas, copas y torneos',
+    href: '/competiciones',
+    icon: 'tournament',
   },
   {
     label: 'Tablas',

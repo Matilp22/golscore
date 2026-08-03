@@ -20839,7 +20839,7 @@ a.hf-history-match:hover {
   min-width: 0;
   min-height: 58px;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.45rem;
   border-right: 1px solid var(--hf-stream-line);

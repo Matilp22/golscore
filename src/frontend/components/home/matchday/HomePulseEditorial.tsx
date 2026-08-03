@@ -10,10 +10,10 @@ import type {
 } from '@/frontend/components/home/matchday/types'
 
 const DESTINATIONS = [
-  { href: '/liga/selecciones-mundial', index: '01', label: 'Mundial 2026' },
-  { href: '/tablas', index: '02', label: 'Tablas' },
-  { href: '/prode', index: '03', label: 'Prode' },
-  { href: '/mi-torneito', index: '04', label: 'Mi Torneito' },
+  { href: '/competiciones', label: 'Competiciones' },
+  { href: '/tablas', label: 'Tablas' },
+  { href: '/prode', label: 'Prode' },
+  { href: '/mi-torneito', label: 'Mi Torneito' },
 ]
 
 function formatDate(value: string) {
@@ -124,7 +124,6 @@ export default function HomePulseEditorial({
       <nav className="hf-stream-shortcuts" aria-label="Accesos destacados">
         {DESTINATIONS.map((item) => (
           <Link key={item.href} href={item.href}>
-            <span>{item.index}</span>
             <strong>{item.label}</strong>
             <i aria-hidden="true">↗</i>
           </Link>
