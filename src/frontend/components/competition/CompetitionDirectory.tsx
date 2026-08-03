@@ -4,6 +4,8 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
 
+import FavoriteCompetitionButton from '@/frontend/components/favorites/FavoriteCompetitionButton'
+
 export type CompetitionDirectoryItem = {
   key: string
   name: string
@@ -129,27 +131,31 @@ export default function CompetitionDirectory({
 
               <div className="hf-competition-directory-grid">
                 {section.items.map((item) => (
-                  <Link key={item.key} href={item.href} className="hf-competition-directory-card">
-                    {item.logo ? (
-                      <span className="hf-competition-directory-logo">
-                        <Image
-                          src={item.logo}
-                          alt=""
-                          width={48}
-                          height={48}
-                          className="h-12 w-12 object-contain"
-                        />
-                      </span>
-                    ) : (
-                      <span className="hf-competition-directory-monogram" aria-hidden="true">
-                        {item.initials}
-                      </span>
-                    )}
-                    <span>{item.name}</span>
-                    <svg aria-hidden="true" viewBox="0 0 24 24">
-                      <path d="m9 5 7 7-7 7" />
-                    </svg>
-                  </Link>
+                  <article key={item.key} className="hf-competition-directory-card-shell">
+                    <Link href={item.href} className="hf-competition-directory-card">
+                      {item.logo ? (
+                        <span className="hf-competition-directory-logo">
+                          <Image
+                            src={item.logo}
+                            alt=""
+                            width={48}
+                            height={48}
+                            className="h-12 w-12 object-contain"
+                          />
+                        </span>
+                      ) : (
+                        <span className="hf-competition-directory-monogram" aria-hidden="true">
+                          {item.initials}
+                        </span>
+                      )}
+                      <span>{item.name}</span>
+                    </Link>
+                    <FavoriteCompetitionButton
+                      leagueKey={item.key}
+                      leagueName={item.name}
+                      className="is-icon-only"
+                    />
+                  </article>
                 ))}
               </div>
             </section>

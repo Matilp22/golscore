@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
 
 import { PlayerPhoto } from '@/frontend/components/AssetImage'
 import { useTranslations } from '@/frontend/components/LocaleProvider'
@@ -28,26 +27,24 @@ export default function LeaderListInteractive({
   translateTeamNames = false,
 }: LeaderListInteractiveProps) {
   const { locale, t } = useTranslations()
-  const [showAll, setShowAll] = useState(false)
-  const visibleRows = showAll ? rows : rows.slice(0, 10)
-  const hasMoreRows = rows.length > 10
+  const visibleRows = rows.slice(0, 10)
 
   return (
-    <section className="hf-card w-full overflow-hidden rounded-3xl">
-      <div className="hf-section-head px-4 py-3">
+    <section className="hf-card hf-leader-list w-full overflow-hidden">
+      <div className="hf-section-head hf-leader-list-heading">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-base font-bold text-white md:text-lg">{title}</h2>
-          <span className="text-[11px] uppercase tracking-[0.14em] text-[#8d98a7]">
-            {rows.length} {t('common.players')}
+          <span className="hf-leader-list-count">
+            Top {Math.min(rows.length, 10)}
           </span>
         </div>
       </div>
 
-      <div className="p-4">
+      <div className="hf-leader-list-body">
         {rows.length ? (
-          <div className="space-y-2">
+          <div className="hf-leader-list-rows">
             {visibleRows.map((row, index) => {
-              const displayIndex = showAll ? index + 1 : index + 1
+              const displayIndex = index + 1
               const href =
                 row.playerId && leagueId && season
                   ? `/jugador/${row.playerId}?leagueId=${leagueId}&season=${season}&statType=${statType}&expectedCount=${row.value}&name=${encodeURIComponent(row.name)}&photo=${encodeURIComponent(row.photo || '')}&teamId=${row.teamId || ''}&teamName=${encodeURIComponent(row.teamName || '')}&teamLogo=${encodeURIComponent(row.teamLogo || '')}`
@@ -60,28 +57,28 @@ export default function LeaderListInteractive({
 
               const content = (
                 <>
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span className="w-6 text-sm font-black text-[#7f8a98]">{displayIndex}</span>
+                  <div className="hf-leader-list-identity">
+                    <span className="hf-leader-list-rank">{displayIndex}</span>
                     <PlayerPhoto
                       src={row.photo}
                       alt={row.name}
-                      size={36}
-                      className="h-9 w-9 rounded-full object-cover"
-                      fallbackClassName="h-9 w-9 rounded-full"
+                      size={30}
+                      className="hf-leader-list-photo object-cover"
+                      fallbackClassName="hf-leader-list-photo"
                     />
                     <div className="min-w-0">
-                      <p className="truncate font-semibold text-white">{row.name}</p>
-                      <p className="truncate text-xs text-[#8d98a7]">
+                      <p className="hf-leader-list-name">{row.name}</p>
+                      <p className="hf-leader-list-team">
                         {displayTeamName}
                       </p>
                       {row.details ? (
-                        <p className="truncate text-[11px] font-semibold text-[#b9c4cf]">
+                        <p className="hf-leader-list-detail">
                           {row.details}
                         </p>
                       ) : null}
                     </div>
                   </div>
-                  <span className={`text-lg font-black ${accentClass}`}>{row.value}</span>
+                  <span className={`hf-leader-list-value ${accentClass}`}>{row.value}</span>
                 </>
               )
 
@@ -89,7 +86,7 @@ export default function LeaderListInteractive({
                 return (
                   <div
                     key={`${row.playerId || row.name}-${index}`}
-                    className="flex items-center justify-between gap-3 rounded-2xl border border-white/6 bg-black/20 px-3 py-3 opacity-80"
+                    className="hf-leader-list-row is-disabled"
                   >
                     {content}
                   </div>
@@ -100,28 +97,13 @@ export default function LeaderListInteractive({
                 <Link
                   key={`${row.playerId || row.name}-${index}`}
                   href={href}
-                  className="hf-card-hover flex items-center justify-between gap-3 rounded-2xl border border-white/6 bg-black/20 px-3 py-3 transition duration-300 ease-out hover:-translate-y-0.5 hover:scale-[1.015] hover:border-[#70ff9d]/25"
+                  className="hf-leader-list-row"
                 >
                   {content}
                 </Link>
               )
             })}
 
-            {hasMoreRows ? (
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAll((current) => !current)}
-                  className="hf-button-secondary flex w-full items-center justify-between rounded-2xl px-4 py-3 text-sm font-semibold"
-                  aria-expanded={showAll}
-                >
-                  <span>{showAll ? t('common.showOnlyTenPlayers') : t('common.showAllPlayers')}</span>
-                  <span className={`text-[#8fa0b1] transition ${showAll ? 'rotate-180' : ''}`}>
-                    ▾
-                  </span>
-                </button>
-              </div>
-            ) : null}
           </div>
         ) : (
           <p className="text-sm text-[#8d98a7]">{t('common.noRankingData')}</p>

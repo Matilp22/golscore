@@ -5,6 +5,8 @@ import type { Metadata } from 'next'
 import type { CSSProperties, ReactNode } from 'react'
 
 import CurrentRoundNavigator from '@/frontend/components/CurrentRoundNavigator'
+import CompetitionGroupSwitcher from '@/frontend/components/competition/CompetitionGroupSwitcher'
+import FavoriteCompetitionButton from '@/frontend/components/favorites/FavoriteCompetitionButton'
 import CompetitionSectionNav from '@/frontend/components/competition/CompetitionSectionNav'
 import CopaArgentinaChampions from '@/frontend/components/CopaArgentinaChampions'
 import CopaArgentinaMatchList from '@/frontend/components/CopaArgentinaMatchList'
@@ -2601,9 +2603,9 @@ function StandingForm({ form }: { form?: string }) {
   }
 
   const labels = {
-    W: { short: 'V', label: 'Victoria', tone: 'is-win' },
-    D: { short: 'E', label: 'Empate', tone: 'is-draw' },
-    L: { short: 'D', label: 'Derrota', tone: 'is-loss' },
+    W: { short: '✓', label: 'Victoria', tone: 'is-win' },
+    D: { short: '–', label: 'Empate', tone: 'is-draw' },
+    L: { short: '×', label: 'Derrota', tone: 'is-loss' },
   } as const
 
   return (
@@ -2637,6 +2639,7 @@ function StandingsTable({
   allowLegacyFallback = true,
   preferConfiguredRules = false,
   thirdPlaceTable = false,
+  showForm = true,
   translateTeamNames = false,
   locale = 'es',
 }: {
@@ -2650,6 +2653,7 @@ function StandingsTable({
   allowLegacyFallback?: boolean
   preferConfiguredRules?: boolean
   thirdPlaceTable?: boolean
+  showForm?: boolean
   translateTeamNames?: boolean
   locale?: AppLocale
 }) {
@@ -2732,7 +2736,7 @@ function StandingsTable({
                   <span className={`min-w-0 truncate font-medium ${compact ? 'text-[10.5px] sm:text-[12px]' : 'text-[10.5px] sm:text-[13px]'}`}>
                     {displayTeamName}
                   </span>
-                  <StandingForm form={row.form} />
+                  {showForm ? <StandingForm form={row.form} /> : null}
                 </div>
               </>
             )
@@ -3399,11 +3403,11 @@ export default async function LigaPage({ params }: PageProps) {
   const leagueSectionNavItems = isWorldCupTournament
     ? []
     : [
-        ...(currentRoundBlocks.length
-          ? [{ key: 'partidos', label: 'Partidos', href: '#partidos', active: true }]
-          : []),
         ...(shouldRenderStandings
-          ? [{ key: 'tabla', label: 'Clasificación', href: '#tabla' }]
+          ? [{ key: 'tabla', label: 'Clasificación', href: '#tabla', active: true }]
+          : []),
+        ...(currentRoundBlocks.length || isUefaLeaguePhaseTournament || showConmebolGroupStage
+          ? [{ key: 'partidos', label: 'Partidos', href: '#partidos' }]
           : []),
         ...(shouldRenderKnockoutBracket || isUefaLeaguePhaseTournament || showConmebolGroupStage
           ? [{ key: 'llaves', label: 'Llaves', href: '#llaves' }]
@@ -3475,6 +3479,10 @@ export default async function LigaPage({ params }: PageProps) {
               </div>
 
               <div className="hf-competition-hero-actions">
+              <FavoriteCompetitionButton
+                leagueKey={tournament.key}
+                leagueName={visibleTournamentTitle}
+              />
               {tournament.key === 'argentina-copa-argentina' ? (
                 <div>
                   <CopaArgentinaChampions champions={copaArgentinaChampions} />
@@ -3538,7 +3546,7 @@ export default async function LigaPage({ params }: PageProps) {
                 <UefaKnockoutBracket fixtures={fixtures} standingsRows={uefaLeaguePhaseRows} />
               </section>
 
-              <div className="grid gap-4 lg:grid-cols-[minmax(0,1.08fr)_minmax(320px,0.92fr)]">
+              <div className="hf-uefa-phase-layout grid gap-4 lg:grid-cols-[minmax(0,1.08fr)_minmax(320px,0.92fr)]">
                 <section id="tabla" className="scroll-mt-28">
                   <SectionCard
                     title="Tabla de posiciones"
@@ -3568,10 +3576,12 @@ export default async function LigaPage({ params }: PageProps) {
                   </SectionCard>
                 </section>
 
-                <UefaMatchPhaseNavigator
-                  fixtures={fixtures}
-                  leaguePhaseMatchdayLimit={uefaLeaguePhaseMatchdayLimit}
-                />
+                <section id="partidos" className="scroll-mt-28">
+                  <UefaMatchPhaseNavigator
+                    fixtures={fixtures}
+                    leaguePhaseMatchdayLimit={uefaLeaguePhaseMatchdayLimit}
+                  />
+                </section>
               </div>
             </>
           ) : null}
@@ -3589,12 +3599,14 @@ export default async function LigaPage({ params }: PageProps) {
                 />
               </section>
 
-              <ConmebolFixtureAgenda
-                competitionType={conmebolCompetitionType}
-                matches={fixtures}
-                series={conmebolViewModel?.bracket.series ?? []}
-                placeholders={conmebolViewModel?.bracket.placeholders}
-              />
+              <section id="partidos" className="scroll-mt-28">
+                <ConmebolFixtureAgenda
+                  competitionType={conmebolCompetitionType}
+                  matches={fixtures}
+                  series={conmebolViewModel?.bracket.series ?? []}
+                  placeholders={conmebolViewModel?.bracket.placeholders}
+                />
+              </section>
 
               {shouldRenderStandings && displayPrimaryGroups.length ? (
                 <section id="tabla" className="scroll-mt-28">
@@ -3698,21 +3710,46 @@ export default async function LigaPage({ params }: PageProps) {
           {!isUefaLeaguePhaseTournament && !showConmebolGroupStage && shouldRenderStandings && displayPrimaryGroups.length ? (
             showGroupStageCards ? (
               isWorldCupTournament ? null : (
-                <>
+                <section id="tabla" className="scroll-mt-28">
                   {groupStageCardsSection}
-
-                  {knockoutRounds.length ? (
-                  <BracketView
-                    rounds={knockoutRounds}
-                    locale={locale}
-                    translateTeamNames={false}
-                  />
-                  ) : null}
-                </>
+                </section>
               )
             ) : (
-              <section id="tabla" className={`scroll-mt-28 ${compactGroups ? 'grid gap-4 md:grid-cols-2' : 'space-y-4'}`}>
-                {displayPrimaryGroups.map((group) => {
+              <section id="tabla" className={`scroll-mt-28 ${compactGroups && !isLigaProfesionalPage ? 'grid gap-4 md:grid-cols-2' : 'space-y-4'}`}>
+                {isLigaProfesionalPage && displayPrimaryGroups.length > 1 ? (
+                  <CompetitionGroupSwitcher
+                    groups={displayPrimaryGroups.map((group) => {
+                      const thirdPlaceTable = isThirdPlaceTableGroup(group, isWorldCupTournament)
+                      const tableLegendItems = getTableLegendItems(
+                        group.rows,
+                        displayOptions.rule,
+                        displayOptions.protected,
+                        thirdPlaceTable
+                      )
+
+                      return {
+                        id: getGroupId(group),
+                        label: getDisplayGroupName(group.name, { thirdPlaceTable }),
+                        content: (
+                          <>
+                            <StandingsTable
+                              rows={group.rows}
+                              compact
+                              fitNarrow
+                              rule={displayOptions.rule}
+                              allowLegacyFallback={displayOptions.protected}
+                              thirdPlaceTable={thirdPlaceTable}
+                              showForm
+                            />
+                            {tableLegendItems.length ? (
+                              <TableLegend items={tableLegendItems} />
+                            ) : null}
+                          </>
+                        ),
+                      }
+                    })}
+                  />
+                ) : displayPrimaryGroups.map((group) => {
                   const thirdPlaceTable = isThirdPlaceTableGroup(group, isWorldCupTournament)
                   const tableLegendItems = getTableLegendItems(
                     group.rows,
@@ -3767,7 +3804,7 @@ export default async function LigaPage({ params }: PageProps) {
           ) : null}
 
           {visibleSecondaryGroups.length ? (
-            <div className="space-y-4">
+            <div className="hf-secondary-standings space-y-4">
               {visibleSecondaryGroups.map((group) => {
                 const thirdPlaceTable = isThirdPlaceTableGroup(group, isWorldCupTournament)
                 const tableLegendItems = getTableLegendItems(
@@ -3792,6 +3829,7 @@ export default async function LigaPage({ params }: PageProps) {
                       rule={displayOptions.rule}
                       allowLegacyFallback={displayOptions.protected}
                       thirdPlaceTable={thirdPlaceTable}
+                      showForm={!isLigaProfesionalPage}
                       translateTeamNames={isWorldCupTournament}
                       locale={locale}
                     />
@@ -3807,7 +3845,7 @@ export default async function LigaPage({ params }: PageProps) {
           {displayOptions.showAnnualTable || displayOptions.showPromedios ? (
             <div
               id={!displayPrimaryGroups.length ? 'tabla' : undefined}
-              className={`scroll-mt-28 ${
+              className={`hf-competition-summary-tables scroll-mt-28 ${
                 compactSummaryTables ? 'grid gap-4 xl:grid-cols-2' : 'space-y-4'
               }`}
             >
@@ -3818,6 +3856,7 @@ export default async function LigaPage({ params }: PageProps) {
                     variant="annual"
                     compact={compactSummaryTables}
                     relegatedTeamIds={annualRelegatedTeamIds}
+                    showForm={!isLigaProfesionalPage}
                   />
                   <TableLegend
                     items={[

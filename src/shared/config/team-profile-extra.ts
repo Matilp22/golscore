@@ -10,23 +10,6 @@ export type TeamSelectionFacts = {
   titles: TeamInfoFact[]
 }
 
-const DEFAULT_SELECTION_FACTS: TeamSelectionFacts = {
-  source: 'Config manual Hay Fulbo',
-  updatedAt: '2026-07-02',
-  worldCup: [
-    { label: 'Mundiales jugados', value: 'No disponible' },
-    { label: 'Mundiales ganados', value: 'No disponible' },
-    { label: 'Finales jugadas', value: 'No disponible' },
-    { label: 'Mejor actuacion', value: 'No disponible' },
-    { label: 'Goles totales', value: 'No disponible' },
-  ],
-  titles: [
-    { label: 'Ranking FIFA', value: 'No disponible' },
-    { label: 'Copas continentales', value: 'No disponible' },
-    { label: 'Otras copas', value: 'No disponible' },
-  ],
-}
-
 const SELECTION_FACTS_BY_NAME: Record<string, TeamSelectionFacts> = {
   argentina: {
     source: 'Config manual Hay Fulbo',
@@ -179,5 +162,5 @@ export function getTeamSelectionFacts(name: string) {
   }
   const key = aliases[normalized] ?? normalized
 
-  return SELECTION_FACTS_BY_NAME[key] ?? DEFAULT_SELECTION_FACTS
+  return SELECTION_FACTS_BY_NAME[key] ?? null
 }

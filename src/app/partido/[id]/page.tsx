@@ -2498,26 +2498,15 @@ export default async function PartidoDetallePage({ params }: PageProps) {
             </div>
 
             <div className="min-w-0">
-              <p className="hf-type-overline">
-                {fixture.league.round || 'Competencia'}
-              </p>
-              <h1 className="hf-match-detail-title">
-                {homeTeamDisplayName} vs {awayTeamDisplayName}
-              </h1>
+              {tournamentHref ? (
+                <Link href={tournamentHref} className="hf-match-detail-tournament">
+                  <h1 className="hf-match-detail-title">{tournamentName}</h1>
+                </Link>
+              ) : (
+                <h1 className="hf-match-detail-title">{tournamentName}</h1>
+              )}
               <div className="hf-match-detail-context">
-                {tournamentHref ? (
-                  <Link
-                    href={tournamentHref}
-                    className="hf-match-detail-tournament"
-                  >
-                    {tournamentName}
-                  </Link>
-                ) : (
-                  <span className="hf-match-detail-tournament">
-                    {tournamentName}
-                  </span>
-                )}
-                <span aria-hidden="true">·</span>
+                <strong>{fixture.league.round || 'Fecha a confirmar'}</strong>
                 <time
                   className="hf-match-detail-kickoff"
                   dateTime={fixture.fixture.date}
@@ -2716,7 +2705,7 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                         </div>
 
                         <div className="text-center">
-                          <span className={`inline-flex rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${style.badge}`}>
+                          <span className="hf-match-detail-minute">
                             {minuteLabel}
                           </span>
                         </div>
@@ -2891,31 +2880,16 @@ export default async function PartidoDetallePage({ params }: PageProps) {
                         key={`${stat.type}-${index}`}
                         className="hf-match-detail-stat-row rounded-xl border px-2.5 py-2"
                       >
-                        <div className="mb-1.5 flex items-center justify-between gap-2">
-                          <span className="text-sm font-extrabold text-white">
-                            {formatStatValue(stat.homeValue)}
-                          </span>
-                          <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#8d98a7]">
-                            {translateStatType(stat.type)}
-                          </span>
-                          <span className="text-sm font-extrabold text-white">
-                            {formatStatValue(stat.awayValue)}
-                          </span>
-                        </div>
-
-                        <div className="hf-match-detail-stat-track relative h-2 overflow-hidden rounded-full">
-                          <div
-                            className="absolute left-0 top-0 h-full bg-[linear-gradient(90deg,#2fbf71_0%,#7ff0b2_100%)]"
-                            style={{ width: `${splitPoint}%` }}
-                          />
-                          <div
-                            className="absolute right-0 top-0 h-full bg-[linear-gradient(90deg,#c8d0da_0%,#5f6b7a_100%)]"
-                            style={{ width: `${100 - splitPoint}%` }}
-                          />
-                          <div
-                            className="absolute top-1/2 h-3 w-[2px] -translate-y-1/2 bg-white/25"
-                            style={{ left: `calc(${splitPoint}% - 1px)` }}
-                          />
+                        <span className="hf-match-detail-stat-label">
+                          {translateStatType(stat.type)}
+                        </span>
+                        <div className="hf-match-detail-stat-meter">
+                          <strong>{formatStatValue(stat.homeValue)}</strong>
+                          <div className="hf-match-detail-stat-track">
+                            <span style={{ width: `${splitPoint}%` }} />
+                            <span style={{ width: `${100 - splitPoint}%` }} />
+                          </div>
+                          <strong>{formatStatValue(stat.awayValue)}</strong>
                         </div>
                       </div>
                     )
