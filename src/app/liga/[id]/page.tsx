@@ -3400,13 +3400,24 @@ export default async function LigaPage({ params }: PageProps) {
       />
     </div>
   )
+  const competitionFamily = isUefaLeaguePhaseTournament
+    ? 'uefa-league-phase'
+    : showConmebolGroupStage
+      ? 'conmebol-groups'
+      : isLigaProfesionalPage
+        ? 'argentina-zones'
+        : showGroupStageCards
+          ? 'groups'
+          : shouldRenderKnockoutBracket
+            ? 'knockout'
+            : 'league'
   const leagueSectionNavItems = isWorldCupTournament
     ? []
     : [
         ...(shouldRenderStandings
           ? [{ key: 'tabla', label: 'Clasificación', href: '#tabla', active: true }]
           : []),
-        ...(currentRoundBlocks.length || isUefaLeaguePhaseTournament || showConmebolGroupStage
+        ...(currentRoundBlocks.length || isLigaProfesionalPage || isUefaLeaguePhaseTournament || showConmebolGroupStage
           ? [{ key: 'partidos', label: 'Partidos', href: '#partidos' }]
           : []),
         ...(shouldRenderKnockoutBracket || isUefaLeaguePhaseTournament || showConmebolGroupStage
@@ -3442,7 +3453,11 @@ export default async function LigaPage({ params }: PageProps) {
   }
 
   return (
-    <div className="hf-competition-page" data-competition={tournament.key}>
+    <div
+      className="hf-competition-page"
+      data-competition={tournament.key}
+      data-competition-family={competitionFamily}
+    >
       {isWorldCupTournament ? <WorldCupScrollReset /> : null}
       <div className="hf-competition-page-inner">
         <main className="hf-competition-page-content">
@@ -3542,11 +3557,7 @@ export default async function LigaPage({ params }: PageProps) {
 
           {isUefaLeaguePhaseTournament ? (
             <>
-              <section id="llaves" className="scroll-mt-28">
-                <UefaKnockoutBracket fixtures={fixtures} standingsRows={uefaLeaguePhaseRows} />
-              </section>
-
-              <div className="hf-uefa-phase-layout grid gap-4 lg:grid-cols-[minmax(0,1.08fr)_minmax(320px,0.92fr)]">
+              <>
                 <section id="tabla" className="scroll-mt-28">
                   <SectionCard
                     title="Tabla de posiciones"
@@ -3582,32 +3593,16 @@ export default async function LigaPage({ params }: PageProps) {
                     leaguePhaseMatchdayLimit={uefaLeaguePhaseMatchdayLimit}
                   />
                 </section>
-              </div>
+              </>
+
+              <section id="llaves" className="scroll-mt-28">
+                <UefaKnockoutBracket fixtures={fixtures} standingsRows={uefaLeaguePhaseRows} />
+              </section>
             </>
           ) : null}
 
           {showConmebolGroupStage && conmebolCompetitionType ? (
             <>
-              <section id="llaves" className="scroll-mt-28">
-                <ConmebolKnockoutBracket
-                  competitionType={conmebolCompetitionType}
-                  season={resolvedTournament?.season ?? 2026}
-                  phases={conmebolViewModel?.bracket.phases}
-                  matches={fixtures}
-                  series={conmebolViewModel?.bracket.series ?? []}
-                  placeholders={conmebolViewModel?.bracket.placeholders}
-                />
-              </section>
-
-              <section id="partidos" className="scroll-mt-28">
-                <ConmebolFixtureAgenda
-                  competitionType={conmebolCompetitionType}
-                  matches={fixtures}
-                  series={conmebolViewModel?.bracket.series ?? []}
-                  placeholders={conmebolViewModel?.bracket.placeholders}
-                />
-              </section>
-
               {shouldRenderStandings && displayPrimaryGroups.length ? (
                 <section id="tabla" className="scroll-mt-28">
                   <GroupStageGrid
@@ -3665,46 +3660,27 @@ export default async function LigaPage({ params }: PageProps) {
                   </SectionCard>
                 </section>
               ) : null}
+
+              <section id="partidos" className="scroll-mt-28">
+                <ConmebolFixtureAgenda
+                  competitionType={conmebolCompetitionType}
+                  matches={fixtures}
+                  series={conmebolViewModel?.bracket.series ?? []}
+                  placeholders={conmebolViewModel?.bracket.placeholders}
+                />
+              </section>
+
+              <section id="llaves" className="scroll-mt-28">
+                <ConmebolKnockoutBracket
+                  competitionType={conmebolCompetitionType}
+                  season={resolvedTournament?.season ?? 2026}
+                  phases={conmebolViewModel?.bracket.phases}
+                  matches={fixtures}
+                  series={conmebolViewModel?.bracket.series ?? []}
+                  placeholders={conmebolViewModel?.bracket.placeholders}
+                />
+              </section>
             </>
-          ) : null}
-
-          {shouldRenderKnockoutBracket ? (
-            <section id="llaves" className="scroll-mt-28">
-              <BracketView
-                rounds={knockoutRounds}
-                useCopaArgentinaTree={tournament.key === 'argentina-copa-argentina'}
-                advanceGenericWinners={tournament.key === 'argentina-liga-profesional' || isWorldCupTournament}
-                emptyBracket={emptyBracket}
-                locale={locale}
-                translateTeamNames={isWorldCupTournament}
-              />
-            </section>
-          ) : null}
-
-          {tournament.key === 'argentina-copa-argentina' && knockoutRounds.length ? (
-            <SectionCard
-              title="Partidos de Copa Argentina"
-              subtitle="Listado completo por fase"
-            >
-              <CopaArgentinaMatchList
-                rounds={buildCopaArgentinaMatchRounds(
-                  knockoutRounds,
-                  resolvedTournament?.leagueId ?? null
-                )}
-                initialRoundLabel={latestCopaArgentinaRound?.label}
-              />
-            </SectionCard>
-          ) : null}
-
-          {!isUefaLeaguePhaseTournament && !showGroupStageCards && currentRoundBlocks.length ? (
-            <section id="partidos" className="scroll-mt-28">
-              <CurrentRoundNavigator
-                rounds={currentRoundBlocks}
-                initialIndex={currentRoundInitialIndex}
-                locale={locale}
-                translateTeamNames={isWorldCupTournament}
-              />
-            </section>
           ) : null}
 
           {!isUefaLeaguePhaseTournament && !showConmebolGroupStage && shouldRenderStandings && displayPrimaryGroups.length ? (
@@ -3801,6 +3777,56 @@ export default async function LigaPage({ params }: PageProps) {
                 </p>
               </SectionCard>
             </section>
+          ) : null}
+
+          {!isUefaLeaguePhaseTournament && !showGroupStageCards && (currentRoundBlocks.length || isLigaProfesionalPage) ? (
+            <section id="partidos" className="scroll-mt-28">
+              {currentRoundBlocks.length ? (
+                <CurrentRoundNavigator
+                  rounds={currentRoundBlocks}
+                  initialIndex={currentRoundInitialIndex}
+                  locale={locale}
+                  translateTeamNames={isWorldCupTournament}
+                />
+              ) : (
+                <SectionCard
+                  title="Partidos"
+                  subtitle="La fecha actual aparecerá cuando la fuente vuelva a estar disponible."
+                >
+                  <p className="text-sm text-[#8d98a7]">
+                    No hay partidos sincronizados para esta edición en este momento.
+                  </p>
+                </SectionCard>
+              )}
+            </section>
+          ) : null}
+
+          {shouldRenderKnockoutBracket ? (
+            <section id="llaves" className="scroll-mt-28">
+              <BracketView
+                rounds={knockoutRounds}
+                useCopaArgentinaTree={tournament.key === 'argentina-copa-argentina'}
+                advanceGenericWinners={tournament.key === 'argentina-liga-profesional' || isWorldCupTournament}
+                emptyBracket={emptyBracket}
+                locale={locale}
+                translateTeamNames={isWorldCupTournament}
+              />
+            </section>
+          ) : null}
+
+          {tournament.key === 'argentina-copa-argentina' && knockoutRounds.length ? (
+            <SectionCard
+              title="Partidos de Copa Argentina"
+              subtitle="Listado completo por fase"
+            >
+              <CopaArgentinaMatchList
+                rounds={buildCopaArgentinaMatchRounds(
+                  knockoutRounds,
+                  resolvedTournament?.leagueId ?? null
+                )}
+                initialRoundLabel={latestCopaArgentinaRound?.label}
+              />
+            </SectionCard>
           ) : null}
 
           {visibleSecondaryGroups.length ? (

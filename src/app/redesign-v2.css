@@ -4273,3 +4273,168 @@ body {
   .hf-match-detail-facts > * { display: block; min-height: 54px; padding: 6px 3px !important; border-right: 1px solid rgb(255 255 255 / 10%) !important; border-bottom: 0 !important; }
   .hf-match-detail-facts strong { margin-top: 3px; font-size: .65rem; text-align: center; white-space: normal; }
 }
+
+/* Competition layout audit: every competition owns one bounded content track. */
+.hf-competition-page-content {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.hf-competition-page-content > *,
+.hf-competition-page-content > :is(section, div, header, nav),
+.hf-uefa-phase-layout > *,
+.hf-group-grid > *,
+.hf-current-round-card,
+.hf-current-round-body,
+.hf-current-round-list,
+.hf-current-round-row,
+.hf-current-round-match,
+.hf-current-round-match > div {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+.hf-current-round-card {
+  overflow: hidden;
+}
+
+.hf-current-round-match > div {
+  overflow: hidden;
+}
+
+/* CONMEBOL and UEFA still use the existing bracket logic, but not its old dark skin. */
+.hf-tournament-dark-panel :is(
+  [class*="bg-[#0"],
+  [class*="bg-[#1"],
+  [class*="bg-white/["],
+  [class*="bg-[linear-gradient"]
+) {
+  background-color: var(--hf-surface-raised) !important;
+  background-image: none !important;
+}
+
+.hf-tournament-dark-panel [class*="bg-[#143624]"] {
+  background-color: var(--hf-color-brand-green-soft) !important;
+}
+
+.hf-tournament-dark-panel :is(
+  [class*="text-[#7ff0b2]"],
+  [class*="text-sky-"],
+  [class*="text-emerald-"]
+) {
+  color: var(--hf-secondary) !important;
+}
+
+.hf-tournament-dark-panel :is(
+  [class*="text-[#6f7d8b]"],
+  [class*="text-[#7f8c98]"],
+  [class*="text-[#8d98a7]"],
+  [class*="text-[#8fa0b1]"],
+  [class*="text-[#98a5b3]"],
+  [class*="text-[#9eacb8]"],
+  [class*="text-[#aeb9c4]"]
+) {
+  color: var(--hf-ink-soft) !important;
+}
+
+.hf-tournament-dark-panel :is(
+  [class*="text-[#c7d0da]"],
+  [class*="text-[#dce5ef]"],
+  [class*="text-[#edf2f7]"],
+  [class*="text-white"]
+) {
+  color: var(--hf-ink) !important;
+}
+
+.hf-tournament-dark-panel :is(
+  [class*="border-white"],
+  [class*="border-[#2a5c46]"],
+  [class*="border-[#25553d]"]
+) {
+  border-color: var(--hf-line) !important;
+}
+
+.hf-tournament-dark-panel :is(select, option) {
+  color: var(--hf-ink) !important;
+  border-color: var(--hf-line) !important;
+  background: var(--hf-surface-raised) !important;
+}
+
+.hf-tournament-dark-panel :is(a, button):hover {
+  background-color: var(--hf-surface-muted) !important;
+}
+
+.hf-tournament-dark-panel :is(a, button):focus-visible {
+  outline: 2px solid var(--hf-focus);
+  outline-offset: 2px;
+}
+
+/* Cup participants and venues are dense horizontal rails; tables never are. */
+.hf-competition-page:is(
+  [data-competition-family="conmebol-groups"],
+  [data-competition-family="uefa-league-phase"],
+  [data-competition-family="knockout"]
+) :is(.hf-competition-team-grid, .hf-competition-venue-grid) {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 2px 8px;
+  border: 0;
+  background: transparent;
+  overscroll-behavior-inline: contain;
+  scroll-snap-type: inline proximity;
+  scrollbar-width: thin;
+}
+
+.hf-competition-page:is(
+  [data-competition-family="conmebol-groups"],
+  [data-competition-family="uefa-league-phase"],
+  [data-competition-family="knockout"]
+) :is(.hf-competition-team-grid, .hf-competition-venue-grid) > * {
+  width: min(72vw, 220px);
+  min-width: min(72vw, 220px);
+  flex: 0 0 min(72vw, 220px);
+  border: 1px solid var(--hf-line);
+  border-radius: var(--hf-radius-sm);
+  scroll-snap-align: start;
+}
+
+@media (max-width: 767px) {
+  .hf-competition-page-content {
+    gap: 8px;
+  }
+
+  .hf-group-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hf-group-card-heading {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px;
+    padding: 6px 8px;
+  }
+
+  .hf-group-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: min(47vw, 154px);
+  }
+
+  .hf-group-tabs button {
+    min-width: 0;
+    min-height: 30px;
+    padding: 3px 5px;
+    font-size: 9px;
+  }
+
+  .hf-tournament-dark-panel {
+    border-radius: var(--hf-radius-md) !important;
+  }
+
+  .hf-tournament-dark-panel .bracket-scroll,
+  .hf-bracket-scroll {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+}

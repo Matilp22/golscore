@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 
+import { VISIBLE_TOURNAMENT_PAGE_CONFIGS } from '@/shared/config/tournament-pages'
 import { prepareReadOnlyPage } from './read-only-page'
 
 const RESPONSIVE_VIEWPORTS = [
@@ -24,6 +25,47 @@ async function expectNoDocumentOverflow(page: import('@playwright/test').Page) {
   }))
 
   expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth)
+}
+
+async function expectCompetitionModulesBounded(page: import('@playwright/test').Page) {
+  const result = await page.locator('.hf-competition-page-content').evaluate((container) => {
+    const containerRect = container.getBoundingClientRect()
+    const tolerance = 1
+    const overflowingChildren = [...container.children]
+      .map((child) => {
+        const rect = child.getBoundingClientRect()
+        return {
+          id: child.id,
+          className: child.className,
+          left: rect.left,
+          right: rect.right,
+          width: rect.width,
+        }
+      })
+      .filter(
+        (child) =>
+          child.left < containerRect.left - tolerance ||
+          child.right > containerRect.right + tolerance ||
+          child.width > containerRect.width + tolerance
+      )
+
+    const overflowingTables = [...container.querySelectorAll('.hf-standings-table-wrap')]
+      .filter((table) => table.scrollWidth > table.clientWidth + tolerance)
+      .map((table) => ({
+        clientWidth: table.clientWidth,
+        scrollWidth: table.scrollWidth,
+      }))
+
+    return {
+      containerWidth: containerRect.width,
+      overflowingChildren,
+      overflowingTables,
+    }
+  })
+
+  expect(result.containerWidth).toBeGreaterThan(0)
+  expect(result.overflowingChildren).toEqual([])
+  expect(result.overflowingTables).toEqual([])
 }
 
 test.describe('Competiciones y tablas', () => {
@@ -145,6 +187,73 @@ test.describe('Competiciones y tablas', () => {
     await page.setViewportSize({ width: 320, height: 800 })
     await expectNoDocumentOverflow(page)
     expect(consoleErrors).toEqual([])
+  })
+
+  test('mantiene acotadas y ordenadas todas las familias de competencia', async ({ page }) => {
+    const consoleErrors = await prepareReadOnlyPage(page)
+    const representatives = [
+      { slug: 'argentina-liga-profesional', family: 'argentina-zones' },
+      { slug: 'inglaterra-premier-league', family: 'league' },
+      { slug: 'internacional-libertadores', family: 'conmebol-groups' },
+      { slug: 'internacional-champions', family: 'uefa-league-phase' },
+      { slug: 'argentina-copa-argentina', family: 'knockout' },
+      { slug: 'selecciones-copa-america', family: 'groups' },
+    ]
+
+    await page.setViewportSize({ width: 390, height: 844 })
+
+    for (const representative of representatives) {
+      await page.goto(`/liga/${representative.slug}`, { waitUntil: 'domcontentloaded' })
+
+      const competition = page.locator('.hf-competition-page')
+      await expect(competition).toHaveAttribute('data-competition-family', representative.family)
+      await expectCompetitionModulesBounded(page)
+      await expectNoDocumentOverflow(page)
+
+      const visibleSectionIds = await page
+        .locator('.hf-competition-page-content > [id]')
+        .evaluateAll((elements) => elements.map((element) => element.id))
+      const expectedOrder = ['tabla', 'partidos', 'llaves'].filter((id) =>
+        visibleSectionIds.includes(id)
+      )
+      const actualOrder = visibleSectionIds.filter((id) => expectedOrder.includes(id))
+
+      expect(actualOrder).toEqual(expectedOrder)
+    }
+
+    expect(consoleErrors).toEqual([])
+  })
+
+  const configuredCompetitionChunks = [
+    VISIBLE_TOURNAMENT_PAGE_CONFIGS.slice(0, 25),
+    VISIBLE_TOURNAMENT_PAGE_CONFIGS.slice(25),
+  ]
+
+  configuredCompetitionChunks.forEach((tournaments, index) => {
+    test(`abre todas las competiciones configuradas sin recortes, tramo ${index + 1}`, async ({ page }) => {
+      test.setTimeout(360_000)
+      const consoleErrors = await prepareReadOnlyPage(page)
+      await page.setViewportSize({ width: 390, height: 844 })
+
+      for (const tournament of tournaments) {
+        await page.goto(`/liga/${tournament.key}`, { waitUntil: 'domcontentloaded' })
+        await expect(page.locator('h1').first()).toBeVisible()
+        await expectNoDocumentOverflow(page)
+
+        if (tournament.key === 'selecciones-mundial') {
+          await expect(page.locator('.hf-world26-page')).toBeVisible()
+          continue
+        }
+
+        await expect(page.locator('.hf-competition-page')).toHaveAttribute(
+          'data-competition',
+          tournament.key
+        )
+        await expectCompetitionModulesBounded(page)
+      }
+
+      expect(consoleErrors).toEqual([])
+    })
   })
 
   test('el centro de tablas enlaza a la sección correcta', async ({ page }) => {
