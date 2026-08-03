@@ -436,11 +436,15 @@ export default function ProdePanel() {
       .then((leaguesData) => {
         if (!active) return
 
-        setLeagues(leaguesData)
+        const activeLeagues = leaguesData.filter(
+          (league) => !isWorldCupTournamentExternalId(league.externalId)
+        )
+
+        setLeagues(activeLeagues)
 
         const defaultLeague =
-          leaguesData.find((league) => league.slug === DEFAULT_PRODE_TOURNAMENT_SLUG) ??
-          leaguesData[0]
+          activeLeagues.find((league) => league.slug === DEFAULT_PRODE_TOURNAMENT_SLUG) ??
+          activeLeagues[0]
 
         if (defaultLeague) {
           setSelectedLeagueId((current) => {

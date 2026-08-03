@@ -14,26 +14,19 @@ export default function PointsSummary({
 }: PointsSummaryProps) {
   const { t } = useTranslations()
   const localPoints = predictions.reduce((sum, prediction) => sum + (prediction.points ?? 0), 0)
-  const localExactHits = predictions.filter((prediction) => prediction.exactHit).length
   const hasLoadedPredictions = predictions.length > 0
   const points = hasLoadedPredictions
     ? localPoints
     : Number.isFinite(myRanking?.points)
       ? myRanking?.points ?? 0
       : 0
-  const exactHits = hasLoadedPredictions
-    ? localExactHits
-    : Number.isFinite(myRanking?.exactHits)
-      ? myRanking?.exactHits ?? 0
-      : 0
   const summaryItems = [
     { label: t('prode.points'), value: points, highlight: true },
     { label: t('prode.predictions'), value: predictions.length },
-    { label: t('prode.exactHits'), value: exactHits },
   ]
 
   return (
-    <div className="grid w-full grid-cols-3 gap-1.5 sm:gap-2 md:gap-3">
+    <div className="grid w-full grid-cols-2 gap-1.5 sm:gap-2 md:gap-3">
       {summaryItems.map((item) => (
         <div
           key={item.label}

@@ -31,10 +31,6 @@ export default async function ProdePage() {
         href: '/prode/torneos',
         label: t(locale, 'prode.tournaments'),
       }}
-      secondaryAction={{
-        href: '/liga/selecciones-mundial',
-        label: 'Copa del Mundo 2026',
-      }}
     >
       <ProdePanel />
     </ProdePageShell>
