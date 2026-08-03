@@ -15,6 +15,7 @@ import {
 } from '@/shared/seo'
 import './globals.css'
 import './design-system.css'
+import './redesign-v2.css'
 
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getRequestLocale()

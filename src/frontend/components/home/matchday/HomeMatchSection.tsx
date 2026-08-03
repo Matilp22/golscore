@@ -254,7 +254,7 @@ function HomeMatchRow({
   locale: AppLocale
   tone: HomeMatchSectionTone
 }) {
-  const { match, competition } = entry
+  const { match } = entry
   const homeName = getTeamDisplayName({
     name: match.home,
     league: match.league,
@@ -268,40 +268,8 @@ function HomeMatchRow({
     locale,
   })
 
-  const competitionIdentity = (
-    <>
-      <LeagueLogo
-        src={competition.logo}
-        alt=""
-        size={22}
-      />
-      <span>{competition.title}</span>
-    </>
-  )
-
   return (
     <article className={`hf-matchday-match is-${tone}`}>
-      <header>
-        {competition.href ? (
-          <Link href={competition.href}>{competitionIdentity}</Link>
-        ) : (
-          <div>{competitionIdentity}</div>
-        )}
-        <MatchStatus
-          status={match.statusShort}
-          label={
-            isLiveStatus(match.statusShort)
-              ? 'En vivo'
-              : isFinishedStatus(match.statusShort)
-                ? 'Final'
-                : isUpcomingStatus(match.statusShort)
-                  ? 'Programado'
-                  : match.displayStatus
-          }
-          minute={match.minute}
-        />
-      </header>
-
       <div className="hf-matchday-match-main">
         <TeamLink
           id={match.homeId}
@@ -315,6 +283,19 @@ function HomeMatchRow({
           name={awayName}
           logo={match.awayLogo}
           side="away"
+        />
+        <MatchStatus
+          status={match.statusShort}
+          label={
+            isLiveStatus(match.statusShort)
+              ? 'En vivo'
+              : isFinishedStatus(match.statusShort)
+                ? 'Final'
+                : isUpcomingStatus(match.statusShort)
+                  ? 'Programado'
+                  : match.displayStatus
+          }
+          minute={match.minute}
         />
       </div>
 
@@ -332,6 +313,8 @@ export default function HomeMatchSection({
   locale,
   tone,
   emptyMessage,
+  showHeading = true,
+  labelledBy,
 }: {
   id: string
   eyebrow: string
@@ -341,35 +324,90 @@ export default function HomeMatchSection({
   locale: AppLocale
   tone: HomeMatchSectionTone
   emptyMessage: string
+  showHeading?: boolean
+  labelledBy?: string
 }) {
+  const groupedEntries = entries.reduce<
+    Array<{
+      competition: HomeMatchEntry['competition']
+      entries: HomeMatchEntry[]
+    }>
+  >((groups, entry) => {
+    const group = groups.find(
+      (candidate) => candidate.competition.key === entry.competition.key
+    )
+
+    if (group) {
+      group.entries.push(entry)
+    } else {
+      groups.push({ competition: entry.competition, entries: [entry] })
+    }
+
+    return groups
+  }, [])
+
   return (
     <section
       id={id}
       className={`hf-matchday-section is-${tone}`}
-      aria-labelledby={`${id}-title`}
+      aria-labelledby={labelledBy ?? `${id}-title`}
     >
-      <header className="hf-matchday-section-heading">
-        <div>
-          <span className="hf-type-overline">{eyebrow}</span>
-          <h2 id={`${id}-title`}>{title}</h2>
-          <p>{description}</p>
-        </div>
-        <span className="hf-matchday-section-count">
-          {entries.length}
-          <small>{entries.length === 1 ? 'partido' : 'partidos'}</small>
-        </span>
-      </header>
+      {showHeading ? (
+        <header className="hf-matchday-section-heading">
+          <div>
+            <span className="hf-type-overline">{eyebrow}</span>
+            <h2 id={`${id}-title`}>{title}</h2>
+            <p>{description}</p>
+          </div>
+          <span className="hf-matchday-section-count">
+            {entries.length}
+            <small>{entries.length === 1 ? 'partido' : 'partidos'}</small>
+          </span>
+        </header>
+      ) : null}
 
       {entries.length ? (
-        <div className="hf-matchday-match-list">
-          {entries.map((entry) => (
-            <HomeMatchRow
-              key={String(entry.match.externalId ?? entry.match.id)}
-              entry={entry}
-              locale={locale}
-              tone={tone}
-            />
-          ))}
+        <div className="hf-matchday-competition-groups">
+          {groupedEntries.map(({ competition, entries: competitionEntries }) => {
+            const competitionIdentity = (
+              <>
+                <LeagueLogo src={competition.logo} alt="" size={26} />
+                <span>
+                  <strong>{competition.title}</strong>
+                  <small>
+                    {competitionEntries.length}{' '}
+                    {competitionEntries.length === 1 ? 'partido' : 'partidos'}
+                  </small>
+                </span>
+              </>
+            )
+
+            return (
+              <section
+                key={competition.key}
+                className="hf-matchday-competition-group"
+                aria-label={competition.title}
+              >
+                <header>
+                  {competition.href ? (
+                    <Link href={competition.href}>{competitionIdentity}</Link>
+                  ) : (
+                    <div>{competitionIdentity}</div>
+                  )}
+                </header>
+                <div className="hf-matchday-match-list">
+                  {competitionEntries.map((entry) => (
+                    <HomeMatchRow
+                      key={String(entry.match.externalId ?? entry.match.id)}
+                      entry={entry}
+                      locale={locale}
+                      tone={tone}
+                    />
+                  ))}
+                </div>
+              </section>
+            )
+          })}
         </div>
       ) : (
         <div className="hf-matchday-section-empty">

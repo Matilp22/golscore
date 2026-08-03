@@ -8,9 +8,7 @@ export type AppNavigationItem = {
 }
 
 export const DESKTOP_NAVIGATION: AppNavigationItem[] = [
-  { key: 'matches', label: 'Partidos', href: '/#partidos', icon: 'matches' },
   { key: 'competitions', label: 'Competiciones', href: '/competiciones', icon: 'competitions' },
-  { key: 'world', label: 'Mundial 2026', href: '/liga/selecciones-mundial', icon: 'world' },
   { key: 'news', label: 'Noticias', href: '/noticias', icon: 'news' },
   { key: 'prode', label: 'Prode', href: '/prode', icon: 'prode' },
   { key: 'guess-player', label: 'Adiviná', href: '/juegos/adivina-el-futbolista', icon: 'matches' },
@@ -23,15 +21,13 @@ export const MOBILE_NAVIGATION: Array<
   }
 > = [
   { key: 'home', label: 'Inicio', href: '/', icon: 'home' },
-  { key: 'matches', label: 'Partidos', href: '/#partidos', icon: 'matches' },
+  { key: 'competitions', label: 'Competiciones', href: '/competiciones', icon: 'competitions' },
   { key: 'search', label: 'Buscar', href: '#buscar', icon: 'search', action: 'search' },
   { key: 'favorites', label: 'Favoritos', href: '#favoritos', icon: 'star', action: 'favorites' },
   { key: 'more', label: 'Más', href: '#mas', icon: 'more', action: 'more' },
 ]
 
 export const MORE_NAVIGATION: AppNavigationItem[] = [
-  { key: 'competitions', label: 'Competiciones', href: '/competiciones', icon: 'competitions' },
-  { key: 'world', label: 'Mundial 2026', href: '/liga/selecciones-mundial', icon: 'world' },
   { key: 'teams', label: 'Equipos y selecciones', href: '/equipos', icon: 'teams' },
   { key: 'stats', label: 'Estadísticas', href: '/estadisticas', icon: 'stats' },
   { key: 'news', label: 'Noticias', href: '/noticias', icon: 'news' },

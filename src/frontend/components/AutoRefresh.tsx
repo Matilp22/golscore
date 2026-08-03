@@ -20,9 +20,21 @@ export default function AutoRefresh({
   initialSyncMinIntervalMs = 60_000,
 }: AutoRefreshProps) {
   const router = useRouter()
+  const automaticRefreshEnabled =
+    typeof window !== 'undefined' &&
+    window.location.hostname !== 'localhost' &&
+    window.location.hostname !== '127.0.0.1' &&
+    window.location.hostname !== '::1'
 
   const syncWithoutRefresh = useCallback(async () => {
     if (!syncBeforeRefreshUrl) return
+    if (
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      window.location.hostname === '::1'
+    ) {
+      return
+    }
 
     await fetch(syncBeforeRefreshUrl, {
       cache: 'no-store',
@@ -40,7 +52,12 @@ export default function AutoRefresh({
   }, [router, syncWithoutRefresh])
 
   useEffect(() => {
-    if (syncBeforeRefreshUrl) {
+    const isLocalServer =
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      window.location.hostname === '::1'
+
+    if (syncBeforeRefreshUrl && !isLocalServer) {
       const syncKey = `hf-auto-sync:${syncBeforeRefreshUrl}`
       const lastSyncedAt = Number(window.sessionStorage.getItem(syncKey) ?? 0)
 
@@ -70,6 +87,7 @@ export default function AutoRefresh({
 
   useAutoRefresh({
     intervalMs,
+    enabled: automaticRefreshEnabled,
     initialUpdatedAt,
     onRefresh: () => {
       return refreshWithOptionalSync()

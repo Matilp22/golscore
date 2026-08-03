@@ -1,5 +1,9 @@
 # Hay Fulbo: concepto visual y sistema de diseño
 
+> Documento histórico de la primera propuesta. La implementación vigente se
+> define en `unified-redesign-v2.md` y reemplaza su paleta, tipografía,
+> composición y lenguaje de componentes.
+
 Estado: Etapas 3 y 4 definidas
 Versión: HF Matchday 1.0
 Fecha: 2026-07-29

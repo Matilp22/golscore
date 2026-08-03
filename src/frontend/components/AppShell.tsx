@@ -12,15 +12,14 @@ import {
 
 import AppAudioPreferenceBridge from '@/frontend/components/AppAudioPreferenceBridge'
 import BackButton from '@/frontend/components/BackButton'
-import BrandMark from '@/frontend/components/BrandMark'
 import FavoritesCenter from '@/frontend/components/favorites/FavoritesCenter'
 import GlobalSearch from '@/frontend/components/global/GlobalSearch'
 import NotificationBell from '@/frontend/components/global/NotificationBell'
 import { LocaleProvider } from '@/frontend/components/LocaleProvider'
 import AppIcon from '@/frontend/components/navigation/AppIcon'
+import { TeamLogo } from '@/frontend/components/AssetImage'
 import MobileSheet from '@/frontend/components/overlays/MobileSheet'
 import SiteFooter from '@/frontend/components/SiteFooter'
-import SidebarNav from '@/frontend/components/SidebarNav'
 import GoogleAdSlot from '@/frontend/components/ads/GoogleAdSlot'
 import TournamentAudioController from '@/frontend/components/TournamentAudioController'
 import { useAuth } from '@/frontend/hooks/useAuth'
@@ -32,7 +31,6 @@ import {
   isNavigationItemActive,
 } from '@/frontend/navigation/app-navigation'
 import { getSupabaseBrowserClient, signOut } from '@/lib/supabase/supabaseClient'
-import { SIDEBAR_SECTION_CONFIGS } from '@/lib/tournament-pages'
 import { shouldAllowAdsOnRoute } from '@/shared/content-quality'
 import { isLiveStatus } from '@/shared/utils/match-status'
 import type { AppLocale } from '@/shared/i18n/locales'
@@ -74,7 +72,7 @@ function SearchTrigger({
       <button
         type="button"
         className="hf-shell-icon-action"
-        aria-label="Buscar en Hay Fulbo"
+        aria-label="Buscar equipos, partidos, jugadores y noticias"
         onClick={onOpen}
       >
         <AppIcon name="search" />
@@ -146,11 +144,23 @@ function MobileAccountLinks({ onNavigate }: { onNavigate: () => void }) {
     )
   }
 
+  const favoriteTeamId = typeof user.user_metadata?.favorite_team_id === 'string'
+    ? user.user_metadata.favorite_team_id
+    : null
+  const favoriteTeamLogo = typeof user.user_metadata?.favorite_team_logo_url === 'string'
+    ? user.user_metadata.favorite_team_logo_url
+    : null
+
   return (
     <div className="hf-sheet-account">
       <div>
         <span className="hf-type-overline">Sesión activa</span>
-        <p>{user.email || 'Tu cuenta de Hay Fulbo'}</p>
+        <p className="hf-sheet-account-identity">
+          {favoriteTeamId ? (
+            <TeamLogo src={favoriteTeamLogo} team={{ id: favoriteTeamId }} alt="" size={30} />
+          ) : null}
+          <span>{user.user_metadata?.username || user.email || 'Tu cuenta de Hay Fulbo'}</span>
+        </p>
       </div>
       <div className="hf-sheet-account-actions">
         <Link href="/perfil" onClick={onNavigate}>
@@ -175,6 +185,13 @@ export default function AppShell({
   const [overlay, setOverlay] = useOverlayState()
   const isAdmin = pathname?.startsWith('/admin') ?? false
   const isHome = pathname === '/'
+  const desktopNavigation = isHome
+    ? DESKTOP_NAVIGATION.filter((item) =>
+        ['matches', 'competitions', 'world', 'news', 'mi-torneito'].includes(
+          item.key
+        )
+      )
+    : DESKTOP_NAVIGATION
   const allowAds = shouldAllowAdsOnRoute(pathname || '/')
   const closeOverlay = useCallback(() => setOverlay(null), [setOverlay])
   const handleSearchOpenChange = useCallback(
@@ -216,14 +233,16 @@ export default function AppShell({
       <AppAudioPreferenceBridge />
       <TournamentAudioController />
 
-      <div className="hf-global-shell">
+      <div className={`hf-global-shell${isHome ? ' is-home' : ''}`}>
         <header className="hf-global-header">
           <div className="hf-global-header-primary">
             <div className="hf-global-header-inner">
               <div className="hf-global-header-start">
                 {!isHome ? <BackButton /> : null}
                 <Link href="/" className="hf-global-brand" aria-label="Hay Fulbo, inicio">
-                  <BrandMark compact />
+                  <span className="hf-home-wordmark hf-global-wordmark" aria-hidden="true">
+                    HAY FULBO<span>.</span>
+                  </span>
                 </Link>
               </div>
 
@@ -256,7 +275,7 @@ export default function AppShell({
             aria-label="Navegación principal"
           >
             <div className="hf-global-nav-inner">
-              {DESKTOP_NAVIGATION.map((item) => {
+              {desktopNavigation.map((item) => {
                 const active =
                   item.key === 'matches'
                     ? pathname === '/'
@@ -370,19 +389,6 @@ export default function AppShell({
 
         <MobileAccountLinks onNavigate={closeOverlay} />
 
-        <section className="hf-more-competitions">
-          <div>
-            <span className="hf-type-overline">Por región</span>
-            <h3>Competiciones</h3>
-          </div>
-          <SidebarNav
-            sections={SIDEBAR_SECTION_CONFIGS}
-            locale={locale}
-            compact
-            showEditorial={false}
-            onNavigate={closeOverlay}
-          />
-        </section>
       </MobileSheet>
 
       <GlobalSearch

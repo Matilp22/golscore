@@ -85,9 +85,11 @@ function formatArticleDate(value: string) {
 export default function HomeDiscovery({
   competitions,
   articles,
+  showNews = true,
 }: {
   competitions: HfHomeCompetition[]
   articles: HfHomeArticle[]
+  showNews?: boolean
 }) {
   return (
     <div className="hf-matchday-discovery">
@@ -158,52 +160,54 @@ export default function HomeDiscovery({
         </div>
       </section>
 
-      <section aria-labelledby="home-news-title">
-        <SectionHeading
-          id="home-news-title"
-          eyebrow="Historias y contexto"
-          title="Noticias"
-          href="/noticias"
-          action="Ver portada"
-        />
+      {showNews ? (
+        <section aria-labelledby="home-news-title">
+          <SectionHeading
+            id="home-news-title"
+            eyebrow="Historias y contexto"
+            title="Noticias"
+            href="/noticias"
+            action="Ver portada"
+          />
 
-        {articles.length ? (
-          <div className="hf-matchday-news-grid">
-            {articles.slice(0, 4).map((article, index) => {
-              const image = article.heroImage ?? article.image
+          {articles.length ? (
+            <div className="hf-matchday-news-grid">
+              {articles.slice(0, 4).map((article, index) => {
+                const image = article.heroImage ?? article.image
 
-              return (
-                <Link
-                  key={article.slug}
-                  href={`/noticias/${article.slug}`}
-                  className={index === 0 ? 'is-featured' : ''}
-                >
-                  <div className="hf-matchday-news-media">
-                    {image ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={image} alt="" loading="lazy" />
-                    ) : (
-                      <span aria-hidden="true">HF</span>
-                    )}
-                  </div>
-                  <div className="hf-matchday-news-copy">
-                    <span>{formatEditorialCategory(article.category)}</span>
-                    <h3>{article.title}</h3>
-                    <p>{article.summary}</p>
-                    <time dateTime={article.updatedAt}>
-                      {formatArticleDate(article.updatedAt)}
-                    </time>
-                  </div>
-                </Link>
-              )
-            })}
-          </div>
-        ) : (
-          <div className="hf-matchday-discovery-empty">
-            Todavía no hay noticias publicadas.
-          </div>
-        )}
-      </section>
+                return (
+                  <Link
+                    key={article.slug}
+                    href={`/noticias/${article.slug}`}
+                    className={index === 0 ? 'is-featured' : ''}
+                  >
+                    <div className="hf-matchday-news-media">
+                      {image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={image} alt="" loading="lazy" />
+                      ) : (
+                        <span aria-hidden="true">HF</span>
+                      )}
+                    </div>
+                    <div className="hf-matchday-news-copy">
+                      <span>{formatEditorialCategory(article.category)}</span>
+                      <h3>{article.title}</h3>
+                      <p>{article.summary}</p>
+                      <time dateTime={article.updatedAt}>
+                        {formatArticleDate(article.updatedAt)}
+                      </time>
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="hf-matchday-discovery-empty">
+              Todavía no hay noticias publicadas.
+            </div>
+          )}
+        </section>
+      ) : null}
     </div>
   )
 }

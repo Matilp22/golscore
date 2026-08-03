@@ -16,26 +16,20 @@ export default function TrustPageLayout({
   children,
 }: TrustPageLayoutProps) {
   return (
-    <main className="min-w-0">
-      <article className="hf-card overflow-hidden rounded-2xl text-white">
-        <header className="hf-section-head px-4 py-4 sm:px-5">
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#70ff9d]">
-            {kicker}
-          </p>
-          <h1 className="mt-2 text-2xl font-black sm:text-3xl">{title}</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-[#c8d3cf]">
-            {summary}
-          </p>
+    <main className="hf-trust-page">
+      <article className="hf-trust-card">
+        <header className="hf-trust-hero">
+          <p className="hf-type-overline">{kicker}</p>
+          <h1>{title}</h1>
+          <p>{summary}</p>
           {updatedAt ? (
-            <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#8d98a7]">
+            <p className="hf-trust-updated">
               Ultima actualizacion: {updatedAt}
             </p>
           ) : null}
         </header>
 
-        <div className="space-y-7 px-4 py-5 text-sm leading-7 text-[#dbe5df] sm:px-5">
-          {children}
-        </div>
+        <div className="hf-trust-body">{children}</div>
       </article>
     </main>
   )
