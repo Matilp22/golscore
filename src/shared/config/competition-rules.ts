@@ -163,27 +163,27 @@ const PROTECTED_COMPETITION_DISPLAY_OVERRIDES: Record<
 }
 
 export const ROW_TONE_CLASSES: Record<RuleTone, string> = {
-  title: 'border-l-[#39e67a] bg-[#10301f]',
-  champions: 'border-l-[#46d98e] bg-[#10261c]',
-  libertadores: 'border-l-[#f1cc4a] bg-[#2d2610]',
-  europa: 'border-l-sky-400 bg-sky-950/25',
-  sudamericana: 'border-l-sky-400 bg-sky-950/25',
-  conference: 'border-l-cyan-300 bg-cyan-950/20',
-  playoff: 'border-l-[#d6a84f] bg-[#2a2414]',
-  relegationPlayoff: 'border-l-[#fb923c] bg-orange-950/20',
-  relegation: 'border-l-[#ff7e7e] bg-[#2a1616]',
+  title: 'hf-row-tone-title',
+  champions: 'hf-row-tone-champions',
+  libertadores: 'hf-row-tone-libertadores',
+  europa: 'hf-row-tone-europa',
+  sudamericana: 'hf-row-tone-sudamericana',
+  conference: 'hf-row-tone-conference',
+  playoff: 'hf-row-tone-playoff',
+  relegationPlayoff: 'hf-row-tone-relegation-playoff',
+  relegation: 'hf-row-tone-relegation',
 }
 
 export const LEGEND_TONE_CLASSES: Record<RuleTone, string> = {
-  title: 'bg-[#39e67a]',
-  champions: 'bg-[#46d98e]',
-  libertadores: 'bg-[#f1cc4a]',
-  europa: 'bg-sky-400',
-  sudamericana: 'bg-sky-400',
-  conference: 'bg-cyan-300',
-  playoff: 'bg-[#d6a84f]',
-  relegationPlayoff: 'bg-[#fb923c]',
-  relegation: 'bg-[#ff7e7e]',
+  title: 'hf-legend-tone-title',
+  champions: 'hf-legend-tone-champions',
+  libertadores: 'hf-legend-tone-libertadores',
+  europa: 'hf-legend-tone-europa',
+  sudamericana: 'hf-legend-tone-sudamericana',
+  conference: 'hf-legend-tone-conference',
+  playoff: 'hf-legend-tone-playoff',
+  relegationPlayoff: 'hf-legend-tone-relegation-playoff',
+  relegation: 'hf-legend-tone-relegation',
 }
 
 const apiDescriptionSource = 'API-Football standings.description cuando viene disponible'

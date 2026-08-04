@@ -547,13 +547,13 @@ function TeamRow({
 }) {
   return (
     <div
-      className={`flex h-[19px] items-center justify-between gap-2 rounded-md px-1.5 py-0.5 ${
+      className={`hf-knockout-team-row flex h-[19px] items-center justify-between gap-2 rounded-md px-1.5 py-0.5 ${
         active
           ? 'bg-[#143624] text-[#7ff0b2] shadow-[inset_0_0_0_1px_rgba(127,240,178,0.2)]'
           : 'bg-[#121a20]'
       }`}
     >
-      <div className="flex min-w-0 items-center gap-1.5">
+      <div className="hf-knockout-team-identity flex min-w-0 items-center gap-1.5">
         <TeamLogo
           src={team.logo}
           alt={team.name}
@@ -568,7 +568,7 @@ function TeamRow({
           </span>
         ) : null}
         <span
-          className={`truncate text-[10.5px] font-semibold ${
+          className={`hf-knockout-team-name truncate text-[10.5px] font-semibold ${
             active ? 'text-[#7ff0b2]' : 'text-[#edf2f7]'
           }`}
         >

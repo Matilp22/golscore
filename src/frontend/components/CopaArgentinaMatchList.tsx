@@ -80,37 +80,37 @@ export default function CopaArgentinaMatchList({
   if (!activeRound) return null
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <label className="text-xs font-semibold text-[#dce5ef]" htmlFor="copa-argentina-round">
+    <div className="hf-copa-agenda">
+      <div className="hf-copa-agenda-toolbar">
+        <label htmlFor="copa-argentina-round">
           Fase
         </label>
         <select
           id="copa-argentina-round"
           value={activeRound.label}
           onChange={(event) => setSelectedRound(event.target.value)}
-          className="min-h-8 rounded-xl border border-white/8 bg-[#10151a] px-2.5 py-1.5 text-xs font-semibold text-white outline-none transition hover:border-white/12 focus:border-[#7ff0b2]/70"
+          className="hf-copa-agenda-select"
         >
           {availableRounds.map((round) => (
-            <option key={round.label} value={round.label} className="bg-[#10151a] text-white">
+            <option key={round.label} value={round.label}>
               {round.label}
             </option>
           ))}
         </select>
       </div>
 
-      <div className="w-full overflow-hidden rounded-xl border border-white/8 bg-[#11161b]">
+      <div className="hf-copa-agenda-list">
         {activeRound.matches.map((match) => (
           <Link
             key={match.id}
             href={`/partido/${match.id}`}
-            className="grid gap-1.5 border-b border-white/8 px-2 py-1.5 text-xs transition hover:bg-[#151b21] focus-visible:bg-[#151b21] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7ff0b2]/60 focus-visible:ring-inset last:border-b-0 md:grid-cols-[112px_minmax(0,1fr)_80px] md:gap-2 md:px-3"
+            className="hf-copa-agenda-match"
           >
-            <div className="font-semibold text-[#8fa0b1]">{formatDate(match.date)}</div>
+            <div className="hf-copa-agenda-date">{formatDate(match.date)}</div>
 
-            <div className="grid grid-cols-[minmax(0,1fr)_76px_minmax(0,1fr)] items-center gap-1.5">
-              <div className="flex min-w-0 items-center justify-end gap-1.5 text-right">
-                <span className="truncate font-semibold text-[#dce5ef]">{match.home}</span>
+            <div className="hf-copa-agenda-teams">
+              <div className="hf-copa-agenda-team is-home">
+                <span>{match.home}</span>
                 <TeamLogo
                   src={match.homeLogo}
                   alt={match.home}
@@ -120,9 +120,9 @@ export default function CopaArgentinaMatchList({
                 />
               </div>
 
-              <div className="text-center text-[13px] font-black text-white">{getScoreLabel(match)}</div>
+              <div className="hf-copa-agenda-score">{getScoreLabel(match)}</div>
 
-              <div className="flex min-w-0 items-center gap-1.5">
+              <div className="hf-copa-agenda-team is-away">
                 <TeamLogo
                   src={match.awayLogo}
                   alt={match.away}
@@ -130,11 +130,11 @@ export default function CopaArgentinaMatchList({
                   className="h-4 w-4 object-contain"
                   fallbackClassName="h-3.5 w-3"
                 />
-                <span className="truncate font-semibold text-[#dce5ef]">{match.away}</span>
+                <span>{match.away}</span>
               </div>
             </div>
 
-            <div className="font-bold text-[#7ff0b2] md:text-right">{getStatusLabel(match)}</div>
+            <div className="hf-copa-agenda-status">{getStatusLabel(match)}</div>
           </Link>
         ))}
       </div>

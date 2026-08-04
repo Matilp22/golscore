@@ -1691,18 +1691,18 @@ function getRowAccent(
   if (variant === 'annual') {
     const rank = row.rank || index + 1
 
-    if (index === 0) return 'border-l-[#39e67a] bg-[#10301f]'
+    if (index === 0) return ROW_TONE_CLASSES.title
     if (relegatedTeamIds.has(String(row.teamId || row.teamName))) {
-      return 'border-l-[#ff5d73] bg-[#35141a]'
+      return ROW_TONE_CLASSES.relegation
     }
-    if (rank === 2 || rank === 3) return 'border-l-[#f1cc4a] bg-[#2d2610]'
-    if (rank >= 4 && rank <= 9) return 'border-l-sky-400 bg-sky-950/25'
+    if (rank === 2 || rank === 3) return ROW_TONE_CLASSES.libertadores
+    if (rank >= 4 && rank <= 9) return ROW_TONE_CLASSES.sudamericana
     return 'border-l-transparent'
   }
 
   if (variant === 'promedios') {
     if (relegatedTeamIds.has(String(row.teamId || row.teamName))) {
-      return 'border-l-[#ff5d73] bg-[#35141a]'
+      return ROW_TONE_CLASSES.relegation
     }
 
     return 'border-l-transparent'
@@ -1731,15 +1731,15 @@ function getRowAccent(
       description.includes('play-offs') ||
       description.includes('playoffs')
     ) {
-      return 'border-l-[#46d98e] bg-[#10261c]'
+      return ROW_TONE_CLASSES.champions
     }
 
     if (description.includes('sudamericana') || description.includes('europa') || description.includes('conference')) {
-      return 'border-l-sky-400 bg-sky-950/25'
+      return ROW_TONE_CLASSES.sudamericana
     }
 
     if (description.includes('relegation') || description.includes('descenso')) {
-      return 'border-l-[#ff7e7e] bg-[#2a1616]'
+      return ROW_TONE_CLASSES.relegation
     }
   }
 
@@ -1748,7 +1748,7 @@ function getRowAccent(
   }
 
   if (allowLegacyFallback && rowsLength >= 14 && index < 8) {
-    return 'border-l-[#46d98e] bg-[#10261c]'
+    return ROW_TONE_CLASSES.champions
   }
 
   return 'border-l-transparent'
@@ -3886,10 +3886,10 @@ export default async function LigaPage({ params }: PageProps) {
                   />
                   <TableLegend
                     items={[
-                      { label: 'Campeon de liga', tone: 'bg-[#39e67a]' },
-                      { label: 'Libertadores: 2 y 3', tone: 'bg-[#f1cc4a]' },
-                      { label: 'Sudamericana: 4 a 9', tone: 'bg-sky-400' },
-                      { label: 'Descenso', tone: 'bg-[#ff5d73]' },
+                      { label: 'Campeon de liga', tone: LEGEND_TONE_CLASSES.title },
+                      { label: 'Libertadores: 2 y 3', tone: LEGEND_TONE_CLASSES.libertadores },
+                      { label: 'Sudamericana: 4 a 9', tone: LEGEND_TONE_CLASSES.sudamericana },
+                      { label: 'Descenso', tone: LEGEND_TONE_CLASSES.relegation },
                     ]}
                   />
                 </SectionCard>
@@ -3904,7 +3904,7 @@ export default async function LigaPage({ params }: PageProps) {
                   />
                   <TableLegend
                     items={[
-                      { label: 'Descenso', tone: 'bg-[#ff5d73]' },
+                      { label: 'Descenso', tone: LEGEND_TONE_CLASSES.relegation },
                     ]}
                   />
                 </SectionCard>

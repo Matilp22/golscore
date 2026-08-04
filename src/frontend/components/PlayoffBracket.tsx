@@ -193,19 +193,21 @@ function SkeletonBracket() {
 
 function TeamSlot({ team, score }: { team: PlayoffTeam; score?: number | null }) {
   return (
-    <div className="grid min-w-0 grid-cols-[18px_minmax(0,1fr)_22px] items-center gap-1.5 rounded-lg border border-white/7 bg-[#111820]/88 px-2 py-1.5">
-      <TeamLogo
-        src={team.logo}
-        alt={team.name}
-        size={18}
-        className="h-[18px] w-[18px] object-contain"
-        fallbackClassName="h-[18px] w-[15px]"
-      />
-      <div className="min-w-0">
-        <p className="truncate text-[12px] font-bold text-white">{team.name}</p>
-        <p className="truncate text-[9px] font-semibold uppercase tracking-[0.06em] text-[#8d98a7]">
-          {team.zone}
-        </p>
+    <div className="hf-knockout-team-row grid min-w-0 grid-cols-[minmax(0,1fr)_22px] items-center gap-1.5 rounded-lg border border-white/7 bg-[#111820]/88 px-2 py-1.5">
+      <div className="hf-knockout-team-identity flex min-w-0 items-center gap-1.5">
+        <TeamLogo
+          src={team.logo}
+          alt={team.name}
+          size={18}
+          className="h-[18px] w-[18px] object-contain"
+          fallbackClassName="h-[18px] w-[15px]"
+        />
+        <div className="min-w-0">
+          <p className="hf-knockout-team-name truncate text-[12px] font-bold text-white">{team.name}</p>
+          <p className="truncate text-[9px] font-semibold uppercase tracking-[0.06em] text-[#8d98a7]">
+            {team.zone}
+          </p>
+        </div>
       </div>
       <span className="flex h-6 w-[22px] items-center justify-center rounded-md border border-white/8 bg-[#0d1217] text-[11px] font-black text-[#c7d0da]">
         {score ?? '-'}
@@ -229,13 +231,15 @@ function PendingTeamSlot() {
   const { t } = useTranslations()
 
   return (
-    <div className="grid min-w-0 grid-cols-[18px_minmax(0,1fr)_22px] items-center gap-1.5 rounded-lg border border-white/7 bg-[#111820]/88 px-2 py-1.5">
-      <span className="h-[18px] w-[15px] bg-[#6f7884] [clip-path:polygon(50%_0,92%_16%,84%_72%,50%_100%,16%_72%,8%_16%)]" />
-      <div className="min-w-0">
-        <p className="truncate text-[12px] font-bold text-white">{t('bracket.pendingTeam')}</p>
-        <p className="truncate text-[9px] font-semibold uppercase tracking-[0.06em] text-[#8d98a7]">
-          {t('bracket.pending')}
-        </p>
+    <div className="hf-knockout-team-row grid min-w-0 grid-cols-[minmax(0,1fr)_22px] items-center gap-1.5 rounded-lg border border-white/7 bg-[#111820]/88 px-2 py-1.5">
+      <div className="hf-knockout-team-identity flex min-w-0 items-center gap-1.5">
+        <span className="h-[18px] w-[15px] bg-[#6f7884] [clip-path:polygon(50%_0,92%_16%,84%_72%,50%_100%,16%_72%,8%_16%)]" />
+        <div className="min-w-0">
+          <p className="hf-knockout-team-name truncate text-[12px] font-bold text-white">{t('bracket.pendingTeam')}</p>
+          <p className="truncate text-[9px] font-semibold uppercase tracking-[0.06em] text-[#8d98a7]">
+            {t('bracket.pending')}
+          </p>
+        </div>
       </div>
       <span className="flex h-6 w-[22px] items-center justify-center rounded-md border border-white/8 bg-[#0d1217] text-[11px] font-black text-[#c7d0da]">
         -

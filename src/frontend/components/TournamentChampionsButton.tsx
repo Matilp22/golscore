@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 import { TeamLogo } from '@/frontend/components/AssetImage'
 import { useTranslations } from '@/frontend/components/LocaleProvider'
@@ -79,8 +80,9 @@ export default function TournamentChampionsButton({
         {t('stage.champions')}
       </button>
 
-      {isOpen ? (
-        <div className="hf-competition-history-overlay">
+      {isOpen && typeof document !== 'undefined'
+        ? createPortal(
+            <div className="hf-competition-history-overlay">
           <button
             type="button"
             className="hf-competition-history-backdrop"
@@ -150,8 +152,10 @@ export default function TournamentChampionsButton({
               ))}
             </div>
           </section>
-        </div>
-      ) : null}
+            </div>,
+            document.body
+          )
+        : null}
     </>
   )
 }
