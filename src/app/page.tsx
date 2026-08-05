@@ -49,9 +49,10 @@ import {
   t,
 } from '@/shared/i18n/locales'
 import {
-  WORLD_CUP_2026_LOGO_URL,
+  getTournamentExternalLeagueId,
   getTournamentKeyByLeagueExternalId,
   getTournamentLogoOverrideUrl,
+  pickLeagueLogoUrl,
 } from '@/shared/utils/asset-urls'
 import { getHomeProdePredictions } from '@/server/prode/home-predictions'
 
@@ -1202,20 +1203,15 @@ function resolveHomeCompetitionLogo(ruleKey: string, sampleMatch?: ApiMatch) {
   const tournamentOverride =
     getTournamentLogoOverrideUrl(ruleKey) ??
     getTournamentLogoOverrideUrl(mappedTournamentKey)
+  const externalId =
+    sampleMatch?.leagueId ??
+    getTournamentExternalLeagueId(mappedTournamentKey) ??
+    getTournamentExternalLeagueId(ruleKey)
 
-  if (tournamentOverride) return tournamentOverride
-
-  if (ruleKey === 'selecciones-mundial' || mappedTournamentKey === 'selecciones-mundial') {
-    return WORLD_CUP_2026_LOGO_URL
-  }
-
-  if (sampleMatch?.leagueLogo) return sampleMatch.leagueLogo
-
-  if (sampleMatch?.leagueId && Number.isFinite(sampleMatch.leagueId)) {
-    return `https://media.api-sports.io/football/leagues/${sampleMatch.leagueId}.png`
-  }
-
-  return undefined
+  return (
+    pickLeagueLogoUrl(sampleMatch?.leagueLogo, externalId, tournamentOverride) ??
+    undefined
+  )
 }
 
 function groupMatchesWithPromiedosStructure(matches: ApiMatch[]): SectionBucket[] {

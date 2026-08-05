@@ -85,7 +85,6 @@ const LEAGUE_LOGO_OVERRIDES: Record<string, string> = {
   '130': TOURNAMENT_LOGO_URLS['argentina-copa-argentina'],
   '960': TOURNAMENT_LOGO_URLS['selecciones-eliminatorias-eurocopa'],
 }
-const FORCE_LEAGUE_LOGO_OVERRIDES = new Set(['1', '15', '31', '32', '34', '960'])
 
 export const ALLOWED_REMOTE_ASSET_HOSTS = [
   API_SPORTS_MEDIA_HOST,
@@ -177,6 +176,15 @@ export function getTournamentExternalLeagueId(key: string | null | undefined) {
   return TOURNAMENT_LEAGUE_EXTERNAL_IDS[key] ?? null
 }
 
+export function getOfficialTournamentLogoUrl(key: string | null | undefined) {
+  const externalId = getTournamentExternalLeagueId(key)
+
+  return (
+    getApiSportsLeagueLogoUrl(externalId) ??
+    getTournamentLogoOverrideUrl(key)
+  )
+}
+
 export function getTournamentKeyByLeagueExternalId(
   externalId: string | number | null | undefined
 ) {
@@ -223,15 +231,17 @@ export function pickLeagueLogoUrl(
   externalId: string | number | null | undefined,
   apiUrl?: string | null
 ) {
-  const id = normalizeExternalId(externalId)
+  const official = getApiSportsLeagueLogoUrl(externalId)
   const override = getLeagueLogoOverrideUrl(externalId)
 
-  if (id && FORCE_LEAGUE_LOGO_OVERRIDES.has(id) && override) return override
+  // Competition IDs are stable in API-Sports. Prefer the official provider
+  // asset over local illustrative badges or stale persisted URLs.
+  if (official) return official
 
   return pickFreshAssetUrl(
     persistedUrl,
     apiUrl,
-    override || getApiSportsLeagueLogoUrl(externalId)
+    override
   )
 }
 

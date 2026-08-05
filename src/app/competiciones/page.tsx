@@ -10,16 +10,11 @@ import {
 } from '@/shared/i18n/locales'
 import { buildSeoMetadata } from '@/shared/seo'
 import {
-  getTournamentExternalLeagueId,
-  getTournamentLogoOverrideUrl,
-  pickLeagueLogoUrl,
+  getOfficialTournamentLogoUrl,
 } from '@/shared/utils/asset-urls'
 
 function resolveTournamentLogo(tournament: TournamentPageConfig) {
-  return (
-    getTournamentLogoOverrideUrl(tournament.key) ??
-    pickLeagueLogoUrl(null, getTournamentExternalLeagueId(tournament.key))
-  )
+  return getOfficialTournamentLogoUrl(tournament.key)
 }
 
 export async function generateMetadata() {

@@ -1,6 +1,4 @@
 import Link from 'next/link'
-import { existsSync } from 'fs'
-import path from 'path'
 import type { Metadata } from 'next'
 import type { CSSProperties, ReactNode } from 'react'
 
@@ -71,7 +69,9 @@ import {
   toArgentinaDate,
 } from '@/shared/utils/argentina-time'
 import {
+  getTournamentExternalLeagueId,
   getTournamentLogoOverrideUrl,
+  pickLeagueLogoUrl,
 } from '@/shared/utils/asset-urls'
 import {
   COPA_ARGENTINA_STAGE_ORDER,
@@ -96,7 +96,6 @@ import {
 import {
   formatMatchScoreWithPenalties,
 } from '@/shared/utils/match-display'
-import { WORLD_CUP_2026_LOGO_URL } from '@/shared/utils/asset-urls'
 import type { ConmebolCompetitionType } from '@/shared/utils/conmebol-rounds'
 import { buildSeoMetadata } from '@/shared/seo'
 import { getRequestLocale } from '@/server/request-locale'
@@ -107,14 +106,6 @@ import { translateCountryName } from '@/shared/utils/country-names'
 
 type PageProps = {
   params: Promise<{ id: string }>
-}
-
-function getExistingPublicAssetUrl(assetUrl: string | null) {
-  if (!assetUrl) return null
-  if (!assetUrl.startsWith('/')) return assetUrl
-
-  const assetPath = path.join(process.cwd(), 'public', assetUrl.slice(1))
-  return existsSync(assetPath) ? assetUrl : null
 }
 
 type LeagueSeoOverride = {
@@ -2751,6 +2742,7 @@ function StandingsTable({
                   {row.teamId ? (
                     <Link
                       href={`/equipo/${row.teamId}`}
+                      prefetch={false}
                       className={`hf-standing-team-link ${compact ? 'gap-1' : 'gap-1.5'}`}
                     >
                       {teamIdentity}
@@ -3282,12 +3274,14 @@ export default async function LigaPage({ params }: PageProps) {
     '--tournament-accent': tournamentTheme.accent,
     '--hf-competition-accent': tournamentTheme.accent,
   } as CSSProperties
-  const headerLeagueLogo =
-    isWorldCupTournament
-      ? WORLD_CUP_2026_LOGO_URL
-      : getExistingPublicAssetUrl(getTournamentLogoOverrideUrl(tournament.key)) ??
-        resolvedTournament?.logo ??
-        null
+  const headerLeagueId =
+    resolvedTournament?.leagueId ??
+    getTournamentExternalLeagueId(tournament.key)
+  const headerLeagueLogo = pickLeagueLogoUrl(
+    resolvedTournament?.logo,
+    headerLeagueId,
+    getTournamentLogoOverrideUrl(tournament.key)
+  )
   const tournamentSubtitle = isWorldCupTournament
     ? 'Canadá - México - Estados Unidos'
     : resolvedTournament
@@ -3940,6 +3934,7 @@ export default async function LigaPage({ params }: PageProps) {
                       <Link
                         key={`team-${team.id}`}
                         href={`/equipo/${team.id}`}
+                        prefetch={false}
                         aria-label={`Ver ${displayName}`}
                       >
                         {content}

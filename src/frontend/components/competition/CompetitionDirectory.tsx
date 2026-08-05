@@ -132,7 +132,11 @@ export default function CompetitionDirectory({
               <div className="hf-competition-directory-grid">
                 {section.items.map((item) => (
                   <article key={item.key} className="hf-competition-directory-card-shell">
-                    <Link href={item.href} className="hf-competition-directory-card">
+                    <Link
+                      href={item.href}
+                      prefetch={false}
+                      className="hf-competition-directory-card"
+                    >
                       {item.logo ? (
                         <span className="hf-competition-directory-logo">
                           <Image
