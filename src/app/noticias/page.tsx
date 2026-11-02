@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import MatchNewsFeed from '@/frontend/components/news/MatchNewsFeed'
 
 import {
   getEditorialCategories,
@@ -122,6 +123,8 @@ export default async function NoticiasPage({ searchParams }: NoticiasPageProps) 
           })}
         </nav>
       ) : null}
+
+      <MatchNewsFeed />
 
       {articles.length ? (
         <section
