@@ -14,6 +14,6 @@ Rama independiente; sin cambios en producción hasta aprobar el PR.
 4. Configurar HF_MATCH_NEWS_ENABLED=true, HF_MATCH_NEWS_AUTO_PUBLISH=false para empezar con borradores; luego true tras validar.
 5. Opcional HF_MATCH_NEWS_LEAGUES=128,130,13,11,2,1. Adaptar a competiciones seleccionadas y cuota API.
 6. CRON_SECRET y FOOTBALL_API_KEY ya figuran como variables en Vercel; nunca mostrar secretos.
-7. El cron GET /api/cron/match-news protegido corre cada cinco minutos. Tiene espera de cuatro minutos después de ver un final; procesa hasta dos artículos por pasada. Evita duplicados por fixture_id.
+7. En este Vercel se detectó plan Hobby: el cron GET /api/cron/match-news corre **una vez por día** (08:15 UTC) por restricción del plan, no cada cinco minutos. Para postpartido inmediato es necesario cambiar a Vercel Pro y restaurar `*/5 * * * *` o usar un planificador externo autorizado. Tiene espera de cuatro minutos después de ver un final; procesa hasta dos artículos por pasada. Evita duplicados por fixture_id.
 8. Notas publicadas aparecen en /noticias y /noticias/partido/[id], dentro del diseño original. Borradores se administran en Supabase hasta que se construya el panel definitivo.
 9. Validar typecheck, build y preview de Vercel antes de fusionar la rama.
