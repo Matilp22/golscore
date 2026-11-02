@@ -12,6 +12,10 @@
     {
       "path": "/api/cron/sync-match-highlights",
       "schedule": "10 8 * * *"
+    },
+    {
+      "path": "/api/cron/match-news",
+      "schedule": "15 8 * * *"
     }
   ]
 }
