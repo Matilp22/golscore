@@ -1,35 +1,40 @@
-# Migración Hay Fulbo V2 — fase 1
+# Hay Fulbo V2 — migración real y estado de implementación
 
-## Conexiones verificadas (2026-11-02 / 03 UTC)
-- Nuevo Supabase: `hay-fulbo`, project ref `upehwmceyhcqrxqtdcfi`, región sa-east-1, ACTIVE_HEALTHY, organización `Hay fulbo` (Free).
-- Anterior Supabase: `app-futbol`, project ref `gzqapeavjpzgmdhrizqy`, INACTIVE; no fue posible restaurarlo por bloqueo de pagos.
-- GitHub: `Matilp22/golscore`, rama de migración separada `feat/hay-fulbo-v2-supabase`.
-- Vercel: proyecto `golscore`, dominio hayfulbo.com; NO cambiar las variables de producción.
+## Estado verificado (2026-11-03 UTC)
 
-## Aplicado y comprobado en Supabase nuevo
-1. `20261103010100_hay_fulbo_v2_preferences.sql`: 4 tablas seguras y vacías:
-   - `hf_club_themes`: identidad visual y paletas publicadas por administradores.
-   - `hf_user_preferences`: club principal, onboarding y modo Tribuna/Simple.
-   - `hf_user_favorite_teams`: favoritos personales sincronizables entre dispositivos.
-   - `hf_notification_preferences`: preferencias de alertas.
-2. `20261103010200_restrict_rls_auto_enable_rpc.sql`: revoca acceso público a función interna creada por Supabase.
-3. Resultado verificado: **4 tablas con RLS, 12 políticas**, y asesor de seguridad sin advertencias.
-4. Avisos informativos de índices sin uso se explican porque la base aún no contiene datos ni tráfico.
+**Base nueva:** Supabase `hay-fulbo` (`upehwmceyhcqrxqtdcfi`), São Paulo, ACTIVE_HEALTHY.
 
-## Pendiente: NO cortar la producción
-- **No se copiaron las 67 migraciones antiguas**: requieren inspección secuencial y ensayos; varias contienen cambios correctivos y funciones de puntuación/administración que deben revisarse antes de aplicar.
-- **No se recuperaron cuentas ni datos del Supabase anterior**: intentar exportar un respaldo, no eliminar proyecto anterior.
-- Falta configurar el servidor para el nuevo proyecto: auth, RPC, datos deportivos y caché, Mi Torneito, Prode, PWA y noticias.
-- **No actualizar variables de Vercel producción** hasta confirmar que las nuevas tablas y servicios cubren todos los puntos de lectura/escritura y probar una preview por rama.
-- Faltan seeds legítimos de temas con IDs API-Football comprobados, verificación de identidad gráfica y autorización de uso de recursos oficiales.
+**Infraestructura de datos:** 54 tablas en `public`, **54 con RLS habilitado**, 71 migraciones aplicadas (incluyen las de esquema V2, compatibilidad y noticias). Estas 71 no equivalen a 71 de las 67 migraciones históricas: varias migraciones originales incompatibles con la estructura `BIGINT` fueron reemplazadas por archivos en `supabase/compat/`.
 
-## Plan de implementación por fases
-1. Auditoría: inventario completo de endpoints/componentes/tablas y dependencias, baseline de rendimiento.
-2. Recuperación de compatibilidad: crear funciones y tablas usadas por app existente mediante migraciones revisadas, con tests RLS.
-3. Personalización: onboarding opcional, club principal, favoritos, modo Tribuna/Simple, estilos accesibles y persistencia local previa a login.
-4. Cron y noticias: aprovechar PR separado de noticias (#1); integrar sólo tras verificar pipeline y claves del servidor.
-5. Preview: configurar **solo** entorno branch-specific de Vercel a `upehwmceyhcqrxqtdcfi` y revisar auth, prode, partidas, favoritos, Mi Torneito, seguridad y carga móvil.
-6. Corte controlado: revisar backups, mantener rollback documentado y promover sólo con aceptación explícita.
+**Seguridad:** auditor de seguridad sin WARN ni ERROR. Hay advertencias `INFO` para tablas RLS internas con cero políticas porque sólo se accede desde service role, nunca desde el cliente. Se reparó la función pública de recálculo de puntos a `BIGINT`, se revocó la ejecución de funciones privilegiadas y se limitaron accesos de las tablas.
 
-## Regla de seguridad
-Nunca mezclar credenciales de la base antigua y nueva dentro de una misma preview; `SUPABASE_SERVICE_ROLE_KEY` jamás en variables `NEXT_PUBLIC_*`. No borrar ni despausar la antigua por esta migración.
+**Compatibilidad restaurada (estructura sin datos de usuario):** partidos, equipos, competiciones, posiciones/cachés, datos de partidos, jugadores, campeones, clasificaciones, Prode, ligas favoritas, torneos privados, Mi Torneito, panel admin, configuración PWA push, registro de cuota de API-Football y bot de noticias.
+
+**Identidad V2:** temas de club, equipo principal persistente por usuario, modo Tribuna/Simple, favoritos por usuario y preferencias de notificaciones.
+
+**GitHub:** rama `feat/hay-fulbo-v2-supabase`; PR de revisión, no fusionado.
+
+**Vercel:** proyecto `golscore` vinculado a hayfulbo.com. La rama V2 tiene variables propias de preview:
+- `NEXT_PUBLIC_SUPABASE_URL` y `SUPABASE_URL`: URL nueva.
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`: clave publicable nueva.
+- `SUPABASE_SERVICE_ROLE_KEY`: valor inválido de bloqueo intencional (**debe reemplazarse por el secreto del proyecto V2, nunca el anterior**).
+
+Esto evita mezclar las claves secretas del proyecto suspendido con las nuevas URLs. Hasta reemplazar ese valor, **las rutas server-side de administración/sincronización que requieran service role fallarán de forma segura en la preview**.
+
+## Bloqueos y verificaciones pendientes
+
+1. **No se recuperaron los datos antiguos**: usuarios, favoritos antiguos, predicciones, torneos, etc. siguen bloqueados en `app-futbol`. No borrar ese proyecto. Intentar respaldo/exportación y luego reconciliación de IDs.
+2. **Nueva clave secreta para la preview:** sustituir `SUPABASE_SERVICE_ROLE_KEY` de la rama V2 por el secreto correspondiente a `upehwmceyhcqrxqtdcfi`, directamente en el panel Vercel; no enviarlo por chat, no añadirlo al repositorio.
+3. **Autenticación:** configurar Site URL y redirecciones de Supabase Auth para la URL de preview y el dominio final, cuando se valide el corte.
+4. **Funciones Edge y Storage:** revisar `supabase/functions`, buckets, configuraciones y secrets; las migraciones de tablas no restauran objetos almacenados ni funciones desplegadas.
+5. **Rendimiento:** revisar 25 índices FK ausentes, 4 duplicados y 8 políticas permisivas múltiples identificadas por el asesor, con pruebas de regresión. Los índices marcados como «unused» todavía no reflejan tráfico real.
+6. **Cron/automatización:** Vercel conectado está limitado por configuración Hobby; noticiero corre sólo si se habilita flag y se provee clave IA opcional. No activado.
+7. **Preview funcional:** comprobar navegadores móvil y escritorio, rutas de partidos, Prode (predicciones/score), Mi Torneito, sesión, favoritos, noticias y alertas antes de fusionar.
+8. **No tocar producción:** las variables globales actuales siguen apuntando al Supabase suspendido. Hacer corte sólo tras pasar validaciones, respaldo, monitoreo y plan de rollback.
+9. **Historial de migraciones:** las migraciones legacy se aplicaron con nombres `legacy_...` y orden SQL, mientras que las correcciones de compatibilidad quedaron en `supabase/compat/`. Antes de usar `supabase db push` en otra instancia debe consolidarse baseline limpio / reconciliar el historial. No ejecutar todos los SQL antiguos tal cual; varios fallan por UUID/BIGINT.
+
+## Consideraciones del producto
+No está construida aún la interfaz final de personalización ni rediseñado Inicio/Mi Club. Las tablas V2 son infraestructura para esas interfaces. La sección de noticias automáticas tiene PR aparte; el esquema está listo, no hay publicación en funcionamiento.
+
+## Garantías
+No hay cambios en `main` ni en el dominio público como consecuencia de estas migraciones. No se modificaron Nutrición Merli ni Brava Créditos.
