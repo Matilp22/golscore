@@ -40,3 +40,6 @@ No está construida aún la interfaz final de personalización ni rediseñado In
 
 ## Garantías
 No hay cambios en `main` ni en el dominio público como consecuencia de estas migraciones. No se modificaron Nutrición Merli ni Brava Créditos.
+
+## Verificación de la preview tras configurar el secreto
+El despliegue de V2 debe ser de la rama `feat/hay-fulbo-v2-supabase` y reconstruirse después de actualizar las variables. Un despliegue de `main` no verifica las variables específicas de V2. Mantener el PR en borrador hasta validar la conexión de servidor, Auth y flujo completo.
