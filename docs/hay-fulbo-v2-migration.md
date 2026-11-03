@@ -4,9 +4,11 @@
 
 **Base nueva:** Supabase `hay-fulbo` (`upehwmceyhcqrxqtdcfi`), São Paulo, ACTIVE_HEALTHY.
 
-**Infraestructura de datos:** 54 tablas en `public`, **54 con RLS habilitado**, 71 migraciones aplicadas (incluyen las de esquema V2, compatibilidad y noticias). Estas 71 no equivalen a 71 de las 67 migraciones históricas: varias migraciones originales incompatibles con la estructura `BIGINT` fueron reemplazadas por archivos en `supabase/compat/`.
+**Infraestructura de datos:** 54 tablas en `public`, **54 con RLS habilitado**, 72 migraciones aplicadas (incluyen las de esquema V2, compatibilidad y noticias). Estas 72 no equivalen a 71 de las 67 migraciones históricas: varias migraciones originales incompatibles con la estructura `BIGINT` fueron reemplazadas por archivos en `supabase/compat/`.
 
 **Seguridad:** auditor de seguridad sin WARN ni ERROR. Hay advertencias `INFO` para tablas RLS internas con cero políticas porque sólo se accede desde service role, nunca desde el cliente. Se reparó la función pública de recálculo de puntos a `BIGINT`, se revocó la ejecución de funciones privilegiadas y se limitaron accesos de las tablas.
+
+**Índices principales:** agregados índices focalizados para consultas por club/fecha, liga/fecha, fuentes de playoffs, finales de Copa Argentina y Mi Torneito. Antes de seguir, revisar planes de consulta reales y advisor de rendimiento.
 
 **Compatibilidad restaurada (estructura sin datos de usuario):** partidos, equipos, competiciones, posiciones/cachés, datos de partidos, jugadores, campeones, clasificaciones, Prode, ligas favoritas, torneos privados, Mi Torneito, panel admin, configuración PWA push, registro de cuota de API-Football y bot de noticias.
 
